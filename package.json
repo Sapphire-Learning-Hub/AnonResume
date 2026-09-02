@@ -39,9 +39,11 @@
     "@iconify-json/lucide": "^1.2.128",
     "@iconify-json/simple-icons": "^1.2.94",
     "@tiptap/extension-link": "^3.30.5",
+    "@tiptap/core": "^3.30.5",
     "@tiptap/react": "^3.30.5",
     "@tiptap/starter-kit": "^3.30.5",
     "antd": "^6.6.1",
+    "antd-style": "^4.1.0",
     "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "idb": "^8.0.3",
@@ -53,6 +55,7 @@
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
+    "zod": "^4.5.4",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
