@@ -41,7 +41,7 @@ describe("duplicate resume route", () => {
       { params: Promise.resolve({ id: "resume-foundation" }) },
     );
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
 
     const copyId = response.headers.get("location")?.split("/").at(-1);
 
@@ -76,7 +76,7 @@ describe("duplicate resume route", () => {
       { params: Promise.resolve({ id: "resume-foundation" }) },
     );
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost/app");
   });
 

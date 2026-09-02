@@ -63,6 +63,7 @@ function createMarkdownRequest({
 
 describe("create resume route", () => {
   beforeEach(async () => {
+    vi.unstubAllEnvs();
     await resetResumeRepository();
     vi.mocked(requireSession).mockResolvedValue({
       session: {
@@ -78,6 +79,7 @@ describe("create resume route", () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await resetResumeRepository();
   });
 
@@ -86,7 +88,7 @@ describe("create resume route", () => {
     async (templateId) => {
       const response = await POST(createRequest(templateId));
 
-      expect(response.status).toBe(307);
+      expect(response.status).toBe(303);
 
       const location = response.headers.get("location");
 
@@ -115,7 +117,7 @@ describe("create resume route", () => {
     const response = await POST(createRequest());
     const resumeId = response.headers.get("location")?.split("/").at(-1);
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(await getResumeRecord("user-demo", resumeId!)).toEqual(
       expect.objectContaining({
         id: resumeId,
@@ -129,8 +131,27 @@ describe("create resume route", () => {
       createRequest("blank", "http://localhost", "/app"),
     );
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost/app");
+    expect(await listResumeEntries("user-demo")).toHaveLength(1);
+  });
+
+  it("uses the configured public origin behind a CDN", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BETTER_AUTH_URL", "https://resume.example.com");
+
+    const response = await POST(
+      new Request("http://10.0.0.8:3000/app/create-resume", {
+        method: "POST",
+        headers: { origin: "https://resume.example.com" },
+        body: new URLSearchParams({ templateId: "blank" }),
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toMatch(
+      /^https:\/\/resume\.example\.com\/app\/resumes\/resume-/,
+    );
     expect(await listResumeEntries("user-demo")).toHaveLength(1);
   });
 
@@ -140,7 +161,7 @@ describe("create resume route", () => {
     const resumeId = location?.split("/").at(-1);
     const created = await getResumeRecord("user-demo", resumeId!);
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(location).toMatch(/^http:\/\/localhost\/app\/resumes\/resume-/);
     expect(created?.title).toBe("Imported Person");
     expect(created?.document.meta.import).toMatchObject({
@@ -160,7 +181,7 @@ describe("create resume route", () => {
       createMarkdownRequest({ returnTo: "/app" }),
     );
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("http://localhost/app");
     expect(await listResumeEntries("user-demo")).toHaveLength(1);
   });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { requireSession } from "@/lib/auth-session";
-import { requireSameOrigin } from "@/lib/request-origin";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
 import {
   deleteResumeRecord,
   getResumeRecord,
@@ -28,5 +28,7 @@ export async function POST(
 
   await deleteResumeRecord(session.user.id, id);
 
-  return NextResponse.redirect(new URL("/app", request.url), { status: 303 });
+  return NextResponse.redirect(createApplicationUrl("/app", request), {
+    status: 303,
+  });
 }

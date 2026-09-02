@@ -8,7 +8,7 @@ import {
   parseLimitedFormDataRequest,
   RequestBodyTooLargeError,
 } from "@/lib/request-body";
-import { requireSameOrigin } from "@/lib/request-origin";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
 import {
   duplicateGeneratedResumeRecord,
   getResumeRecord,
@@ -61,7 +61,7 @@ export async function POST(
   });
   const redirectPath =
     requestedReturnTo === "/app" ? "/app" : `/app/resumes/${copy.id}`;
-  const redirectUrl = new URL(redirectPath, request.url);
+  const redirectUrl = createApplicationUrl(redirectPath, request);
 
-  return NextResponse.redirect(redirectUrl);
+  return NextResponse.redirect(redirectUrl, { status: 303 });
 }

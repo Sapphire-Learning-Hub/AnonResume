@@ -7,7 +7,7 @@ import {
   parseLimitedFormDataRequest,
   RequestBodyTooLargeError,
 } from "@/lib/request-body";
-import { requireSameOrigin } from "@/lib/request-origin";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
 import {
   getResumeRecord,
   ResumeNotFoundError,
@@ -79,7 +79,7 @@ export async function POST(
         ? requestedReturnTo
         : "/app/fonts";
 
-  return NextResponse.redirect(new URL(returnTo, request.url), {
+  return NextResponse.redirect(createApplicationUrl(returnTo, request), {
     status: 303,
   });
 }
