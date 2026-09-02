@@ -1,4 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { db, getDatabaseSchemaName } from "@/db";
 import { migrateDatabase } from "@/db/migrate";
@@ -29,6 +31,17 @@ describe("database migrations", () => {
       { table_name: "resume_versions" },
       { table_name: "resumes" },
     ]);
+  });
+
+  it("adds the Better Auth account issuer required by credential sign-up", async () => {
+    const migration = await readFile(
+      resolve(process.cwd(), "drizzle/0005_better_auth_account_issuer.sql"),
+      "utf8",
+    );
+
+    expect(migration).toContain(
+      'ALTER TABLE "account" ADD COLUMN IF NOT EXISTS "issuer" text NOT NULL',
+    );
   });
 
   it("rejects duplicate public slugs at the database boundary", async () => {
