@@ -1,0 +1,1900 @@
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+
+import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import {
+  ResumeValidationClientError,
+  ResumeVersionConflictClientError,
+} from "@/lib/resume-client";
+import type { RichTextContent } from "@/domain/resume/schema";
+
+import { ResumeEditorShell } from "@/components/editor/ResumeEditorShell";
+
+type RichTextMarks = Extract<
+  RichTextContent["content"][number]["content"][number],
+  { type: "text" }
+>["marks"];
+
+function richText(
+  text: string,
+  marks?: NonNullable<RichTextMarks>,
+): RichTextContent {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text, marks }],
+      },
+    ],
+  };
+}
+
+function createDeferredPromise<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject,
+  };
+}
+
+function spacedLabel(text: string) {
+  return new RegExp(text.split("").join("\\s*"));
+}
+
+function exactSpacedLabel(text: string) {
+  return new RegExp(`^${text.split("").join("\\s*")}$`);
+}
+
+function getInspectorPanel() {
+  return screen.getByTestId("resume-inspector-panel");
+}
+
+class MockResizeObserver {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+describe("ResumeEditorShell", () => {
+  beforeEach(() => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the editor shell around the shared canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.getByText("简历名称")).toBeInTheDocument();
+    expect(screen.getByText("保存状态")).toBeInTheDocument();
+    expect(screen.getByTestId("resume-save-status")).toHaveTextContent("空闲");
+    expect(screen.getByRole("link", { name: spacedLabel("预览") })).toHaveAttribute(
+      "href",
+      "/app/resumes/resume-demo/preview",
+    );
+    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "重新分页" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: spacedLabel("保存") })).toBeDisabled();
+    expect(screen.getByRole("button", { name: spacedLabel("发布") })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: spacedLabel("属性设置") })).not.toBeInTheDocument();
+    expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(
+      /发\s*布/,
+    );
+    expect(screen.getByText("大纲")).toBeInTheDocument();
+    expect(screen.getByText("画布")).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByText("个人简介")).toBeInTheDocument();
+    const outlineItem = screen.getByTestId("section-outline-item-section-profile");
+    expect(outlineItem).toHaveAttribute("role", "group");
+    expect(outlineItem).toHaveAttribute("aria-label", "拖动排序 个人简介");
+    expect(within(outlineItem).queryByText("个人简介 区块")).not.toBeInTheDocument();
+    expect(within(outlineItem).queryByText("显示中")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeDisabled();
+    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeDisabled();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("共 1 页")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: spacedLabel("内容编辑") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: spacedLabel("布局排序") })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("文档设置");
+    expect(screen.queryByText("文本格式")).not.toBeInTheDocument();
+  });
+
+  it("keeps all three column headers pinned to the top of their panels", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const headers = [
+      screen.getByTestId("editor-outline-header"),
+      screen.getByTestId("editor-canvas-header"),
+      screen.getByTestId("editor-inspector-header"),
+    ];
+
+    for (const header of headers) {
+      const style = window.getComputedStyle(header);
+
+      expect(style.position).toBe("sticky");
+      expect(style.top).toBe("0px");
+    }
+
+    expect(
+      window.getComputedStyle(screen.getByTestId("resume-inspector-panel"))
+        .paddingTop,
+    ).toBe("0px");
+    expect(
+      window.getComputedStyle(screen.getByRole("region", { name: "画布" }))
+        .paddingTop,
+    ).toBe("0px");
+    expect(
+      window.getComputedStyle(screen.getByTestId("editor-canvas-header"))
+        .paddingTop,
+    ).toBe("10px");
+    expect(
+      window.getComputedStyle(screen.getByTestId("editor-inspector-header"))
+        .paddingTop,
+    ).toBe("10px");
+
+    const inspectorPanel = screen.getByTestId("resume-inspector-panel");
+    const inspectorContent = screen.getByTestId("editor-inspector-scroll-content");
+
+    expect(window.getComputedStyle(inspectorPanel).overflow).toBe("hidden");
+    expect(window.getComputedStyle(inspectorPanel).gap).toBe("0px");
+    expect(window.getComputedStyle(inspectorPanel).paddingBottom).toBe("0px");
+    expect(window.getComputedStyle(inspectorContent).overflowY).toBe("auto");
+    expect(window.getComputedStyle(inspectorContent).paddingTop).toBe("14px");
+    expect(window.getComputedStyle(inspectorContent).paddingBottom).toBe("24px");
+  });
+
+  it("keeps the canvas bottom spacing inside its scroll viewport", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const canvasPanel = screen.getByRole("region", { name: "画布" });
+    const canvasHeader = screen.getByTestId("editor-canvas-header");
+    const canvasViewport = screen.getByTestId("resume-canvas-zoom").parentElement;
+    const panelStyle = window.getComputedStyle(canvasPanel);
+    const headerStyle = window.getComputedStyle(canvasHeader);
+    const viewportStyle = window.getComputedStyle(canvasViewport!);
+
+    expect(panelStyle.paddingRight).toBe("0px");
+    expect(panelStyle.paddingBottom).toBe("0px");
+    expect(panelStyle.paddingLeft).toBe("0px");
+    expect(headerStyle.paddingRight).toBe("20px");
+    expect(headerStyle.paddingLeft).toBe("20px");
+    expect(viewportStyle.paddingRight).toBe("20px");
+    expect(viewportStyle.paddingBottom).toBe("48px");
+    expect(viewportStyle.paddingLeft).toBe("20px");
+  });
+
+  it("uses only the fixed inspector header divider above its content", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    const componentLibrary = screen.getByTestId("block-insert-panel");
+    const style = window.getComputedStyle(componentLibrary);
+
+    expect(style.borderTopWidth).toBe("0px");
+    expect(style.paddingTop).toBe("0px");
+  });
+
+  it("toggles the non-layout print safe-area guide on the canvas", () => {
+    const { container } = render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+    const safeAreaButton = screen.getByRole("button", { name: "打印安全区" });
+
+    expect(safeAreaButton).toHaveAttribute("aria-pressed", "false");
+    expect(
+      container.querySelector("[data-resume-print-safe-area='true']"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(safeAreaButton);
+
+    expect(safeAreaButton).toHaveAttribute("aria-pressed", "true");
+    expect(
+      container.querySelector("[data-resume-print-safe-area='true']"),
+    ).toBeInTheDocument();
+  });
+
+  it("saves pending changes from the toolbar button and Ctrl+S", async () => {
+    const saveDocument = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 2, updatedAt: 800 })
+      .mockResolvedValueOnce({ version: 3, updatedAt: 900 });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={saveDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    const saveButton = screen.getByRole("button", { name: spacedLabel("保存") });
+
+    expect(saveButton).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(saveButton);
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    expect(saveButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    await act(async () => {
+      const dispatched = fireEvent.keyDown(window, {
+        key: "s",
+        ctrlKey: true,
+      });
+
+      expect(dispatched).toBe(false);
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("已保存")).toBeInTheDocument();
+  });
+
+  it("saves pending content before editing the shared resume summary", async () => {
+    const saveDocument = vi
+      .fn()
+      .mockResolvedValueOnce({ version: 4, updatedAt: 800 })
+      .mockResolvedValueOnce({ version: 6, updatedAt: 1000 });
+    const updateSummary = vi.fn().mockResolvedValue({
+      summary: "面向复杂业务的前端平台工程师",
+      updatedAt: 900,
+      version: 5,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        initialSummary="旧简介"
+        initialVersion={3}
+        autosaveDelayMs={10_000}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={saveDocument}
+        updateSummary={updateSummary}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: "编辑简介" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "简历简介" }), {
+      target: { value: "面向复杂业务的前端平台工程师" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "保存简介" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ version: 3 }),
+    );
+    expect(updateSummary).toHaveBeenCalledWith({
+      resumeId: "resume-demo",
+      summary: "面向复杂业务的前端平台工程师",
+      version: 4,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("保存（⌘/Ctrl+S）"));
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ version: 5 }),
+    );
+  });
+
+  it("warns before leaving the page only when edits are unsaved", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+      />,
+    );
+
+    expect(
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    expect(
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
+    ).toBe(false);
+  });
+
+  it("supports global undo and redo shortcuts without intercepting input editing", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+
+    const undoEvent = fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+
+    expect(undoEvent).toBe(false);
+    expect(screen.queryByRole("button", { name: "新区块" })).not.toBeInTheDocument();
+
+    const redoEvent = fireEvent.keyDown(window, {
+      key: "z",
+      ctrlKey: true,
+      shiftKey: true,
+    });
+
+    expect(redoEvent).toBe(false);
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+
+    const nativeInput = document.createElement("input");
+
+    document.body.append(nativeInput);
+    const inputUndoEvent = fireEvent.keyDown(nativeInput, { key: "z", ctrlKey: true });
+    nativeInput.remove();
+
+    expect(inputUndoEvent).toBe(true);
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+  });
+
+  it("creates a restore point from the version history panel", async () => {
+    const loadVersionSnapshots = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: "snapshot-1", version: 3, createdAt: 800 }])
+      .mockResolvedValueOnce([
+        { id: "snapshot-2", version: 3, createdAt: 900 },
+        { id: "snapshot-1", version: 3, createdAt: 800 },
+      ]);
+    const createVersionSnapshot = vi.fn().mockResolvedValue({
+      id: "snapshot-2",
+      version: 3,
+      createdAt: 900,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        loadVersionSnapshots={loadVersionSnapshots}
+        createVersionSnapshot={createVersionSnapshot}
+        versionHistoryLimit={7}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("历史记录") }));
+
+    expect(loadVersionSnapshots).toHaveBeenCalledWith("resume-demo");
+    expect(await screen.findByText("版本 3")).toBeInTheDocument();
+    expect(
+      screen.getByText("最多保留 7 个恢复点；超出后会自动移除最早的记录。"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("创建恢复点") }));
+
+    await waitFor(() =>
+      expect(createVersionSnapshot).toHaveBeenCalledWith("resume-demo"),
+    );
+    await waitFor(() => expect(loadVersionSnapshots).toHaveBeenCalledTimes(2));
+  });
+
+  it("compares a selected history snapshot with the current editor document", async () => {
+    const currentDocument = createDefaultResumeDocument();
+    const historicalDocument = createDefaultResumeDocument();
+
+    currentDocument.meta.title = "Current document";
+    historicalDocument.meta.title = "Historical document";
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={currentDocument}
+        loadVersionSnapshots={async () => [
+          { id: "snapshot-1", version: 3, createdAt: 800 },
+        ]}
+        loadVersionSnapshot={async () => ({
+          id: "snapshot-1",
+          version: 3,
+          createdAt: 800,
+          document: historicalDocument,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("历史记录") }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: spacedLabel("查看差异") }),
+    );
+
+    const dialog = (await screen.findByText("版本差异")).closest(
+      "[role='dialog']",
+    ) as HTMLElement;
+
+    expect(within(dialog).getByText("Historical document")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("Current document").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("历史版本").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("当前内容").length).toBeGreaterThan(0);
+  });
+
+  it("does not expose the removed resume check feature", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: spacedLabel("简历检查") }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links to the workspace from the editor toolbar", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
+  });
+
+  it("exposes the outline, canvas, and inspector as named editor workspaces", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.getByRole("complementary", { name: "大纲" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "画布" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "检查器" }),
+    ).toBeInTheDocument();
+  });
+
+  it("updates the editor zoom controls and scales the canvas viewport", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const zoomViewport = screen.getByTestId("resume-canvas-zoom");
+
+    expect(zoomViewport).toHaveStyle({
+      transform: "scale(1)",
+    });
+    expect(screen.getByRole("button", { name: spacedLabel("缩小") })).toBeEnabled();
+    expect(screen.getByRole("button", { name: spacedLabel("放大") })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("放大") }));
+
+    expect(screen.getByText("110%")).toBeInTheDocument();
+    expect(zoomViewport).toHaveStyle({
+      transform: "scale(1.1)",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("重置缩放") }));
+
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(zoomViewport).toHaveStyle({
+      transform: "scale(1)",
+    });
+  });
+
+  it("shows document settings in the inspector when nothing is selected", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+
+    expect(dialog).toHaveTextContent("文档设置");
+    expect(within(dialog).getByLabelText("简历标题")).toHaveValue(
+      "AnonResume 基础简历",
+    );
+    expect(
+      within(dialog).getByTestId("document-template-language-select"),
+    ).toHaveTextContent("简体中文");
+    expect(within(dialog).getByLabelText("查看模板语言说明")).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId("document-visual-preset-select"),
+    ).toHaveTextContent("专业平衡");
+    expect(
+      within(dialog).getByTestId("document-font-family-select"),
+    ).toHaveTextContent("IBM Plex Sans");
+    expect(within(dialog).getByLabelText("基础字号")).toHaveValue(14);
+    expect(within(dialog).getByLabelText("基础行高")).toHaveValue("1.45");
+  });
+
+  it("allows clearing a required document setting before typing its replacement", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+    const titleInput = within(dialog).getByLabelText("简历标题");
+    const baseFontSizeInput = within(dialog).getByLabelText("基础字号");
+    const baseLineHeightInput = within(dialog).getByLabelText("基础行高");
+
+    fireEvent.change(titleInput, { target: { value: "" } });
+    fireEvent.change(baseFontSizeInput, { target: { value: "" } });
+    fireEvent.change(baseLineHeightInput, { target: { value: "" } });
+
+    expect(titleInput).toHaveValue("");
+    expect(baseFontSizeInput).toHaveValue(null);
+    expect(baseLineHeightInput).toHaveValue("");
+
+    fireEvent.change(titleInput, { target: { value: "Platform Resume" } });
+    fireEvent.change(baseFontSizeInput, { target: { value: "16" } });
+    fireEvent.change(baseLineHeightInput, { target: { value: "1.6" } });
+
+    expect(titleInput).toHaveValue("Platform Resume");
+    expect(baseFontSizeInput).toHaveValue(16);
+    expect(baseLineHeightInput).toHaveValue("1.6");
+    expect(screen.getByRole("article")).toHaveStyle({
+      "--resume-base-font-size": "16px",
+      "--resume-line-height": "1.6",
+    });
+  });
+
+  it("applies a licensed font preset to the rendered resume", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+    const fontFamilySelect = within(dialog).getByTestId(
+      "document-font-family-select",
+    );
+
+    expect(fontFamilySelect).toHaveTextContent("IBM Plex Sans");
+
+    fireEvent.mouseDown(
+      within(dialog).getByRole("combobox", { name: "字体族" }),
+    );
+    fireEvent.click(screen.getByText("Noto Serif SC"));
+
+    expect(fontFamilySelect).toHaveTextContent("Noto Serif SC");
+    expect(screen.getByRole("article")).toHaveStyle({
+      "--resume-font-family":
+        "var(--font-noto-serif-sc), var(--font-noto-sans-sc), serif",
+    });
+  });
+
+  it("filters licensed font presets from the font family input", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const fontFamilyInput = within(getInspectorPanel()).getByRole("combobox", {
+      name: "字体族",
+    });
+
+    fireEvent.mouseDown(fontFamilyInput);
+    fireEvent.change(fontFamilyInput, { target: { value: "中文宋体" } });
+
+    expect(screen.getByText("Noto Serif SC")).toBeInTheDocument();
+    expect(screen.queryByText("Manrope")).not.toBeInTheDocument();
+  });
+
+  it("returns to document settings from a selected text block", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", { name: "文档设置" }),
+    );
+
+    expect(within(getInspectorPanel()).getByRole("heading", { name: "文档设置" })).toBeInTheDocument();
+    expect(within(getInspectorPanel()).getByLabelText("简历标题")).toHaveValue(
+      "AnonResume 基础简历",
+    );
+  });
+
+  it("updates document settings from the inspector and reflects them on the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+
+    fireEvent.change(within(dialog).getByLabelText("简历标题"), {
+      target: { value: "Platform Resume" },
+    });
+    fireEvent.mouseDown(
+      within(dialog).getByRole("combobox", { name: "字体族" }),
+    );
+    fireEvent.click(screen.getByText("Noto Sans SC"));
+    fireEvent.change(within(dialog).getByLabelText("基础字号"), {
+      target: { value: "16" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("基础行高"), {
+      target: { value: "1.8" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("页面上边距"), {
+      target: { value: "40" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("页面右边距"), {
+      target: { value: "36" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("页面下边距"), {
+      target: { value: "28" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("页面左边距"), {
+      target: { value: "24" },
+    });
+
+    const templateLanguage = within(dialog).getByRole("combobox", {
+      name: "模板语言",
+    });
+    const templateLanguageSelect = within(dialog).getByTestId(
+      "document-template-language-select",
+    );
+
+    fireEvent.mouseDown(templateLanguage);
+    fireEvent.click(screen.getByText("English"));
+
+    const canvas = screen.getByRole("article");
+
+    expect(screen.getByText("Platform Resume")).toBeInTheDocument();
+    expect(templateLanguageSelect).toHaveTextContent("English");
+    expect(
+      within(dialog).getByTestId("document-font-family-select"),
+    ).toHaveTextContent("Noto Sans SC");
+    expect(canvas).toHaveStyle({
+      "--resume-font-family": "var(--font-noto-sans-sc), sans-serif",
+      "--resume-base-font-size": "16px",
+      "--resume-line-height": "1.8",
+      "--resume-page-padding": "40px 36px 28px 24px",
+    });
+    expect(
+      within(dialog).getByTestId("document-visual-preset-select"),
+    ).toHaveTextContent("自定义（已微调）");
+  });
+
+  it("applies a visual preset as one document setting change", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+    const visualPreset = within(dialog).getByRole("combobox", {
+      name: "视觉预设",
+    });
+
+    fireEvent.mouseDown(visualPreset);
+    fireEvent.click(screen.getByText("紧凑高密度"));
+
+    expect(within(dialog).getByTestId("document-visual-preset-select")).toHaveTextContent(
+      "紧凑高密度",
+    );
+    expect(within(dialog).getByLabelText("基础字号")).toHaveValue(13);
+    expect(within(dialog).getByLabelText("基础行高")).toHaveValue("1.35");
+    expect(within(dialog).getByLabelText("页面上边距")).toHaveValue(24);
+    expect(screen.getByRole("article")).toHaveStyle({
+      "--resume-page-padding": "24px 28px 24px 28px",
+    });
+  });
+
+  it("shows unpublish controls when a published slug is available", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-foundation"
+        publicSlug="foundation-resume"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: spacedLabel("取消发布") })).toBeEnabled();
+    expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(
+      /取\s*消\s*发\s*布/,
+    );
+    expect(screen.getByRole("link", { name: spacedLabel("打开公开页") })).toHaveAttribute(
+      "href",
+      "/resume/foundation-resume",
+    );
+    expect(screen.getByTestId("resume-open-public")).toHaveAttribute(
+      "href",
+      "/resume/foundation-resume",
+    );
+  });
+
+  it("copies the public URL directly from the published editor", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.assign(navigator, {
+      clipboard: { writeText },
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-foundation"
+        publicSlug="foundation-resume"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "复制公开链接" }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        "http://localhost:3000/resume/foundation-resume",
+      ),
+    );
+    expect(screen.getByRole("button", { name: "公开链接已复制" })).toBeInTheDocument();
+  });
+
+  it("publishes the current resume and reveals the public link", async () => {
+    const publishDocument = vi
+      .fn()
+      .mockResolvedValue({ slug: "resume-demo" });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        publishDocument={publishDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("发布") }));
+
+    await waitFor(() =>
+      expect(publishDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByTestId("resume-publish-action")).toHaveTextContent(
+      "取消发布",
+    );
+    expect(await screen.findByRole("link", { name: spacedLabel("打开公开页") })).toHaveAttribute(
+      "href",
+      "/resume/resume-demo",
+    );
+    expect(await screen.findByTestId("resume-open-public")).toHaveAttribute(
+      "href",
+      "/resume/resume-demo",
+    );
+  });
+
+  it("reuses an in-flight autosave before publishing", async () => {
+    vi.useFakeTimers();
+
+    const firstSave = createDeferredPromise<{
+      version: number;
+      updatedAt: number;
+    }>();
+    const saveDocument = vi
+      .fn()
+      .mockImplementationOnce(() => firstSave.promise)
+      .mockResolvedValue({
+        version: 2,
+        updatedAt: 1000,
+      });
+    const publishDocument = vi.fn().mockResolvedValue({
+      slug: "resume-demo",
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={1}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={saveDocument}
+        publishDocument={publishDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: spacedLabel("发布") }));
+      await Promise.resolve();
+    });
+
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    expect(publishDocument).not.toHaveBeenCalled();
+
+    await act(async () => {
+      firstSave.resolve({
+        version: 2,
+        updatedAt: 1000,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(publishDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" });
+    expect(screen.getByTestId("resume-open-public")).toHaveAttribute(
+      "href",
+      "/resume/resume-demo",
+    );
+  });
+
+  it("exports pdf after saving dirty changes", async () => {
+    const saveDocument = vi.fn().mockResolvedValue({
+      version: 2,
+      updatedAt: 1000,
+    });
+    const exportPdfDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={999999}
+        saveDocument={saveDocument}
+        exportPdfDocument={exportPdfDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(exportPdfDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" }),
+    );
+  });
+
+  it("shows a conflict banner when autosave hits a stale server version", async () => {
+    const cloudDocument = createDefaultResumeDocument();
+    cloudDocument.meta.title = "Latest cloud title";
+    const loadCurrentResume = vi.fn().mockResolvedValue({
+      document: cloudDocument,
+      version: 7,
+      updatedAt: 1200,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={1}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={async () => {
+          throw new ResumeVersionConflictClientError(7);
+        }}
+        loadCurrentResume={loadCurrentResume}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    expect(
+      await screen.findByText("检测到云端版本冲突"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("最新云端版本为 7。本地编辑仍保留在浏览器草稿中。"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(loadCurrentResume).toHaveBeenCalledWith("resume-demo"));
+
+    const prompt = screen.getByRole("status", { name: "版本冲突" });
+
+    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
+    expect(prompt.parentElement).toHaveAttribute(
+      "data-editor-floating-notice-stack",
+      "true",
+    );
+    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
+      "fixed",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /查看差异/ }));
+
+    const dialog = (await screen.findByText("版本差异")).closest(
+      "[role='dialog']",
+    ) as HTMLElement;
+    expect(within(dialog).getByText("Latest cloud title")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("云端版本").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("本地版本").length).toBeGreaterThan(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: spacedLabel("关闭") }));
+  });
+
+  it("shows a validation banner when autosave payload is rejected", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={1}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={async () => {
+          throw new ResumeValidationClientError([
+            {
+              code: "invalid_color",
+              path: "settings.theme.accent",
+              message: "强调色必须是有效的十六进制颜色值。",
+            },
+          ]);
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    expect(await screen.findByText("简历校验失败")).toBeInTheDocument();
+    expect(
+      screen.getByText("强调色必须是有效的十六进制颜色值。"),
+    ).toBeInTheDocument();
+
+    const prompt = screen.getByRole("status", { name: "简历校验失败" });
+
+    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
+    expect(prompt.parentElement).toHaveAttribute(
+      "data-editor-floating-notice-stack",
+      "true",
+    );
+    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
+      "fixed",
+    );
+  });
+
+  it("updates inspector content when selecting a section from the outline", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "个人简介" }),
+    );
+    const dialog = screen.getByTestId("resume-inspector-panel");
+
+    expect(dialog).toHaveTextContent("区块设置");
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    });
+    expect(within(dialog).getByLabelText("分栏数")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("区块间距")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("隐藏区块") })).toBeEnabled();
+    expect(within(dialog).queryByText("语义")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("profile")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("可见性")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("区块语义")).not.toBeInTheDocument();
+  });
+
+  it("updates section layout from the inspector and reflects it on the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("区块设置");
+    fireEvent.change(screen.getByLabelText("区块间距"), {
+      target: { value: "28" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("横向布局") }));
+
+    const canvas = screen.getByRole("article");
+    const blockStack = within(canvas).getByTestId("section-block-stack-section-profile");
+
+    expect(blockStack).toHaveStyle({
+      flexDirection: "row",
+      gap: "28px",
+    });
+  });
+
+  it("updates section columns from the inspector and reflects them on the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("区块设置");
+    fireEvent.change(screen.getByLabelText("分栏数"), {
+      target: { value: "2" },
+    });
+
+    const canvas = screen.getByRole("article");
+    const blockStack = within(canvas).getByTestId("section-block-stack-section-profile");
+
+    expect(blockStack).toHaveStyle({
+      display: "grid",
+      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    });
+  });
+
+  it("updates section padding from the inspector and reflects it on the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("区块设置");
+    fireEvent.change(screen.getByLabelText("上内边距"), {
+      target: { value: "12" },
+    });
+    fireEvent.change(screen.getByLabelText("右内边距"), {
+      target: { value: "16" },
+    });
+    fireEvent.change(screen.getByLabelText("下内边距"), {
+      target: { value: "20" },
+    });
+    fireEvent.change(screen.getByLabelText("左内边距"), {
+      target: { value: "24" },
+    });
+
+    const canvas = screen.getByRole("article");
+    const section = within(canvas).getByTestId("resume-section-section-profile");
+
+    expect(section).toHaveStyle({
+      paddingTop: "12px",
+      paddingRight: "16px",
+      paddingBottom: "20px",
+      paddingLeft: "24px",
+    });
+  });
+
+  it("lets the user edit a section title directly on the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const canvas = screen.getByRole("article");
+    const sectionTitle = within(canvas).getByText("个人简介");
+
+    fireEvent.click(sectionTitle.closest("button")!);
+
+    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+
+    expect(editor).toHaveTextContent("个人简介");
+    const dialog = screen.getByTestId("resume-inspector-panel");
+    expect(dialog).toHaveTextContent("文本设置");
+    expect(within(dialog).getByText("文本格式")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("加粗") })).toBeEnabled();
+  });
+
+  it("shows a tiptap editor when selecting a text block from the canvas", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+
+    expect(editor.tagName).toBe("DIV");
+    expect(editor).toHaveAttribute("contenteditable", "true");
+    expect(editor).toHaveTextContent("共享渲染器基础");
+    const dialog = screen.getByTestId("resume-inspector-panel");
+    expect(dialog).toHaveTextContent("文本设置");
+    expect(within(dialog).queryByText("Block 类型")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Block 路径")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("block-profile-summary")).not.toBeInTheDocument();
+  });
+
+  it("adds reusable child components after the selected content", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    const inspector = getInspectorPanel();
+    const componentLibrary = within(inspector).getByTestId("block-insert-panel");
+
+    expect(componentLibrary).toHaveTextContent("添加到所选内容后方");
+    expect(within(componentLibrary).getByRole("button", { name: "文本" })).toBeEnabled();
+    expect(within(componentLibrary).getByRole("button", { name: "标签" })).toBeEnabled();
+    expect(within(componentLibrary).getByRole("button", { name: "分点列表" })).toBeEnabled();
+    expect(within(componentLibrary).getByRole("button", { name: "内容组" })).toBeEnabled();
+    expect(within(componentLibrary).getByRole("button", { name: "双列内容" })).toBeEnabled();
+
+    fireEvent.click(within(componentLibrary).getByRole("button", { name: "标签" }));
+
+    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
+    expect(inspector).toHaveTextContent("标签设置");
+  });
+
+  it("updates the selected text block styles from the inspector", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    const dialog = screen.getByTestId("resume-inspector-panel");
+
+    fireEvent.change(within(dialog).getByLabelText("字号"), {
+      target: { value: "24" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("字重"), {
+      target: { value: "800" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("行高"), {
+      target: { value: "1.25" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: spacedLabel("居中对齐") }));
+
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveStyle({
+      fontSize: "24px",
+      fontWeight: "800",
+      lineHeight: "1.25",
+      textAlign: "center",
+    });
+  });
+
+  it("edits badge text from the inspector without replacing the canvas chip", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+
+    const dialog = getInspectorPanel();
+
+    expect(dialog).toHaveTextContent("标签设置");
+    expect(within(dialog).getByLabelText("标签文本")).toHaveValue("Next.js");
+
+    fireEvent.change(within(dialog).getByLabelText("标签文本"), {
+      target: { value: "TypeScript" },
+    });
+
+    expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "编辑标签 Next.js" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "新增标签" }));
+
+    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "删除标签" }));
+
+    expect(screen.queryByRole("button", { name: "编辑标签 新标签" })).not.toBeInTheDocument();
+  });
+
+  it("allows clearing badge text before typing its replacement", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+
+    const badgeInput = within(getInspectorPanel()).getByLabelText("标签文本");
+
+    fireEvent.change(badgeInput, { target: { value: "" } });
+    expect(badgeInput).toHaveValue("");
+
+    fireEvent.change(badgeInput, { target: { value: "TypeScript" } });
+
+    expect(badgeInput).toHaveValue("TypeScript");
+    expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
+  });
+
+  it("provides a palette for every editable color field", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const dialog = getInspectorPanel();
+    const themeColors = within(dialog).getByTestId("document-theme-colors");
+
+    expect(themeColors).toHaveTextContent("主题配色");
+    expect(within(themeColors).getByText("强调")).toBeInTheDocument();
+    expect(within(themeColors).getByText("正文")).toBeInTheDocument();
+    expect(within(themeColors).getByText("弱化")).toBeInTheDocument();
+    expect(within(themeColors).getByLabelText("强调色调色板")).toBeInTheDocument();
+    expect(within(themeColors).getByLabelText("正文颜色调色板")).toBeInTheDocument();
+    expect(within(themeColors).getByLabelText("弱化文本颜色调色板")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("强调色")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("正文颜色")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("弱化文本颜色")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByLabelText("强调色调色板"));
+    const preset = document.querySelectorAll(".ant-color-picker-presets-color")[1];
+
+    expect(preset).toBeDefined();
+    fireEvent.click(preset);
+
+    expect(screen.getByRole("article")).toHaveStyle({
+      "--resume-accent": "#2563eb",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    expect(within(dialog).getByLabelText("文本颜色调色板")).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("文本颜色")).not.toBeInTheDocument();
+  });
+
+  it("allows decimal line-height input without dropping the trailing decimal point", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    const dialog = screen.getByTestId("resume-inspector-panel");
+    const lineHeightInput = within(dialog).getByLabelText("行高");
+
+    fireEvent.change(lineHeightInput, {
+      target: { value: "1." },
+    });
+
+    expect(lineHeightInput).toHaveValue("1.");
+
+    fireEvent.change(lineHeightInput, {
+      target: { value: "1.25" },
+    });
+
+    expect(lineHeightInput).toHaveValue("1.25");
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveStyle({
+      lineHeight: "1.25",
+    });
+  });
+
+  it("hides rich text toolbar controls until a text block is selected", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: spacedLabel("加粗") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("斜体") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("下划线") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("删除线") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("内联标签") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("应用链接") })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: spacedLabel("清除链接") })).not.toBeInTheDocument();
+  });
+
+  it("enables rich text toolbar controls when a text block is selected", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    const dialog = screen.getByTestId("resume-inspector-panel");
+
+    expect(within(dialog).getByRole("button", { name: spacedLabel("加粗") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("斜体") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("下划线") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("删除线") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("内联标签") })).toBeEnabled();
+    expect(within(dialog).getByRole("textbox", { name: "链接" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("应用链接") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("清除链接") })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
+  });
+
+  it("opens the icon library for the active text editor and inserts an icon", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", {
+        name: spacedLabel("插入图标"),
+      }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "图标库" });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "搜索图标" }), {
+      target: { value: "邮箱" },
+    });
+    fireEvent.click(
+      await within(dialog).findByRole("button", { name: "插入 邮箱" }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("article").querySelector(
+          '[data-resume-icon-id="lucide:mail"]',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("duplicates the selected section from the inspector", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制区块") }),
+    );
+
+    expect(screen.getAllByRole("group", { name: "拖动排序 个人简介" })).toHaveLength(2);
+  });
+
+  it("duplicates selected content beside its source from the inspector", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制内容") }),
+    );
+
+    expect(screen.getAllByRole("button", { name: "共享渲染器基础" })).toHaveLength(1);
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveTextContent(
+      "共享渲染器基础",
+    );
+  });
+
+  it("deletes a selected bullet as a whole list item", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "基于流式布局的结构化简历编辑基础能力",
+      }),
+    );
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", { name: spacedLabel("删除内容") }),
+    );
+
+    expect(
+      screen.queryByRole("button", {
+        name: "基于流式布局的结构化简历编辑基础能力",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveTextContent(
+      "编辑、预览与打印三种模式共享同一渲染契约",
+    );
+  });
+
+  it("allows deleting the final bullet and removes its empty list", () => {
+    const initialDocument = createDefaultResumeDocument();
+    const list = initialDocument.sections[0]?.blocks[1];
+
+    if (list?.type !== "list") {
+      throw new Error("Expected profile highlights to remain a list.");
+    }
+
+    list.items = [list.items[0]!];
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "基于流式布局的结构化简历编辑基础能力",
+      }),
+    );
+    const deleteButton = within(getInspectorPanel()).getByRole("button", {
+      name: spacedLabel("删除内容"),
+    });
+
+    expect(deleteButton).toBeEnabled();
+    fireEvent.click(deleteButton);
+
+    expect(
+      screen.queryByRole("button", {
+        name: "基于流式布局的结构化简历编辑基础能力",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows deleting the final badge and removes its empty badge block", () => {
+    const initialDocument = createDefaultResumeDocument();
+    const badges = initialDocument.sections[0]?.blocks[2];
+
+    if (badges?.type !== "badges") {
+      throw new Error("Expected profile stack to remain a badge block.");
+    }
+
+    badges.items = [badges.items[0]!];
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+    const deleteButton = within(getInspectorPanel()).getByRole("button", {
+      name: "删除标签",
+    });
+
+    expect(deleteButton).toBeEnabled();
+    fireEvent.click(deleteButton);
+
+    expect(
+      screen.queryByRole("button", { name: "编辑标签 Next.js" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reflects the selected text block formatting in the toolbar", async () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections[0].blocks[0] = {
+      ...initialDocument.sections[0].blocks[0],
+      type: "text",
+      content: richText("共享渲染器基础", [
+        { type: "bold" },
+        { type: "italic" },
+        { type: "underline" },
+        { type: "strike" },
+        { type: "tag" },
+        { type: "link", attrs: { href: "https://example.com" } },
+      ]),
+    };
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    const dialog = screen.getByTestId("resume-inspector-panel");
+
+    expect(within(dialog).getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("button", { name: spacedLabel("斜体") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("button", { name: spacedLabel("下划线") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("button", { name: spacedLabel("删除线") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("button", { name: spacedLabel("内联标签") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(dialog).getByRole("textbox", { name: "链接" })).toHaveValue(
+      "https://example.com",
+    );
+  });
+
+  it("switches the canvas into layout sort mode and reveals drag handles", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("文本设置");
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
+
+    expect(screen.getByRole("button", { name: spacedLabel("内容编辑") })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: spacedLabel("布局排序") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryByRole("textbox", { name: "文本块编辑器" })).not.toBeInTheDocument();
+    expect(
+      within(getInspectorPanel()).queryByRole("button", { name: spacedLabel("加粗") }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", {
+        name: /拖动/,
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("updates toolbar pressed state after applying formatting", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    const dialog = screen.getByTestId("resume-inspector-panel");
+
+    const boldButton = within(dialog).getByRole("button", { name: spacedLabel("加粗") });
+
+    expect(boldButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(boldButton);
+
+    expect(within(dialog).getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("restores a newer local draft from the recovery prompt", async () => {
+    const recoveryDocument = createDefaultResumeDocument();
+    recoveryDocument.meta.title = "Recovered Local Draft";
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        initialVersion={3}
+        initialUpdatedAt={100}
+        autosaveDelayMs={800}
+        draftRepository={{
+          getDraft: async () => ({
+            resumeId: "resume-demo",
+            document: recoveryDocument,
+            baseVersion: 3,
+            updatedAt: 900,
+          }),
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={async ({ version }) => ({
+          version: version + 1,
+          updatedAt: 1000,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("发现较新的本地草稿")).toBeInTheDocument();
+
+    const prompt = screen.getByRole("status", { name: "本地草稿恢复" });
+
+    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
+    expect(prompt.parentElement).toHaveAttribute(
+      "data-editor-floating-notice-stack",
+      "true",
+    );
+    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
+      "fixed",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /查看差异/ }));
+
+    const dialog = (await screen.findByText("版本差异")).closest(
+      "[role='dialog']",
+    ) as HTMLElement;
+    expect(within(dialog).getAllByText("Recovered Local Draft").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("云端版本").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("本地版本").length).toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: spacedLabel("关闭") }));
+
+    fireEvent.click(
+      within(prompt).getByRole("button", {
+        name: spacedLabel("恢复本地版本"),
+      }),
+    );
+
+    expect(screen.getByText("Recovered Local Draft")).toBeInTheDocument();
+    expect(screen.getByText("有未保存更改")).toBeInTheDocument();
+  });
+
+  it("adds a new section from the outline actions and selects it", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByText("从这里开始编写")).toBeInTheDocument();
+  });
+
+  it("adds a projects preset section from the outline quick insert actions", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增项目区块") }));
+
+    expect(screen.getByRole("button", { name: "项目" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "用一小段文字说明项目范围、技术栈与可量化结果。",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the selected section from the canvas while keeping it inspectable", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("区块设置");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("隐藏区块") }));
+
+    expect(screen.getAllByText("已隐藏")).toHaveLength(1);
+    expect(screen.queryByText("共享渲染器基础")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: spacedLabel("显示区块") })).toBeInTheDocument();
+  });
+
+  it("deletes the selected section and shifts focus to the next remaining section", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("区块设置");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("删除区块") }));
+
+    expect(screen.queryByRole("button", { name: "个人简介" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "经历" })).toBeInTheDocument();
+    expect(screen.getByText("AnonResume - 前端工程师")).toBeInTheDocument();
+  });
+
+  it("undoes and redoes section changes from the toolbar", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
+    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("撤销") }));
+
+    expect(screen.queryByRole("button", { name: "新区块" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("重做") }));
+
+    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
+  });
+
+  it("reorders sections from outline controls and keeps outline and canvas in sync", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "上移 经历" }));
+
+    const canvas = screen.getByRole("article");
+    const headings = within(canvas).getAllByText(/个人简介|经历/);
+
+    expect(screen.getByRole("button", { name: "经历" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "个人简介" })).toBeInTheDocument();
+    expect(headings[0]).toHaveTextContent("经历");
+    expect(headings[1]).toHaveTextContent("个人简介");
+  });
+
+  it("moves a selected text block upward within its parent group", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "围绕结构化编辑器架构、共享渲染契约与 A4 优先展示能力展开实现。",
+      }),
+    );
+    expect(screen.getByTestId("resume-inspector-panel")).toHaveTextContent("文本设置");
+    fireEvent.click(screen.getByRole("button", { name: "上移 Block" }));
+
+    const movedBlock = screen.getByRole("textbox", {
+      name: "文本块编辑器",
+    });
+    const roleBlock = screen.getByRole("button", {
+      name: "AnonResume - 前端工程师",
+    });
+
+    expect(movedBlock).toHaveTextContent(
+      "围绕结构化编辑器架构、共享渲染契约与 A4 优先展示能力展开实现。",
+    );
+    expect(movedBlock.compareDocumentPosition(roleBlock)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+});

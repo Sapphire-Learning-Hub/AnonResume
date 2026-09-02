@@ -1,0 +1,45 @@
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    margin: 0;
+    background: #fff;
+  }
+
+  [data-print-chrome="screen"] {
+    display: none !important;
+  }
+
+  [data-resume-print-shell="true"] {
+    min-height: auto !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  [data-resume-print-content="true"] {
+    width: auto !important;
+    margin: 0 !important;
+  }
+
+  [data-resume-mode="print"] {
+    display: block !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 0 !important;
+  }
+
+  [data-resume-mode="print"] [data-resume-page="true"] {
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  [data-resume-mode="print"] [data-resume-page="true"]:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

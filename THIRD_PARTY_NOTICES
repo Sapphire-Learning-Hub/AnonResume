@@ -1,0 +1,24 @@
+AnonResume third-party notices
+==============================
+
+The AnonResume source code is licensed under AGPL-3.0-or-later. Bundled
+third-party assets retain their own licenses.
+
+Bundled fonts
+-------------
+The application self-hosts font files supplied by the checked-in @fontsource
+package dependencies. These fonts are distributed under the SIL Open Font
+License 1.1. See public/font-licenses/OFL-1.1.txt and
+public/font-licenses/README.txt for the bundled family list and license text.
+
+Icon data
+---------
+src/domain/resume/generated-icon-data.ts contains generated SVG data from:
+
+- Lucide, distributed under the ISC License:
+  https://github.com/lucide-icons/lucide
+- Simple Icons, distributed under CC0 1.0:
+  https://github.com/simple-icons/simple-icons
+
+The upstream packages and repositories remain the authoritative source for
+their complete license texts and attribution requirements.

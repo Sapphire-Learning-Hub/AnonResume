@@ -1,0 +1,590 @@
+"use client";
+
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
+
+import Link from "@tiptap/extension-link";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import StarterKit from "@tiptap/starter-kit";
+import { Button, Input, Popover, Tooltip, type InputRef } from "antd";
+
+import { TagOutlined } from "@ant-design/icons";
+
+import { CloseIcon, LinkIcon } from "@/components/ui/InlineIcons";
+import {
+  areRichTextContentsEqual,
+  normalizeLinkHref,
+  normalizeRichTextContent,
+} from "@/domain/resume/rich-text";
+import type { RichTextContent } from "@/domain/resume/schema";
+import { defaultLocale, getMessages } from "@/i18n/messages";
+
+import { useTiptapTextBlockEditorStyles } from "./TiptapTextBlockEditor.style";
+import { ResumeIconNode } from "./ResumeIconNode";
+import { ResumeInlineTagMark } from "./ResumeInlineTagMark";
+
+const defaultMessages = getMessages(defaultLocale);
+
+export interface TiptapInlineToolbarLabels {
+  applyLink: string;
+  ariaLabel: string;
+  bold: string;
+  boldShortcut: string;
+  inlineTag: string;
+  inlineTagShortcut: string;
+  italic: string;
+  italicShortcut: string;
+  link: string;
+  linkPlaceholder: string;
+  linkShortcut: string;
+  removeLink: string;
+  strike: string;
+  strikeShortcut: string;
+  underline: string;
+  underlineShortcut: string;
+}
+
+const defaultInlineToolbarLabels: TiptapInlineToolbarLabels = {
+  applyLink: defaultMessages["editor.applyLink"],
+  ariaLabel: defaultMessages["editor.inlineTextFormatting"],
+  bold: defaultMessages["editor.bold"],
+  boldShortcut: defaultMessages["editor.boldShortcut"],
+  inlineTag: defaultMessages["editor.inlineTag"],
+  inlineTagShortcut: defaultMessages["editor.inlineTagShortcut"],
+  italic: defaultMessages["editor.italic"],
+  italicShortcut: defaultMessages["editor.italicShortcut"],
+  link: defaultMessages["editor.link"],
+  linkPlaceholder: defaultMessages["editor.linkPlaceholder"],
+  linkShortcut: defaultMessages["editor.linkShortcut"],
+  removeLink: defaultMessages["editor.removeLink"],
+  strike: defaultMessages["editor.strike"],
+  strikeShortcut: defaultMessages["editor.strikeShortcut"],
+  underline: defaultMessages["editor.underline"],
+  underlineShortcut: defaultMessages["editor.underlineShortcut"],
+};
+
+export type TiptapTextBlockEditorCommand =
+  | { type: "toggleBold" }
+  | { type: "toggleItalic" }
+  | { type: "toggleUnderline" }
+  | { type: "toggleStrike" }
+  | { type: "toggleTag" }
+  | { type: "setLink"; href: string }
+  | { type: "unsetLink" }
+  | { type: "insertIcon"; iconId: string };
+
+export interface TiptapTextBlockEditorHandle {
+  applyCommand: (command: TiptapTextBlockEditorCommand) => boolean;
+}
+
+export interface TiptapTextBlockEditorFormatState {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strike: boolean;
+  tag: boolean;
+  linkHref: string;
+}
+
+function createResumeIconInsertion(iconId: string) {
+  return [
+    {
+      type: "resumeIcon",
+      attrs: { iconId },
+    },
+    {
+      type: "text",
+      text: " ",
+    },
+  ];
+}
+
+type TextSelectionRange = {
+  from: number;
+  to: number;
+};
+
+interface TiptapTextBlockEditorProps {
+  ariaLabel?: string;
+  className?: string;
+  content: RichTextContent;
+  inlineToolbarLabels?: TiptapInlineToolbarLabels;
+  onChange: (content: RichTextContent) => void;
+  onFormattingStateChange?: (state: TiptapTextBlockEditorFormatState) => void;
+  style?: CSSProperties;
+  wrapperClassName?: string;
+}
+
+function getFirstDocumentLinkHref(editor: Editor) {
+  const document = normalizeRichTextContent(editor.getJSON());
+
+  for (const paragraph of document.content) {
+    for (const node of paragraph.content) {
+      if (node.type !== "text") continue;
+
+      const linkMark = node.marks?.find((mark) => mark.type === "link");
+
+      if (typeof linkMark?.attrs?.href === "string") {
+        return linkMark.attrs.href;
+      }
+    }
+  }
+
+  return "";
+}
+
+function getSelectedLinkHref(editor: Editor) {
+  const selectionMarks = editor.state.selection.empty
+    ? editor.state.selection.$from.marks()
+    : [
+        ...editor.state.selection.$from.marks(),
+        ...editor.state.selection.$to.marks(),
+      ];
+  const selectedLinkMark = selectionMarks.find((mark) => mark.type.name === "link");
+
+  if (typeof selectedLinkMark?.attrs.href === "string") {
+    return selectedLinkMark.attrs.href;
+  }
+
+  const linkAttrs = editor.getAttributes("link");
+
+  if (typeof linkAttrs.href === "string") {
+    return linkAttrs.href;
+  }
+
+  return getFirstDocumentLinkHref(editor);
+}
+
+function getFormattingState(editor: Editor): TiptapTextBlockEditorFormatState {
+  const { $from, empty } = editor.state.selection;
+  const adjacentTag =
+    empty &&
+    [$from.nodeBefore, $from.nodeAfter].some((node) =>
+      node?.marks.some((mark) => mark.type.name === "tag"),
+    );
+
+  return {
+    bold: editor.isActive("bold"),
+    italic: editor.isActive("italic"),
+    underline: editor.isActive("underline"),
+    strike: editor.isActive("strike"),
+    tag: editor.isActive("tag") || Boolean(adjacentTag),
+    linkHref: getSelectedLinkHref(editor),
+  };
+}
+
+function applyEditorStyle(element: HTMLElement, style: CSSProperties | undefined) {
+  element.style.margin = "0";
+
+  if (style?.fontSize) {
+    element.style.fontSize = `${style.fontSize}px`;
+  } else {
+    element.style.removeProperty("font-size");
+  }
+
+  if (style?.fontWeight) {
+    element.style.fontWeight = `${style.fontWeight}`;
+  } else {
+    element.style.removeProperty("font-weight");
+  }
+
+  if (style?.lineHeight) {
+    element.style.lineHeight = `${style.lineHeight}`;
+  } else {
+    element.style.removeProperty("line-height");
+  }
+
+  if (style?.color) {
+    element.style.color = style.color;
+  } else {
+    element.style.removeProperty("color");
+  }
+
+  if (style?.textAlign) {
+    element.style.textAlign = style.textAlign;
+  } else {
+    element.style.removeProperty("text-align");
+  }
+}
+
+function preventToolbarMouseDown(event: ReactMouseEvent<HTMLElement>) {
+  event.preventDefault();
+}
+
+export const TiptapTextBlockEditor = forwardRef<
+  TiptapTextBlockEditorHandle,
+  TiptapTextBlockEditorProps
+>(function TiptapTextBlockEditor({
+  ariaLabel = defaultMessages["editor.textBlockEditor"],
+  className,
+  content,
+  inlineToolbarLabels = defaultInlineToolbarLabels,
+  onChange,
+  onFormattingStateChange,
+  style,
+  wrapperClassName,
+}, ref) {
+  const { styles } = useTiptapTextBlockEditorStyles();
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkDraft, setLinkDraft] = useState("");
+  const linkInputRef = useRef<InputRef>(null);
+  const linkSelectionRef = useRef<TextSelectionRange | null>(null);
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit.configure({
+        blockquote: false,
+        bulletList: false,
+        codeBlock: false,
+        dropcursor: false,
+        gapcursor: false,
+        heading: false,
+        horizontalRule: false,
+        listItem: false,
+        link: false,
+        orderedList: false,
+      }),
+      Link.configure({
+        autolink: false,
+        linkOnPaste: false,
+        openOnClick: false,
+      }),
+      ResumeIconNode,
+      ResumeInlineTagMark,
+    ],
+    content,
+    editorProps: {
+      attributes: {
+        "aria-label": ariaLabel,
+        class: className ?? "",
+        role: "textbox",
+      },
+      handleKeyDown: (_view, event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+          event.preventDefault();
+          const { empty, from, to } = _view.state.selection;
+          linkSelectionRef.current = empty ? null : { from, to };
+          setLinkDraft("");
+          setLinkPopoverOpen(true);
+          return true;
+        }
+
+        return false;
+      },
+    },
+    onUpdate: ({ editor: nextEditor }) => {
+      onChange(normalizeRichTextContent(nextEditor.getJSON()));
+    },
+  });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      applyCommand: (command) => {
+        if (!editor) {
+          return false;
+        }
+
+        if (command.type === "insertIcon") {
+          return editor
+            .chain()
+            .focus(undefined, { scrollIntoView: false })
+            .insertContent(createResumeIconInsertion(command.iconId))
+            .run();
+        }
+
+        const chain = editor.chain().focus();
+        const preparedChain = editor.state.selection.empty ? chain.selectAll() : chain;
+
+        switch (command.type) {
+          case "toggleBold":
+            return preparedChain.toggleBold().run();
+          case "toggleItalic":
+            return preparedChain.toggleItalic().run();
+          case "toggleUnderline":
+            return preparedChain.toggleUnderline().run();
+          case "toggleStrike":
+            return preparedChain.toggleStrike().run();
+          case "toggleTag":
+            return preparedChain.toggleMark("tag").run();
+          case "setLink": {
+            const href = normalizeLinkHref(command.href);
+
+            return href ? preparedChain.setLink({ href }).run() : false;
+          }
+          case "unsetLink":
+            return preparedChain.unsetLink().run();
+        }
+      },
+    }),
+    [editor],
+  );
+
+  useEffect(() => {
+    if (!editor || !onFormattingStateChange) return;
+
+    const reportFormattingState = () => {
+      onFormattingStateChange(getFormattingState(editor));
+    };
+
+    reportFormattingState();
+    editor.on("selectionUpdate", reportFormattingState);
+    editor.on("transaction", reportFormattingState);
+
+    return () => {
+      editor.off("selectionUpdate", reportFormattingState);
+      editor.off("transaction", reportFormattingState);
+    };
+  }, [editor, onFormattingStateChange]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const nextContent = normalizeRichTextContent(content);
+    const currentContent = normalizeRichTextContent(editor.getJSON());
+
+    if (areRichTextContentsEqual(currentContent, nextContent)) {
+      return;
+    }
+
+    editor.commands.setContent(nextContent, { emitUpdate: false });
+  }, [content, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    applyEditorStyle(editor.view.dom as HTMLElement, style);
+  }, [editor, style]);
+
+  useLayoutEffect(() => {
+    if (!linkPopoverOpen) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      linkInputRef.current?.focus({ cursor: "end" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [linkPopoverOpen]);
+
+  function runInlineCommand(command: TiptapTextBlockEditorCommand) {
+    if (!editor) return;
+
+    const chain = editor.chain().focus();
+
+    switch (command.type) {
+      case "toggleBold":
+        chain.toggleBold().run();
+        break;
+      case "toggleItalic":
+        chain.toggleItalic().run();
+        break;
+      case "toggleUnderline":
+        chain.toggleUnderline().run();
+        break;
+      case "toggleStrike":
+        chain.toggleStrike().run();
+        break;
+      case "toggleTag":
+        chain.toggleMark("tag").run();
+        break;
+      case "setLink": {
+        const href = normalizeLinkHref(command.href);
+
+        if (!href) {
+          return;
+        }
+
+        const savedSelection = linkSelectionRef.current;
+        const linkChain = savedSelection
+          ? chain.setTextSelection(savedSelection)
+          : chain;
+
+        linkChain.setLink({ href }).run();
+        linkSelectionRef.current = null;
+        setLinkPopoverOpen(false);
+        break;
+      }
+      case "unsetLink":
+        chain.unsetLink().run();
+        linkSelectionRef.current = null;
+        break;
+      case "insertIcon":
+        editor
+          .chain()
+          .focus(undefined, { scrollIntoView: false })
+          .insertContent(createResumeIconInsertion(command.iconId))
+          .run();
+        break;
+    }
+  }
+
+  function openLinkPopover() {
+    if (!editor) return;
+
+    const { empty, from, to } = editor.state.selection;
+    linkSelectionRef.current = empty ? null : { from, to };
+    setLinkDraft(getSelectedLinkHref(editor));
+    setLinkPopoverOpen(true);
+  }
+
+  return (
+    <>
+      <EditorContent editor={editor} className={wrapperClassName} style={style} />
+      {editor ? (
+        <BubbleMenu
+          editor={editor}
+          role="toolbar"
+          aria-label={inlineToolbarLabels.ariaLabel}
+          className={styles.inlineToolbar}
+          appendTo={() => document.body}
+          shouldShow={({ state, view, from, to }) =>
+            (linkPopoverOpen && linkSelectionRef.current !== null) ||
+            (view.hasFocus() &&
+              !state.selection.empty &&
+              Boolean(state.doc.textBetween(from, to).trim()))
+          }
+          options={{
+            strategy: "fixed",
+            placement: "top",
+            offset: 8,
+            flip: true,
+            shift: { padding: 12 },
+          }}
+        >
+          <Tooltip title={inlineToolbarLabels.boldShortcut}>
+            <Button
+              size="small"
+              type={editor.isActive("bold") ? "primary" : "text"}
+              aria-label={inlineToolbarLabels.bold}
+              aria-pressed={editor.isActive("bold")}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "toggleBold" })}
+            >
+              B
+            </Button>
+          </Tooltip>
+          <Tooltip title={inlineToolbarLabels.italicShortcut}>
+            <Button
+              size="small"
+              type={editor.isActive("italic") ? "primary" : "text"}
+              aria-label={inlineToolbarLabels.italic}
+              aria-pressed={editor.isActive("italic")}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "toggleItalic" })}
+            >
+              <i>I</i>
+            </Button>
+          </Tooltip>
+          <Tooltip title={inlineToolbarLabels.inlineTagShortcut}>
+            <Button
+              size="small"
+              type={editor.isActive("tag") ? "primary" : "text"}
+              aria-label={inlineToolbarLabels.inlineTag}
+              aria-pressed={editor.isActive("tag")}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "toggleTag" })}
+            >
+              <TagOutlined />
+            </Button>
+          </Tooltip>
+          <Tooltip title={inlineToolbarLabels.underlineShortcut}>
+            <Button
+              size="small"
+              type={editor.isActive("underline") ? "primary" : "text"}
+              aria-label={inlineToolbarLabels.underline}
+              aria-pressed={editor.isActive("underline")}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "toggleUnderline" })}
+            >
+              <span style={{ textDecoration: "underline" }}>U</span>
+            </Button>
+          </Tooltip>
+          <Tooltip title={inlineToolbarLabels.strikeShortcut}>
+            <Button
+              size="small"
+              type={editor.isActive("strike") ? "primary" : "text"}
+              aria-label={inlineToolbarLabels.strike}
+              aria-pressed={editor.isActive("strike")}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "toggleStrike" })}
+            >
+              <span style={{ textDecoration: "line-through" }}>S</span>
+            </Button>
+          </Tooltip>
+          <Popover
+            open={linkPopoverOpen}
+            trigger={[]}
+            placement="top"
+            autoAdjustOverflow={false}
+            destroyOnHidden
+            content={
+              <div className={styles.inlineToolbarLinkForm}>
+                <Input
+                  ref={linkInputRef}
+                  aria-label={inlineToolbarLabels.link}
+                  placeholder={inlineToolbarLabels.linkPlaceholder}
+                  value={linkDraft}
+                  onChange={(event) => setLinkDraft(event.target.value)}
+                  onPressEnter={() => {
+                    const href = linkDraft.trim();
+
+                    if (href) {
+                      runInlineCommand({ type: "setLink", href });
+                    }
+                  }}
+                />
+                <Button
+                  type="primary"
+                  onMouseDown={preventToolbarMouseDown}
+                  onClick={() => {
+                    const href = linkDraft.trim();
+
+                    if (href) {
+                      runInlineCommand({ type: "setLink", href });
+                    }
+                  }}
+                >
+                  {inlineToolbarLabels.applyLink}
+                </Button>
+              </div>
+            }
+          >
+            <Tooltip title={linkPopoverOpen ? null : inlineToolbarLabels.linkShortcut}>
+              <Button
+                size="small"
+                type={editor.isActive("link") ? "primary" : "text"}
+                aria-label={inlineToolbarLabels.link}
+                aria-pressed={editor.isActive("link")}
+                onMouseDown={preventToolbarMouseDown}
+                onClick={openLinkPopover}
+              >
+                <LinkIcon size={15} />
+              </Button>
+            </Tooltip>
+          </Popover>
+          {editor.isActive("link") ? (
+            <Button
+              size="small"
+              type="text"
+              aria-label={inlineToolbarLabels.removeLink}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "unsetLink" })}
+            >
+              <CloseIcon size={15} />
+            </Button>
+          ) : null}
+        </BubbleMenu>
+      ) : null}
+    </>
+  );
+});

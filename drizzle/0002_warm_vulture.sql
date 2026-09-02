@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "resumes_generated_id_unique" ON "resumes" USING btree ("id") WHERE "resumes"."id" ~ '^resume-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$';
