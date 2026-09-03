@@ -1,6 +1,7 @@
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   appendBlockToSectionDocument,
+  createRichTextFromPlainText,
   findBlockByPath,
   findTextBlock,
   getBlockSiblingPosition,
@@ -26,6 +27,13 @@ function richText(text: string): RichTextContent {
 }
 
 describe("resume operations", () => {
+  it("represents blank plain text without a whitespace placeholder", () => {
+    expect(createRichTextFromPlainText("")).toEqual({
+      type: "doc",
+      content: [{ type: "paragraph", content: [] }],
+    });
+  });
+
   it("omits decorative resume icons from extracted plain text", () => {
     expect(
       getPlainTextFromRichText({

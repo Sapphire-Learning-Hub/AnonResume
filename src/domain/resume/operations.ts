@@ -48,7 +48,7 @@ export function createRichTextFromPlainText(text: string): RichTextContent {
     type: "doc",
     content: lines.map((line) => ({
       type: "paragraph",
-      content: [{ type: "text", text: line || " " }],
+      content: line ? [{ type: "text" as const, text: line }] : [],
     })),
   };
 }

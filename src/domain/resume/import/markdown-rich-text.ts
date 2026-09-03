@@ -227,7 +227,7 @@ export function createRichTextFromMdast(
     content: [
       {
         type: "paragraph",
-        content: content.length ? content : [{ type: "text", text: " " }],
+        content,
       },
     ],
   };

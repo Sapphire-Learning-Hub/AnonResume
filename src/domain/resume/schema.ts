@@ -46,7 +46,7 @@ const richTextParagraphSchema = z.object({
         richTextResumeIconNodeSchema,
       ]),
     )
-    .min(1),
+    .default([]),
 });
 
 export const richTextContentSchema = z.object({

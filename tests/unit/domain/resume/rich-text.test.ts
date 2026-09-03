@@ -2,6 +2,18 @@ import { richTextContentSchema } from "@/domain/resume/schema";
 import { normalizeLinkHref, normalizeRichTextContent } from "@/domain/resume/rich-text";
 
 describe("normalizeRichTextContent", () => {
+  it("normalizes an empty Tiptap paragraph into an editable empty paragraph", () => {
+    expect(
+      normalizeRichTextContent({
+        type: "doc",
+        content: [{ type: "paragraph" }],
+      }),
+    ).toEqual({
+      type: "doc",
+      content: [{ type: "paragraph", content: [] }],
+    });
+  });
+
   it("strips unsupported attrs while preserving supported rich text nodes", () => {
     const normalized = normalizeRichTextContent({
       type: "doc",

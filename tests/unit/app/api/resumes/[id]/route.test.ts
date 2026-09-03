@@ -124,6 +124,46 @@ describe("resume route", () => {
     ).toBe(3);
   });
 
+  it("persists an empty editable text block", async () => {
+    const document = createDefaultResumeDocument();
+    const textBlock = document.sections[0]?.blocks[0];
+
+    expect(textBlock?.type).toBe("text");
+    if (textBlock?.type !== "text") {
+      throw new Error("Expected the first profile block to be text.");
+    }
+
+    textBlock.content = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [] }],
+    };
+
+    const response = await PUT(
+      new Request("http://localhost/api/resumes/resume-foundation", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          origin: "http://localhost",
+        },
+        body: JSON.stringify({ version: 1, document }),
+      }),
+      { params: Promise.resolve({ id: "resume-foundation" }) },
+    );
+
+    expect(response.status).toBe(200);
+    const saved = await getResumeRecord("user-demo", "resume-foundation");
+    const savedTextBlock = saved?.document.sections[0]?.blocks.find(
+      (block) => block.id === textBlock.id,
+    );
+
+    expect(savedTextBlock).toMatchObject({
+      type: "text",
+      content: {
+        content: [{ type: "paragraph", content: [] }],
+      },
+    });
+  });
+
   it("updates only the resume summary with optimistic versioning", async () => {
     const response = await PATCH(
       new Request("http://localhost/api/resumes/resume-foundation", {
