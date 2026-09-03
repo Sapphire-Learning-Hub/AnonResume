@@ -44,6 +44,21 @@ describe("database migrations", () => {
     );
   });
 
+  it("enforces unique Better Auth account identities", async () => {
+    const migration = await readFile(
+      resolve(
+        process.cwd(),
+        "drizzle/0006_better_auth_account_identity_unique.sql",
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "account_issuer_accountid_key"',
+    );
+    expect(migration).toContain('ON "account" ("issuer", "accountId")');
+  });
+
   it("rejects duplicate public slugs at the database boundary", async () => {
     const document = createDefaultResumeDocument();
 
