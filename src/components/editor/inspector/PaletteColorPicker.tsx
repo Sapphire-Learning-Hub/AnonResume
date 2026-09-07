@@ -50,17 +50,17 @@ export function PaletteColorPicker({
             height: 28,
             padding: 0,
             border: "none",
-            borderRadius: 8,
+            borderRadius: 6,
             background: "transparent",
             boxShadow: "none",
           },
           body: {
             width: "100%",
             height: "100%",
-            borderRadius: 8,
+            borderRadius: 6,
           },
           content: {
-            borderRadius: 8,
+            borderRadius: 6,
           },
         }}
         value={isHexColor(value) ? value : placeholder}

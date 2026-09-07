@@ -6,114 +6,35 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   shell: css`
     display: flex;
     flex-direction: column;
-    min-height: 100dvh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
     background: ${token.colorBgLayout};
   `,
-  toolbar: css`
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: center;
-    min-height: 64px;
-    padding: 8px 16px;
-    border-bottom: 1px solid ${token.colorBorderSecondary};
-    background: color-mix(in srgb, ${token.colorBgContainer} 96%, transparent);
-    backdrop-filter: blur(16px);
-    position: sticky;
-    top: 0;
-    z-index: 20;
-
-    @media (max-width: 1180px) {
-      flex-wrap: wrap;
-      padding: 10px 12px;
-    }
-  `,
-  backButton: css`
+  ribbonIconButton: css`
     && {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
       padding: 0;
-      border-radius: 8px;
-      font-size: 20px;
-      line-height: 1;
+      border-radius: 6px;
       color: ${token.colorTextSecondary};
 
-      &:hover {
+      &:hover,
+      &:focus-visible {
         color: ${token.colorText};
         background: ${token.colorFillTertiary};
       }
-
-      svg {
-        flex: 0 0 18px;
-      }
     }
   `,
-  toolbarIdentity: css`
+  ribbonControlGroup: css`
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-width: 0;
-  `,
-  titleStack: css`
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-width: 0;
-  `,
-  toolbarLabel: css`
-    font-size: 12px;
-    font-weight: 700;
-    color: ${token.colorTextTertiary};
-    white-space: nowrap;
-  `,
-  toolbarValue: css`
-    overflow: hidden;
-    font-size: 16px;
-    font-weight: 700;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: ${token.colorText};
-  `,
-  saveStatus: css`
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding-left: 12px;
-    border-left: 1px solid ${token.colorBorderSecondary};
-  `,
-  toolbarActionRail: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: flex-end;
-    align-items: center;
-    margin-left: auto;
-
-    @media (max-width: 1180px) {
-      margin-left: 0;
-    }
-  `,
-  toolbarActionGroup: css`
-    display: flex;
-    flex-wrap: wrap;
     gap: 4px;
-    align-items: center;
-    padding-left: 8px;
-    border-left: 1px solid ${token.colorBorderSecondary};
-
-    &:first-child {
-      padding-left: 0;
-      border-left: 0;
-    }
-  `,
-  richTextToolbar: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
+    min-width: max-content;
   `,
   linkInput: css`
     && {
@@ -173,17 +94,18 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   `,
   body: css`
     display: grid;
-    grid-template-columns: minmax(240px, 272px) minmax(0, 1fr) minmax(320px, 360px);
+    grid-template-columns: minmax(240px, 272px) minmax(0, 1fr);
     flex: 1;
     min-height: 0;
     align-items: stretch;
+    overflow: hidden;
 
     @media (max-width: 1440px) {
-      grid-template-columns: 204px minmax(0, 1fr) 272px;
+      grid-template-columns: 204px minmax(0, 1fr);
     }
 
     @media (max-width: 1180px) {
-      grid-template-columns: minmax(208px, 240px) minmax(0, 1fr);
+      grid-template-columns: 180px minmax(0, 1fr);
     }
 
     @media (max-width: 960px) {
@@ -197,9 +119,10 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     min-width: 0;
   `,
   sidebar: css`
-    position: sticky;
-    top: var(--editor-sticky-offset, 64px);
-    max-height: calc(100dvh - var(--editor-sticky-offset, 64px));
+    position: relative;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
     overflow: auto;
     padding: 10px 14px 18px;
     border-right: 1px solid ${token.colorBorderSecondary};
@@ -211,6 +134,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
 
     @media (max-width: 960px) {
       position: static;
+      height: auto;
       max-height: none;
       overflow: visible;
       border-right: 0;
@@ -246,23 +170,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     color: ${token.colorTextSecondary};
     line-height: 1.5;
   `,
-  panelSection: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-
-    & + & {
-      padding-top: 14px;
-      border-top: 1px solid ${token.colorBorderSecondary};
-    }
-  `,
-  sectionEyebrow: css`
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: ${token.colorTextTertiary};
-  `,
   outlineList: css`
     display: flex;
     flex-direction: column;
@@ -294,12 +201,9 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   `,
   panelActionRow: css`
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  `,
-  presetButtonList: css`
-    display: grid;
-    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
   `,
   compactActionRow: css`
     display: flex;
@@ -346,7 +250,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   `,
   canvasPanel: css`
     gap: 0;
-    height: calc(100dvh - var(--editor-sticky-offset, 64px));
+    height: 100%;
     min-height: 0;
     overflow: hidden;
     padding: 0;
@@ -356,7 +260,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
 
     @media (max-width: 960px) {
       height: auto;
-      min-height: calc(100dvh - var(--editor-sticky-offset, 64px));
+      min-height: 0;
       overflow: visible;
     }
   `,
@@ -394,25 +298,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     align-items: center;
     gap: 8px;
   `,
-  canvasSafeAreaButton: css`
-    && {
-      color: rgba(255, 255, 255, 0.88);
-      border-color: rgba(255, 255, 255, 0.22);
-      background: rgba(15, 23, 42, 0.18);
-
-      &:hover,
-      &[aria-pressed="true"] {
-        color: #ffffff;
-        border-color: color-mix(in srgb, ${token.colorPrimary} 72%, white);
-        background: color-mix(in srgb, ${token.colorPrimary} 34%, transparent);
-      }
-    }
-  `,
-  canvasPageCount: css`
-    color: rgba(255, 255, 255, 0.68);
-    font-size: 12px;
-    white-space: nowrap;
-  `,
   canvasModeTag: css`
     && {
       margin-inline-end: 0;
@@ -443,101 +328,91 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     transition: transform 160ms ease;
     margin: 0 auto;
   `,
-  inspectorPanel: css`
-    position: sticky;
-    top: var(--editor-sticky-offset, 64px);
-    max-height: calc(100dvh - var(--editor-sticky-offset, 64px));
-    overflow: hidden;
-    gap: 0;
-    padding: 0 16px;
-    border-left: 1px solid ${token.colorBorderSecondary};
-    background: color-mix(in srgb, ${token.colorBgContainer} 96%, transparent);
-
-    @media (max-width: 1180px) {
-      grid-column: 1 / -1;
-      position: static;
-      max-height: none;
-      overflow: visible;
-      border-top: 1px solid ${token.colorBorderSecondary};
-      border-left: 0;
-    }
-  `,
-  inspectorPanelHeader: css`
+  ribbonPropertyPanel: css`
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 30px;
-    padding: 10px 0 8px;
-    background: ${token.colorBgContainer};
-    box-shadow: 0 1px 0 ${token.colorBorderSecondary};
-  `,
-  drawerContent: css`
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 14px;
-    min-height: 0;
-    padding: 14px 0 24px;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-
-    @media (max-width: 1180px) {
-      flex: none;
-      overflow: visible;
-    }
-  `,
-  drawerSectionHeader: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  `,
-  drawerSectionTitle: css`
-    margin: 0;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: ${token.colorTextSecondary};
-  `,
-  drawerSummary: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 14px 16px;
-    border-radius: 18px;
-    background: ${token.colorFillTertiary};
-  `,
-  drawerSummaryLabel: css`
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: ${token.colorTextTertiary};
-  `,
-  drawerSummaryValue: css`
-    font-weight: 600;
-    color: ${token.colorText};
-  `,
-  inspectorList: css`
-    display: grid;
-    gap: 12px;
+    min-width: max-content;
+    height: 49px;
   `,
   inspectorControlGrid: css`
-    display: grid;
-    gap: 12px;
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 8px;
   `,
   inspectorControlRow: css`
-    display: grid;
-    gap: 6px;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 5px;
+
+    > * {
+      min-width: 0;
+    }
+
+    > :last-child {
+      width: 92px;
+      flex: 0 0 auto;
+    }
+
+    &[data-field-size="compact"] > :last-child {
+      width: 60px;
+    }
+
+    &[data-field-size="medium"] > :last-child {
+      width: 124px;
+    }
+
+    &[data-field-size="wide"] > :last-child {
+      width: 190px;
+    }
+
+    &[data-field-size="select-medium"] > :last-child {
+      width: 180px;
+    }
+
+    &[data-field-size="select-wide"] > :last-child {
+      width: 220px;
+    }
+
+    &[data-field-size="color"] > :last-child {
+      width: 40px;
+    }
+
+    &[data-field-size="auto"] > :last-child {
+      width: auto;
+    }
+  `,
+  documentPropertyStack: css`
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 8px;
+  `,
+  documentPropertyPair: css`
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 8px;
+  `,
+  documentColorStack: css`
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 8px;
+  `,
+  documentMarginGrid: css`
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 8px;
   `,
   inspectorControlLabel: css`
+    flex: 0 0 auto;
+    color: ${token.colorTextSecondary};
     font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: ${token.colorTextTertiary};
+    font-weight: 600;
+    white-space: nowrap;
   `,
   fontPresetOption: css`
     display: flex;
@@ -547,18 +422,25 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     gap: 10px;
   `,
   fontPresetName: css`
+    flex: 0 0 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
   fontPresetMeta: css`
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
     color: ${token.colorTextTertiary};
     font-size: 11px;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   inspectorLabelWithHint: css`
     display: flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 4px;
   `,
   inspectorHelpButton: css`
@@ -585,59 +467,21 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     }
   `,
   colorControl: css`
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     min-width: 0;
-    flex: 1;
-  `,
-  colorThemeGroup: css`
-    display: grid;
-    gap: 6px;
-  `,
-  colorThemeGrid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-  `,
-  colorThemeItem: css`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    min-width: 0;
-    padding: 4px 8px;
+    height: 28px;
+    padding: 0;
+    overflow: hidden;
     border: 1px solid ${token.colorBorder};
-    border-radius: ${token.borderRadius}px;
+    border-radius: 6px;
     background: ${token.colorBgContainer};
-  `,
-  colorThemeLabel: css`
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    color: ${token.colorTextSecondary};
   `,
   alignButtonRow: css`
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  `,
-  inspectorItem: css`
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 12px 14px;
-    border-radius: 14px;
-    background: ${token.colorFillTertiary};
-  `,
-  inspectorLabel: css`
-    font-weight: 600;
-  `,
-  inspectorValue: css`
-    color: ${token.colorTextSecondary};
-  `,
-  emptyState: css`
-    margin: 0;
-    color: ${token.colorTextSecondary};
-    line-height: 1.7;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
   `,
 }));
