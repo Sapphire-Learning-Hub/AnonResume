@@ -2,8 +2,19 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AuthPanel } from "@/components/auth/AuthPanel";
+import {
+  AdminAccessShell,
+  AdminMfaPanel,
+} from "@/components/admin/AdminAccessPanel";
 import { isGitHubAuthEnabled } from "@/lib/auth";
-import { getOptionalSession } from "@/lib/auth-session";
+import {
+  AdminAuthenticationError,
+  type AdminAuthorizationContext,
+} from "@/lib/admin-authorization";
+import { getAdminRequestContext } from "@/lib/admin-request";
+import { resolveAuthenticatedEntry } from "@/lib/admin-sign-in-flow";
+import { getAdminAccessForUser, isAccountSuspended } from "@/lib/admin-store";
+import { getOptionalIdentitySession } from "@/lib/auth-session";
 
 export const metadata: Metadata = {
   robots: {
@@ -17,11 +28,41 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ error?: string | string[] }>;
 }) {
-  const session = await getOptionalSession();
+  const session = await getOptionalIdentitySession();
   const params = await searchParams;
 
   if (session) {
-    redirect("/app");
+    if (await isAccountSuspended(session.user.id)) {
+      return (
+        <main className="auth-page-shell">
+          <AuthPanel
+            githubEnabled={isGitHubAuthEnabled()}
+            verificationError="ACCOUNT_SUSPENDED"
+          />
+        </main>
+      );
+    }
+
+    const assignedManagement = await getAdminAccessForUser(session.user.id);
+    let activeManagement: AdminAuthorizationContext | null = null;
+    try {
+      activeManagement = await getAdminRequestContext();
+    } catch (error) {
+      if (!(error instanceof AdminAuthenticationError)) throw error;
+    }
+
+    const destination = resolveAuthenticatedEntry({
+      activeManagement,
+      assignedManagement,
+      productAccess: assignedManagement?.kind !== "super_admin",
+    });
+    if (destination !== "management_mfa") redirect(destination);
+
+    return (
+      <AdminAccessShell>
+        <AdminMfaPanel />
+      </AdminAccessShell>
+    );
   }
 
   return (

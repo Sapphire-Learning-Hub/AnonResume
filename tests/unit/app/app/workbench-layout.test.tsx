@@ -1,18 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { requireSession } from "@/lib/auth-session";
-import { listResumeEntries } from "@/lib/resume-repository";
+import { requireAppShellContext } from "@/lib/app-shell-context";
 
 import WorkbenchLayout from "@/app/app/(workbench)/layout";
 import { metadata as privateAppMetadata } from "@/app/app/layout";
 
-vi.mock("@/lib/auth-session", () => ({
-  requireSession: vi.fn(),
-}));
-
-vi.mock("@/lib/resume-repository", () => ({
-  listResumeEntries: vi.fn(),
+vi.mock("@/lib/app-shell-context", () => ({
+  requireAppShellContext: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -26,21 +21,28 @@ describe("WorkbenchLayout", () => {
   });
 
   it("owns the persistent workbench chrome around route content", async () => {
-    vi.mocked(requireSession).mockResolvedValue({
-      session: { id: "session-demo", userId: "user-demo" },
+    vi.mocked(requireAppShellContext).mockResolvedValue({
+      access: {
+        canEnterManagement: false,
+        mfaEnrollmentRequired: false,
+        mode: "product",
+        productAccess: true,
+      },
       user: {
         id: "user-demo",
         name: "Demo User",
         email: "demo@example.com",
       },
     } as never);
-    vi.mocked(listResumeEntries).mockResolvedValue([]);
 
-    render(await WorkbenchLayout());
+    render(
+      await WorkbenchLayout({
+        children: <h1>Route content</h1>,
+      }),
+    );
 
-    expect(requireSession).toHaveBeenCalledOnce();
-    expect(listResumeEntries).toHaveBeenCalledWith("user-demo");
-    expect(screen.getByRole("heading", { name: "简历" })).toBeInTheDocument();
+    expect(requireAppShellContext).toHaveBeenCalledOnce();
+    expect(screen.getByRole("heading", { name: "Route content" })).toBeInTheDocument();
     expect(
       document.querySelector('img[src="/brand/anonresume-lockup.png"]'),
     ).toHaveAttribute("alt", "AnonResume");

@@ -1,15 +1,16 @@
-import { WorkbenchShell } from "@/components/dashboard/WorkbenchShell";
-import { requireSession } from "@/lib/auth-session";
-import { listResumeEntries } from "@/lib/resume-repository";
+import type { PropsWithChildren } from "react";
 
-export default async function WorkbenchLayout() {
-  const session = await requireSession();
+import { AppShell } from "@/components/dashboard/AppShell";
+import { requireAppShellContext } from "@/lib/app-shell-context";
+
+export default async function WorkbenchLayout({
+  children,
+}: PropsWithChildren) {
+  const context = await requireAppShellContext();
 
   return (
-    <WorkbenchShell
-      createAction="/app/create-resume"
-      resumes={await listResumeEntries(session.user.id)}
-      user={session.user}
-    />
+    <AppShell access={context.access} user={context.user}>
+      {children}
+    </AppShell>
   );
 }

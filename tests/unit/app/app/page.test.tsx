@@ -8,7 +8,7 @@ import {
   resetResumeRepository,
 } from "@/lib/resume-repository";
 
-import WorkbenchLayout from "@/app/app/(workbench)/layout";
+import DashboardPage from "@/app/app/(workbench)/page";
 
 vi.mock("@/lib/auth-session", () => ({
   requireSession: vi.fn(),
@@ -66,7 +66,7 @@ describe("Dashboard workbench view", () => {
       createId: () => "resume-frontend",
     });
     await publishResumeRecord("user-demo", "resume-foundation");
-    const page = await WorkbenchLayout();
+    const page = await DashboardPage();
 
     render(page);
 

@@ -247,7 +247,7 @@ export function AuthPanel({
         const result = await authClient.signIn.email({
           email,
           password,
-          callbackURL: "/app",
+          callbackURL: "/sign-in",
         });
 
         if (result.error) {
@@ -262,7 +262,7 @@ export function AuthPanel({
         }
       }
 
-      router.push("/app");
+      router.push("/sign-in");
       router.refresh();
     } catch (error) {
       setErrorMessage(getAuthErrorMessage(error, t("auth.errorFallback")));
@@ -313,7 +313,7 @@ export function AuthPanel({
     try {
       const result = await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/app",
+        callbackURL: "/sign-in",
       });
 
       if (result.error) {

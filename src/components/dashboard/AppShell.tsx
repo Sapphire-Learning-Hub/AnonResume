@@ -1,24 +1,32 @@
 "use client";
 
 import {
+  AuditOutlined,
+  CloudServerOutlined,
+  DashboardOutlined,
   FileTextOutlined,
   FontSizeOutlined,
+  LockOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  SafetyCertificateOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import { createStyles } from "antd-style";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type MouseEvent, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
-import { ResumeDashboardShell } from "@/components/dashboard/ResumeDashboardShell";
-import { FontMarket } from "@/components/fonts/FontMarket";
+import { ManagementModeControl } from "@/components/dashboard/ManagementModeControl";
+import {
+  buildAppNavigation,
+  type AppNavigationIcon,
+} from "@/components/dashboard/app-navigation";
 import { useI18n } from "@/i18n/I18nProvider";
-import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
-
-export type WorkbenchNavigationItem = "resumes" | "fonts";
+import type { AppShellAccess } from "@/lib/app-shell-access";
 
 const useStyles = createStyles(({ token, css }) => ({
   shell: css`
@@ -166,12 +174,20 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
   navigation: css`
     display: grid;
-    gap: 4px;
+    gap: 14px;
 
     @media (max-width: 720px) {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+  `,
+  navigationSection: css`
+    display: grid;
+    gap: 4px;
+
+    @media (max-width: 720px) {
+      display: contents;
     }
   `,
   navigationLabel: css`
@@ -279,62 +295,46 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
 }));
 
-export function WorkbenchShell({
-  createAction,
-  resumes,
-  user,
-}: {
-  createAction: string;
-  resumes: ResumeCatalogEntry[];
+const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
+  audit: <AuditOutlined />,
+  dashboard: <DashboardOutlined />,
+  exports: <CloudServerOutlined />,
+  fonts: <FontSizeOutlined />,
+  resumes: <FileTextOutlined />,
+  roles: <SafetyCertificateOutlined />,
+  security: <LockOutlined />,
+  system: <CloudServerOutlined />,
+  users: <TeamOutlined />,
+};
+
+function isNavigationItemActive(pathname: string, href: string) {
+  if (href === "/app" || href === "/app/manage") return pathname === href;
+  return pathname.startsWith(`${href}/`) || pathname === href;
+}
+
+export interface AppShellProps {
+  access: AppShellAccess;
+  children: ReactNode;
   user: {
     name?: string | null;
     email: string;
   };
-}) {
+}
+
+export function AppShell({
+  access,
+  children,
+  user,
+}: AppShellProps) {
   const { styles } = useStyles();
   const { t } = useI18n();
   const pathname = usePathname();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const activeItem: WorkbenchNavigationItem = pathname.startsWith("/app/fonts")
-    ? "fonts"
-    : "resumes";
-  const contentScroll = activeItem === "fonts" ? "internal" : "frame";
+  const contentScroll = pathname.startsWith("/app/fonts")
+    ? "internal"
+    : "frame";
   const userName = user.name || t("common.userFallback");
-  const navigationItems = [
-    {
-      id: "resumes" as const,
-      href: "/app",
-      icon: <FileTextOutlined />,
-      label: t("dashboard.resumeList"),
-    },
-    {
-      id: "fonts" as const,
-      href: "/app/fonts",
-      icon: <FontSizeOutlined />,
-      label: t("fontMarket.navigation"),
-    },
-  ];
-
-  function switchWorkbenchView(
-    event: MouseEvent<HTMLAnchorElement>,
-    href: string,
-  ) {
-    if (
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    if (pathname !== href) {
-      window.history.pushState(null, "", href);
-    }
-  }
+  const navigationSections = buildAppNavigation(access, t);
 
   return (
     <main className={styles.shell}>
@@ -344,8 +344,23 @@ export function WorkbenchShell({
         </div>
         <div className={styles.account}>
           <span className={styles.userSummary}>
-            {t("dashboard.signedInAs", { name: userName, email: user.email })}
+            {access.mode !== "product" && access.kind === "super_admin"
+              ? t("management.superAdmin")
+              : t("dashboard.signedInAs", {
+                  name: userName,
+                  email: user.email,
+                })}
           </span>
+          {access.mode === "product" && access.canEnterManagement ? (
+            <ManagementModeControl
+              email={user.email}
+              enrollmentRequired={access.mfaEnrollmentRequired}
+              state="available"
+            />
+          ) : null}
+          {access.mode === "management" && access.productAccess ? (
+            <ManagementModeControl state="active" />
+          ) : null}
           <SignOutButton />
         </div>
       </header>
@@ -363,11 +378,7 @@ export function WorkbenchShell({
             className={styles.sidebarHeader}
             data-collapsed={isSidebarCollapsed}
           >
-            {!isSidebarCollapsed ? (
-              <span className={styles.navigationLabel}>
-                {t("dashboard.resumeManagement")}
-              </span>
-            ) : null}
+            <span />
             <Tooltip
               placement="right"
               title={
@@ -397,40 +408,46 @@ export function WorkbenchShell({
             </Tooltip>
           </div>
           <nav aria-label={t("dashboard.navigation")} className={styles.navigation}>
-            {navigationItems.map((item) => {
-              const active = item.id === activeItem;
+            {navigationSections.map((section) => (
+              <section className={styles.navigationSection} key={section.id}>
+                {!isSidebarCollapsed ? (
+                  <span className={styles.navigationLabel}>{section.label}</span>
+                ) : null}
+                {section.items.map((item) => {
+                  const active = isNavigationItemActive(pathname, item.href);
 
-              return (
-                <Tooltip
-                  key={item.id}
-                  placement="right"
-                  title={isSidebarCollapsed ? item.label : undefined}
-                >
-                  <a
-                    aria-current={active ? "page" : undefined}
-                    aria-label={item.label}
-                    className={styles.navigationItem}
-                    data-collapsed={isSidebarCollapsed}
-                    href={item.href}
-                    onClick={(event) => switchWorkbenchView(event, item.href)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={styles.navigationIcon}
-                      data-testid={`workbench-nav-icon-${item.id}`}
+                  return (
+                    <Tooltip
+                      key={item.id}
+                      placement="right"
+                      title={isSidebarCollapsed ? item.label : undefined}
                     >
-                      {item.icon}
-                    </span>
-                    <span
-                      className={styles.navigationItemText}
-                      data-collapsed={isSidebarCollapsed}
-                    >
-                      {item.label}
-                    </span>
-                  </a>
-                </Tooltip>
-              );
-            })}
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        aria-label={item.label}
+                        className={styles.navigationItem}
+                        data-collapsed={isSidebarCollapsed}
+                        href={item.href}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={styles.navigationIcon}
+                          data-testid={`workbench-nav-icon-${item.id}`}
+                        >
+                          {navigationIcons[item.icon]}
+                        </span>
+                        <span
+                          className={styles.navigationItemText}
+                          data-collapsed={isSidebarCollapsed}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                    </Tooltip>
+                  );
+                })}
+              </section>
+            ))}
           </nav>
         </aside>
 
@@ -439,14 +456,7 @@ export function WorkbenchShell({
           data-scroll-mode={contentScroll}
           data-testid="workbench-content-frame"
         >
-          {activeItem === "fonts" ? (
-            <FontMarket resumes={resumes} />
-          ) : (
-            <ResumeDashboardShell
-              createAction={createAction}
-              resumes={resumes}
-            />
-          )}
+          {children}
         </div>
       </div>
     </main>

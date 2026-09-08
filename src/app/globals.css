@@ -269,3 +269,308 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
     border-radius: 0;
   }
 }
+/* Management console primitives use stable global classes for server-rendered tables. */
+.admin-page {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-page-header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+}
+
+.admin-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.admin-stat-grid article {
+  display: grid;
+  gap: 12px;
+  min-height: 116px;
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+}
+
+.admin-stat-grid span {
+  color: var(--app-text-secondary);
+}
+
+.admin-stat-grid strong {
+  font-size: 28px;
+}
+
+.admin-table-shell {
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--app-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table th {
+  color: var(--app-text-secondary);
+  background: var(--app-page-background-raised);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table td > span {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-table small {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+}
+
+.admin-section-title {
+  margin: 12px 0 0;
+  font-size: 18px;
+}
+
+.admin-otp.admin-otp.ant-otp {
+  display: grid;
+  width: min(100%, 420px);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-otp .admin-otp__input.admin-otp__input.ant-input {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding-inline: 0;
+  border-radius: 12px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.admin-recovery-sheet {
+  display: grid;
+}
+
+.admin-recovery-title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.admin-recovery-description {
+  margin: 10px 0 24px;
+  color: var(--app-text-secondary);
+  line-height: 1.7;
+}
+
+.admin-recovery-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-recovery-list li {
+  padding: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-text) 4%, transparent);
+  font-family: var(--font-noto-sans-mono), monospace;
+  font-size: 12px;
+  text-align: center;
+}
+
+.admin-recovery-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-recovery-actions > :last-child {
+  grid-column: 1 / -1;
+}
+
+.admin-recovery-print-logo,
+.admin-recovery-print-meta {
+  display: none;
+}
+
+.admin-mfa-enrollment {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-mfa-enrollment__description {
+  margin: 0;
+  color: var(--app-text-secondary);
+  line-height: 1.65;
+}
+
+.admin-mfa-enrollment__description-line {
+  display: block;
+}
+
+.admin-mfa-enrollment__section {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-mfa-enrollment__label {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.admin-mfa-enrollment__qr {
+  display: grid;
+  width: fit-content;
+  place-items: center;
+  justify-self: center;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.admin-mfa-enrollment__secret {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-text) 4%, transparent);
+  color: var(--app-text);
+  font-family: var(--font-noto-sans-mono), monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.admin-mfa-enrollment__otp .admin-otp {
+  margin-inline: auto;
+}
+
+.admin-resume-preview {
+  min-width: 760px;
+  padding: 24px;
+  border-radius: 14px;
+  background: #68717f;
+}
+
+@media (max-width: 760px) {
+  .admin-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-otp.admin-otp.ant-otp {
+    gap: 6px;
+  }
+
+  .admin-otp .admin-otp__input.admin-otp__input.ant-input {
+    height: 44px;
+    font-size: 18px;
+  }
+}
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .admin-recovery-sheet,
+  .admin-recovery-sheet * {
+    visibility: visible !important;
+  }
+
+  .admin-recovery-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    color: #111111;
+  }
+
+  .admin-recovery-print-logo {
+    display: block;
+    width: 210px;
+    height: auto;
+    margin: 0 0 32px;
+  }
+
+  .admin-recovery-title {
+    color: #111111;
+  }
+
+  .admin-recovery-description {
+    color: #555555;
+  }
+
+  .admin-recovery-print-meta {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 24px;
+  }
+
+  .admin-recovery-print-meta div {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+  }
+
+  .admin-recovery-print-meta dt {
+    color: #666666;
+  }
+
+  .admin-recovery-print-meta dd {
+    margin: 0;
+  }
+
+  .admin-recovery-list li {
+    border: 1px solid #dddddd;
+    background: #ffffff;
+    color: #111111;
+  }
+
+  .admin-recovery-actions {
+    display: none !important;
+  }
+}

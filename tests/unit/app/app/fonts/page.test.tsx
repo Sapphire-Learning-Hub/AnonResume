@@ -4,7 +4,7 @@ import { vi } from "vitest";
 import { requireSession } from "@/lib/auth-session";
 import { listResumeEntries } from "@/lib/resume-repository";
 
-import WorkbenchLayout from "@/app/app/(workbench)/layout";
+import FontMarketPage from "@/app/app/(workbench)/fonts/page";
 
 vi.mock("@/lib/auth-session", () => ({
   requireSession: vi.fn(),
@@ -44,7 +44,7 @@ describe("FontMarketPage", () => {
       },
     ]);
 
-    render(await WorkbenchLayout());
+    render(await FontMarketPage());
 
     expect(requireSession).toHaveBeenCalledOnce();
     expect(listResumeEntries).toHaveBeenCalledWith("user-demo");

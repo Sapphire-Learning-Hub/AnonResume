@@ -16,6 +16,9 @@ export function SignOutButton() {
     setIsPending(true);
 
     try {
+      await fetch("/api/manage/session", { method: "DELETE" }).catch(
+        () => undefined,
+      );
       await authClient.signOut();
       router.push("/sign-in");
       router.refresh();
