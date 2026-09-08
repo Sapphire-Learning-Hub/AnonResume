@@ -50,6 +50,20 @@
       "when": 1788465660000,
       "tag": "0006_better_auth_account_identity_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788864447170,
+      "tag": "0007_shocking_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788865967918,
+      "tag": "0008_last_swordsman",
+      "breakpoints": true
     }
   ]
 }

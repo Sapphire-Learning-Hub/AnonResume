@@ -1,8 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
+  adminCancelPdfExport,
+  adminRetryPdfExport,
   cancelPdfExport,
   claimPdfExportJobs,
   completePdfExport,
@@ -65,6 +67,63 @@ describe("PDF export queue", () => {
       status: "queued",
       position: 2,
       queuedCount: 2,
+    });
+  });
+
+  it("allows an administrator to cancel queued and running jobs by id", async () => {
+    const running = await enqueue(1);
+    const queued = await enqueue(2);
+    await claimPdfExportJobs({
+      workerId: "admin-cancel-worker",
+      maxConcurrency: 1,
+      leaseMs: 30_000,
+    });
+
+    await adminCancelPdfExport(running.jobId);
+    await adminCancelPdfExport(queued.jobId);
+
+    const rows = await db
+      .select({ id: pdfExportJobs.id, status: pdfExportJobs.status, cancelRequested: pdfExportJobs.cancelRequested })
+      .from(pdfExportJobs);
+    expect(rows.find((row) => row.id === running.jobId)).toMatchObject({
+      status: "running",
+      cancelRequested: true,
+    });
+    expect(rows.find((row) => row.id === queued.jobId)).toMatchObject({
+      status: "cancelled",
+      cancelRequested: true,
+    });
+  });
+
+  it("retries only terminal failed or cancelled jobs", async () => {
+    const failed = await enqueue();
+    await db
+      .update(pdfExportJobs)
+      .set({
+        status: "failed",
+        attempts: 3,
+        error: "renderer failed",
+        completedAt: new Date(),
+      })
+      .where(eq(pdfExportJobs.id, failed.jobId));
+
+    const retried = await adminRetryPdfExport(failed.jobId, { queueLimit: 20 });
+
+    const rows = await db
+      .select()
+      .from(pdfExportJobs)
+      .where(inArray(pdfExportJobs.id, [failed.jobId, retried.jobId]));
+    expect(rows.find((row) => row.id === failed.jobId)).toMatchObject({
+      status: "failed",
+      attempts: 3,
+      error: "renderer failed",
+    });
+    expect(rows.find((row) => row.id === retried.jobId)).toMatchObject({
+      status: "queued",
+      attempts: 0,
+      error: null,
+      cancelRequested: false,
+      completedAt: null,
     });
   });
 

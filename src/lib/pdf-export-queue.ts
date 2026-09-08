@@ -34,6 +34,7 @@ export class PdfExportUserQueueLimitError extends Error {}
 export class PdfExportAccessError extends Error {}
 export class PdfExportNotFoundError extends Error {}
 export class PdfExportNotReadyError extends Error {}
+export class PdfExportStateConflictError extends Error {}
 
 function parsePositiveInteger(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -319,6 +320,86 @@ export async function cancelPdfExport(params: {
       .set({ cancelRequested: true })
       .where(eq(pdfExportJobs.id, row.id));
   }
+}
+
+export async function adminCancelPdfExport(jobId: string) {
+  return db.transaction(async (transaction) => {
+    const rows = await transaction
+      .select()
+      .from(pdfExportJobs)
+      .where(eq(pdfExportJobs.id, jobId))
+      .limit(1)
+      .for("update");
+    const row = rows[0];
+
+    if (!row) throw new PdfExportNotFoundError(jobId);
+    if (row.status === "queued") {
+      await transaction
+        .update(pdfExportJobs)
+        .set({
+          status: "cancelled",
+          cancelRequested: true,
+          completedAt: new Date(),
+        })
+        .where(eq(pdfExportJobs.id, jobId));
+      return;
+    }
+    if (row.status === "running") {
+      await transaction
+        .update(pdfExportJobs)
+        .set({ cancelRequested: true })
+        .where(eq(pdfExportJobs.id, jobId));
+      return;
+    }
+    throw new PdfExportStateConflictError(jobId);
+  });
+}
+
+export async function adminRetryPdfExport(
+  jobId: string,
+  options: { queueLimit?: number } = {},
+) {
+  return db.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${PDF_QUEUE_LOCK}))`,
+    );
+    const rows = await transaction
+      .select()
+      .from(pdfExportJobs)
+      .where(eq(pdfExportJobs.id, jobId))
+      .limit(1)
+      .for("update");
+    const row = rows[0];
+
+    if (!row) throw new PdfExportNotFoundError(jobId);
+    if (row.status !== "failed" && row.status !== "cancelled") {
+      throw new PdfExportStateConflictError(jobId);
+    }
+
+    const [active] = await transaction
+      .select({ value: count() })
+      .from(pdfExportJobs)
+      .where(inArray(pdfExportJobs.status, ["queued", "running"]));
+    if (
+      (active?.value ?? 0) >=
+      (options.queueLimit ?? getPdfExportQueueConfig().queueLimit)
+    ) {
+      throw new PdfExportQueueFullError();
+    }
+
+    const [retried] = await transaction
+      .insert(pdfExportJobs)
+      .values({
+        resumeUserId: row.resumeUserId,
+        resumeId: row.resumeId,
+        requesterUserId: row.requesterUserId,
+        accessTokenHash: hashAccessToken(randomBytes(32).toString("base64url")),
+        document: row.document,
+        filename: row.filename,
+      })
+      .returning({ id: pdfExportJobs.id });
+    return { jobId: retried!.id };
+  });
 }
 
 export async function claimPdfExportJobs(params: {

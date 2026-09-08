@@ -1,3 +1,8 @@
+import {
+  decodeAdminMfaEncryptionKey,
+  isValidAdminEmail,
+} from "./admin-configuration";
+
 type RuntimeEnvironment = Record<string, string | undefined>;
 
 export type RuntimeConfigurationIssue =
@@ -27,7 +32,16 @@ export type RuntimeConfigurationIssue =
   | "resume_history_limit_invalid"
   | "github_oauth_incomplete"
   | "source_code_url_invalid"
-  | "database_schema_invalid";
+  | "database_schema_invalid"
+  | "super_admin_email_missing"
+  | "super_admin_email_invalid"
+  | "admin_mfa_encryption_key_missing"
+  | "admin_mfa_encryption_key_invalid"
+  | "admin_session_idle_invalid"
+  | "admin_session_max_invalid"
+  | "admin_reauth_invalid"
+  | "admin_session_lifetime_invalid"
+  | "admin_reauth_window_invalid";
 
 export interface RuntimeConfigurationStatus {
   valid: boolean;
@@ -44,6 +58,9 @@ const requiredPositiveIntegers = {
   PDF_EXPORT_RESULT_TTL_MS: "pdf_result_ttl_invalid",
   PDF_EXPORT_FORCE_EXPIRY_MS: "pdf_force_expiry_invalid",
   RESUME_VERSION_HISTORY_LIMIT: "resume_history_limit_invalid",
+  ADMIN_SESSION_IDLE_SECONDS: "admin_session_idle_invalid",
+  ADMIN_SESSION_MAX_SECONDS: "admin_session_max_invalid",
+  ADMIN_REAUTH_SECONDS: "admin_reauth_invalid",
 } as const satisfies Record<string, RuntimeConfigurationIssue>;
 
 function isPositiveInteger(value: string | undefined) {
@@ -123,6 +140,20 @@ export function validateRuntimeConfiguration(
   if (!hasText(environment.SMTP_PASSWORD)) issues.push("smtp_password_missing");
   if (!hasText(environment.EMAIL_FROM)) issues.push("email_from_missing");
 
+  if (!hasText(environment.ANONRESUME_SUPER_ADMIN_EMAIL)) {
+    issues.push("super_admin_email_missing");
+  } else if (!isValidAdminEmail(environment.ANONRESUME_SUPER_ADMIN_EMAIL)) {
+    issues.push("super_admin_email_invalid");
+  }
+
+  if (!hasText(environment.ADMIN_MFA_ENCRYPTION_KEY)) {
+    issues.push("admin_mfa_encryption_key_missing");
+  } else if (
+    !decodeAdminMfaEncryptionKey(environment.ADMIN_MFA_ENCRYPTION_KEY)
+  ) {
+    issues.push("admin_mfa_encryption_key_invalid");
+  }
+
   const smtpPort = Number(environment.SMTP_PORT);
   if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65_535) {
     issues.push("smtp_port_invalid");
@@ -182,6 +213,31 @@ export function validateRuntimeConfiguration(
     forceExpiry < resultTtl
   ) {
     issues.push("pdf_expiry_invalid");
+  }
+
+  const adminIdleSeconds = parsePositiveInteger(
+    environment.ADMIN_SESSION_IDLE_SECONDS,
+  );
+  const adminMaxSeconds = parsePositiveInteger(
+    environment.ADMIN_SESSION_MAX_SECONDS,
+  );
+  const adminReauthSeconds = parsePositiveInteger(
+    environment.ADMIN_REAUTH_SECONDS,
+  );
+
+  if (
+    adminIdleSeconds !== undefined &&
+    adminMaxSeconds !== undefined &&
+    adminIdleSeconds > adminMaxSeconds
+  ) {
+    issues.push("admin_session_lifetime_invalid");
+  }
+  if (
+    adminReauthSeconds !== undefined &&
+    adminMaxSeconds !== undefined &&
+    adminReauthSeconds > adminMaxSeconds
+  ) {
+    issues.push("admin_reauth_window_invalid");
   }
 
   if (

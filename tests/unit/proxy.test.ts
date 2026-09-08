@@ -8,6 +8,31 @@ afterEach(() => {
 });
 
 describe("production configuration proxy", () => {
+  it("rejects cross-origin and originless management mutations", async () => {
+    const crossOrigin = proxy(
+      new NextRequest("https://resume.example.com/api/manage/roles", {
+        method: "POST",
+        headers: { origin: "https://attacker.example" },
+      }),
+    );
+    const originless = proxy(
+      new NextRequest("https://resume.example.com/api/manage/roles", {
+        method: "POST",
+      }),
+    );
+    const sameOrigin = proxy(
+      new NextRequest("https://resume.example.com/api/manage/roles", {
+        method: "POST",
+        headers: { origin: "https://resume.example.com" },
+      }),
+    );
+
+    expect(crossOrigin.status).toBe(403);
+    expect(originless.status).toBe(403);
+    expect(await crossOrigin.json()).toEqual({ error: "invalid_request_origin" });
+    expect(sameOrigin.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("rewrites document requests to the configuration error page", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DATABASE_URL", "");

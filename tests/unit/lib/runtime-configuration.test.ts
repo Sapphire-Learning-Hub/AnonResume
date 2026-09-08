@@ -26,6 +26,11 @@ const validProductionEnvironment = {
   PDF_EXPORT_FORCE_EXPIRY_MS: "86400000",
   PDF_EXPORT_ALLOW_ANONYMOUS: "false",
   RESUME_VERSION_HISTORY_LIMIT: "5",
+  ANONRESUME_SUPER_ADMIN_EMAIL: "owner@example.com",
+  ADMIN_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+  ADMIN_SESSION_IDLE_SECONDS: "1800",
+  ADMIN_SESSION_MAX_SECONDS: "28800",
+  ADMIN_REAUTH_SECONDS: "300",
 } satisfies Record<string, string>;
 
 describe("validateRuntimeConfiguration", () => {
@@ -80,6 +85,26 @@ describe("validateRuntimeConfiguration", () => {
         "pdf_expiry_invalid",
       ]),
     });
+  });
+
+  it("rejects unsafe management-console configuration", () => {
+    const result = validateRuntimeConfiguration({
+      ...validProductionEnvironment,
+      ANONRESUME_SUPER_ADMIN_EMAIL: "not-an-email",
+      ADMIN_MFA_ENCRYPTION_KEY: "too-short",
+      ADMIN_SESSION_IDLE_SECONDS: "3600",
+      ADMIN_SESSION_MAX_SECONDS: "1800",
+      ADMIN_REAUTH_SECONDS: "3601",
+    });
+
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        "super_admin_email_invalid",
+        "admin_mfa_encryption_key_invalid",
+        "admin_session_lifetime_invalid",
+        "admin_reauth_window_invalid",
+      ]),
+    );
   });
 
   it("keeps route collection bootable while the request gate rejects an invalid origin", () => {

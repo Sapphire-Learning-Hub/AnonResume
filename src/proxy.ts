@@ -9,6 +9,18 @@ export function proxy(request: NextRequest) {
   const configuration = validateRuntimeConfiguration(process.env);
 
   if (configuration.valid) {
+    if (
+      request.nextUrl.pathname.startsWith("/api/manage/") &&
+      !["GET", "HEAD", "OPTIONS"].includes(request.method)
+    ) {
+      const origin = request.headers.get("origin");
+      if (!origin || origin !== request.nextUrl.origin) {
+        return NextResponse.json(
+          { error: "invalid_request_origin" },
+          { status: 403, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+    }
     return NextResponse.next();
   }
 

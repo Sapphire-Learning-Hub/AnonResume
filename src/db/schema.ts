@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -17,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type { ResumeDocument } from "@/domain/resume/schema";
+import type { AdminPermission } from "@/lib/admin-permissions";
 
 export type PdfExportJobStatus =
   | "queued"
@@ -166,3 +168,322 @@ export const pdfExportJobs =
           table.createdAt,
         ),
       ]);
+
+export type AdminPrincipalKind =
+  | "super_admin"
+  | "delegated_admin"
+  | "quarantined_admin";
+
+const adminPrincipalColumns = {
+  userId: text("user_id").primaryKey(),
+  kind: text("kind").$type<AdminPrincipalKind>().notNull(),
+  singletonSlot: integer("singleton_slot"),
+  quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminPrincipals =
+  schemaName === "public"
+    ? pgTable("admin_principals", adminPrincipalColumns, (table) => [
+        uniqueIndex("admin_principals_singleton_slot_unique").on(
+          table.singletonSlot,
+        ),
+        check(
+          "admin_principals_kind_slot_check",
+          sql`(${table.kind} = 'super_admin' AND ${table.singletonSlot} = 1) OR (${table.kind} IN ('delegated_admin', 'quarantined_admin') AND ${table.singletonSlot} IS NULL)`,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_principals",
+        adminPrincipalColumns,
+        (table) => [
+          uniqueIndex("admin_principals_singleton_slot_unique").on(
+            table.singletonSlot,
+          ),
+          check(
+            "admin_principals_kind_slot_check",
+            sql`(${table.kind} = 'super_admin' AND ${table.singletonSlot} = 1) OR (${table.kind} IN ('delegated_admin', 'quarantined_admin') AND ${table.singletonSlot} IS NULL)`,
+          ),
+        ],
+      );
+
+const adminRoleColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  permissions: jsonb("permissions").$type<AdminPermission[]>().notNull(),
+  createdByUserId: text("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminRoles =
+  schemaName === "public"
+    ? pgTable("admin_roles", adminRoleColumns, (table) => [
+        uniqueIndex("admin_roles_name_unique").on(sql`lower(${table.name})`),
+      ])
+    : pgSchema(schemaName).table("admin_roles", adminRoleColumns, (table) => [
+        uniqueIndex("admin_roles_name_unique").on(sql`lower(${table.name})`),
+      ]);
+
+const adminAssignmentColumns = {
+  userId: text("user_id").primaryKey(),
+  roleId: uuid("role_id").notNull(),
+  assignedByUserId: text("assigned_by_user_id").notNull(),
+  accessVersion: integer("access_version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminAssignments =
+  schemaName === "public"
+    ? pgTable("admin_assignments", adminAssignmentColumns, (table) => [
+        foreignKey({
+          columns: [table.roleId],
+          foreignColumns: [adminRoles.id],
+          name: "admin_assignments_role_fk",
+        }).onDelete("restrict"),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_assignments",
+        adminAssignmentColumns,
+        (table) => [
+          foreignKey({
+            columns: [table.roleId],
+            foreignColumns: [adminRoles.id],
+            name: "admin_assignments_role_fk",
+          }).onDelete("restrict"),
+        ],
+      );
+
+const adminMfaDeviceColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  encryptedSecret: text("encrypted_secret").notNull(),
+  encryptionIv: text("encryption_iv").notNull(),
+  encryptionTag: text("encryption_tag").notNull(),
+  keyVersion: integer("key_version").notNull().default(1),
+  lastAcceptedStep: bigint("last_accepted_step", { mode: "number" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+};
+
+export const adminMfaDevices =
+  schemaName === "public"
+    ? pgTable("admin_mfa_devices", adminMfaDeviceColumns, (table) => [
+        index("admin_mfa_devices_user_id_idx").on(table.userId),
+        uniqueIndex("admin_mfa_devices_user_name_unique").on(
+          table.userId,
+          sql`lower(${table.name})`,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_mfa_devices",
+        adminMfaDeviceColumns,
+        (table) => [
+          index("admin_mfa_devices_user_id_idx").on(table.userId),
+          uniqueIndex("admin_mfa_devices_user_name_unique").on(
+            table.userId,
+            sql`lower(${table.name})`,
+          ),
+        ],
+      );
+
+const adminRecoveryCodeColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  codeHash: text("code_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+};
+
+export const adminRecoveryCodes =
+  schemaName === "public"
+    ? pgTable("admin_recovery_codes", adminRecoveryCodeColumns, (table) => [
+        index("admin_recovery_codes_user_id_idx").on(table.userId),
+        uniqueIndex("admin_recovery_codes_hash_unique").on(table.codeHash),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_recovery_codes",
+        adminRecoveryCodeColumns,
+        (table) => [
+          index("admin_recovery_codes_user_id_idx").on(table.userId),
+          uniqueIndex("admin_recovery_codes_hash_unique").on(table.codeHash),
+        ],
+      );
+
+const adminSecurityStateColumns = {
+  userId: text("user_id").primaryKey(),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  recoveryRequired: boolean("recovery_required").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminSecurityStates =
+  schemaName === "public"
+    ? pgTable("admin_security_states", adminSecurityStateColumns)
+    : pgSchema(schemaName).table(
+        "admin_security_states",
+        adminSecurityStateColumns,
+      );
+
+const accountRestrictionColumns = {
+  userId: text("user_id").primaryKey(),
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }).notNull(),
+  suspendedUntil: timestamp("suspended_until", { withTimezone: true }),
+  reason: text("reason").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const accountRestrictions =
+  schemaName === "public"
+    ? pgTable("account_restrictions", accountRestrictionColumns)
+    : pgSchema(schemaName).table(
+        "account_restrictions",
+        accountRestrictionColumns,
+      );
+
+const adminSessionColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  baseSessionId: text("base_session_id").notNull(),
+  mfaDeviceId: uuid("mfa_device_id"),
+  tokenHash: text("token_hash").notNull(),
+  accessVersion: integer("access_version").notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  idleExpiresAt: timestamp("idle_expires_at", { withTimezone: true }).notNull(),
+  absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }).notNull(),
+  reauthenticatedAt: timestamp("reauthenticated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+};
+
+export const adminSessions =
+  schemaName === "public"
+    ? pgTable("admin_sessions", adminSessionColumns, (table) => [
+        uniqueIndex("admin_sessions_token_hash_unique").on(table.tokenHash),
+        index("admin_sessions_user_id_idx").on(table.userId),
+        index("admin_sessions_base_session_id_idx").on(table.baseSessionId),
+        foreignKey({
+          columns: [table.mfaDeviceId],
+          foreignColumns: [adminMfaDevices.id],
+          name: "admin_sessions_mfa_device_fk",
+        }).onDelete("set null"),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_sessions",
+        adminSessionColumns,
+        (table) => [
+          uniqueIndex("admin_sessions_token_hash_unique").on(table.tokenHash),
+          index("admin_sessions_user_id_idx").on(table.userId),
+          index("admin_sessions_base_session_id_idx").on(table.baseSessionId),
+          foreignKey({
+            columns: [table.mfaDeviceId],
+            foreignColumns: [adminMfaDevices.id],
+            name: "admin_sessions_mfa_device_fk",
+          }).onDelete("set null"),
+        ],
+      );
+
+const adminActivationTokenColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  purpose: text("purpose")
+    .$type<"super_admin" | "product_user" | "delegated_admin">()
+    .notNull()
+    .default("super_admin"),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+};
+
+export const adminActivationTokens =
+  schemaName === "public"
+    ? pgTable("admin_activation_tokens", adminActivationTokenColumns, (table) => [
+        check(
+          "admin_activation_tokens_purpose_check",
+          sql`${table.purpose} IN ('super_admin', 'product_user', 'delegated_admin')`,
+        ),
+        uniqueIndex("admin_activation_tokens_hash_unique").on(table.tokenHash),
+        index("admin_activation_tokens_user_id_idx").on(table.userId),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_activation_tokens",
+        adminActivationTokenColumns,
+        (table) => [
+          check(
+            "admin_activation_tokens_purpose_check",
+            sql`${table.purpose} IN ('super_admin', 'product_user', 'delegated_admin')`,
+          ),
+          uniqueIndex("admin_activation_tokens_hash_unique").on(table.tokenHash),
+          index("admin_activation_tokens_user_id_idx").on(table.userId),
+        ],
+      );
+
+const adminAuditEventColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorUserId: text("actor_user_id"),
+  action: text("action").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: text("target_id"),
+  outcome: text("outcome").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull(),
+  requestId: text("request_id"),
+  ipHash: text("ip_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminAuditEvents =
+  schemaName === "public"
+    ? pgTable("admin_audit_events", adminAuditEventColumns, (table) => [
+        index("admin_audit_events_created_at_idx").on(table.createdAt),
+        index("admin_audit_events_actor_created_at_idx").on(
+          table.actorUserId,
+          table.createdAt,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_audit_events",
+        adminAuditEventColumns,
+        (table) => [
+          index("admin_audit_events_created_at_idx").on(table.createdAt),
+          index("admin_audit_events_actor_created_at_idx").on(
+            table.actorUserId,
+            table.createdAt,
+          ),
+        ],
+      );
+
+const workerHeartbeatColumns = {
+  workerId: text("worker_id").primaryKey(),
+  workerType: text("worker_type").notNull(),
+  release: text("release"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull(),
+};
+
+export const workerHeartbeats =
+  schemaName === "public"
+    ? pgTable("worker_heartbeats", workerHeartbeatColumns, (table) => [
+        index("worker_heartbeats_type_seen_idx").on(
+          table.workerType,
+          table.lastSeenAt,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "worker_heartbeats",
+        workerHeartbeatColumns,
+        (table) => [
+          index("worker_heartbeats_type_seen_idx").on(
+            table.workerType,
+            table.lastSeenAt,
+          ),
+        ],
+      );

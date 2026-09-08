@@ -1,0 +1,2 @@
+ALTER TABLE "admin_activation_tokens" ADD COLUMN "purpose" text DEFAULT 'super_admin' NOT NULL;--> statement-breakpoint
+ALTER TABLE "admin_activation_tokens" ADD CONSTRAINT "admin_activation_tokens_purpose_check" CHECK ("admin_activation_tokens"."purpose" IN ('super_admin', 'product_user', 'delegated_admin'));

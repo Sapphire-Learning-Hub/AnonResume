@@ -16,6 +16,7 @@ import {
   resolveApplicationOriginForBootstrap,
   validateRuntimeConfiguration,
 } from "@/lib/runtime-configuration";
+import { recordWorkerHeartbeat } from "@/lib/worker-heartbeat";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;
@@ -159,9 +160,18 @@ export async function runPdfExportWorker(options?: {
     config.forceExpiryMs,
   );
   let lastCleanupAt = 0;
+  const startedAt = new Date();
 
   while (!options?.signal?.aborted) {
     const now = Date.now();
+
+    await recordWorkerHeartbeat({
+      workerId,
+      workerType: "pdf-export",
+      startedAt,
+      metadata: { maxConcurrency: config.maxConcurrency },
+      now: new Date(now),
+    });
 
     if (now - lastCleanupAt >= cleanupIntervalMs) {
       await deleteExpiredPdfExportResults({
