@@ -33,6 +33,7 @@ playwright-report/
 test-results/
 output/
 tmp/
+/.worktrees/
 *.log
 
 # debug
