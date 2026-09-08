@@ -20,10 +20,12 @@ import { Button, Input, Popover, Tooltip, type InputRef } from "antd";
 import { TagOutlined } from "@ant-design/icons";
 
 import { CloseIcon, LinkIcon } from "@/components/ui/InlineIcons";
+import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import {
   areRichTextContentsEqual,
   normalizeLinkHref,
   normalizeRichTextContent,
+  normalizeTextColor,
 } from "@/domain/resume/rich-text";
 import type { RichTextContent } from "@/domain/resume/schema";
 import { defaultLocale, getMessages } from "@/i18n/messages";
@@ -31,6 +33,7 @@ import { defaultLocale, getMessages } from "@/i18n/messages";
 import { useTiptapTextBlockEditorStyles } from "./TiptapTextBlockEditor.style";
 import { ResumeIconNode } from "./ResumeIconNode";
 import { ResumeInlineTagMark } from "./ResumeInlineTagMark";
+import { ResumeTextColorMark } from "./ResumeTextColorMark";
 
 const defaultMessages = getMessages(defaultLocale);
 
@@ -41,6 +44,9 @@ export interface TiptapInlineToolbarLabels {
   boldShortcut: string;
   inlineTag: string;
   inlineTagShortcut: string;
+  textColor: string;
+  clearTextColor: string;
+  colorPalette: string;
   italic: string;
   italicShortcut: string;
   link: string;
@@ -60,6 +66,9 @@ const defaultInlineToolbarLabels: TiptapInlineToolbarLabels = {
   boldShortcut: defaultMessages["editor.boldShortcut"],
   inlineTag: defaultMessages["editor.inlineTag"],
   inlineTagShortcut: defaultMessages["editor.inlineTagShortcut"],
+  textColor: defaultMessages["editor.inlineTextColor"],
+  clearTextColor: defaultMessages["editor.clearTextColor"],
+  colorPalette: defaultMessages["common.colorPalette"],
   italic: defaultMessages["editor.italic"],
   italicShortcut: defaultMessages["editor.italicShortcut"],
   link: defaultMessages["editor.link"],
@@ -78,6 +87,8 @@ export type TiptapTextBlockEditorCommand =
   | { type: "toggleUnderline" }
   | { type: "toggleStrike" }
   | { type: "toggleTag" }
+  | { type: "setTextColor"; color: string }
+  | { type: "unsetTextColor" }
   | { type: "setLink"; href: string }
   | { type: "unsetLink" }
   | { type: "insertIcon"; iconId: string };
@@ -92,6 +103,7 @@ export interface TiptapTextBlockEditorFormatState {
   underline: boolean;
   strike: boolean;
   tag: boolean;
+  textColor: string;
   linkHref: string;
 }
 
@@ -171,6 +183,7 @@ function getFormattingState(editor: Editor): TiptapTextBlockEditorFormatState {
     [$from.nodeBefore, $from.nodeAfter].some((node) =>
       node?.marks.some((mark) => mark.type.name === "tag"),
     );
+  const textColorAttributes = editor.getAttributes("textColor");
 
   return {
     bold: editor.isActive("bold"),
@@ -178,6 +191,10 @@ function getFormattingState(editor: Editor): TiptapTextBlockEditorFormatState {
     underline: editor.isActive("underline"),
     strike: editor.isActive("strike"),
     tag: editor.isActive("tag") || Boolean(adjacentTag),
+    textColor:
+      typeof textColorAttributes.color === "string"
+        ? textColorAttributes.color
+        : "",
     linkHref: getSelectedLinkHref(editor),
   };
 }
@@ -235,9 +252,11 @@ export const TiptapTextBlockEditor = forwardRef<
 }, ref) {
   const { styles } = useTiptapTextBlockEditorStyles();
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState("");
   const linkInputRef = useRef<InputRef>(null);
   const linkSelectionRef = useRef<TextSelectionRange | null>(null);
+  const colorSelectionRef = useRef<TextSelectionRange | null>(null);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -261,6 +280,7 @@ export const TiptapTextBlockEditor = forwardRef<
       }),
       ResumeIconNode,
       ResumeInlineTagMark,
+      ResumeTextColorMark,
     ],
     content,
     editorProps: {
@@ -317,6 +337,15 @@ export const TiptapTextBlockEditor = forwardRef<
             return preparedChain.toggleStrike().run();
           case "toggleTag":
             return preparedChain.toggleMark("tag").run();
+          case "setTextColor": {
+            const color = normalizeTextColor(command.color);
+
+            return color
+              ? preparedChain.setMark("textColor", { color }).run()
+              : false;
+          }
+          case "unsetTextColor":
+            return preparedChain.unsetMark("textColor").run();
           case "setLink": {
             const href = normalizeLinkHref(command.href);
 
@@ -397,6 +426,32 @@ export const TiptapTextBlockEditor = forwardRef<
       case "toggleTag":
         chain.toggleMark("tag").run();
         break;
+      case "setTextColor": {
+        const color = normalizeTextColor(command.color);
+
+        if (!color) {
+          return;
+        }
+
+        const savedSelection = colorSelectionRef.current;
+        const colorChain = savedSelection
+          ? chain.setTextSelection(savedSelection)
+          : chain;
+
+        colorChain.setMark("textColor", { color }).run();
+        colorSelectionRef.current = null;
+        break;
+      }
+      case "unsetTextColor": {
+        const savedSelection = colorSelectionRef.current;
+        const colorChain = savedSelection
+          ? chain.setTextSelection(savedSelection)
+          : chain;
+
+        colorChain.unsetMark("textColor").run();
+        colorSelectionRef.current = null;
+        break;
+      }
       case "setLink": {
         const href = normalizeLinkHref(command.href);
 
@@ -437,6 +492,13 @@ export const TiptapTextBlockEditor = forwardRef<
     setLinkPopoverOpen(true);
   }
 
+  function rememberColorSelection() {
+    if (!editor) return;
+
+    const { empty, from, to } = editor.state.selection;
+    colorSelectionRef.current = empty ? null : { from, to };
+  }
+
   return (
     <>
       <EditorContent editor={editor} className={wrapperClassName} style={style} />
@@ -449,6 +511,7 @@ export const TiptapTextBlockEditor = forwardRef<
           appendTo={() => document.body}
           shouldShow={({ state, view, from, to }) =>
             (linkPopoverOpen && linkSelectionRef.current !== null) ||
+            (colorPickerOpen && colorSelectionRef.current !== null) ||
             (view.hasFocus() &&
               !state.selection.empty &&
               Boolean(state.doc.textBetween(from, to).trim()))
@@ -519,6 +582,39 @@ export const TiptapTextBlockEditor = forwardRef<
               onClick={() => runInlineCommand({ type: "toggleStrike" })}
             >
               <span style={{ textDecoration: "line-through" }}>S</span>
+            </Button>
+          </Tooltip>
+          <div onMouseDownCapture={rememberColorSelection}>
+            <PaletteColorPicker
+              allowClear
+              className={styles.inlineColorControl}
+              label={inlineToolbarLabels.textColor}
+              paletteLabel={inlineToolbarLabels.colorPalette}
+              placement="top"
+              value={getFormattingState(editor).textColor}
+              placeholder={style?.color ?? "#0f172a"}
+              onOpenChange={(open) => {
+                if (open) {
+                  rememberColorSelection();
+                }
+
+                setColorPickerOpen(open);
+              }}
+              onChange={(color) =>
+                runInlineCommand({ type: "setTextColor", color })
+              }
+              onClear={() => runInlineCommand({ type: "unsetTextColor" })}
+            />
+          </div>
+          <Tooltip title={inlineToolbarLabels.clearTextColor}>
+            <Button
+              size="small"
+              type="text"
+              aria-label={inlineToolbarLabels.clearTextColor}
+              onMouseDown={preventToolbarMouseDown}
+              onClick={() => runInlineCommand({ type: "unsetTextColor" })}
+            >
+              <CloseIcon size={15} />
             </Button>
           </Tooltip>
           <Popover

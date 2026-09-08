@@ -57,6 +57,8 @@ describe("TiptapTextBlockEditor", () => {
     await waitFor(() =>
       expect(screen.getByRole("toolbar", { name: "文本快捷格式" })).toBeInTheDocument(),
     );
+    expect(screen.getByLabelText("局部文字颜色调色板")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复默认颜色" })).toBeInTheDocument();
   });
 
   it("mounts the inline toolbar outside the transformed resume canvas", async () => {
@@ -274,7 +276,64 @@ describe("TiptapTextBlockEditor", () => {
         underline: false,
         strike: false,
         tag: false,
+        textColor: "",
         linkHref: "https://example.com",
+      }),
+    );
+  });
+
+  it("replaces smaller inline color ranges when the whole text receives a new color", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const onChange = vi.fn();
+
+    render(
+      <TiptapTextBlockEditor
+        ref={ref}
+        content={{
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "text",
+                  text: "红色",
+                  marks: [{ type: "textColor", attrs: { color: "#dc2626" } }],
+                },
+                {
+                  type: "text",
+                  text: "绿色",
+                  marks: [{ type: "textColor", attrs: { color: "#059669" } }],
+                },
+              ],
+            },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    act(() => {
+      ref.current?.applyCommand({ type: "setTextColor", color: "#2563eb" });
+    });
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "红色绿色",
+                marks: [{ type: "textColor", attrs: { color: "#2563eb" } }],
+              },
+            ],
+          },
+        ],
       }),
     );
   });
@@ -446,6 +505,7 @@ describe("TiptapTextBlockEditor", () => {
         underline: false,
         strike: false,
         tag: false,
+        textColor: "",
         linkHref: "https://example.com",
       }),
     );
@@ -473,6 +533,7 @@ describe("TiptapTextBlockEditor", () => {
         underline: false,
         strike: false,
         tag: false,
+        textColor: "",
         linkHref: "",
       }),
     );

@@ -53,6 +53,24 @@ describe("ResumeRenderer", () => {
     );
   });
 
+  it.each(["view", "print"] as const)(
+    "renders a per-section title color in %s output",
+    (mode) => {
+      const document = createDefaultResumeDocument();
+      Object.assign(document.sections[0]!, {
+        titleStyle: { color: "#be123c" },
+      });
+
+      const { container } = render(
+        <ResumeRenderer document={document} mode={mode} />,
+      );
+
+      expect(
+        container.querySelector('[data-resume-section-title="true"]'),
+      ).toHaveStyle({ color: "#be123c" });
+    },
+  );
+
   it("annotates semantic resume nodes only when a diff presentation is supplied", () => {
     const document = createDefaultResumeDocument();
     const summaryBlock = document.sections[0]?.blocks[0];
@@ -432,6 +450,36 @@ describe("ResumeRenderer", () => {
     expect(screen.getByText("带下划线和删除线的文本").closest("s")).toBeTruthy();
     expect(screen.getByText("带下划线和删除线的文本").closest("u")).toBeTruthy();
   });
+
+  it.each(["view", "print"] as const)(
+    "renders inline text colors in %s output",
+    (mode) => {
+      const document = createDefaultResumeDocument();
+      const summary = document.sections[0]?.blocks[0];
+
+      if (!summary || summary.type !== "text") {
+        throw new Error("Expected the profile summary text block");
+      }
+
+      summary.content.content[0]!.content = [
+        { type: "text", text: "默认颜色" },
+        {
+          type: "text",
+          text: "局部颜色",
+          marks: [{ type: "textColor", attrs: { color: "#be123c" } }],
+        },
+      ];
+
+      render(<ResumeRenderer document={document} mode={mode} />);
+
+      const coloredText = screen.getByText("局部颜色").closest(
+        '[data-resume-text-color="#be123c"]',
+      );
+
+      expect(coloredText).toHaveStyle({ color: "#be123c" });
+      expect(screen.getByText("默认颜色")).not.toHaveStyle({ color: "#be123c" });
+    },
+  );
 
   it.each(["view", "print"] as const)(
     "renders local inline icons in %s mode",

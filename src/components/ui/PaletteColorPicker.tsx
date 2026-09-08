@@ -1,6 +1,6 @@
 "use client";
 
-import { ColorPicker } from "antd";
+import { ColorPicker, type ColorPickerProps } from "antd";
 
 const RESUME_COLOR_PALETTE = [
   "#0f62fe",
@@ -21,28 +21,42 @@ function isHexColor(value: string) {
 }
 
 export function PaletteColorPicker({
+  allowClear = false,
   className,
+  disabled = false,
   label,
-  paletteLabel,
   onChange,
+  onClear,
+  onOpenChange,
+  paletteLabel,
+  placement = "bottomRight",
   placeholder,
   value,
 }: {
+  allowClear?: boolean;
   className: string;
+  disabled?: boolean;
   label: string;
-  paletteLabel: string;
   onChange: (color: string) => void;
+  onClear?: () => void;
+  onOpenChange?: (open: boolean) => void;
+  paletteLabel: string;
+  placement?: ColorPickerProps["placement"];
   placeholder: string;
   value: string;
 }) {
   return (
     <div className={className}>
       <ColorPicker
+        allowClear={allowClear}
+        aria-disabled={disabled}
         aria-label={`${label}${paletteLabel}`}
+        data-color-value={isHexColor(value) ? value : placeholder}
+        disabled={disabled}
         disabledAlpha
         disabledFormat
         format="hex"
-        placement="bottomRight"
+        placement={placement}
         presets={[{ label: paletteLabel, colors: RESUME_COLOR_PALETTE }]}
         styles={{
           root: {
@@ -64,6 +78,8 @@ export function PaletteColorPicker({
           },
         }}
         value={isHexColor(value) ? value : placeholder}
+        onClear={onClear}
+        onOpenChange={onOpenChange}
         onChangeComplete={(color) => onChange(color.toHexString())}
       />
     </div>

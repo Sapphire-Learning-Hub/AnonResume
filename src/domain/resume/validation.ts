@@ -611,6 +611,15 @@ function collectResumeValidationIssues(document: ResumeDocument) {
     }
 
     validateRichTextContent(section.title, `${sectionPath}.title`, issues, messages);
+    if (section.titleStyle?.color) {
+      pushColorIssue(
+        issues,
+        `${sectionPath}.titleStyle.color`,
+        getValidationLabel(messages, "validation.label.sectionTitleColor"),
+        section.titleStyle.color,
+        messages,
+      );
+    }
     pushRangeIssue(
       issues,
       `${sectionPath}.layout.gap`,

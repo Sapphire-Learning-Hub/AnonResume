@@ -231,6 +231,39 @@ describe("createResumeEditorStore", () => {
     expect(state.saveStatus).toBe("dirty");
   });
 
+  it("sets and clears a per-section title color", () => {
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document: createDefaultResumeDocument(),
+      version: 1,
+      updatedAt: 100,
+    });
+    store.getState().setSectionTitleColor({
+      sectionId: "section-profile",
+      color: "#be123c",
+    });
+    expect(
+      (
+        store.getState().document.sections[0] as unknown as {
+          titleStyle?: { color?: string };
+        }
+      ).titleStyle,
+    ).toEqual({ color: "#be123c" });
+
+    store.getState().setSectionTitleColor({
+      sectionId: "section-profile",
+      color: undefined,
+    });
+    expect(
+      (
+        store.getState().document.sections[0] as unknown as {
+          titleStyle?: { color?: string };
+        }
+      ).titleStyle,
+    ).toBeUndefined();
+    expect(store.getState().history.past).toHaveLength(2);
+  });
+
   it("updates a text block style by section and block path", () => {
     const store = createResumeEditorStore({
       resumeId: "resume-demo",
@@ -270,6 +303,57 @@ describe("createResumeEditorStore", () => {
     expect(state.history.past).toHaveLength(1);
     expect(state.dirty).toBe(true);
     expect(state.saveStatus).toBe("dirty");
+  });
+
+  it("clears smaller inline colors when applying a color to the whole block", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]?.blocks[0];
+
+    if (!summary || summary.type !== "text") {
+      throw new Error("Expected the profile summary text block");
+    }
+
+    summary.content.content[0]!.content = [
+      { type: "text", text: "默认" },
+      {
+        type: "text",
+        text: "局部",
+        marks: [
+          { type: "bold" },
+          { type: "textColor", attrs: { color: "#dc2626" } },
+        ],
+      },
+    ];
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+
+    store.getState().setTextBlockColor({
+      sectionId: "section-profile",
+      blockPath: ["block-profile-summary"],
+      color: "#2563eb",
+    });
+
+    const nextSummary = store.getState().document.sections[0]?.blocks[0];
+
+    expect(nextSummary).toMatchObject({
+      type: "text",
+      style: { color: "#2563eb" },
+      content: {
+        content: [
+          {
+            content: [
+              { type: "text", text: "默认" },
+              { type: "text", text: "局部", marks: [{ type: "bold" }] },
+            ],
+          },
+        ],
+      },
+    });
+    expect(store.getState().history.past).toHaveLength(1);
   });
 
   it("marks a dirty document as saved with the next server version", () => {

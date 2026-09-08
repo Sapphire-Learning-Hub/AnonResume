@@ -1421,6 +1421,29 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toBeEnabled();
   });
 
+  it("shows the selected section title color in the ribbon", () => {
+    const document = createDefaultResumeDocument();
+    Object.assign(document.sections[0]!, {
+      titleStyle: { color: "#be123c" },
+    });
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    const canvas = screen.getByRole("article");
+    fireEvent.click(within(canvas).getByText("个人简介").closest("button")!);
+
+    expect(screen.getByLabelText("区块标题颜色调色板")).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    expect(screen.getByLabelText("区块标题颜色调色板")).toHaveAttribute(
+      "data-color-value",
+      "#be123c",
+    );
+  });
+
   it("shows a tiptap editor when selecting a text block from the canvas", () => {
     render(
       <ResumeEditorShell
@@ -1643,6 +1666,10 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: spacedLabel("下划线") })).toBeDisabled();
     expect(screen.getByRole("button", { name: spacedLabel("删除线") })).toBeDisabled();
     expect(screen.getByRole("button", { name: spacedLabel("内联标签") })).toBeDisabled();
+    expect(screen.getByLabelText("文本颜色调色板")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     expect(screen.getByRole("textbox", { name: "链接" })).toBeDisabled();
     expect(screen.getByRole("button", { name: spacedLabel("应用链接") })).toBeDisabled();
     expect(screen.getByRole("button", { name: spacedLabel("清除链接") })).toBeDisabled();
@@ -1662,10 +1689,46 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: spacedLabel("下划线") })).toBeEnabled();
     expect(screen.getByRole("button", { name: spacedLabel("删除线") })).toBeEnabled();
     expect(screen.getByRole("button", { name: spacedLabel("内联标签") })).toBeEnabled();
+    expect(screen.getByLabelText("文本颜色调色板")).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
     expect(screen.getByRole("textbox", { name: "链接" })).toBeEnabled();
     expect(screen.getByRole("button", { name: spacedLabel("应用链接") })).toBeEnabled();
     expect(screen.getByRole("button", { name: spacedLabel("清除链接") })).toBeEnabled();
     expect(within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
+  });
+
+  it("keeps the ribbon color picker bound to the whole block color", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]?.blocks[0];
+
+    if (!summary || summary.type !== "text") {
+      throw new Error("Expected the profile summary text block");
+    }
+
+    summary.style = { ...summary.style, color: "#2563eb" };
+    summary.content.content[0]!.content = [
+      {
+        type: "text",
+        text: "共享渲染器基础",
+        marks: [{ type: "textColor", attrs: { color: "#be123c" } }],
+      },
+    ];
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={document}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    expect(screen.getByLabelText("文本颜色调色板")).toHaveAttribute(
+      "data-color-value",
+      "#2563eb",
+    );
   });
 
   it("opens the icon library for the active text editor and inserts an icon", async () => {

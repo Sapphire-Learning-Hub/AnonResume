@@ -19,4 +19,15 @@ export const useTiptapTextBlockEditorStyles = createStyles(({ token, css }) => (
     gap: 8px;
     width: min(320px, calc(100vw - 32px));
   `,
+  inlineColorControl: css`
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 6px;
+    background: ${token.colorBgContainer};
+  `,
 }));

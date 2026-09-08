@@ -1,5 +1,9 @@
 import { richTextContentSchema } from "@/domain/resume/schema";
-import { normalizeLinkHref, normalizeRichTextContent } from "@/domain/resume/rich-text";
+import {
+  normalizeLinkHref,
+  normalizeRichTextContent,
+  removeInlineTextColorMarks,
+} from "@/domain/resume/rich-text";
 
 describe("normalizeRichTextContent", () => {
   it("normalizes an empty Tiptap paragraph into an editable empty paragraph", () => {
@@ -114,6 +118,90 @@ describe("normalizeRichTextContent", () => {
       "my-resume-app://portfolio/42",
     );
     expect(normalizeLinkHref(" ")).toBeUndefined();
+  });
+
+  it("preserves only the hex color attribute of inline text color marks", () => {
+    expect(
+      normalizeRichTextContent({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "局部颜色",
+                marks: [
+                  {
+                    type: "textColor",
+                    attrs: { color: "#BE123C", ignored: "value" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "局部颜色",
+              marks: [{ type: "textColor", attrs: { color: "#BE123C" } }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("removes inline colors without removing unrelated marks", () => {
+    expect(
+      removeInlineTextColorMarks({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "保留粗体",
+                marks: [
+                  { type: "bold" },
+                  { type: "textColor", attrs: { color: "#be123c" } },
+                ],
+              },
+              {
+                type: "text",
+                text: "移除纯颜色",
+                marks: [
+                  { type: "textColor", attrs: { color: "#2563eb" } },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "保留粗体",
+              marks: [{ type: "bold" }],
+            },
+            { type: "text", text: "移除纯颜色" },
+          ],
+        },
+      ],
+    });
   });
 
   it("preserves inline resume icons while stripping unsupported attrs", () => {

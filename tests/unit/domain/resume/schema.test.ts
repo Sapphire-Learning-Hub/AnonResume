@@ -146,6 +146,49 @@ describe("resumeDocumentSchema", () => {
     expect(firstBlock.content.content[0]?.content[1]?.type).toBe("hardBreak");
   });
 
+  it("accepts a hex text color mark on part of rich text", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.blocks[0] = {
+      id: "block-inline-color",
+      type: "text",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "默认颜色" },
+              {
+                type: "text",
+                text: "局部颜色",
+                marks: [{ type: "textColor", attrs: { color: "#be123c" } }],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    expect(() => resumeDocumentSchema.parse(document)).not.toThrow();
+  });
+
+  it("preserves a valid per-section title color and rejects invalid colors", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0] as unknown as {
+      titleStyle?: { color?: string };
+    };
+    section.titleStyle = { color: "#be123c" };
+
+    const parsed = resumeDocumentSchema.parse(document) as typeof document & {
+      sections: Array<{ titleStyle?: { color?: string } }>;
+    };
+
+    expect(parsed.sections[0]?.titleStyle).toEqual({ color: "#be123c" });
+
+    section.titleStyle = { color: "red" };
+    expect(() => resumeDocumentSchema.parse(document)).toThrow();
+  });
+
   it("accepts inline resume icons mixed with text", () => {
     const document = createDefaultResumeDocument();
     document.sections[0]!.blocks[0] = {

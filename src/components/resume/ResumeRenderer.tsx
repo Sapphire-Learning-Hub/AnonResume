@@ -132,6 +132,9 @@ function getInlineToolbarLabels(t: Translator): TiptapInlineToolbarLabels {
     boldShortcut: t("editor.boldShortcut"),
     inlineTag: t("editor.inlineTag"),
     inlineTagShortcut: t("editor.inlineTagShortcut"),
+    textColor: t("editor.inlineTextColor"),
+    clearTextColor: t("editor.clearTextColor"),
+    colorPalette: t("common.colorPalette"),
     italic: t("editor.italic"),
     italicShortcut: t("editor.italicShortcut"),
     link: t("editor.link"),
@@ -189,6 +192,18 @@ function applyMarks(
           <span key={key} data-resume-inline-tag="true">
             {current}
           </span>
+        );
+      case "textColor":
+        return mark.attrs?.color ? (
+          <span
+            key={key}
+            data-resume-text-color={mark.attrs.color}
+            style={{ color: mark.attrs.color }}
+          >
+            {current}
+          </span>
+        ) : (
+          current
         );
       case "link":
         if (!mark.attrs?.href || UNSAFE_LINK_PROTOCOL_PATTERN.test(mark.attrs.href)) {
@@ -511,11 +526,12 @@ function renderSectionTitle(
   }
 
   const plainText = getPlainTextFromRichText(section.title);
+  const titleColor = section.titleStyle?.color ?? "var(--resume-accent)";
   const titleStyle: CSSProperties = {
     margin: 0,
     fontSize: 24,
     fontWeight: 700,
-    color: "var(--resume-accent)",
+    color: titleColor,
     letterSpacing: "-0.02em",
   };
   const selected = isSelectedSectionTitle(context.selection, section.id);
@@ -525,6 +541,7 @@ function renderSectionTitle(
       <header
         className={context.styles.sectionTitle}
         data-resume-section-title="true"
+        style={{ color: titleColor }}
       >
         {selected ? (
           renderSelectedEditorShell({
@@ -583,11 +600,12 @@ function renderSectionTitle(
     <ResumeDiffTarget
       nodeType="section"
       nodeId={section.id}
-      fields={["title"]}
+      fields={["title", "titleStyle.color"]}
     >
       <header
         className={context.styles.sectionTitle}
         data-resume-section-title="true"
+        style={{ color: titleColor }}
       >
         <RichTextView
           content={section.title}

@@ -231,6 +231,7 @@ function createSnapshot(document: ResumeDocument): DocumentSnapshot {
       },
       appearance: {
         visible: String(section.visible),
+        "titleStyle.color": section.titleStyle?.color ?? "",
         layout: serializeValue(section.layout),
       },
     });

@@ -42,7 +42,7 @@ import {
 import { ResumeDocumentDiffModal } from "@/components/editor/ResumeDocumentDiffModal";
 import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPrompt";
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
-import { PaletteColorPicker } from "@/components/editor/inspector/PaletteColorPicker";
+import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import {
   DocumentIcon,
   EnterFullscreenIcon,
@@ -180,6 +180,7 @@ function getInitialFormattingState(
       underline: false,
       strike: false,
       tag: false,
+      textColor: "",
       linkHref: "",
     };
   }
@@ -191,6 +192,9 @@ function getInitialFormattingState(
       firstTextNode.marks?.some((mark) => mark.type === "underline") ?? false,
     strike: firstTextNode.marks?.some((mark) => mark.type === "strike") ?? false,
     tag: firstTextNode.marks?.some((mark) => mark.type === "tag") ?? false,
+    textColor:
+      firstTextNode.marks?.find((mark) => mark.type === "textColor")?.attrs
+        ?.color ?? "",
     linkHref: getFirstLinkHref(content),
   };
 }
@@ -536,6 +540,7 @@ export function ResumeEditorShell({
       underline: false,
       strike: false,
       tag: false,
+      textColor: "",
       linkHref: "",
     },
   });
@@ -720,6 +725,29 @@ export function ResumeEditorShell({
       sectionId: selection.sectionId,
       blockPath: selection.blockPath,
       style,
+    });
+  }
+
+  function setSelectedTextBlockColor(color: string) {
+    if (!selection.sectionId || !selection.blockPath) {
+      return;
+    }
+
+    store.getState().setTextBlockColor({
+      sectionId: selection.sectionId,
+      blockPath: selection.blockPath,
+      color,
+    });
+  }
+
+  function setSelectedSectionTitleColor(color?: string) {
+    if (!selectedSection || !selectedSectionTitle) {
+      return;
+    }
+
+    store.getState().setSectionTitleColor({
+      sectionId: selectedSection.id,
+      color,
     });
   }
 
@@ -1065,8 +1093,32 @@ export function ResumeEditorShell({
   }
 
   const inspectorContent = selectedSectionTitle && selectedSection ? (
-    <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionActions")}>
-      <div className={styles.panelActionRow}>
+    <>
+      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionTitleStyle")}>
+        <div className={styles.ribbonControlGroup}>
+          <span className={styles.inspectorControlLabel}>
+            {t("editor.sectionTitleColor")}
+          </span>
+          <PaletteColorPicker
+            allowClear
+            className={styles.ribbonColorControl}
+            label={t("editor.sectionTitleColor")}
+            paletteLabel={t("common.colorPalette")}
+            value={selectedSection.titleStyle?.color ?? ""}
+            placeholder={document.settings.theme.accent}
+            onChange={setSelectedSectionTitleColor}
+            onClear={() => setSelectedSectionTitleColor(undefined)}
+          />
+          <Button
+            disabled={!selectedSection.titleStyle?.color}
+            onClick={() => setSelectedSectionTitleColor(undefined)}
+          >
+            {t("editor.inheritGlobalAccent")}
+          </Button>
+        </div>
+      </EditorRibbonPropertyGroup>
+      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionActions")}>
+        <div className={styles.panelActionRow}>
         <Button
           disabled={!canMoveSelectedSectionUp}
           onClick={() =>
@@ -1109,8 +1161,9 @@ export function ResumeEditorShell({
         >
           {t("editor.deleteSection")}
         </Button>
-      </div>
-    </EditorRibbonPropertyGroup>
+        </div>
+      </EditorRibbonPropertyGroup>
+    </>
   ) : selectedTextBlock && selection.blockPath ? (
     <>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.textStyle")}>
@@ -1159,7 +1212,7 @@ export function ResumeEditorShell({
             paletteLabel={t("common.colorPalette")}
             value={selectedTextBlock.style?.color ?? ""}
             placeholder="#0f172a"
-            onChange={(color) => updateSelectedTextBlockStyle({ color })}
+            onChange={setSelectedTextBlockColor}
           />
         </div>
         <div className={styles.inspectorControlRow} data-field-size="auto">
@@ -1981,6 +2034,33 @@ export function ResumeEditorShell({
                 >
                   {t("editor.inlineTag")}
                 </Button>
+                <PaletteColorPicker
+                  allowClear={Boolean(selectedSectionTitle)}
+                  className={styles.ribbonColorControl}
+                  disabled={!selectedTextBlock && !selectedSectionTitle}
+                  label={
+                    selectedSectionTitle
+                      ? t("editor.sectionTitleColor")
+                      : t("editor.textColor")
+                  }
+                  paletteLabel={t("common.colorPalette")}
+                  value={
+                    selectedSectionTitle
+                      ? selectedSection?.titleStyle?.color ?? ""
+                      : selectedTextBlock?.style?.color ?? ""
+                  }
+                  placeholder={
+                    selectedSectionTitle
+                      ? document.settings.theme.accent
+                      : document.settings.theme.textColor
+                  }
+                  onChange={(color) =>
+                    selectedSectionTitle
+                      ? setSelectedSectionTitleColor(color)
+                      : setSelectedTextBlockColor(color)
+                  }
+                  onClear={() => setSelectedSectionTitleColor(undefined)}
+                />
                 <Input
                   aria-label={t("editor.link")}
                   className={styles.linkInput}
@@ -2453,6 +2533,7 @@ export function ResumeEditorShell({
                       current.value.underline === state.underline &&
                       current.value.strike === state.strike &&
                       current.value.tag === state.tag &&
+                      current.value.textColor === state.textColor &&
                       current.value.linkHref === state.linkHref
                     ) {
                       return current;

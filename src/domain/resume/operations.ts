@@ -19,6 +19,7 @@ import type {
   TextBlock,
 } from "./schema";
 import { createSectionFromPreset } from "./presets";
+import { removeInlineTextColorMarks } from "./rich-text";
 
 export {
   cloneBlockWithFreshIds,
@@ -58,6 +59,7 @@ export function cloneSectionWithFreshIds(section: ResumeSection): ResumeSection 
     ...section,
     id: createFreshResumeNodeId("section"),
     title: section.title ? structuredClone(section.title) : undefined,
+    titleStyle: section.titleStyle ? { ...section.titleStyle } : undefined,
     layout: section.layout ? structuredClone(section.layout) : undefined,
     pagination: section.pagination ? { ...section.pagination } : undefined,
     blocks: section.blocks.map(cloneBlockWithFreshIds),
@@ -670,6 +672,37 @@ export function updateTextBlockStyleInDocument({
   };
 }
 
+export function setTextBlockColorInDocument({
+  document,
+  sectionId,
+  blockPath,
+  color,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  blockPath: string[];
+  color: string;
+}): ResumeDocument {
+  const section = document.sections.find((item) => item.id === sectionId);
+  const block = section ? findBlockByPath(section.blocks, blockPath) : undefined;
+
+  if (!block || block.type !== "text") {
+    return document;
+  }
+
+  return updateTextBlockStyleInDocument({
+    document: updateTextBlockContentInDocument({
+      document,
+      sectionId,
+      blockPath,
+      content: removeInlineTextColorMarks(block.content),
+    }),
+    sectionId,
+    blockPath,
+    style: { color },
+  });
+}
+
 export function updateBadgeItemsInDocument({
   document,
   sectionId,
@@ -713,6 +746,30 @@ export function updateSectionTitleInDocument({
       return {
         ...section,
         title: content,
+      };
+    }),
+  };
+}
+
+export function setSectionTitleColorInDocument({
+  document,
+  sectionId,
+  color,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  color?: string;
+}): ResumeDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.id !== sectionId) {
+        return section;
+      }
+
+      return {
+        ...section,
+        titleStyle: color ? { color } : undefined,
       };
     }),
   };

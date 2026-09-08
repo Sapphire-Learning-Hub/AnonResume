@@ -2,22 +2,25 @@ import { z } from "zod";
 
 import type { ResumeImportMetadata } from "./import/types";
 
-const richTextMarkSchema = z.object({
-  type: z.enum([
-    "bold",
-    "italic",
-    "underline",
-    "strike",
-    "link",
-    "code",
-    "tag",
-  ]),
-  attrs: z
-    .object({
-      href: z.string().min(1).optional(),
-    })
-    .optional(),
-});
+const richTextMarkSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.enum(["bold", "italic", "underline", "strike", "code", "tag"]),
+  }),
+  z.object({
+    type: z.literal("link"),
+    attrs: z
+      .object({
+        href: z.string().min(1).optional(),
+      })
+      .optional(),
+  }),
+  z.object({
+    type: z.literal("textColor"),
+    attrs: z.object({
+      color: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+    }),
+  }),
+]);
 
 const richTextTextNodeSchema = z.object({
   type: z.literal("text"),
@@ -215,6 +218,9 @@ export type ResumeBlock =
 export interface ResumeSection {
   id: string;
   title?: RichTextContent;
+  titleStyle?: {
+    color?: string;
+  };
   semantic?: string;
   visible: boolean;
   layout?: {
@@ -258,6 +264,14 @@ export interface ResumeDocument {
 const resumeSectionSchema: z.ZodType<ResumeSection> = z.object({
   id: z.string().min(1),
   title: richTextContentSchema.optional(),
+  titleStyle: z
+    .object({
+      color: z
+        .string()
+        .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+        .optional(),
+    })
+    .optional(),
   semantic: z.string().min(1).optional(),
   visible: z.boolean(),
   layout: z

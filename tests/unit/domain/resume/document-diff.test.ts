@@ -86,4 +86,22 @@ describe("compareResumeDocuments", () => {
     ]);
     expect(JSON.stringify(result)).not.toContain("pagination");
   });
+
+  it("reports a per-section title color as a section appearance change", () => {
+    const cloud = createDefaultResumeDocument();
+    const local = structuredClone(cloud);
+    Object.assign(local.sections[0]!, {
+      titleStyle: { color: "#be123c" },
+    });
+
+    expect(compareResumeDocuments(cloud, local).changes).toEqual([
+      expect.objectContaining({
+        category: "appearance",
+        kind: "changed",
+        nodeId: "section-profile",
+        field: "titleStyle.color",
+        localValue: "#be123c",
+      }),
+    ]);
+  });
 });

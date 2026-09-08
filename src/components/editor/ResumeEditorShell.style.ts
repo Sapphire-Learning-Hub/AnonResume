@@ -36,6 +36,18 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     gap: 4px;
     min-width: max-content;
   `,
+  ribbonColorControl: css`
+    box-sizing: border-box;
+    display: flex;
+    flex: 0 0 28px;
+    align-items: center;
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
+    border: 1px solid ${token.colorBorder};
+    border-radius: 6px;
+    background: ${token.colorBgContainer};
+  `,
   linkInput: css`
     && {
       width: clamp(220px, 28vw, 320px);

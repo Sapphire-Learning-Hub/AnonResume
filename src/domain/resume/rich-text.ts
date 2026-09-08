@@ -11,6 +11,14 @@ export function normalizeLinkHref(value: unknown): string | undefined {
   return trimmedValue || undefined;
 }
 
+export function normalizeTextColor(value: unknown): string | undefined {
+  const trimmedValue = typeof value === "string" ? value.trim() : "";
+
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(trimmedValue)
+    ? trimmedValue
+    : undefined;
+}
+
 function sanitizeRuntimeRichTextContent(content: unknown): unknown {
   if (!isRecord(content) || !Array.isArray(content.content)) {
     return content;
@@ -33,7 +41,21 @@ function sanitizeRuntimeRichTextContent(content: unknown): unknown {
           return {
             ...node,
             marks: node.marks.flatMap((mark) => {
-              if (!isRecord(mark) || mark.type !== "link") {
+              if (!isRecord(mark)) {
+                return [mark];
+              }
+
+              if (mark.type === "textColor") {
+                const color = normalizeTextColor(
+                  isRecord(mark.attrs) ? mark.attrs.color : undefined,
+                );
+
+                return color
+                  ? [{ type: "textColor", attrs: { color } }]
+                  : [];
+              }
+
+              if (mark.type !== "link") {
                 return [mark];
               }
 
@@ -86,6 +108,13 @@ export function normalizeRichTextContent(content: unknown): RichTextContent {
         return {
           ...node,
           marks: node.marks?.map((mark) => {
+            if (mark.type === "textColor") {
+              return {
+                type: "textColor",
+                attrs: { color: mark.attrs.color },
+              };
+            }
+
             if (mark.type !== "link") {
               return { type: mark.type };
             }
@@ -95,6 +124,30 @@ export function normalizeRichTextContent(content: unknown): RichTextContent {
               : { type: "link" };
           }),
         };
+      }),
+    })),
+  };
+}
+
+export function removeInlineTextColorMarks(
+  content: RichTextContent,
+): RichTextContent {
+  return {
+    ...content,
+    content: content.content.map((paragraph) => ({
+      ...paragraph,
+      content: paragraph.content.map((node) => {
+        if (node.type !== "text" || !node.marks?.length) {
+          return node;
+        }
+
+        const marks = node.marks.filter((mark) => mark.type !== "textColor");
+
+        if (!marks.length) {
+          return { type: "text" as const, text: node.text };
+        }
+
+        return { ...node, marks };
       }),
     })),
   };

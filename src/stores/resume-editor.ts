@@ -26,6 +26,8 @@ import {
   removeBlockFromDocument,
   removeListItemFromDocument,
   removeSectionFromDocument,
+  setSectionTitleColorInDocument,
+  setTextBlockColorInDocument,
   setSectionVisibilityInDocument,
   updateSectionLayoutInDocument,
   updateSectionSemanticInDocument,
@@ -101,6 +103,10 @@ export interface ResumeEditorActions {
     sectionId: string;
     content: RichTextContent;
   }) => void;
+  setSectionTitleColor: (params: {
+    sectionId: string;
+    color?: string;
+  }) => void;
   updateSectionLayout: (params: {
     sectionId: string;
     layout: Partial<NonNullable<ResumeDocument["sections"][number]["layout"]>>;
@@ -113,6 +119,11 @@ export interface ResumeEditorActions {
     sectionId: string;
     blockPath: string[];
     style: Partial<NonNullable<TextBlock["style"]>>;
+  }) => void;
+  setTextBlockColor: (params: {
+    sectionId: string;
+    blockPath: string[];
+    color: string;
   }) => void;
   updateBadgeItems: (params: {
     sectionId: string;
@@ -277,6 +288,11 @@ export function createResumeEditorStore({
         }),
       );
     },
+    setSectionTitleColor: ({ sectionId, color }) => {
+      get().updateDocument((document) =>
+        setSectionTitleColorInDocument({ document, sectionId, color }),
+      );
+    },
     updateSectionLayout: ({ sectionId, layout }) => {
       get().updateDocument((document) =>
         updateSectionLayoutInDocument({
@@ -302,6 +318,16 @@ export function createResumeEditorStore({
           sectionId,
           blockPath,
           style,
+        }),
+      );
+    },
+    setTextBlockColor: ({ sectionId, blockPath, color }) => {
+      get().updateDocument((document) =>
+        setTextBlockColorInDocument({
+          document,
+          sectionId,
+          blockPath,
+          color,
         }),
       );
     },
