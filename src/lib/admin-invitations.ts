@@ -21,10 +21,11 @@ export async function inviteUser(input: {
   actorKind: "super_admin" | "delegated_admin";
   name: string;
   email: string;
-  roleId?: string | null;
+  roleIds?: string[];
   deliverInvitation?: typeof sendUserInvitationEmail;
 }) {
-  if (input.roleId && input.actorKind !== "super_admin") {
+  const roleIds = [...new Set(input.roleIds ?? [])].sort();
+  if (roleIds.length > 0 && input.actorKind !== "super_admin") {
     throw new AdminInvitationConflictError(
       "Only the super-admin can invite a delegated administrator",
     );
@@ -47,24 +48,26 @@ export async function inviteUser(input: {
     if (existing.rowCount) {
       throw new AdminInvitationConflictError("An account with this email already exists");
     }
-    if (input.roleId) {
-      const role = await client.query(
-        `SELECT id FROM ${schema}.admin_roles WHERE id = $1`,
-        [input.roleId],
+    if (roleIds.length > 0) {
+      const roles = await client.query(
+        `SELECT id FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+        [roleIds],
       );
-      if (role.rowCount !== 1) throw new AdminInvitationNotFoundError();
+      if (roles.rowCount !== roleIds.length) {
+        throw new AdminInvitationNotFoundError();
+      }
     }
 
     const userId = randomUUID();
     const rawToken = randomBytes(32).toString("base64url");
-    const purpose = input.roleId ? "delegated_admin" : "product_user";
+    const purpose = roleIds.length > 0 ? "delegated_admin" : "product_user";
     await client.query(
       `INSERT INTO "user"
         (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
        VALUES ($1, $2, $3, false, NULL, now(), now())`,
       [userId, name, email],
     );
-    if (input.roleId) {
+    if (roleIds.length > 0) {
       await client.query(
         `INSERT INTO ${schema}.admin_principals (user_id, kind)
          VALUES ($1, 'delegated_admin')`,
@@ -73,8 +76,9 @@ export async function inviteUser(input: {
       await client.query(
         `INSERT INTO ${schema}.admin_assignments
           (user_id, role_id, assigned_by_user_id)
-         VALUES ($1, $2, $3)`,
-        [userId, input.roleId, input.actorUserId],
+         SELECT $1, role_id, $3
+           FROM unnest($2::uuid[]) AS role_id`,
+        [userId, roleIds, input.actorUserId],
       );
     }
     await client.query(
@@ -95,7 +99,10 @@ export async function inviteUser(input: {
       [
         input.actorUserId,
         userId,
-        JSON.stringify({ grantsManagementAccess: Boolean(input.roleId) }),
+        JSON.stringify({
+          grantsManagementAccess: roleIds.length > 0,
+          roleIds,
+        }),
       ],
     );
 
@@ -108,7 +115,7 @@ export async function inviteUser(input: {
       email,
       name,
       url: url.toString(),
-      grantsManagementAccess: Boolean(input.roleId),
+      grantsManagementAccess: roleIds.length > 0,
     });
     await client.query("COMMIT");
     return { userId };

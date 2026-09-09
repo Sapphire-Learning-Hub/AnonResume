@@ -3,21 +3,24 @@ import { z } from "zod";
 
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
 import {
-  assignAdminRole,
+  setAdminRoles,
   removeDelegatedAdmin,
   AdminManagementConflictError,
   AdminManagementNotFoundError,
 } from "@/lib/admin-management";
 
-const assignSchema = z.object({ userId: z.string().min(1), roleId: z.uuid() });
+const assignSchema = z.object({
+  userId: z.string().min(1),
+  roleIds: z.array(z.uuid()).max(50),
+});
 const removeSchema = z.object({ userId: z.string().min(1) });
 
-export async function POST(request: Request) {
+export async function PUT(request: Request) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     const parsed = assignSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
-    await assignAdminRole({ actorUserId: context.userId, ...parsed.data });
+    await setAdminRoles({ actorUserId: context.userId, ...parsed.data });
     return NextResponse.json({ ok: true });
   } catch (error) {
     const authError = adminApiErrorResponse(error);

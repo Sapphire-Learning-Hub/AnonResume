@@ -203,6 +203,7 @@ const adminPrincipalColumns = {
   userId: text("user_id").primaryKey(),
   kind: text("kind").$type<AdminPrincipalKind>().notNull(),
   singletonSlot: integer("singleton_slot"),
+  accessVersion: integer("access_version").notNull().default(1),
   quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -276,10 +277,9 @@ export const adminRoles =
       ]);
 
 const adminAssignmentColumns = {
-  userId: text("user_id").primaryKey(),
+  userId: text("user_id").notNull(),
   roleId: uuid("role_id").notNull(),
   assignedByUserId: text("assigned_by_user_id").notNull(),
-  accessVersion: integer("access_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -287,6 +287,10 @@ const adminAssignmentColumns = {
 export const adminAssignments =
   schemaName === "public"
     ? pgTable("admin_assignments", adminAssignmentColumns, (table) => [
+        primaryKey({
+          columns: [table.userId, table.roleId],
+          name: "admin_assignments_user_role_pk",
+        }),
         foreignKey({
           columns: [table.roleId],
           foreignColumns: [adminRoles.id],
@@ -297,6 +301,10 @@ export const adminAssignments =
         "admin_assignments",
         adminAssignmentColumns,
         (table) => [
+          primaryKey({
+            columns: [table.userId, table.roleId],
+            name: "admin_assignments_user_role_pk",
+          }),
           foreignKey({
             columns: [table.roleId],
             foreignColumns: [adminRoles.id],

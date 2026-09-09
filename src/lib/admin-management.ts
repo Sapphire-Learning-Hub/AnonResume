@@ -159,9 +159,12 @@ export async function updateAdminRole(input: {
     if (updated.rowCount !== 1) throw new AdminManagementNotFoundError();
 
     const affected = await client.query<{ userId: string }>(
-      `UPDATE ${schema}.admin_assignments
+      `UPDATE ${schema}.admin_principals
           SET access_version = access_version + 1, updated_at = now()
-        WHERE role_id = $1 RETURNING user_id AS "userId"`,
+        WHERE user_id IN (
+          SELECT user_id FROM ${schema}.admin_assignments WHERE role_id = $1
+        )
+        RETURNING user_id AS "userId"`,
       [input.roleId],
     );
     if (affected.rows.length > 0) {
@@ -224,13 +227,14 @@ export async function deleteAdminRole(actorUserId: string, roleId: string) {
   }
 }
 
-export async function assignAdminRole(input: {
+export async function setAdminRoles(input: {
   actorUserId: string;
   userId: string;
-  roleId: string;
+  roleIds: string[];
 }) {
   const schema = schemaName();
   const client = await getDatabasePool().connect();
+  const roleIds = [...new Set(input.roleIds)].sort();
   try {
     await client.query("BEGIN");
     const user = await client.query(
@@ -238,41 +242,82 @@ export async function assignAdminRole(input: {
       [input.userId],
     );
     if (user.rowCount !== 1) throw new AdminManagementNotFoundError();
-    const superAdmin = await client.query(
-      `SELECT 1 FROM ${schema}.admin_principals
-        WHERE user_id = $1 AND kind = 'super_admin'`,
+    const principal = await client.query<{
+      accessVersion: number;
+      kind: string;
+    }>(
+      `SELECT kind, access_version AS "accessVersion"
+         FROM ${schema}.admin_principals
+        WHERE user_id = $1
+        FOR UPDATE`,
       [input.userId],
     );
-    if (superAdmin.rowCount) {
+    if (principal.rows[0]?.kind === "super_admin") {
       throw new AdminManagementConflictError("The super-admin cannot receive a delegated role");
     }
-    const role = await client.query(
-      `SELECT 1 FROM ${schema}.admin_roles WHERE id = $1`,
-      [input.roleId],
+    const roles = await client.query<{ id: string }>(
+      `SELECT id::text FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+      [roleIds],
     );
-    if (role.rowCount !== 1) throw new AdminManagementNotFoundError();
+    if (roles.rowCount !== roleIds.length) {
+      throw new AdminManagementNotFoundError();
+    }
 
-    await client.query(
-      `INSERT INTO ${schema}.admin_principals
-        (user_id, kind, singleton_slot, quarantined_at, created_at, updated_at)
-       VALUES ($1, 'delegated_admin', NULL, NULL, now(), now())
-       ON CONFLICT (user_id) DO UPDATE SET
-         kind = 'delegated_admin', singleton_slot = NULL,
-         quarantined_at = NULL, updated_at = now()
-       WHERE ${schema}.admin_principals.kind <> 'super_admin'`,
+    const assignments = await client.query<{ roleId: string }>(
+      `SELECT role_id::text AS "roleId"
+         FROM ${schema}.admin_assignments
+        WHERE user_id = $1
+        ORDER BY role_id
+        FOR UPDATE`,
       [input.userId],
     );
-    await client.query(
-      `INSERT INTO ${schema}.admin_assignments
-        (user_id, role_id, assigned_by_user_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id) DO UPDATE SET
-         role_id = EXCLUDED.role_id,
-         assigned_by_user_id = EXCLUDED.assigned_by_user_id,
-         access_version = ${schema}.admin_assignments.access_version + 1,
-         updated_at = now()`,
-      [input.userId, input.roleId, input.actorUserId],
-    );
+    const previousRoleIds = assignments.rows.map((row) => row.roleId);
+    if (
+      previousRoleIds.length === roleIds.length &&
+      previousRoleIds.every((roleId, index) => roleId === roleIds[index])
+    ) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    if (roleIds.length === 0) {
+      await client.query(
+        `DELETE FROM ${schema}.admin_assignments WHERE user_id = $1`,
+        [input.userId],
+      );
+      await client.query(
+        `DELETE FROM ${schema}.admin_principals
+          WHERE user_id = $1 AND kind = 'delegated_admin'`,
+        [input.userId],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO ${schema}.admin_principals
+          (user_id, kind, singleton_slot, access_version, quarantined_at,
+           created_at, updated_at)
+         VALUES ($1, 'delegated_admin', NULL, 1, NULL, now(), now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           kind = 'delegated_admin', singleton_slot = NULL,
+           access_version = ${schema}.admin_principals.access_version + 1,
+           quarantined_at = NULL, updated_at = now()
+         WHERE ${schema}.admin_principals.kind <> 'super_admin'`,
+        [input.userId],
+      );
+      await client.query(
+        `DELETE FROM ${schema}.admin_assignments
+          WHERE user_id = $1 AND NOT (role_id = ANY($2::uuid[]))`,
+        [input.userId, roleIds],
+      );
+      await client.query(
+        `INSERT INTO ${schema}.admin_assignments
+          (user_id, role_id, assigned_by_user_id)
+         SELECT $1, role_id, $3
+           FROM unnest($2::uuid[]) AS role_id
+         ON CONFLICT (user_id, role_id) DO NOTHING`,
+        [input.userId, roleIds, input.actorUserId],
+      );
+    }
+
     await client.query(
       `UPDATE ${schema}.admin_sessions SET revoked_at = now()
         WHERE user_id = $1 AND revoked_at IS NULL`,
@@ -280,11 +325,13 @@ export async function assignAdminRole(input: {
     );
     await writeAdminAuditEventWithClient(client, {
       actorUserId: input.actorUserId,
-      action: "administrator.assign_role",
+      action: roleIds.length > 0
+        ? "administrator.set_roles"
+        : "administrator.remove",
       targetType: "user",
       targetId: input.userId,
       outcome: "success",
-      metadata: { roleId: input.roleId },
+      metadata: { previousRoleIds, roleIds },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -296,45 +343,7 @@ export async function assignAdminRole(input: {
 }
 
 export async function removeDelegatedAdmin(actorUserId: string, userId: string) {
-  const schema = schemaName();
-  const client = await getDatabasePool().connect();
-  try {
-    await client.query("BEGIN");
-    const principal = await client.query<{ kind: string }>(
-      `SELECT kind FROM ${schema}.admin_principals WHERE user_id = $1 FOR UPDATE`,
-      [userId],
-    );
-    if (principal.rows[0]?.kind === "super_admin") {
-      throw new AdminManagementConflictError("The super-admin cannot be removed");
-    }
-    await client.query(
-      `DELETE FROM ${schema}.admin_assignments WHERE user_id = $1`,
-      [userId],
-    );
-    await client.query(
-      `DELETE FROM ${schema}.admin_principals
-        WHERE user_id = $1 AND kind = 'delegated_admin'`,
-      [userId],
-    );
-    await client.query(
-      `UPDATE ${schema}.admin_sessions SET revoked_at = now()
-        WHERE user_id = $1 AND revoked_at IS NULL`,
-      [userId],
-    );
-    await writeAdminAuditEventWithClient(client, {
-      actorUserId,
-      action: "administrator.remove",
-      targetType: "user",
-      targetId: userId,
-      outcome: "success",
-    });
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+  return setAdminRoles({ actorUserId, userId, roleIds: [] });
 }
 
 export async function suspendUser(input: {

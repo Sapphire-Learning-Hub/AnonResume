@@ -21,7 +21,7 @@ function quoteIdentifier(value: string) {
 describe("administrative user invitations", () => {
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const actorUserId = `invite-actor-${randomUUID()}`;
-  const roleId = randomUUID();
+  const roleIds = [randomUUID(), randomUUID()];
   const invitedEmail = `invite-${randomUUID()}@example.com`;
   const createdUserIds: string[] = [];
 
@@ -34,8 +34,16 @@ describe("administrative user invitations", () => {
     await getDatabasePool().query(
       `INSERT INTO ${schema}.admin_roles
         (id, name, description, permissions, created_by_user_id)
-       VALUES ($1, $2, '', '["users.read"]'::jsonb, $3)`,
-      [roleId, `Invite role ${roleId}`, actorUserId],
+       VALUES
+         ($1, $3, '', '["users.read"]'::jsonb, $5),
+         ($2, $4, '', '["audit.read"]'::jsonb, $5)`,
+      [
+        roleIds[0],
+        roleIds[1],
+        `Invite role ${roleIds[0]}`,
+        `Invite role ${roleIds[1]}`,
+        actorUserId,
+      ],
     );
   });
 
@@ -66,7 +74,10 @@ describe("administrative user invitations", () => {
       );
       await getDatabasePool().query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [createdUserIds]);
     }
-    await getDatabasePool().query(`DELETE FROM ${schema}.admin_roles WHERE id = $1`, [roleId]);
+    await getDatabasePool().query(
+      `DELETE FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+      [roleIds],
+    );
     await getDatabasePool().query(`DELETE FROM "user" WHERE id = $1`, [actorUserId]);
   });
 
@@ -77,7 +88,7 @@ describe("administrative user invitations", () => {
       actorKind: "super_admin",
       name: "Invited administrator",
       email: invitedEmail,
-      roleId,
+      roleIds,
       deliverInvitation: async ({ url }) => {
         activationUrl = url;
       },
@@ -91,11 +102,14 @@ describe("administrative user invitations", () => {
       purpose: "delegated_admin",
       requiresMfa: true,
     });
-    const assignment = await getDatabasePool().query(
-      `SELECT role_id FROM ${schema}.admin_assignments WHERE user_id = $1`,
+    const assignment = await getDatabasePool().query<{ role_id: string }>(
+      `SELECT role_id::text FROM ${schema}.admin_assignments
+        WHERE user_id = $1 ORDER BY role_id`,
       [result.userId],
     );
-    expect(assignment.rows[0]?.role_id).toBe(roleId);
+    expect(assignment.rows.map((row) => row.role_id)).toEqual(
+      [...roleIds].sort(),
+    );
 
     const enrollment = await startAdminActivation({
       token,
@@ -164,7 +178,7 @@ describe("administrative user invitations", () => {
         actorKind: "delegated_admin",
         name: "Forbidden",
         email: `forbidden-${randomUUID()}@example.com`,
-        roleId,
+        roleIds,
         deliverInvitation: vi.fn(),
       }),
     ).rejects.toBeInstanceOf(AdminInvitationConflictError);

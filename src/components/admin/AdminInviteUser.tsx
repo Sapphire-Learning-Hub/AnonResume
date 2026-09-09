@@ -22,7 +22,7 @@ export function AdminInviteUser({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [roleId, setRoleId] = useState<string>();
+  const [roleIds, setRoleIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
@@ -32,7 +32,7 @@ export function AdminInviteUser({
     const response = await fetch("/api/manage/users/invite", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, email, roleId: roleId ?? null }),
+      body: JSON.stringify({ name, email, roleIds }),
     });
     setPending(false);
     if (response.status === 428) {
@@ -48,7 +48,7 @@ export function AdminInviteUser({
     setOpen(false);
     setName("");
     setEmail("");
-    setRoleId(undefined);
+    setRoleIds([]);
     router.refresh();
   }
 
@@ -87,9 +87,10 @@ export function AdminInviteUser({
             <AdminPagedSelect
               allowClear
               endpoint="/api/manage/roles"
-              onChange={setRoleId}
+              mode="multiple"
+              onChange={setRoleIds}
               placeholder={t("invite.role")}
-              value={roleId}
+              value={roleIds}
             />
           ) : null}
         </div>

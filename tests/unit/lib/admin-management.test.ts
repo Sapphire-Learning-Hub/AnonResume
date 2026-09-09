@@ -5,13 +5,12 @@ import { eq } from "drizzle-orm";
 import { adminAssignments, adminRoles, db, getDatabaseSchemaName } from "@/db";
 import {
   AdminManagementConflictError,
-  assignAdminRole,
   createAdminRole,
   deleteAdminRole,
-  removeDelegatedAdmin,
   restoreUser,
   revokeUserSessions,
   suspendUser,
+  setAdminRoles,
   updateAdminRole,
 } from "@/lib/admin-management";
 import { getAdminAccessForUser } from "@/lib/admin-store";
@@ -76,24 +75,44 @@ describe("admin role management", () => {
     ]);
   });
 
-  it("assigns exactly one current role and invalidates access on updates", async () => {
-    const created = await createAdminRole({
+  it("combines multiple roles and versions the complete role set", async () => {
+    const supportRole = await createAdminRole({
       actorUserId: superAdminId,
       name: "Support",
       description: "Support operators",
       permissions: ["users.read"],
     });
-    await assignAdminRole({ actorUserId: superAdminId, userId, roleId: created.id });
+    const auditRole = await createAdminRole({
+      actorUserId: superAdminId,
+      name: "Audit",
+      description: "Audit operators",
+      permissions: ["users.read", "audit.read"],
+    });
+    await setAdminRoles({
+      actorUserId: superAdminId,
+      userId,
+      roleIds: [supportRole.id, auditRole.id, supportRole.id],
+    });
 
     await expect(getAdminAccessForUser(userId)).resolves.toMatchObject({
       kind: "delegated_admin",
       accessVersion: 1,
-      permissions: ["users.read"],
+      permissions: ["users.read", "audit.read"],
+    });
+    expect(await db.select().from(adminAssignments)).toHaveLength(2);
+
+    await setAdminRoles({
+      actorUserId: superAdminId,
+      userId,
+      roleIds: [auditRole.id, supportRole.id],
+    });
+    await expect(getAdminAccessForUser(userId)).resolves.toMatchObject({
+      accessVersion: 1,
     });
 
     await updateAdminRole({
       actorUserId: superAdminId,
-      roleId: created.id,
+      roleId: supportRole.id,
       name: "Support",
       description: "Updated",
       permissions: ["users.read", "users.sessions.revoke"],
@@ -101,13 +120,28 @@ describe("admin role management", () => {
 
     await expect(getAdminAccessForUser(userId)).resolves.toMatchObject({
       accessVersion: 2,
-      permissions: ["users.read", "users.sessions.revoke"],
+      permissions: ["users.read", "users.sessions.revoke", "audit.read"],
+    });
+
+    await setAdminRoles({
+      actorUserId: superAdminId,
+      userId,
+      roleIds: [auditRole.id],
+    });
+    await expect(getAdminAccessForUser(userId)).resolves.toMatchObject({
+      accessVersion: 3,
+      permissions: ["users.read", "audit.read"],
     });
     expect(await db.select().from(adminAssignments)).toHaveLength(1);
 
-    await removeDelegatedAdmin(superAdminId, userId);
+    await setAdminRoles({
+      actorUserId: superAdminId,
+      userId,
+      roleIds: [],
+    });
     await expect(getAdminAccessForUser(userId)).resolves.toBeNull();
-    await db.delete(adminRoles).where(eq(adminRoles.id, created.id));
+    await db.delete(adminRoles).where(eq(adminRoles.id, supportRole.id));
+    await db.delete(adminRoles).where(eq(adminRoles.id, auditRole.id));
   });
 
   it("never overwrites the singleton super-admin with a delegated role", async () => {
@@ -119,10 +153,10 @@ describe("admin role management", () => {
     });
 
     await expect(
-      assignAdminRole({
+      setAdminRoles({
         actorUserId: superAdminId,
         userId: superAdminId,
-        roleId: created.id,
+        roleIds: [created.id],
       }),
     ).rejects.toBeInstanceOf(AdminManagementConflictError);
   });

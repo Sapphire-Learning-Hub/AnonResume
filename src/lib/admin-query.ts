@@ -17,12 +17,41 @@ import { validateRuntimeConfiguration } from "./runtime-configuration";
 
 export type AdminListRequest = PageRequest & { query?: string };
 
+export interface AdminAssignedRole {
+  id: string;
+  name: string;
+  permissions: ReturnType<typeof normalizeAdminPermissions>;
+  systemKey: ReturnType<typeof normalizeSystemRoleKey>;
+}
+
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
 function schemaName() {
   return quoteIdentifier(getDatabaseSchemaName());
+}
+
+function normalizeSystemRoleKey(value: unknown) {
+  return isAdminSystemRoleKey(value) ? value : null;
+}
+
+function normalizeAssignedRoles(value: unknown): AdminAssignedRole[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const role = item as Record<string, unknown>;
+    if (typeof role.id !== "string" || typeof role.name !== "string") {
+      return [];
+    }
+    return [{
+      id: role.id,
+      name: role.name,
+      permissions: normalizeAdminPermissions(role.permissions),
+      systemKey: normalizeSystemRoleKey(role.systemKey),
+    }];
+  });
 }
 
 function normalizeSearchQuery(query?: string) {
@@ -97,32 +126,38 @@ export async function listAdminUsers(request: AdminListRequest) {
     createdAt: Date;
     resumes: number;
     principalKind: string | null;
-    roleName: string | null;
-    roleSystemKey: string | null;
+    roles: unknown;
     suspended: boolean;
   }>(
     request,
     `SELECT count(*)::text AS total FROM "user" AS identity ${search.clause}`,
     `SELECT identity.id, identity.name, identity.email,
       identity."emailVerified", identity."createdAt",
-      count(resume.id)::int AS resumes,
-      principal.kind AS "principalKind", role.name AS "roleName",
-      role.system_key AS "roleSystemKey",
+      (SELECT count(*)::int FROM ${schema}.resumes AS resume
+        WHERE resume.user_id = identity.id) AS resumes,
+      principal.kind AS "principalKind",
+      coalesce(assigned_roles.roles, '[]'::jsonb) AS roles,
       (restriction.user_id IS NOT NULL AND
        (restriction.suspended_until IS NULL OR restriction.suspended_until > now())) AS suspended
     FROM "user" AS identity
-    LEFT JOIN ${schema}.resumes AS resume ON resume.user_id = identity.id
     LEFT JOIN ${schema}.admin_principals AS principal
       ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
-    LEFT JOIN ${schema}.admin_assignments AS assignment
-      ON assignment.user_id = identity.id
-    LEFT JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
+    LEFT JOIN LATERAL (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', role.id::text,
+          'name', role.name,
+          'permissions', role.permissions,
+          'systemKey', role.system_key
+        ) ORDER BY lower(role.name), role.id
+      ) AS roles
+      FROM ${schema}.admin_assignments AS assignment
+      JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
+      WHERE assignment.user_id = identity.id
+    ) AS assigned_roles ON true
     LEFT JOIN ${schema}.account_restrictions AS restriction
       ON restriction.user_id = identity.id
     ${search.clause}
-    GROUP BY identity.id, principal.kind, role.name, role.system_key,
-      restriction.user_id,
-      restriction.suspended_until
     ORDER BY identity."createdAt" DESC, identity.id DESC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
@@ -132,9 +167,7 @@ export async function listAdminUsers(request: AdminListRequest) {
     ...result,
     items: result.items.map((row) => ({
       ...row,
-      roleSystemKey: isAdminSystemRoleKey(row.roleSystemKey)
-        ? row.roleSystemKey
-        : null,
+      roles: normalizeAssignedRoles(row.roles),
     })),
   };
 }
@@ -147,7 +180,7 @@ export async function listAssignableAdminUsers(request: AdminListRequest) {
   );
   const where = appendCondition(
     search.clause,
-    "(principal.kind IS NULL OR principal.kind <> 'super_admin')",
+    "principal.user_id IS NULL",
   );
 
   return runPagedQuery<{
@@ -289,47 +322,61 @@ export async function listAdminRoles(request: AdminListRequest) {
 
 export async function listAdminAdministrators(request: AdminListRequest) {
   const schema = schemaName();
-  const search = searchWhere(
-    ["identity.name", "identity.email", "role.name"],
-    normalizeSearchQuery(request.query),
-  );
-  const where = appendCondition(search.clause, "principal.kind = 'delegated_admin'");
+  const pattern = normalizeSearchQuery(request.query);
+  const searchClause = pattern
+    ? `WHERE (identity.name ILIKE $1 OR identity.email ILIKE $1 OR EXISTS (
+        SELECT 1
+          FROM ${schema}.admin_assignments AS searched_assignment
+          JOIN ${schema}.admin_roles AS searched_role
+            ON searched_role.id = searched_assignment.role_id
+         WHERE searched_assignment.user_id = identity.id
+           AND searched_role.name ILIKE $1
+      ))`
+    : "";
+  const values = pattern ? [pattern] : [];
+  const where = appendCondition(searchClause, "principal.kind = 'delegated_admin'");
 
   const result = await runPagedQuery<{
     id: string;
     name: string;
     email: string;
     principalKind: string;
-    roleName: string | null;
-    roleSystemKey: string | null;
+    roles: unknown;
   }>(
     request,
     `SELECT count(*)::text AS total
        FROM ${schema}.admin_principals AS principal
        JOIN "user" AS identity ON identity.id = principal.user_id
-       LEFT JOIN ${schema}.admin_assignments AS assignment ON assignment.user_id = identity.id
-       LEFT JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
        ${where}`,
     `SELECT identity.id, identity.name, identity.email,
-      principal.kind AS "principalKind", role.name AS "roleName",
-      role.system_key AS "roleSystemKey"
+      principal.kind AS "principalKind",
+      coalesce(assigned_roles.roles, '[]'::jsonb) AS roles
     FROM ${schema}.admin_principals AS principal
     JOIN "user" AS identity ON identity.id = principal.user_id
-    LEFT JOIN ${schema}.admin_assignments AS assignment ON assignment.user_id = identity.id
-    LEFT JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
+    LEFT JOIN LATERAL (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', role.id::text,
+          'name', role.name,
+          'permissions', role.permissions,
+          'systemKey', role.system_key
+        ) ORDER BY lower(role.name), role.id
+      ) AS roles
+      FROM ${schema}.admin_assignments AS assignment
+      JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
+      WHERE assignment.user_id = identity.id
+    ) AS assigned_roles ON true
     ${where}
     ORDER BY identity."createdAt" DESC, identity.id DESC
-    LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
-    search.values,
+    LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+    values,
   );
 
   return {
     ...result,
     items: result.items.map((row) => ({
       ...row,
-      roleSystemKey: isAdminSystemRoleKey(row.roleSystemKey)
-        ? row.roleSystemKey
-        : null,
+      roles: normalizeAssignedRoles(row.roles),
     })),
   };
 }

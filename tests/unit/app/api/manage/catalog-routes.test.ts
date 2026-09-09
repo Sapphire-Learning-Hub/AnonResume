@@ -37,7 +37,7 @@ describe("management paginated catalog routes", () => {
         id: "role-1",
         name: "database-name",
         description: "",
-        permissions: [],
+        permissions: ["users.read", "audit.read"],
         members: 0,
         systemKey: "support_operator",
       }],
@@ -67,7 +67,11 @@ describe("management paginated catalog routes", () => {
       query: "support",
     });
     await expect(response.json()).resolves.toMatchObject({
-      items: [{ id: "role-1", label: "支持专员（系统角色）" }],
+      items: [{
+        id: "role-1",
+        label: "支持专员（系统角色）",
+        permissions: ["users.read", "audit.read"],
+      }],
       page: 2,
       totalPages: 2,
     });

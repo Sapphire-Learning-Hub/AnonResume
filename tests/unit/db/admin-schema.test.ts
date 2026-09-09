@@ -50,10 +50,17 @@ describe("admin database schema", () => {
       "userId",
       "roleId",
       "assignedByUserId",
-      "accessVersion",
       "createdAt",
       "updatedAt",
     ]);
+    expect(Object.keys(getTableColumns(adminPrincipals))).toContain(
+      "accessVersion",
+    );
+    const assignmentConfig = getTableConfig(adminAssignments);
+    expect(assignmentConfig.primaryKeys).toHaveLength(1);
+    expect(
+      assignmentConfig.primaryKeys[0]?.columns.map((column) => column.name),
+    ).toEqual(["user_id", "role_id"]);
   });
 
   it("declares independent MFA and management-session storage", () => {

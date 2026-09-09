@@ -173,7 +173,7 @@ export async function getAdminAccessForUser(
     .select({
       kind: adminPrincipals.kind,
       rolePermissions: adminRoles.permissions,
-      accessVersion: adminAssignments.accessVersion,
+      accessVersion: adminPrincipals.accessVersion,
       recoveryRequired: adminSecurityStates.recoveryRequired,
     })
     .from(adminPrincipals)
@@ -191,25 +191,30 @@ export async function getAdminAccessForUser(
         eq(adminPrincipals.userId, userId),
         isNull(adminPrincipals.quarantinedAt),
       ),
-    )
-    .limit(1);
+    );
   const row = rows[0];
 
   if (!row || row.kind === "quarantined_admin") return null;
   if (row.kind === "super_admin") {
     return {
       kind: "super_admin",
-      accessVersion: 1,
+      accessVersion: row.accessVersion,
       permissions: [...ADMIN_PERMISSION_KEYS],
       recoveryRequired: row.recoveryRequired ?? false,
     };
   }
-  if (!row.rolePermissions || !row.accessVersion) return null;
+  const assignedPermissions = rows.flatMap((item) =>
+    normalizeAdminPermissions(item.rolePermissions),
+  );
+  if (assignedPermissions.length === 0) return null;
+  const permissionSet = new Set(assignedPermissions);
 
   return {
     kind: "delegated_admin",
     accessVersion: row.accessVersion,
-    permissions: normalizeAdminPermissions(row.rolePermissions),
+    permissions: ADMIN_PERMISSION_KEYS.filter((permission) =>
+      permissionSet.has(permission),
+    ),
     recoveryRequired: row.recoveryRequired ?? false,
   };
 }

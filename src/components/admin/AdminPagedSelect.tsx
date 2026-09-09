@@ -5,10 +5,39 @@ import { createStyles } from "antd-style";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
-interface AdminSelectOption {
+import {
+  ADMIN_PERMISSION_KEYS,
+  type AdminPermission,
+} from "@/lib/admin-permissions";
+
+export interface AdminSelectOption {
   id: string;
   label: string;
+  permissions?: AdminPermission[];
 }
+
+interface AdminPagedSelectCommonProps {
+  allowClear?: boolean;
+  className?: string;
+  endpoint: string;
+  initialOptions?: AdminSelectOption[];
+  onOptionsChange?: (options: AdminSelectOption[]) => void;
+  placeholder: string;
+  style?: CSSProperties;
+}
+
+type AdminPagedSelectProps = AdminPagedSelectCommonProps & (
+  | {
+      mode: "multiple";
+      onChange: (value: string[]) => void;
+      value?: string[];
+    }
+  | {
+      mode?: undefined;
+      onChange: (value: string | undefined) => void;
+      value?: string;
+    }
+);
 
 interface AdminSelectPage {
   items: AdminSelectOption[];
@@ -45,7 +74,12 @@ function isAdminSelectPage(value: unknown): value is AdminSelectPage {
         item &&
         typeof item === "object" &&
         typeof (item as AdminSelectOption).id === "string" &&
-        typeof (item as AdminSelectOption).label === "string",
+        typeof (item as AdminSelectOption).label === "string" &&
+        ((item as AdminSelectOption).permissions === undefined ||
+          (Array.isArray((item as AdminSelectOption).permissions) &&
+            (item as AdminSelectOption).permissions!.every((permission) =>
+              ADMIN_PERMISSION_KEYS.includes(permission),
+            ))),
     ) &&
     typeof page.page === "number" &&
     typeof page.pageSize === "number" &&
@@ -54,25 +88,10 @@ function isAdminSelectPage(value: unknown): value is AdminSelectPage {
   );
 }
 
-export function AdminPagedSelect({
-  allowClear,
-  className,
-  endpoint,
-  onChange,
-  placeholder,
-  style,
-  value,
-}: {
-  allowClear?: boolean;
-  className?: string;
-  endpoint: string;
-  onChange: (value: string | undefined) => void;
-  placeholder: string;
-  style?: CSSProperties;
-  value?: string;
-}) {
+export function AdminPagedSelect(props: AdminPagedSelectProps) {
   const { styles } = useStyles();
   const [page, setPage] = useState(emptyPage);
+  const [knownOptions, setKnownOptions] = useState(props.initialOptions ?? []);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const requestId = useRef(0);
@@ -94,11 +113,17 @@ export function AdminPagedSelect({
         pageSize: "10",
       });
       if (nextQuery.trim()) params.set("q", nextQuery.trim());
-      const response = await fetch(`${endpoint}?${params.toString()}`);
+      const response = await fetch(`${props.endpoint}?${params.toString()}`);
       if (!response.ok) return;
       const payload: unknown = await response.json();
       if (currentRequestId === requestId.current && isAdminSelectPage(payload)) {
         setPage(payload);
+        props.onOptionsChange?.(payload.items);
+        setKnownOptions((current) => {
+          const options = new Map(current.map((item) => [item.id, item]));
+          for (const item of payload.items) options.set(item.id, item);
+          return [...options.values()];
+        });
       }
     } catch {
       if (currentRequestId === requestId.current) setPage(emptyPage);
@@ -109,12 +134,19 @@ export function AdminPagedSelect({
 
   return (
     <Select
-      allowClear={allowClear}
-      aria-label={placeholder}
-      className={className}
+      allowClear={props.allowClear}
+      aria-label={props.placeholder}
+      className={props.className}
       filterOption={false}
       loading={loading}
-      onChange={onChange}
+      mode={props.mode}
+      onChange={(nextValue) => {
+        if (props.mode === "multiple") {
+          props.onChange(nextValue as string[]);
+        } else {
+          props.onChange(nextValue as string | undefined);
+        }
+      }}
       onOpenChange={(open) => {
         if (open) void loadPage(1, query);
       }}
@@ -125,11 +157,11 @@ export function AdminPagedSelect({
           void loadPage(1, nextQuery);
         }, 250);
       }}
-      options={page.items.map((item) => ({
+      options={knownOptions.map((item) => ({
         label: item.label,
         value: item.id,
       }))}
-      placeholder={placeholder}
+      placeholder={props.placeholder}
       popupRender={(menu) => (
         <>
           {menu}
@@ -151,8 +183,8 @@ export function AdminPagedSelect({
         </>
       )}
       showSearch
-      style={style}
-      value={value}
+      style={props.style}
+      value={props.value}
     />
   );
 }

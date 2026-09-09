@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ...result,
-      items: result.items.map(({ id, name, systemKey }) => {
+      items: result.items.map(({ id, name, permissions, systemKey }) => {
         const systemName = systemKey
           ? getAdminSystemRolePresentation(t, systemKey).name
           : null;
@@ -40,6 +40,7 @@ export async function GET(request: Request) {
           label: systemName
             ? t("roles.systemOption", { name: systemName })
             : name,
+          permissions,
         };
       }),
     });

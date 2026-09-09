@@ -58,6 +58,11 @@ export default async function ManagementUsersPage({
         rows={users.items.map((user) => {
           const canOperateTarget =
             context.kind === "super_admin" || user.principalKind === null;
+          const assignedRoleNames = user.roles.map((role) =>
+            role.systemKey
+              ? getAdminSystemRolePresentation(t, role.systemKey).name
+              : role.name,
+          );
           return [
             <AdminIdentity
               description={user.email}
@@ -73,9 +78,9 @@ export default async function ManagementUsersPage({
             user.resumes,
             user.principalKind === "super_admin"
               ? t("shell.superAdmin")
-              : user.roleSystemKey
-                ? getAdminSystemRolePresentation(t, user.roleSystemKey).name
-                : user.roleName || t("users.regular"),
+              : assignedRoleNames.length > 0
+                ? assignedRoleNames.join("、")
+                : t("users.regular"),
             <AdminStatus
               key="status"
               tone={user.suspended ? "danger" : "success"}

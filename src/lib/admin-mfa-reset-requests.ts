@@ -339,10 +339,12 @@ export async function reviewAdminMfaResetRequest({
     if (decision === "approved") {
       const target = await client.query(
         `SELECT 1 FROM ${schema}.admin_principals AS principal
-          JOIN ${schema}.admin_assignments AS assignment
-            ON assignment.user_id = principal.user_id
          WHERE principal.user_id = $1 AND principal.kind = 'delegated_admin'
-           AND principal.quarantined_at IS NULL`,
+           AND principal.quarantined_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM ${schema}.admin_assignments AS assignment
+              WHERE assignment.user_id = principal.user_id
+           )`,
         [current.requesterUserId],
       );
       if (target.rowCount !== 1) {

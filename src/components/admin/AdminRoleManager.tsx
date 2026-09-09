@@ -1,18 +1,21 @@
 "use client";
 
-import { Button, Checkbox, Input, Modal } from "antd";
+import { CheckCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
+import { Button, Checkbox, Input, Modal, Tag } from "antd";
 import { createStyles } from "antd-style";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
-import { AdminPagedSelect } from "@/components/admin/AdminPagedSelect";
+import {
+  AdminPagedSelect,
+  type AdminSelectOption,
+} from "@/components/admin/AdminPagedSelect";
 import {
   AdminIdentity,
   AdminSection,
   AdminTable,
   AdminTableActions,
-  AdminToolbar,
 } from "@/components/admin/AdminPage";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
@@ -50,6 +53,72 @@ const useStyles = createStyles(({ token, css }) => ({
       }
     }
   `,
+  roleList: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .ant-tag {
+      margin: 0;
+    }
+  `,
+  permissionPreview: css`
+    padding: 14px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
+    background: ${token.colorFillAlter};
+  `,
+  permissionPreviewHeader: css`
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+
+    strong {
+      color: ${token.colorText};
+    }
+
+    span {
+      color: ${token.colorTextSecondary};
+      font-size: ${token.fontSizeSM}px;
+    }
+  `,
+  permissionGroups: css`
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+
+    @media (max-width: 620px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  permissionGroup: css`
+    display: grid;
+    gap: 7px;
+
+    h3 {
+      margin: 0;
+      color: ${token.colorTextSecondary};
+      font-size: ${token.fontSizeSM}px;
+      font-weight: 600;
+    }
+  `,
+  permissionItem: css`
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: ${token.colorTextDisabled};
+    font-size: ${token.fontSizeSM}px;
+
+    &[data-active="true"] {
+      color: ${token.colorText};
+    }
+
+    &[data-active="true"] .anticon {
+      color: ${token.colorPrimary};
+    }
+  `,
 }));
 
 interface RoleSummary {
@@ -66,8 +135,12 @@ interface UserSummary {
   name: string;
   email: string;
   principalKind: string | null;
-  roleName: string | null;
-  roleSystemKey: AdminSystemRoleKey | null;
+  roles: Array<{
+    id: string;
+    name: string;
+    permissions: AdminPermission[];
+    systemKey: AdminSystemRoleKey | null;
+  }>;
 }
 
 const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
@@ -85,6 +158,45 @@ const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
 };
+
+const permissionGroups: Array<{
+  label: AdminMessageKey;
+  permissions: AdminPermission[];
+}> = [
+  {
+    label: "roles.permissionGroup.overview",
+    permissions: ["overview.read"],
+  },
+  {
+    label: "roles.permissionGroup.users",
+    permissions: [
+      "users.read",
+      "users.invite",
+      "users.suspend",
+      "users.sessions.revoke",
+    ],
+  },
+  {
+    label: "roles.permissionGroup.resumes",
+    permissions: [
+      "resumes.metadata.read",
+      "resumes.content.read",
+      "resumes.unpublish",
+    ],
+  },
+  {
+    label: "roles.permissionGroup.exports",
+    permissions: ["exports.read", "exports.cancel", "exports.retry"],
+  },
+  {
+    label: "roles.permissionGroup.audit",
+    permissions: ["audit.read"],
+  },
+  {
+    label: "roles.permissionGroup.system",
+    permissions: ["system.read"],
+  },
+];
 
 export function AdminRoleManager({
   administrators,
@@ -105,8 +217,12 @@ export function AdminRoleManager({
   const [description, setDescription] = useState("");
   const [permissions, setPermissions] = useState<AdminPermission[]>([]);
   const [editingRoleId, setEditingRoleId] = useState<string>();
+  const [grantOpen, setGrantOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string>();
-  const [selectedRole, setSelectedRole] = useState<string>();
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [loadedRoleOptions, setLoadedRoleOptions] = useState<AdminSelectOption[]>([]);
+  const [roleEditorUser, setRoleEditorUser] = useState<UserSummary>();
+  const [roleEditorIds, setRoleEditorIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
@@ -127,6 +243,10 @@ export function AdminRoleManager({
         );
       }
       setOpen(false);
+      setGrantOpen(false);
+      setRoleEditorUser(undefined);
+      setSelectedUser(undefined);
+      setSelectedRoles([]);
       router.refresh();
     } catch (caught) {
       toast.error(
@@ -135,6 +255,88 @@ export function AdminRoleManager({
     } finally {
       setPending(false);
     }
+  }
+
+  function roleLabel(role: UserSummary["roles"][number]) {
+    return role.systemKey
+      ? getAdminSystemRolePresentation(t, role.systemKey).name
+      : role.name;
+  }
+
+  function mergeRoleOptions(nextOptions: AdminSelectOption[]) {
+    setLoadedRoleOptions((currentOptions) => {
+      const merged = new Map(
+        currentOptions.map((option) => [option.id, option]),
+      );
+      for (const option of nextOptions) merged.set(option.id, option);
+      return [...merged.values()];
+    });
+  }
+
+  const roleCatalog = new Map<string, AdminSelectOption>();
+  for (const role of roles.items) {
+    roleCatalog.set(role.id, {
+      id: role.id,
+      label: role.systemKey
+        ? getAdminSystemRolePresentation(t, role.systemKey).name
+        : role.name,
+      permissions: role.permissions,
+    });
+  }
+  for (const option of loadedRoleOptions) roleCatalog.set(option.id, option);
+  if (roleEditorUser) {
+    for (const role of roleEditorUser.roles) {
+      roleCatalog.set(role.id, {
+        id: role.id,
+        label: roleLabel(role),
+        permissions: role.permissions,
+      });
+    }
+  }
+
+  function effectivePermissions(roleIds: string[]) {
+    return ADMIN_PERMISSION_KEYS.filter((permission) =>
+      roleIds.some((roleId) =>
+        roleCatalog.get(roleId)?.permissions?.includes(permission),
+      ),
+    );
+  }
+
+  function permissionPreview(roleIds: string[]) {
+    const effective = effectivePermissions(roleIds);
+    const effectiveSet = new Set(effective);
+
+    return (
+      <div className={styles.permissionPreview}>
+        <div className={styles.permissionPreviewHeader}>
+          <strong>{t("roles.effectivePermissions")}</strong>
+          <span>{t("roles.permissionSummary", {
+            selected: effective.length,
+            total: ADMIN_PERMISSION_KEYS.length,
+          })}</span>
+        </div>
+        <div className={styles.permissionGroups}>
+          {permissionGroups.map((group) => (
+            <section className={styles.permissionGroup} key={group.label}>
+              <h3>{t(group.label)}</h3>
+              {group.permissions.map((permission) => {
+                const active = effectiveSet.has(permission);
+                return (
+                  <span
+                    className={styles.permissionItem}
+                    data-active={active}
+                    key={permission}
+                  >
+                    {active ? <CheckCircleFilled /> : <MinusCircleOutlined />}
+                    {t(permissionMessageKeys[permission])}
+                  </span>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   function openRoleForm(role?: RoleSummary) {
@@ -171,35 +373,14 @@ export function AdminRoleManager({
 
   return (
     <div className="admin-stack">
-      <AdminToolbar>
-        <Button onClick={() => openRoleForm()} type="primary">{t("roles.create")}</Button>
-        <AdminPagedSelect
-          className="admin-toolbar__select admin-toolbar__select--wide"
-          endpoint="/api/manage/users"
-          onChange={setSelectedUser}
-          placeholder={t("roles.selectUser")}
-          value={selectedUser}
-        />
-        <AdminPagedSelect
-          className="admin-toolbar__select"
-          endpoint="/api/manage/roles"
-          onChange={setSelectedRole}
-          placeholder={t("roles.selectRole")}
-          value={selectedRole}
-        />
-        <Button
-          disabled={!selectedUser || !selectedRole}
-          loading={pending}
-          onClick={() => runAction(() => fetch("/api/manage/administrators", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ userId: selectedUser, roleId: selectedRole }),
-          }))}
-        >
-          {t("roles.assign")}
-        </Button>
-      </AdminToolbar>
-      <AdminSection title={t("roles.role")}>
+      <AdminSection
+        actions={(
+          <Button onClick={() => openRoleForm()} type="primary">
+            {t("roles.create")}
+          </Button>
+        )}
+        title={t("roles.role")}
+      >
         <AdminTable
           actionColumn
           headers={[t("roles.role"), t("roles.permissions"), t("roles.administrators"), t("common.actions")]}
@@ -256,7 +437,14 @@ export function AdminRoleManager({
         />
       </AdminSection>
 
-      <AdminSection title={t("roles.authorized")}>
+      <AdminSection
+        actions={(
+          <Button onClick={() => setGrantOpen(true)} type="primary">
+            {t("roles.authorize")}
+          </Button>
+        )}
+        title={t("roles.authorized")}
+      >
         <AdminTable
           actionColumn
           headers={[t("roles.user"), t("roles.role"), t("common.actions")]}
@@ -275,10 +463,21 @@ export function AdminRoleManager({
               key="user"
               title={user.name}
             />,
-            user.roleSystemKey
-              ? getAdminSystemRolePresentation(t, user.roleSystemKey).name
-              : user.roleName || t("roles.unassigned"),
+            user.roles.length > 0 ? (
+              <div className={styles.roleList} key="roles">
+                {user.roles.map((role) => (
+                  <Tag key={role.id}>{roleLabel(role)}</Tag>
+                ))}
+              </div>
+            ) : t("roles.unassigned"),
             <AdminTableActions key="actions">
+              <Button
+                onClick={() => {
+                  setRoleEditorUser(user);
+                  setRoleEditorIds(user.roles.map((role) => role.id));
+                }}
+                type="link"
+              >{t("roles.manage")}</Button>
               <Button
                 danger
                 loading={pending}
@@ -293,6 +492,99 @@ export function AdminRoleManager({
           ])}
         />
       </AdminSection>
+
+      <Modal
+        cancelText={t("common.cancel")}
+        destroyOnHidden
+        okButtonProps={{
+          disabled: !selectedUser || selectedRoles.length === 0,
+          loading: pending,
+        }}
+        okText={t("roles.authorize")}
+        onCancel={() => {
+          setGrantOpen(false);
+          setSelectedUser(undefined);
+          setSelectedRoles([]);
+        }}
+        onOk={() => {
+          if (!selectedUser || selectedRoles.length === 0) return;
+          void runAction(() => fetch("/api/manage/administrators", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              userId: selectedUser,
+              roleIds: selectedRoles,
+            }),
+          }));
+        }}
+        open={grantOpen}
+        title={t("roles.authorizeTitle")}
+        width={720}
+      >
+        <div className="admin-dialog-form">
+          <AdminPagedSelect
+            endpoint="/api/manage/users"
+            onChange={setSelectedUser}
+            placeholder={t("roles.selectUser")}
+            value={selectedUser}
+          />
+          <AdminPagedSelect
+            endpoint="/api/manage/roles"
+            initialOptions={[...roleCatalog.values()]}
+            mode="multiple"
+            onChange={setSelectedRoles}
+            onOptionsChange={mergeRoleOptions}
+            placeholder={t("roles.selectRole")}
+            value={selectedRoles}
+          />
+          {permissionPreview(selectedRoles)}
+        </div>
+      </Modal>
+
+      <Modal
+        cancelText={t("common.cancel")}
+        destroyOnHidden
+        okButtonProps={{ loading: pending }}
+        okText={t("roles.saveAssignments")}
+        onCancel={() => setRoleEditorUser(undefined)}
+        onOk={() => {
+          if (!roleEditorUser) return;
+          void runAction(() => fetch("/api/manage/administrators", {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              userId: roleEditorUser.id,
+              roleIds: roleEditorIds,
+            }),
+          }));
+        }}
+        open={Boolean(roleEditorUser)}
+        title={t("roles.manageTitle")}
+        width={720}
+      >
+        {roleEditorUser ? (
+          <div className="admin-dialog-form">
+            <AdminIdentity
+              description={roleEditorUser.email}
+              title={roleEditorUser.name}
+            />
+            <AdminPagedSelect
+              endpoint="/api/manage/roles"
+              initialOptions={roleEditorUser.roles.map((role) => ({
+                id: role.id,
+                label: roleLabel(role),
+                permissions: role.permissions,
+              }))}
+              mode="multiple"
+              onChange={setRoleEditorIds}
+              onOptionsChange={mergeRoleOptions}
+              placeholder={t("roles.selectRole")}
+              value={roleEditorIds}
+            />
+            {permissionPreview(roleEditorIds)}
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         destroyOnHidden

@@ -23,6 +23,7 @@ describe("delegated administrator MFA reset requests", () => {
   const otherDelegatedAdminId = `mfa-reset-other-${randomUUID()}`;
   const baseSessionId = `mfa-reset-session-${randomUUID()}`;
   const roleId = randomUUID();
+  const secondRoleId = randomUUID();
 
   beforeAll(async () => {
     const pool = getDatabasePool();
@@ -52,14 +53,27 @@ describe("delegated administrator MFA reset requests", () => {
     await pool.query(
       `INSERT INTO ${schema}.admin_roles
         (id, name, description, permissions, created_by_user_id)
-       VALUES ($1, $2, '', '["overview.read"]'::jsonb, $3)`,
-      [roleId, `MFA reset test ${roleId}`, superAdminId],
+       VALUES ($1, $3, '', '["overview.read"]'::jsonb, $5),
+              ($2, $4, '', '["audit.read"]'::jsonb, $5)`,
+      [
+        roleId,
+        secondRoleId,
+        `MFA reset test ${roleId}`,
+        `MFA reset test ${secondRoleId}`,
+        superAdminId,
+      ],
     );
     await pool.query(
       `INSERT INTO ${schema}.admin_assignments
         (user_id, role_id, assigned_by_user_id)
-       VALUES ($1, $3, $2), ($4, $3, $2)`,
-      [delegatedAdminId, superAdminId, roleId, otherDelegatedAdminId],
+       VALUES ($1, $3, $2), ($4, $3, $2), ($4, $5, $2)`,
+      [
+        delegatedAdminId,
+        superAdminId,
+        roleId,
+        otherDelegatedAdminId,
+        secondRoleId,
+      ],
     );
     await pool.query(
       `INSERT INTO ${schema}.admin_mfa_devices
@@ -103,7 +117,10 @@ describe("delegated administrator MFA reset requests", () => {
        WHERE user_id = ANY($1::text[])`,
       [[delegatedAdminId, otherDelegatedAdminId]],
     );
-    await pool.query(`DELETE FROM ${schema}.admin_roles WHERE id = $1`, [roleId]);
+    await pool.query(
+      `DELETE FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+      [[roleId, secondRoleId]],
+    );
     await pool.query(
       `DELETE FROM ${schema}.admin_principals WHERE user_id = ANY($1::text[])`,
       [[superAdminId, delegatedAdminId, otherDelegatedAdminId]],

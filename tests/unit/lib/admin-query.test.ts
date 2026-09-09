@@ -22,7 +22,7 @@ describe("admin paginated queries", () => {
   const marker = `page-${randomUUID()}`;
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const userIds = Array.from({ length: 3 }, (_, index) => `${marker}-user-${index}`);
-  let roleId = "";
+  const roleIds: string[] = [];
 
   beforeAll(async () => {
     const pool = getDatabasePool();
@@ -58,7 +58,15 @@ describe("admin paginated queries", () => {
        RETURNING id::text`,
       [`${marker} Role`, userIds[0]],
     );
-    roleId = role.rows[0]!.id;
+    roleIds.push(role.rows[0]!.id);
+    const secondRole = await pool.query<{ id: string }>(
+      `INSERT INTO ${schema}.admin_roles
+        (name, description, permissions, created_by_user_id)
+       VALUES ($1, 'Second pagination role', '["audit.read"]'::jsonb, $2)
+       RETURNING id::text`,
+      [`${marker} Second role`, userIds[0]],
+    );
+    roleIds.push(secondRole.rows[0]!.id);
     await pool.query(
       `INSERT INTO ${schema}.admin_principals (user_id, kind)
        VALUES ($1, 'delegated_admin')`,
@@ -67,8 +75,8 @@ describe("admin paginated queries", () => {
     await pool.query(
       `INSERT INTO ${schema}.admin_assignments
         (user_id, role_id, assigned_by_user_id)
-       VALUES ($1, $2, $1)`,
-      [userIds[0], roleId],
+       VALUES ($1, $2, $1), ($1, $3, $1)`,
+      [userIds[0], roleIds[0], roleIds[1]],
     );
     await pool.query(
       `INSERT INTO ${schema}.pdf_export_jobs
@@ -95,9 +103,15 @@ describe("admin paginated queries", () => {
     await pool.query(`DELETE FROM ${schema}.worker_heartbeats WHERE worker_id LIKE $1`, [`${marker}%`]);
     await pool.query(`DELETE FROM ${schema}.admin_audit_events WHERE target_id = $1`, [marker]);
     await pool.query(`DELETE FROM ${schema}.pdf_export_jobs WHERE filename = $1`, [`${marker}.pdf`]);
-    await pool.query(`DELETE FROM ${schema}.admin_assignments WHERE role_id = $1`, [roleId]);
+    await pool.query(
+      `DELETE FROM ${schema}.admin_assignments WHERE role_id = ANY($1::uuid[])`,
+      [roleIds],
+    );
     await pool.query(`DELETE FROM ${schema}.admin_principals WHERE user_id = ANY($1::text[])`, [userIds]);
-    await pool.query(`DELETE FROM ${schema}.admin_roles WHERE id = $1`, [roleId]);
+    await pool.query(
+      `DELETE FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+      [roleIds],
+    );
     await pool.query(`DELETE FROM ${schema}.resumes WHERE user_id = ANY($1::text[])`, [userIds]);
     await pool.query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [userIds]);
   });
@@ -111,6 +125,7 @@ describe("admin paginated queries", () => {
 
     expect(result).toMatchObject({ page: 2, pageSize: 2, total: 3, totalPages: 2 });
     expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.roles).toHaveLength(2);
   });
 
   it("returns pagination metadata for every management list", async () => {
@@ -127,14 +142,23 @@ describe("admin paginated queries", () => {
 
     expect(resumes).toMatchObject({ page: 1, pageSize: 20, total: 3, totalPages: 1 });
     expect(resumes.items).toHaveLength(3);
-    for (const result of [exports, roles, administrators, events, workers]) {
+    expect(roles).toMatchObject({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
+    expect(roles.items).toHaveLength(2);
+    expect(administrators).toMatchObject({
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+    });
+    expect(administrators.items[0]?.roles).toHaveLength(2);
+    for (const result of [exports, events, workers]) {
       expect(result).toMatchObject({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
       expect(result.items).toHaveLength(1);
     }
     expect(assignableUsers).toMatchObject({
       page: 1,
       pageSize: 20,
-      total: 3,
+      total: 2,
       totalPages: 1,
     });
   });
