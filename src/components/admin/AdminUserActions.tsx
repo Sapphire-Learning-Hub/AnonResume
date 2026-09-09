@@ -6,17 +6,20 @@ import { useRouter } from "next/navigation";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
 import { AdminTableActions } from "@/components/admin/AdminPage";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export function AdminUserActions({
   userId,
+  userName,
   suspended,
   canSuspend,
   canRevokeSessions,
 }: {
   userId: string;
+  userName: string;
   suspended: boolean;
   canSuspend: boolean;
   canRevokeSessions: boolean;
@@ -31,6 +34,7 @@ export function AdminUserActions({
   const [reauthCode, setReauthCode] = useState("");
   const [pending, setPending] = useState(false);
   const [deferred, setDeferred] = useState<(() => Promise<void>) | null>(null);
+  const [revokeOpen, setRevokeOpen] = useState(false);
 
   async function run(request: () => Promise<Response>) {
     setPending(true);
@@ -89,7 +93,7 @@ export function AdminUserActions({
         {canRevokeSessions ? (
           <Button
             loading={pending}
-            onClick={() => run(() => fetch(`/api/manage/users/${userId}/sessions`, { method: "DELETE" }))}
+            onClick={() => setRevokeOpen(true)}
             type="link"
           >{t("users.revokeSessions")}</Button>
         ) : null}
@@ -115,6 +119,19 @@ export function AdminUserActions({
           value={reason}
         />
       </Modal>
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={t("users.revokeSessionsConfirm")}
+        description={t("users.revokeSessionsDescription", { user: userName })}
+        onCancel={() => setRevokeOpen(false)}
+        onConfirm={() => {
+          setRevokeOpen(false);
+          void run(() => fetch(`/api/manage/users/${userId}/sessions`, { method: "DELETE" }));
+        }}
+        open={revokeOpen}
+        pending={pending}
+        title={t("users.revokeSessionsTitle")}
+      />
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ disabled: reauthCode.length !== 6, loading: pending }}

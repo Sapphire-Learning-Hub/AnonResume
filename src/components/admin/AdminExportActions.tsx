@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
 import { AdminTableActions } from "@/components/admin/AdminPage";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -14,11 +15,13 @@ type ExportAction = "cancel" | "retry";
 
 export function AdminExportActions({
   jobId,
+  filename,
   status,
   canCancel,
   canRetry,
 }: {
   jobId: string;
+  filename: string;
   status: string;
   canCancel: boolean;
   canRetry: boolean;
@@ -31,6 +34,7 @@ export function AdminExportActions({
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
   const [deferredAction, setDeferredAction] = useState<ExportAction>();
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   async function run(action: ExportAction) {
     setPending(true);
@@ -81,7 +85,7 @@ export function AdminExportActions({
     <>
       <AdminTableActions>
         {canCancel && (status === "queued" || status === "running") ? (
-          <Button danger loading={pending} onClick={() => run("cancel")} type="link">
+          <Button danger loading={pending} onClick={() => setCancelOpen(true)} type="link">
             {t("exports.cancel")}
           </Button>
         ) : null}
@@ -91,6 +95,19 @@ export function AdminExportActions({
           </Button>
         ) : null}
       </AdminTableActions>
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={t("exports.cancelConfirm")}
+        description={t("exports.cancelDescription", { file: filename })}
+        onCancel={() => setCancelOpen(false)}
+        onConfirm={() => {
+          setCancelOpen(false);
+          void run("cancel");
+        }}
+        open={cancelOpen}
+        pending={pending}
+        title={t("exports.cancelTitle")}
+      />
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ disabled: reauthCode.length !== 6, loading: pending }}

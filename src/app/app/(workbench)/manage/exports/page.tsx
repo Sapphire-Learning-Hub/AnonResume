@@ -71,6 +71,7 @@ export default async function ManagementExportsPage({
             <AdminExportActions
               canCancel={context.kind === "super_admin" || context.permissions.includes("exports.cancel")}
               canRetry={context.kind === "super_admin" || context.permissions.includes("exports.retry")}
+              filename={job.filename}
               jobId={job.id}
               key="actions"
               status={job.status}

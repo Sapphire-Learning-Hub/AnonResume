@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const routerMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -154,6 +154,11 @@ describe("AdminSecurityPanel response handling", () => {
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: "移除" })[0]!);
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "移除 MFA 设备" });
+    expect(within(dialog).getByText(/主验证器/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认移除" }));
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenCalledWith(

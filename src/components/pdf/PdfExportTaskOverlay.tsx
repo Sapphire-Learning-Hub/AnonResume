@@ -11,6 +11,7 @@ import { createStyles } from "antd-style";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
   cancelPdfExportTask,
@@ -189,6 +190,7 @@ export function PdfExportTaskOverlay() {
   const { t } = useI18n();
   const { notification } = useAppFeedback();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [taskToCancel, setTaskToCancel] = useState<PdfExportClientTask>();
   const notifiedFailuresRef = useRef(new Set<string>());
   const knownTaskIdsRef = useRef(new Set<string>());
   const queuedPollCountRef = useRef(new Map<string, number>());
@@ -399,7 +401,7 @@ export function PdfExportTaskOverlay() {
                     <div className={styles.actions}>
                       <Button
                         disabled={task.cancelRequested}
-                        onClick={() => void cancelPdfExportTask(task)}
+                        onClick={() => setTaskToCancel(task)}
                         size="small"
                       >
                         {t("pdfExport.cancel")}
@@ -432,6 +434,21 @@ export function PdfExportTaskOverlay() {
             </div>
           ) : null}
       </aside>
+      <ActionConfirmationModal
+        cancelText={t("common.dismiss")}
+        confirmText={t("pdfExport.cancelConfirm")}
+        description={t("pdfExport.cancelDescription", {
+          file: taskToCancel?.filename || t("common.pdf"),
+        })}
+        onCancel={() => setTaskToCancel(undefined)}
+        onConfirm={() => {
+          const task = taskToCancel;
+          setTaskToCancel(undefined);
+          if (task) void cancelPdfExportTask(task);
+        }}
+        open={Boolean(taskToCancel)}
+        title={t("pdfExport.cancelTitle")}
+      />
       <FloatButton
         aria-expanded={panelOpen}
         aria-label={statusButtonLabel}

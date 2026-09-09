@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useEffectEvent, useState } from "react";
 
 import { AdminStatus } from "@/components/admin/AdminPage";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -53,6 +54,7 @@ export function AdminMfaResetRequestControl({
   const { toast } = useAppFeedback();
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [request, setRequest] = useState<ResetRequest | null>(null);
 
@@ -132,72 +134,88 @@ export function AdminMfaResetRequestControl({
   const isApproved = request?.status === "approved";
 
   return (
-    <Modal
-      afterClose={() => {
-        setLoading(true);
-        setReason("");
-      }}
-      cancelText={t("common.cancel")}
-      footer={null}
-      onCancel={onClose}
-      open={open}
-      title={t("mfaReset.title")}
-      width={560}
-    >
-      {loading ? (
-        <div className={styles.loading}><Spin /></div>
-      ) : isPending ? (
-        <div className={styles.content}>
-          <div className={styles.requestSummary}>
-            <AdminStatus tone="warning">{t("mfaReset.pending")}</AdminStatus>
-            <p>{request.reason}</p>
-            <span>{t("mfaReset.expiresAt", {
-              time: new Date(request.expiresAt).toLocaleString(locale),
-            })}</span>
+    <>
+      <Modal
+        afterClose={() => {
+          setLoading(true);
+          setReason("");
+          setCancelOpen(false);
+        }}
+        cancelText={t("common.cancel")}
+        footer={null}
+        onCancel={onClose}
+        open={open}
+        title={t("mfaReset.title")}
+        width={560}
+      >
+        {loading ? (
+          <div className={styles.loading}><Spin /></div>
+        ) : isPending ? (
+          <div className={styles.content}>
+            <div className={styles.requestSummary}>
+              <AdminStatus tone="warning">{t("mfaReset.pending")}</AdminStatus>
+              <p>{request.reason}</p>
+              <span>{t("mfaReset.expiresAt", {
+                time: new Date(request.expiresAt).toLocaleString(locale),
+              })}</span>
+            </div>
+            <Button danger loading={pending} onClick={() => setCancelOpen(true)}>
+              {t("mfaReset.cancel")}
+            </Button>
           </div>
-          <Button danger loading={pending} onClick={cancelRequest}>
-            {t("mfaReset.cancel")}
-          </Button>
-        </div>
-      ) : isApproved ? (
-        <div className={styles.content}>
-          <AdminStatus tone="success">{t("mfaReset.approved")}</AdminStatus>
-          <p>{t("mfaReset.approvedDescription")}</p>
-          <Button
-            onClick={() => {
-              onClose();
-              router.refresh();
-            }}
-            type="primary"
-          >
-            {t("mfaReset.bindAgain")}
-          </Button>
-        </div>
-      ) : (
-        <div className={styles.content}>
-          <p>{t("mfaReset.description")}</p>
-          {request?.status === "rejected" ? (
-            <AdminStatus tone="danger">
-              {t("mfaReset.rejected")}{request.reviewReason ? `：${request.reviewReason}` : ""}
-            </AdminStatus>
-          ) : null}
-          <Input.TextArea
-            maxLength={1000}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder={t("mfaReset.reasonPlaceholder")}
-            rows={5}
-            value={reason}
-          />
-          <Button
-            disabled={!canSubmit}
-            loading={pending}
-            onClick={submitRequest}
-            type="primary"
-          >
-            {t("mfaReset.submit")}
-          </Button>
-        </div>
-      )}
-    </Modal>
+        ) : isApproved ? (
+          <div className={styles.content}>
+            <AdminStatus tone="success">{t("mfaReset.approved")}</AdminStatus>
+            <p>{t("mfaReset.approvedDescription")}</p>
+            <Button
+              onClick={() => {
+                onClose();
+                router.refresh();
+              }}
+              type="primary"
+            >
+              {t("mfaReset.bindAgain")}
+            </Button>
+          </div>
+        ) : (
+          <div className={styles.content}>
+            <p>{t("mfaReset.description")}</p>
+            {request?.status === "rejected" ? (
+              <AdminStatus tone="danger">
+                {t("mfaReset.rejected")}{request.reviewReason ? `：${request.reviewReason}` : ""}
+              </AdminStatus>
+            ) : null}
+            <Input.TextArea
+              maxLength={1000}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder={t("mfaReset.reasonPlaceholder")}
+              rows={5}
+              value={reason}
+            />
+            <Button
+              disabled={!canSubmit}
+              loading={pending}
+              onClick={submitRequest}
+              type="primary"
+            >
+              {t("mfaReset.submit")}
+            </Button>
+          </div>
+        )}
+      </Modal>
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={t("mfaReset.cancelConfirm")}
+        description={t("mfaReset.cancelDescription")}
+        onCancel={() => setCancelOpen(false)}
+        onConfirm={() => {
+          setCancelOpen(false);
+          void cancelRequest();
+        }}
+        open={cancelOpen}
+        pending={pending}
+        title={t("mfaReset.cancelTitle")}
+      />
+    </>
   );
 }

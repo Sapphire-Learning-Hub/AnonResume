@@ -41,6 +41,7 @@ import { ResumeDocumentDiffModal } from "@/components/editor/ResumeDocumentDiffM
 import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPrompt";
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
   DocumentIcon,
@@ -555,6 +556,7 @@ export function ResumeEditorShell({
   const [publishedSlug, setPublishedSlug] = useState(publicSlug);
   const [publicLinkCopied, setPublicLinkCopied] = useState(false);
   const [publicationBusy, setPublicationBusy] = useState(false);
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
   const [activeRibbonTab, setActiveRibbonTab] = useState<EditorRibbonTab>("home");
@@ -2322,7 +2324,7 @@ export function ResumeEditorShell({
                   <Button
                     data-testid="resume-publish-action"
                     disabled={publicationBusy}
-                    onClick={() => void handleUnpublish()}
+                    onClick={() => setUnpublishOpen(true)}
                   >
                     {t("common.unpublish")}
                   </Button>
@@ -2480,6 +2482,22 @@ export function ResumeEditorShell({
         targetLabel={t("editor.diff.currentVersion")}
         title={t("editor.diff.title")}
         onCancel={() => setVersionDiffOpen(false)}
+      />
+
+      <ActionConfirmationModal
+        cancelText={t("common.dismiss")}
+        confirmText={t("publication.unpublishConfirm")}
+        description={t("publication.unpublishDescription", {
+          title: resumeName,
+        })}
+        onCancel={() => setUnpublishOpen(false)}
+        onConfirm={() => {
+          setUnpublishOpen(false);
+          void handleUnpublish();
+        }}
+        open={unpublishOpen}
+        pending={publicationBusy}
+        title={t("publication.unpublishTitle")}
       />
 
       {recoveryDraft || saveConflict ? (

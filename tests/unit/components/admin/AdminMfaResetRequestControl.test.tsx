@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const feedbackMocks = vi.hoisted(() => ({
   error: vi.fn(),
@@ -66,6 +72,15 @@ describe("AdminMfaResetRequestControl", () => {
     render(<AdminMfaResetRequestControl onClose={vi.fn()} open />);
     await screen.findByText("等待超级管理员审批");
     fireEvent.click(screen.getByRole("button", { name: "取消申请" }));
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const dialog = screen
+      .getByText("取消 MFA 重置申请", { selector: ".ant-modal-title" })
+      .closest('[role="dialog"]');
+    expect(dialog).toBeInstanceOf(HTMLElement);
+    fireEvent.click(
+      within(dialog as HTMLElement).getByRole("button", { name: "确认取消" }),
+    );
 
     await waitFor(() => {
       expect(globalThis.fetch).toHaveBeenLastCalledWith(

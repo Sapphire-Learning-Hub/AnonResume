@@ -95,6 +95,7 @@ export default async function ManagementUsersPage({
                 key="actions"
                 suspended={user.suspended}
                 userId={user.id}
+                userName={user.name}
               />
             ),
           ];

@@ -318,6 +318,11 @@ describe("ResumeDashboardShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "更多操作：公开简历" }));
     fireEvent.click(await screen.findByRole("button", { name: "取消发布" }));
 
+    expect(unpublishDocument).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "取消发布简历" });
+    expect(within(dialog).getByText(/公开简历/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认取消发布" }));
+
     await waitFor(() => {
       expect(unpublishDocument).toHaveBeenCalledWith({ resumeId: "resume-one" });
       expect(screen.getByText("草稿")).toBeInTheDocument();

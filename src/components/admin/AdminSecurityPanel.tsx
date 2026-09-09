@@ -14,6 +14,7 @@ import {
   AdminToolbar,
 } from "@/components/admin/AdminPage";
 import { AdminRecoveryCodesPanel } from "@/components/admin/AdminRecoveryCodesPanel";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -58,6 +59,7 @@ export function AdminSecurityPanel({
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
   const [deferred, setDeferred] = useState<(() => Promise<void>)>();
+  const [removingDevice, setRemovingDevice] = useState<MfaDevice>();
   const recoveryRequiredMessage = t("security.recoveryRequired");
 
   useEffect(() => {
@@ -204,7 +206,7 @@ export function AdminSecurityPanel({
                   danger
                   disabled={devices.length <= 1}
                   loading={pending}
-                  onClick={() => removeDevice(device.id)}
+                  onClick={() => setRemovingDevice(device)}
                   size="small"
                   type="text"
                 >{t("security.remove")}</Button>
@@ -213,6 +215,22 @@ export function AdminSecurityPanel({
           ))}
         </ul>
       ) : null}
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={t("security.removeConfirm")}
+        description={t("security.removeDescription", {
+          device: removingDevice?.name ?? "",
+        })}
+        onCancel={() => setRemovingDevice(undefined)}
+        onConfirm={() => {
+          const device = removingDevice;
+          setRemovingDevice(undefined);
+          if (device) void removeDevice(device.id);
+        }}
+        open={Boolean(removingDevice)}
+        pending={pending}
+        title={t("security.removeTitle")}
+      />
       <Modal
         okButtonProps={{ disabled: !name.trim(), loading: pending }}
         onCancel={() => setNameOpen(false)}

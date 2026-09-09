@@ -9,6 +9,7 @@ import { NumberedPagination } from "@/components/common/NumberedPagination";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
 import { SearchIcon } from "@/components/ui/InlineIcons";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
@@ -476,6 +477,7 @@ function ResumeRowActions({
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [publicationBusy, setPublicationBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const editorHref = `/app/resumes/${resume.id}`;
@@ -552,7 +554,10 @@ function ResumeRowActions({
                 disabled={publicationBusy}
                 loading={publicationBusy}
                 type="text"
-                onClick={() => void handleUnpublish()}
+                onClick={() => {
+                  setOpen(false);
+                  setUnpublishOpen(true);
+                }}
               >
                 {t("common.unpublish")}
               </Button>
@@ -637,6 +642,21 @@ function ResumeRowActions({
         renderTrigger={false}
         resume={resume}
         onOpenChange={setDeleteOpen}
+      />
+      <ActionConfirmationModal
+        cancelText={t("common.dismiss")}
+        confirmText={t("publication.unpublishConfirm")}
+        description={t("publication.unpublishDescription", {
+          title: resume.title,
+        })}
+        onCancel={() => setUnpublishOpen(false)}
+        onConfirm={() => {
+          setUnpublishOpen(false);
+          void handleUnpublish();
+        }}
+        open={unpublishOpen}
+        pending={publicationBusy}
+        title={t("publication.unpublishTitle")}
       />
     </div>
   );

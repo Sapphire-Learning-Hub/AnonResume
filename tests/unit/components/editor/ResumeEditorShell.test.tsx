@@ -1029,12 +1029,14 @@ describe("ResumeEditorShell", () => {
     });
   });
 
-  it("shows unpublish controls when a published slug is available", () => {
+  it("confirms before unpublishing from the editor", async () => {
+    const unpublishDocument = vi.fn().mockResolvedValue(undefined);
     render(
       <ResumeEditorShell
         resumeId="resume-foundation"
         publicSlug="foundation-resume"
         initialDocument={createDefaultResumeDocument()}
+        unpublishDocument={unpublishDocument}
       />,
     );
 
@@ -1052,6 +1054,19 @@ describe("ResumeEditorShell", () => {
       "href",
       "/resume/foundation-resume",
     );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("取消发布") }));
+    expect(unpublishDocument).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "取消发布简历" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "确认取消发布" }),
+    );
+
+    await waitFor(() => {
+      expect(unpublishDocument).toHaveBeenCalledWith({
+        resumeId: "resume-foundation",
+      });
+    });
   });
 
   it("copies the public URL directly from the published editor", async () => {

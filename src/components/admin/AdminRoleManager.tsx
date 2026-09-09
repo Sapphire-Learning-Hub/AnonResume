@@ -18,6 +18,7 @@ import {
   AdminTableActions,
 } from "@/components/admin/AdminPage";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import {
   createAdminTranslator,
   getAdminSystemRolePresentation,
@@ -143,6 +144,13 @@ interface UserSummary {
   }>;
 }
 
+interface PendingConfirmation {
+  confirmText: string;
+  description: string;
+  run: () => Promise<void>;
+  title: string;
+}
+
 const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "overview.read": "permission.overview.read",
   "users.read": "permission.users.read",
@@ -227,6 +235,7 @@ export function AdminRoleManager({
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
   const [deferredAction, setDeferredAction] = useState<(() => Promise<void>) | null>(null);
+  const [confirmation, setConfirmation] = useState<PendingConfirmation>();
 
   async function runAction(action: () => Promise<Response>) {
     setPending(true);
@@ -348,6 +357,74 @@ export function AdminRoleManager({
     setOpen(true);
   }
 
+  function confirmAction(next: PendingConfirmation) {
+    setConfirmation(next);
+  }
+
+  function executeConfirmedAction() {
+    const action = confirmation?.run;
+    setConfirmation(undefined);
+    void action?.();
+  }
+
+  function saveRole() {
+    const request = () => runAction(() => fetch(
+      editingRoleId ? `/api/manage/roles/${editingRoleId}` : "/api/manage/roles",
+      {
+        method: editingRoleId ? "PUT" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, description, permissions }),
+      },
+    ));
+    const previous = editingRoleId
+      ? roles.items.find((role) => role.id === editingRoleId)
+      : undefined;
+    const removedPermissions = previous?.permissions.filter(
+      (permission) => !permissions.includes(permission),
+    ) ?? [];
+    if (removedPermissions.length === 0) {
+      void request();
+      return;
+    }
+    confirmAction({
+      confirmText: t("roles.confirmSave"),
+      description: t("roles.removePermissionsDescription", {
+        permissions: removedPermissions
+          .map((permission) => t(permissionMessageKeys[permission]))
+          .join(locale === "zh-CN" ? "、" : ", "),
+        role: previous?.name ?? name,
+      }),
+      run: request,
+      title: t("roles.removePermissionsTitle"),
+    });
+  }
+
+  function saveUserRoles() {
+    if (!roleEditorUser) return;
+    const user = roleEditorUser;
+    const request = () => runAction(() => fetch("/api/manage/administrators", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId: user.id, roleIds: roleEditorIds }),
+    }));
+    const removedRoles = user.roles.filter(
+      (role) => !roleEditorIds.includes(role.id),
+    );
+    if (removedRoles.length === 0) {
+      void request();
+      return;
+    }
+    confirmAction({
+      confirmText: t("roles.confirmSave"),
+      description: t("roles.removeRolesDescription", {
+        roles: removedRoles.map(roleLabel).join(locale === "zh-CN" ? "、" : ", "),
+        user: user.name,
+      }),
+      run: request,
+      title: t("roles.removeRolesTitle"),
+    });
+  }
+
   async function reauthenticate() {
     setPending(true);
     try {
@@ -427,7 +504,12 @@ export function AdminRoleManager({
                     danger
                     disabled={role.members > 0}
                     loading={pending}
-                    onClick={() => runAction(() => fetch(`/api/manage/roles/${role.id}`, { method: "DELETE" }))}
+                    onClick={() => confirmAction({
+                      confirmText: t("roles.deleteConfirm"),
+                      description: t("roles.deleteDescription", { role: roleName }),
+                      run: () => runAction(() => fetch(`/api/manage/roles/${role.id}`, { method: "DELETE" })),
+                      title: t("roles.deleteTitle"),
+                    })}
                     type="link"
                   >{t("common.delete")}</Button>
                 </AdminTableActions>
@@ -481,11 +563,16 @@ export function AdminRoleManager({
               <Button
                 danger
                 loading={pending}
-                onClick={() => runAction(() => fetch("/api/manage/administrators", {
-                  method: "DELETE",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ userId: user.id }),
-                }))}
+                onClick={() => confirmAction({
+                  confirmText: t("roles.removeAdminConfirm"),
+                  description: t("roles.removeAdminDescription", { user: user.name }),
+                  run: () => runAction(() => fetch("/api/manage/administrators", {
+                    method: "DELETE",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ userId: user.id }),
+                  })),
+                  title: t("roles.removeAdminTitle"),
+                })}
                 type="link"
               >{t("roles.removeAdmin")}</Button>
             </AdminTableActions>,
@@ -547,17 +634,7 @@ export function AdminRoleManager({
         okButtonProps={{ loading: pending }}
         okText={t("roles.saveAssignments")}
         onCancel={() => setRoleEditorUser(undefined)}
-        onOk={() => {
-          if (!roleEditorUser) return;
-          void runAction(() => fetch("/api/manage/administrators", {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              userId: roleEditorUser.id,
-              roleIds: roleEditorIds,
-            }),
-          }));
-        }}
+        onOk={saveUserRoles}
         open={Boolean(roleEditorUser)}
         title={t("roles.manageTitle")}
         width={720}
@@ -597,13 +674,7 @@ export function AdminRoleManager({
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();
-            void runAction(() => fetch(
-              editingRoleId ? `/api/manage/roles/${editingRoleId}` : "/api/manage/roles",
-              {
-              method: editingRoleId ? "PUT" : "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ name, description, permissions }),
-            }));
+            saveRole();
           }}
         >
           <Input onChange={(event) => setName(event.target.value)} placeholder={t("roles.name")} value={name} />
@@ -623,6 +694,17 @@ export function AdminRoleManager({
           </Button>
         </form>
       </Modal>
+
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={confirmation?.confirmText ?? t("common.confirm")}
+        description={confirmation?.description ?? ""}
+        onCancel={() => setConfirmation(undefined)}
+        onConfirm={executeConfirmedAction}
+        open={Boolean(confirmation)}
+        pending={pending}
+        title={confirmation?.title ?? ""}
+      />
 
       <Modal
         cancelText={t("common.cancel")}

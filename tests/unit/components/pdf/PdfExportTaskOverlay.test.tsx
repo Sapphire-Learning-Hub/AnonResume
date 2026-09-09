@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const feedbackMocks = vi.hoisted(() => ({
@@ -150,6 +150,72 @@ describe("PdfExportTaskOverlay", () => {
       screen.getByRole("button", { name: "查看 PDF 导出状态" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(getPdfExportTasksSnapshot()).toHaveLength(1);
+    view.unmount();
+  });
+
+  it("confirms before cancelling an active export task", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (_input, init) => {
+        if (init?.method === "POST") {
+          return new Response(
+            JSON.stringify({
+              job: {
+                id: "job-cancel",
+                accessToken: "capability-token",
+                status: "queued",
+              },
+            }),
+            { status: 202, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (init?.method === "DELETE") {
+          return new Response(
+            JSON.stringify({ job: { id: "job-cancel", status: "cancelled" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            job: {
+              id: "job-cancel",
+              status: "queued",
+              position: 1,
+              queuedCount: 1,
+              cancelRequested: false,
+              filename: "resume.pdf",
+              pollAfterMs: 10_000,
+              workerAvailable: true,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      },
+    );
+
+    await startResumePdfExport("resume-demo");
+    const view = render(<PdfExportTaskOverlay />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "取消任务" }));
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
+    ).toBe(false);
+
+    const dialog = screen.getByRole("dialog", { name: "取消 PDF 导出" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "确认取消" }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE"),
+    ).toBe(true);
     view.unmount();
   });
 
