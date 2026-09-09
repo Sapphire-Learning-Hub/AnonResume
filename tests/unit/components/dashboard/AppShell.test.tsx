@@ -63,7 +63,7 @@ describe("AppShell", () => {
     expect(getComputedStyle(frame).overflowY).toBe("hidden");
   });
 
-  it("renders recovery navigation without product links", () => {
+  it("retains product navigation for a delegated administrator in recovery", () => {
     navigationState.pathname = "/app/manage/security";
     renderShell({
       kind: "delegated_admin",
@@ -75,7 +75,9 @@ describe("AppShell", () => {
       screen.getByRole("link", { name: "管理安全" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "我的简历" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("link", { name: "我的简历" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "字体市场" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "管理概览" })).not.toBeInTheDocument();
   });
 });

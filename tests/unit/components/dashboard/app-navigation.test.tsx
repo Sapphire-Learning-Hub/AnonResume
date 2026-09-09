@@ -79,12 +79,25 @@ describe("app navigation", () => {
     ]);
   });
 
-  it("shows only MFA management during recovery", () => {
+  it("keeps product links but limits management links during delegated-admin recovery", () => {
     expect(
       hrefs({
         kind: "delegated_admin",
         mode: "recovery",
         productAccess: true,
+      }),
+    ).toEqual([
+      { id: "product", items: ["/app", "/app/fonts"] },
+      { id: "management", items: ["/app/manage/security"] },
+    ]);
+  });
+
+  it("shows only MFA management during super-admin recovery", () => {
+    expect(
+      hrefs({
+        kind: "super_admin",
+        mode: "recovery",
+        productAccess: false,
       }),
     ).toEqual([
       { id: "management", items: ["/app/manage/security"] },

@@ -97,24 +97,6 @@ export function buildAppNavigation(
   access: AppShellAccess,
   translate: (key: MessageKey) => string,
 ): AppNavigationSection[] {
-  if (access.mode === "recovery") {
-    const security = managementItems.at(-1)!;
-    return [
-      {
-        id: "management",
-        label: translate("management.navigation.section"),
-        items: [
-          {
-            href: security.href,
-            icon: security.icon,
-            id: security.id,
-            label: translate(security.labelKey),
-          },
-        ],
-      },
-    ];
-  }
-
   const sections: AppNavigationSection[] = [];
   if (access.productAccess) {
     sections.push({
@@ -135,6 +117,24 @@ export function buildAppNavigation(
         },
       ],
     });
+  }
+
+  if (access.mode === "recovery") {
+    const security = managementItems.at(-1)!;
+    sections.push({
+      id: "management",
+      label: translate("management.navigation.section"),
+      items: [
+        {
+          href: security.href,
+          icon: security.icon,
+          id: security.id,
+          label: translate(security.labelKey),
+        },
+      ],
+    });
+
+    return sections;
   }
 
   if (access.mode === "management") {
