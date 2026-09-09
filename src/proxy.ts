@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { getExpectedRequestOrigin } from "@/lib/request-origin";
 import { validateRuntimeConfiguration } from "@/lib/runtime-configuration";
 
 const configurationErrorPath = "/configuration-error";
@@ -14,7 +15,7 @@ export function proxy(request: NextRequest) {
       !["GET", "HEAD", "OPTIONS"].includes(request.method)
     ) {
       const origin = request.headers.get("origin");
-      if (!origin || origin !== request.nextUrl.origin) {
+      if (!origin || origin !== getExpectedRequestOrigin(request)) {
         return NextResponse.json(
           { error: "invalid_request_origin" },
           { status: 403, headers: { "Cache-Control": "no-store" } },

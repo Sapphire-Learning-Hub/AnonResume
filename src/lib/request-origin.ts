@@ -22,7 +22,7 @@ function getConfiguredApplicationOrigin() {
   return configuredUrl;
 }
 
-function getExpectedRequestOrigin(request: Request) {
+export function getExpectedRequestOrigin(request: Request) {
   return getConfiguredApplicationOrigin() ?? new URL(request.url).origin;
 }
 
