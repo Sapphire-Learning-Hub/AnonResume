@@ -19,6 +19,7 @@ export type ResumeFontPreset = {
   name: string;
   fontFamily: string;
   resolvedFontFamily: string;
+  fontLoadFamily: string;
   descriptionKey:
     | "editor.fontPreset.businessSans"
     | "editor.fontPreset.modernSans"
@@ -46,6 +47,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"IBM Plex Sans", "Segoe UI", sans-serif',
     resolvedFontFamily:
       "var(--font-ibm-plex-sans), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"IBM Plex Sans Variable", "Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.businessSans",
     category: "sans",
     scripts: ["latin"],
@@ -58,6 +61,7 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Manrope", sans-serif',
     resolvedFontFamily:
       "var(--font-manrope), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily: '"Manrope Variable", "Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.geometricSans",
     category: "sans",
     scripts: ["latin"],
@@ -70,6 +74,7 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Lato", sans-serif',
     resolvedFontFamily:
       "var(--font-lato), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily: '"Lato", "Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.humanistSans",
     category: "sans",
     scripts: ["latin"],
@@ -82,6 +87,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Source Sans 3", sans-serif',
     resolvedFontFamily:
       "var(--font-source-sans-3), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"Source Sans 3 Variable", "Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.neutralSans",
     category: "sans",
     scripts: ["latin"],
@@ -93,6 +100,7 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     name: "Noto Sans SC",
     fontFamily: '"Source Han Sans SC", "Noto Sans SC", sans-serif',
     resolvedFontFamily: "var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily: '"Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.modernSans",
     category: "sans",
     scripts: ["latin", "zh-CN"],
@@ -105,6 +113,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Noto Sans Mono", monospace',
     resolvedFontFamily:
       "var(--font-noto-sans-mono), var(--font-noto-sans-sc), monospace",
+    fontLoadFamily:
+      '"Noto Sans Mono Variable", "Noto Sans SC Variable", monospace',
     descriptionKey: "editor.fontPreset.technicalMono",
     category: "mono",
     scripts: ["latin"],
@@ -117,6 +127,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Noto Serif SC", "Source Han Serif SC", serif',
     resolvedFontFamily:
       "var(--font-noto-serif-sc), var(--font-noto-sans-sc), serif",
+    fontLoadFamily:
+      '"Noto Serif SC Variable", "Noto Sans SC Variable", serif',
     descriptionKey: "editor.fontPreset.chineseSerif",
     category: "serif",
     scripts: ["latin", "zh-CN"],
@@ -129,6 +141,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Source Serif 4", Georgia, serif',
     resolvedFontFamily:
       "var(--font-source-serif-4), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"Source Serif 4 Variable", "Noto Serif SC Variable", serif',
     descriptionKey: "editor.fontPreset.classicSerif",
     category: "serif",
     scripts: ["latin"],
@@ -141,6 +155,7 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Lora", serif',
     resolvedFontFamily:
       "var(--font-lora), var(--font-noto-serif-sc), serif",
+    fontLoadFamily: '"Lora Variable", "Noto Serif SC Variable", serif',
     descriptionKey: "editor.fontPreset.editorialSerif",
     category: "serif",
     scripts: ["latin"],
@@ -153,6 +168,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Merriweather", serif',
     resolvedFontFamily:
       "var(--font-merriweather), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"Merriweather Variable", "Noto Serif SC Variable", serif',
     descriptionKey: "editor.fontPreset.readableSerif",
     category: "serif",
     scripts: ["latin"],
@@ -165,6 +182,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"Playfair Display", serif',
     resolvedFontFamily:
       "var(--font-playfair-display), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"Playfair Display Variable", "Noto Serif SC Variable", serif',
     descriptionKey: "editor.fontPreset.displaySerif",
     category: "serif",
     scripts: ["latin"],
@@ -177,6 +196,8 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"LXGW Marker Gothic", "Noto Sans SC", sans-serif',
     resolvedFontFamily:
       "var(--font-lxgw-marker-gothic), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"LXGW Marker Gothic", "Noto Sans SC Variable", sans-serif',
     descriptionKey: "editor.fontPreset.markerGothic",
     category: "handwriting",
     scripts: ["latin", "zh-CN"],
@@ -189,6 +210,7 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     fontFamily: '"LXGW WenKai", serif',
     resolvedFontFamily:
       "var(--font-lxgw-wenkai), var(--font-noto-serif-sc), serif",
+    fontLoadFamily: '"LXGW WenKai", "Noto Serif SC Variable", serif',
     descriptionKey: "editor.fontPreset.chineseHandwriting",
     category: "handwriting",
     scripts: ["latin", "zh-CN"],

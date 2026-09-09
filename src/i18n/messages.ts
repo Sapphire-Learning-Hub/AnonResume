@@ -199,6 +199,7 @@ const messages = {
     "fontMarket.searchPlaceholder": "搜索名称、风格或语言支持",
     "fontMarket.previewText": "预览文字",
     "fontMarket.previewPlaceholder": "输入一段文字，实时比较所有字体",
+    "fontMarket.previewLoading": "正在加载字体",
     "fontMarket.defaultPreview":
       "让每一段经历，都以合适的字形被看见。 AnonResume 2026",
     "fontMarket.category.all": "全部",
@@ -883,6 +884,7 @@ const messages = {
     "fontMarket.searchPlaceholder": "Search by name, style, or script",
     "fontMarket.previewText": "Preview text",
     "fontMarket.previewPlaceholder": "Type once to compare every font",
+    "fontMarket.previewLoading": "Loading font",
     "fontMarket.defaultPreview":
       "Make every achievement clear, credible, and memorable. AnonResume 2026",
     "fontMarket.category.all": "All",

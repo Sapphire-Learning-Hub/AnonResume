@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ConfigProvider } from "antd";
 
 import { appTheme } from "@/styles/app-theme";
@@ -53,6 +53,99 @@ describe("FontMarket", () => {
       total: 1,
       totalPages: 1,
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, "fonts");
+  });
+
+  it("reveals a preview only after its near-viewport font finishes loading", async () => {
+    let observerCallback: IntersectionObserverCallback | undefined;
+    let finishFontLoad: (() => void) | undefined;
+    const observe = vi.fn();
+    const unobserve = vi.fn();
+    const load = vi.fn(
+      () =>
+        new Promise<FontFace[]>((resolve) => {
+          finishFontLoad = () => resolve([]);
+        }),
+    );
+
+    class MockIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = "";
+      readonly thresholds = [];
+      readonly disconnect = vi.fn();
+      readonly observe = observe;
+      readonly takeRecords = vi.fn(() => []);
+      readonly unobserve = unobserve;
+
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallback = callback;
+      }
+    }
+
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load },
+    });
+
+    renderFontMarket();
+
+    const ibmPreview = screen.getByTestId("font-preview-ibm-plex-sans");
+    const wenKaiPreview = screen.getByTestId("font-preview-lxgw-wenkai");
+    expect(ibmPreview).not.toHaveStyle({
+      fontFamily:
+        "var(--font-ibm-plex-sans), var(--font-noto-sans-sc), sans-serif",
+    });
+    expect(wenKaiPreview).not.toHaveStyle({
+      fontFamily: "var(--font-lxgw-wenkai), var(--font-noto-serif-sc), serif",
+    });
+    expect(ibmPreview).toHaveAttribute("data-font-ready", "false");
+    expect(
+      screen.getByTestId("font-preview-loading-ibm-plex-sans"),
+    ).toHaveTextContent("正在加载字体");
+
+    act(() => {
+      observerCallback?.(
+        [
+          {
+            isIntersecting: true,
+            target: ibmPreview,
+          } as unknown as IntersectionObserverEntry,
+        ],
+        {} as IntersectionObserver,
+      );
+    });
+
+    await waitFor(() => {
+      expect(load).toHaveBeenCalledWith(
+        expect.stringContaining("IBM Plex Sans Variable"),
+        expect.any(String),
+      );
+    });
+    expect(ibmPreview).toHaveStyle({
+      fontFamily:
+        "var(--font-ibm-plex-sans), var(--font-noto-sans-sc), sans-serif",
+    });
+    expect(ibmPreview).toHaveAttribute("data-font-ready", "false");
+    expect(wenKaiPreview).not.toHaveStyle({
+      fontFamily: "var(--font-lxgw-wenkai), var(--font-noto-serif-sc), serif",
+    });
+    expect(unobserve).toHaveBeenCalledWith(ibmPreview);
+
+    await act(async () => {
+      finishFontLoad?.();
+      await Promise.resolve();
+    });
+
+    expect(ibmPreview).toHaveAttribute("data-font-ready", "true");
+    expect(
+      screen.queryByTestId("font-preview-loading-ibm-plex-sans"),
+    ).not.toBeInTheDocument();
+    expect(wenKaiPreview).toHaveAttribute("data-font-ready", "false");
   });
 
   it("filters bundled fonts and renders editable preview text with the real font", async () => {

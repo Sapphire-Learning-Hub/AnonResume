@@ -2,7 +2,7 @@
 
 import { Button, Input, Modal, Pagination, Segmented, Select, Spin, Tag } from "antd";
 import { createStyles } from "antd-style";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { SearchIcon } from "@/components/ui/InlineIcons";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
@@ -135,6 +135,8 @@ const useStyles = createStyles(({ token, css }) => ({
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 10px;
     background: ${token.colorBgContainer};
+    content-visibility: auto;
+    contain-intrinsic-size: auto 248px;
     transition:
       border-color 140ms ease,
       box-shadow 140ms ease;
@@ -171,8 +173,14 @@ const useStyles = createStyles(({ token, css }) => ({
     font-size: 12px;
     line-height: 1.45;
   `,
+  previewSlot: css`
+    display: grid;
+    min-height: 96px;
+    align-items: center;
+  `,
   preview: css`
     display: -webkit-box;
+    grid-area: 1 / 1;
     overflow: hidden;
     color: ${token.colorText};
     font-size: 26px;
@@ -181,6 +189,19 @@ const useStyles = createStyles(({ token, css }) => ({
     overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+
+    &[data-font-ready="false"] {
+      visibility: hidden;
+    }
+  `,
+  previewLoading: css`
+    display: flex;
+    grid-area: 1 / 1;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: ${token.colorTextTertiary};
+    font-size: 12px;
   `,
   cardFooter: css`
     display: grid;
@@ -257,7 +278,19 @@ export function FontMarket() {
   const [resumePageNumber, setResumePageNumber] = useState(1);
   const [resumeQuery, setResumeQuery] = useState("");
   const [resumeLoading, setResumeLoading] = useState(false);
+  const [activePreviewIds, setActivePreviewIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [readyPreviewTextById, setReadyPreviewTextById] = useState<
+    ReadonlyMap<string, string>
+  >(() => new Map());
+  const fontListRef = useRef<HTMLDivElement>(null);
+  const loadingPreviewKeysRef = useRef(new Set<string>());
+  const mountedRef = useRef(true);
   const deferredQuery = useDeferredValue(query);
+  const deferredPreviewText = useDeferredValue(
+    previewText || t("fontMarket.defaultPreview"),
+  );
   const filteredPresets = filterResumeFontPresets(deferredQuery, {
     category,
     getCategoryLabel: (value) => t(`fontMarket.category.${value}`),
@@ -271,6 +304,126 @@ export function FontMarket() {
     { label: t("fontMarket.category.mono"), value: "mono" },
     { label: t("fontMarket.category.handwriting"), value: "handwriting" },
   ];
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const fontList = fontListRef.current;
+    if (!fontList) return;
+
+    const previews = Array.from(
+      fontList.querySelectorAll<HTMLElement>("[data-font-preview-id]"),
+    );
+
+    if (typeof IntersectionObserver === "undefined") {
+      setActivePreviewIds((current) => {
+        const next = new Set(current);
+        let changed = false;
+        previews.forEach((preview) => {
+          const id = preview.dataset.fontPreviewId;
+          if (id && !next.has(id)) {
+            next.add(id);
+            changed = true;
+          }
+        });
+        return changed ? next : current;
+      });
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const intersectingEntries = entries.filter(
+          (entry) => entry.isIntersecting,
+        );
+        if (intersectingEntries.length === 0) return;
+
+        setActivePreviewIds((current) => {
+          const next = new Set(current);
+          let changed = false;
+          intersectingEntries.forEach((entry) => {
+            const id = (entry.target as HTMLElement).dataset.fontPreviewId;
+            if (id && !next.has(id)) {
+              next.add(id);
+              changed = true;
+            }
+          });
+          return changed ? next : current;
+        });
+        intersectingEntries.forEach((entry) => observer.unobserve(entry.target));
+      },
+      {
+        root: fontList,
+        rootMargin: "240px 0px",
+      },
+    );
+
+    previews.forEach((preview) => {
+      if (!activePreviewIds.has(preview.dataset.fontPreviewId ?? "")) {
+        observer.observe(preview);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [activePreviewIds, category, deferredQuery]);
+
+  useEffect(() => {
+    const fontList = fontListRef.current;
+    if (!fontList) return;
+
+    const activePreviews = Array.from(
+      fontList.querySelectorAll<HTMLElement>("[data-font-preview-id]"),
+    ).filter((preview) =>
+      activePreviewIds.has(preview.dataset.fontPreviewId ?? ""),
+    );
+
+    if (!("fonts" in document) || typeof document.fonts.load !== "function") {
+      setReadyPreviewTextById((current) => {
+        const next = new Map(current);
+        let changed = false;
+        activePreviews.forEach((preview) => {
+          const id = preview.dataset.fontPreviewId;
+          if (id && next.get(id) !== deferredPreviewText) {
+            next.set(id, deferredPreviewText);
+            changed = true;
+          }
+        });
+        return changed ? next : current;
+      });
+      return;
+    }
+
+    activePreviews.forEach((preview) => {
+      const id = preview.dataset.fontPreviewId;
+      const fontLoadFamily = preview.dataset.fontLoadFamily;
+      if (!id || !fontLoadFamily) return;
+      if (readyPreviewTextById.get(id) === deferredPreviewText) return;
+
+      const loadingKey = `${id}\u0000${deferredPreviewText}`;
+      if (loadingPreviewKeysRef.current.has(loadingKey)) return;
+      loadingPreviewKeysRef.current.add(loadingKey);
+
+      void document.fonts
+        .load(`500 26px ${fontLoadFamily}`, deferredPreviewText)
+        .catch(() => [])
+        .then(() => {
+          loadingPreviewKeysRef.current.delete(loadingKey);
+          if (!mountedRef.current) return;
+
+          setReadyPreviewTextById((current) => {
+            if (current.get(id) === deferredPreviewText) return current;
+            const next = new Map(current);
+            next.set(id, deferredPreviewText);
+            return next;
+          });
+        });
+    });
+  }, [activePreviewIds, deferredPreviewText, readyPreviewTextById]);
 
   useEffect(() => {
     if (!selectedPreset) return;
@@ -368,6 +521,7 @@ export function FontMarket() {
             <div
               className={styles.grid}
               data-testid="font-market-list"
+              ref={fontListRef}
             >
           {filteredPresets.length === 0 ? (
             <div className={styles.empty}>{t("fontMarket.noResults")}</div>
@@ -384,12 +538,34 @@ export function FontMarket() {
                   <Tag>{t(`fontMarket.category.${preset.category}`)}</Tag>
                 </header>
 
-                <div
-                  className={styles.preview}
-                  data-testid={`font-preview-${preset.id}`}
-                  style={{ fontFamily: preset.resolvedFontFamily }}
-                >
-                  {previewText || t("fontMarket.defaultPreview")}
+                <div className={styles.previewSlot}>
+                  <div
+                    className={styles.preview}
+                    data-font-load-family={preset.fontLoadFamily}
+                    data-font-preview-id={preset.id}
+                    data-font-ready={
+                      readyPreviewTextById.get(preset.id) === deferredPreviewText
+                    }
+                    data-testid={`font-preview-${preset.id}`}
+                    style={
+                      activePreviewIds.has(preset.id)
+                        ? { fontFamily: preset.resolvedFontFamily }
+                        : undefined
+                    }
+                  >
+                    {deferredPreviewText}
+                  </div>
+                  {readyPreviewTextById.get(preset.id) !== deferredPreviewText ? (
+                    <div
+                      aria-live="polite"
+                      className={styles.previewLoading}
+                      data-testid={`font-preview-loading-${preset.id}`}
+                      role="status"
+                    >
+                      <Spin size="small" />
+                      <span>{t("fontMarket.previewLoading")}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <footer className={styles.cardFooter}>
