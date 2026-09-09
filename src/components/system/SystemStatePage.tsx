@@ -26,7 +26,7 @@ export function SystemStatePage({
       <section className="system-state-card">
         <AnonResumeLogo
           className="system-state-logo"
-          priority
+          loading="eager"
           variant="lockup"
         />
         <div className="system-state-content">

@@ -361,7 +361,7 @@ export function AuthPanel({
           data-verification-state={
             mode === "sign-up" && verificationEmail ? "true" : undefined
           }
-          priority
+          loading="eager"
           variant="lockup"
         />
       </div>

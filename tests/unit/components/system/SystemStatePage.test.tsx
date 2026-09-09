@@ -21,6 +21,10 @@ describe("SystemStatePage", () => {
       "src",
       "/brand/anonresume-lockup.png",
     );
+    expect(screen.getByRole("img", { name: "AnonResume" })).toHaveAttribute(
+      "loading",
+      "eager",
+    );
     expect(screen.getByRole("heading", { name: "页面暂时不可用" })).toBeInTheDocument();
     expect(screen.getByText("500")).toBeInTheDocument();
     expect(screen.queryByText("系统状态")).not.toBeInTheDocument();

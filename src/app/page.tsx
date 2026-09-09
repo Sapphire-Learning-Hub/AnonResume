@@ -76,7 +76,11 @@ export default function HomePage() {
           <div>
             <p className={styles.eyebrow}>{t("home.eyebrow")}</p>
             <h1 className={styles.heading}>
-              <AnonResumeLogo className={styles.brandLogo} priority variant="lockup" />
+              <AnonResumeLogo
+                className={styles.brandLogo}
+                loading="eager"
+                variant="lockup"
+              />
             </h1>
             <p className={styles.lead}>{t("home.lead")}</p>
           </div>

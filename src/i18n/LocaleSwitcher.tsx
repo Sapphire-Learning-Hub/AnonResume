@@ -444,7 +444,6 @@ export function LocaleSwitcher() {
                 <AnonResumeLogo
                   alt="AnonResume"
                   className={styles.aboutLogo}
-                  priority
                   variant="lockup"
                 />
                 <p className={styles.aboutIntro}>

@@ -342,7 +342,11 @@ export function AppShell({
     <main className={styles.shell}>
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
-          <AnonResumeLogo className={styles.brandLogo} priority variant="lockup" />
+          <AnonResumeLogo
+            className={styles.brandLogo}
+            loading="eager"
+            variant="lockup"
+          />
         </div>
         <div className={styles.account}>
           <span className={styles.userSummary}>

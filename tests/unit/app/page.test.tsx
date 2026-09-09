@@ -21,6 +21,10 @@ describe("HomePage", () => {
       "alt",
       "AnonResume",
     );
+    expect(document.querySelector('img[src="/brand/anonresume-lockup.png"]')).toHaveAttribute(
+      "loading",
+      "eager",
+    );
     expect(screen.getAllByText("共享渲染器基础").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /登\s*录/ })).toHaveAttribute(
       "href",

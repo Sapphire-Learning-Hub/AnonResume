@@ -46,6 +46,9 @@ describe("WorkbenchLayout", () => {
     expect(
       document.querySelector('img[src="/brand/anonresume-lockup.png"]'),
     ).toHaveAttribute("alt", "AnonResume");
+    expect(
+      document.querySelector('img[src="/brand/anonresume-lockup.png"]'),
+    ).toHaveAttribute("loading", "eager");
     expect(screen.getByRole("navigation", { name: "工作台导航" })).toBeInTheDocument();
     expect(screen.getByText(/当前登录：/)).toHaveTextContent(
       "当前登录：Demo User · demo@example.com",

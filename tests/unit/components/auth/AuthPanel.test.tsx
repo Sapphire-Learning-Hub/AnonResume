@@ -67,6 +67,15 @@ describe("AuthPanel email verification", () => {
     vi.clearAllMocks();
   });
 
+  it("eagerly loads the above-the-fold brand image", () => {
+    render(<AuthPanel githubEnabled={false} />);
+
+    expect(screen.getByRole("img", { name: "AnonResume" })).toHaveAttribute(
+      "loading",
+      "eager",
+    );
+  });
+
   it("shows a verification state after email registration instead of entering the app", async () => {
     authMocks.signUpEmail.mockResolvedValue({
       data: { token: null, user: { email: "user@example.com" } },

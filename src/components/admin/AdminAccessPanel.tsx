@@ -78,7 +78,11 @@ export function AdminAccessShell({ children }: { children: React.ReactNode }) {
   return (
     <main className={styles.page}>
       <section className={styles.panel}>
-        <AnonResumeLogo className={styles.logo} variant="lockup" />
+        <AnonResumeLogo
+          className={styles.logo}
+          loading="eager"
+          variant="lockup"
+        />
         {children}
       </section>
     </main>
