@@ -1,4 +1,8 @@
-import { AdminPage, AdminTable } from "@/components/admin/AdminPage";
+import {
+  AdminPage,
+  AdminStatus,
+  AdminTable,
+} from "@/components/admin/AdminPage";
 import { requireAdminPage } from "@/lib/admin-page";
 import { listAdminAuditEvents } from "@/lib/admin-query";
 import {
@@ -38,7 +42,12 @@ export default async function ManagementAuditPage({
           event.action,
           event.actorUserId || t("audit.system"),
           `${event.targetType}${event.targetId ? ` · ${event.targetId}` : ""}`,
-          event.outcome,
+          <AdminStatus
+            key="outcome"
+            tone={event.outcome === "success" ? "success" : "danger"}
+          >
+            {event.outcome}
+          </AdminStatus>,
           event.createdAt.toLocaleString(locale),
         ])}
       />

@@ -53,6 +53,27 @@ describe("database migrations", () => {
     ]);
   });
 
+  it("seeds the four immutable system roles", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      createdByUserId: string | null;
+      systemKey: string;
+    }>(
+      `SELECT system_key AS "systemKey",
+        created_by_user_id AS "createdByUserId"
+       FROM "${schemaName}".admin_roles
+       WHERE system_key IS NOT NULL
+       ORDER BY system_key`,
+    );
+
+    expect(result.rows).toEqual([
+      { createdByUserId: null, systemKey: "content_reviewer" },
+      { createdByUserId: null, systemKey: "read_only_auditor" },
+      { createdByUserId: null, systemKey: "support_operator" },
+      { createdByUserId: null, systemKey: "system_operator" },
+    ]);
+  });
+
   it("adds the Better Auth account issuer required by credential sign-up", async () => {
     const migration = await readFile(
       resolve(process.cwd(), "drizzle/0005_better_auth_account_issuer.sql"),

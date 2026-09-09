@@ -56,6 +56,7 @@ function isAdminSelectPage(value: unknown): value is AdminSelectPage {
 
 export function AdminPagedSelect({
   allowClear,
+  className,
   endpoint,
   onChange,
   placeholder,
@@ -63,6 +64,7 @@ export function AdminPagedSelect({
   value,
 }: {
   allowClear?: boolean;
+  className?: string;
   endpoint: string;
   onChange: (value: string | undefined) => void;
   placeholder: string;
@@ -109,6 +111,7 @@ export function AdminPagedSelect({
     <Select
       allowClear={allowClear}
       aria-label={placeholder}
+      className={className}
       filterOption={false}
       loading={loading}
       onChange={onChange}

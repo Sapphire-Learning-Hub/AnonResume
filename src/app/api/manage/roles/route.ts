@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  createAdminTranslator,
+  getAdminSystemRolePresentation,
+} from "@/i18n/admin-messages";
+import { getRequestLocale } from "@/i18n/server";
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
 import { createAdminRole, AdminManagementConflictError } from "@/lib/admin-management";
 import { ADMIN_PERMISSION_KEYS } from "@/lib/admin-permissions";
@@ -21,10 +26,22 @@ export async function GET(request: Request) {
       ...parsePageRequest(Object.fromEntries(url.searchParams)),
       query: url.searchParams.get("q") ?? undefined,
     });
+    const t = createAdminTranslator(await getRequestLocale());
 
     return NextResponse.json({
       ...result,
-      items: result.items.map(({ id, name }) => ({ id, label: name })),
+      items: result.items.map(({ id, name, systemKey }) => {
+        const systemName = systemKey
+          ? getAdminSystemRolePresentation(t, systemKey).name
+          : null;
+
+        return {
+          id,
+          label: systemName
+            ? t("roles.systemOption", { name: systemName })
+            : name,
+        };
+      }),
     });
   } catch (error) {
     const authError = adminApiErrorResponse(error);

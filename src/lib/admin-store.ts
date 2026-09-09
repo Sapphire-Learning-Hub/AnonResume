@@ -769,11 +769,6 @@ export async function removeAdminMfaDevice(userId: string, deviceId: string) {
       `DELETE FROM ${schema}.admin_mfa_devices WHERE id = $1 AND user_id = $2`,
       [deviceId, userId],
     );
-    await client.query(
-      `UPDATE ${schema}.admin_sessions SET revoked_at = now()
-        WHERE user_id = $1 AND revoked_at IS NULL`,
-      [userId],
-    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);

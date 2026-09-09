@@ -7,6 +7,7 @@ import {
   adminAssignments,
   adminAuditEvents,
   adminMfaDevices,
+  adminMfaResetRequests,
   adminPrincipals,
   adminRecoveryCodes,
   adminRoles,
@@ -33,10 +34,18 @@ describe("admin database schema", () => {
       "name",
       "description",
       "permissions",
+      "systemKey",
       "createdByUserId",
       "createdAt",
       "updatedAt",
     ]);
+    const config = getTableConfig(adminRoles);
+    expect(config.indexes.map((index) => index.config.name)).toContain(
+      "admin_roles_system_key_unique",
+    );
+    expect(config.checks.map((constraint) => constraint.name)).toContain(
+      "admin_roles_origin_check",
+    );
     expect(Object.keys(getTableColumns(adminAssignments))).toEqual([
       "userId",
       "roleId",
@@ -72,6 +81,17 @@ describe("admin database schema", () => {
     );
     expect(Object.keys(getTableColumns(adminSecurityStates))).toContain(
       "lockedUntil",
+    );
+  });
+
+  it("enforces one pending MFA reset request per delegated administrator", () => {
+    const config = getTableConfig(adminMfaResetRequests);
+
+    expect(config.indexes.map((index) => index.config.name)).toContain(
+      "admin_mfa_reset_requests_requester_pending_unique",
+    );
+    expect(config.checks.map((check) => check.name)).toContain(
+      "admin_mfa_reset_requests_status_check",
     );
   });
 

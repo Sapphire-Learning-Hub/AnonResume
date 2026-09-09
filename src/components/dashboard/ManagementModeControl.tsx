@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Modal, Spin } from "antd";
+import { Button, Modal, Spin } from "antd";
 import { createStyles } from "antd-style";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,7 +10,9 @@ import {
   AdminMfaEnrollmentContent,
 } from "@/components/admin/AdminMfaEnrollmentContent";
 import { ManagementMfaChallenge } from "@/components/admin/ManagementMfaChallenge";
+import { AdminMfaResetRequestControl } from "@/components/admin/AdminMfaResetRequestControl";
 import { AdminRecoveryCodesPanel } from "@/components/admin/AdminRecoveryCodesPanel";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -39,19 +41,19 @@ export function ManagementModeControl({
   const router = useRouter();
   const { locale, t } = useI18n();
   const adminT = createAdminTranslator(locale);
+  const { toast } = useAppFeedback();
   const [open, setOpen] = useState(false);
+  const [resetRequestOpen, setResetRequestOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [enrollment, setEnrollment] = useState<AdminMfaEnrollment | null>(null);
   const [enrollmentCode, setEnrollmentCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function openManagementMode() {
     setEnrollment(null);
     setEnrollmentCode("");
     setRecoveryCodes(null);
     setOpen(true);
-    setError(null);
     if (!enrollmentRequired) return;
 
     setPending(true);
@@ -70,7 +72,8 @@ export function ManagementModeControl({
       if (!response.ok) throw new Error(body.error);
       setEnrollment(body);
     } catch {
-      setError(adminT("common.operationFailed"));
+      toast.error(adminT("common.operationFailed"));
+      setOpen(false);
     } finally {
       setPending(false);
     }
@@ -81,7 +84,6 @@ export function ManagementModeControl({
     if (!enrollment) return;
 
     setPending(true);
-    setError(null);
     try {
       const response = await fetch("/api/manage/session", {
         method: "POST",
@@ -101,7 +103,7 @@ export function ManagementModeControl({
       }
       setRecoveryCodes(body.recoveryCodes);
     } catch {
-      setError(adminT("common.invalidCode"));
+      toast.error(adminT("common.invalidCode"));
     } finally {
       setPending(false);
     }
@@ -118,7 +120,6 @@ export function ManagementModeControl({
     setOpen(false);
     setEnrollment(null);
     setEnrollmentCode("");
-    setError(null);
   }
 
   async function exitManagementMode() {
@@ -173,7 +174,6 @@ export function ManagementModeControl({
             </div>
           ) : enrollment ? (
             <form className={styles.enrollmentForm} onSubmit={completeEnrollment}>
-              {error ? <Alert message={error} showIcon type="error" /> : null}
               <AdminMfaEnrollmentContent
                 code={enrollmentCode}
                 enrollment={enrollment}
@@ -189,17 +189,15 @@ export function ManagementModeControl({
                 {adminT("activation.complete")}
               </Button>
             </form>
-          ) : (
-            <Alert
-              message={error ?? adminT("common.operationFailed")}
-              showIcon
-              type="error"
-            />
-          )
+          ) : null
         ) : (
           <>
             <p>{adminT("auth.mfaDescription")}</p>
             <ManagementMfaChallenge
+              onRequestReset={() => {
+                setOpen(false);
+                setResetRequestOpen(true);
+              }}
               onSuccess={({ recoveryRequired }) => {
                 setOpen(false);
                 router.replace(
@@ -212,6 +210,10 @@ export function ManagementModeControl({
           </>
         )}
       </Modal>
+      <AdminMfaResetRequestControl
+        onClose={() => setResetRequestOpen(false)}
+        open={resetRequestOpen}
+      />
     </>
   );
 }

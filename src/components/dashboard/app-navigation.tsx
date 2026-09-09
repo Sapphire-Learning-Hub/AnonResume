@@ -3,6 +3,7 @@ import type { AdminPermission } from "@/lib/admin-permissions";
 import type { AppShellAccess } from "@/lib/app-shell-access";
 
 export type AppNavigationIcon =
+  | "approvals"
   | "audit"
   | "dashboard"
   | "exports"
@@ -84,6 +85,13 @@ const managementItems: ManagementNavigationDefinition[] = [
     id: "manage-system",
     labelKey: "management.navigation.system",
     permission: "system.read",
+  },
+  {
+    href: "/app/manage/mfa-resets",
+    icon: "approvals",
+    id: "manage-mfa-resets",
+    labelKey: "management.navigation.mfaResets",
+    superOnly: true,
   },
   {
     href: "/app/manage/security",

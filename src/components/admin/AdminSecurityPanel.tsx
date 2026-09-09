@@ -1,14 +1,20 @@
 "use client";
 
-import { Alert, Button, Input, List, Modal, Space, message } from "antd";
+import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   AdminMfaEnrollmentContent,
   type AdminMfaEnrollment,
 } from "@/components/admin/AdminMfaEnrollmentContent";
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
+import {
+  AdminIdentity,
+  AdminToolbar,
+} from "@/components/admin/AdminPage";
+import { AdminRecoveryCodesPanel } from "@/components/admin/AdminRecoveryCodesPanel";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -30,17 +36,19 @@ export function getAdminSecurityResponseAction(
 
 export function AdminSecurityPanel({
   devices,
+  email,
   recoveryRequired,
   recoveryCodesRemaining,
 }: {
   devices: MfaDevice[];
+  email: string;
   recoveryRequired: boolean;
   recoveryCodesRemaining: number;
 }) {
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
-  const [messageApi, contextHolder] = message.useMessage();
+  const { notification, toast } = useAppFeedback();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
@@ -50,6 +58,24 @@ export function AdminSecurityPanel({
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
   const [deferred, setDeferred] = useState<(() => Promise<void>)>();
+  const recoveryRequiredMessage = t("security.recoveryRequired");
+
+  useEffect(() => {
+    const key = "management-recovery-required";
+
+    if (recoveryRequired) {
+      notification.warning({
+        duration: false,
+        key,
+        role: "alert",
+        title: recoveryRequiredMessage,
+      });
+    } else {
+      notification.destroy(key);
+    }
+
+    return () => notification.destroy(key);
+  }, [notification, recoveryRequired, recoveryRequiredMessage]);
 
   async function withReauth(action: () => Promise<Response>, onSuccess: (response: Response) => Promise<void>) {
     setPending(true);
@@ -72,7 +98,7 @@ export function AdminSecurityPanel({
       return;
     }
     if (!response.ok) {
-      messageApi.error(
+      toast.error(
         body.error === "device_limit"
           ? t("security.deviceLimit")
           : body.error === "device_conflict"
@@ -114,7 +140,7 @@ export function AdminSecurityPanel({
         setCode("");
         setName("");
         if (body.recoveryCodes.length > 0) setRecoveryCodes(body.recoveryCodes);
-        messageApi.success(t("security.added"));
+        toast.success(t("security.added"));
         router.refresh();
       },
     );
@@ -124,8 +150,7 @@ export function AdminSecurityPanel({
     await withReauth(
       () => fetch(`/api/manage/security/mfa/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
       async () => {
-        messageApi.success(t("security.removed"));
-        router.replace("/app");
+        toast.success(t("security.removed"));
         router.refresh();
       },
     );
@@ -149,7 +174,7 @@ export function AdminSecurityPanel({
       return;
     }
     if (!response.ok) {
-      messageApi.error(t("common.invalidCode"));
+      toast.error(t("common.invalidCode"));
       return;
     }
     const action = deferred;
@@ -161,41 +186,33 @@ export function AdminSecurityPanel({
 
   return (
     <>
-      {contextHolder}
-      {recoveryRequired ? (
-        <Alert
-          message={t("security.recoveryRequired")}
-          showIcon
-          type="warning"
-        />
-      ) : null}
-      <Space style={{ margin: "16px 0" }}>
+      <AdminToolbar
+        meta={t("security.remainingCodes", { count: recoveryCodesRemaining })}
+      >
         <Button onClick={() => setNameOpen(true)} type="primary">{t("security.add")}</Button>
-        <span>{t("security.remainingCodes", { count: recoveryCodesRemaining })}</span>
-      </Space>
-      <List
-        bordered
-        dataSource={devices}
-        renderItem={(device) => (
-          <List.Item
-            actions={[
-              <Button
-                danger
-                disabled={devices.length <= 1}
-                key="remove"
-                loading={pending}
-                onClick={() => removeDevice(device.id)}
-                type="link"
-              >{t("security.remove")}</Button>,
-            ]}
-          >
-            <List.Item.Meta
-              description={`${t("security.created", { time: new Date(device.createdAt).toLocaleString(locale) })} · ${device.lastUsedAt ? t("security.lastUsed", { time: new Date(device.lastUsedAt).toLocaleString(locale) }) : t("security.neverUsed")}`}
-              title={device.name}
-            />
-          </List.Item>
-        )}
-      />
+      </AdminToolbar>
+      {devices.length > 0 ? (
+        <ul className="admin-card-list">
+          {devices.map((device) => (
+            <li className="admin-card-list__item" key={device.id}>
+              <AdminIdentity
+                description={`${t("security.created", { time: new Date(device.createdAt).toLocaleString(locale) })} · ${device.lastUsedAt ? t("security.lastUsed", { time: new Date(device.lastUsedAt).toLocaleString(locale) }) : t("security.neverUsed")}`}
+                title={device.name}
+              />
+              <div className="admin-action-group">
+                <Button
+                  danger
+                  disabled={devices.length <= 1}
+                  loading={pending}
+                  onClick={() => removeDevice(device.id)}
+                  size="small"
+                  type="text"
+                >{t("security.remove")}</Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <Modal
         okButtonProps={{ disabled: !name.trim(), loading: pending }}
         onCancel={() => setNameOpen(false)}
@@ -203,7 +220,9 @@ export function AdminSecurityPanel({
         open={nameOpen}
         title={t("security.add")}
       >
-        <Input maxLength={60} onChange={(event) => setName(event.target.value)} placeholder={t("security.deviceName")} value={name} />
+        <div className="admin-dialog-form">
+          <Input maxLength={60} onChange={(event) => setName(event.target.value)} placeholder={t("security.deviceName")} value={name} />
+        </div>
       </Modal>
       <Modal
         okButtonProps={{ disabled: code.length !== 6, loading: pending }}
@@ -222,14 +241,21 @@ export function AdminSecurityPanel({
         ) : null}
       </Modal>
       <Modal
-        cancelButtonProps={{ style: { display: "none" } }}
-        okText={t("security.saved")}
-        onOk={() => setRecoveryCodes(undefined)}
+        closable={false}
+        footer={null}
+        mask={{ closable: false }}
         open={Boolean(recoveryCodes)}
-        title={t("security.recoveryCodes")}
+        title={null}
+        width={720}
       >
-        <p>{t("security.recoveryCodesDescription")}</p>
-        <pre>{recoveryCodes?.join("\n")}</pre>
+        {recoveryCodes ? (
+          <AdminRecoveryCodesPanel
+            codes={recoveryCodes}
+            continueLabel={t("security.saved")}
+            email={email}
+            onContinue={() => setRecoveryCodes(undefined)}
+          />
+        ) : null}
       </Modal>
       <Modal
         okButtonProps={{ disabled: reauthCode.length !== 6, loading: pending }}
@@ -238,7 +264,12 @@ export function AdminSecurityPanel({
         open={reauthOpen}
         title={t("common.reauthTitle")}
       >
-        <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        <div className="admin-dialog-form">
+          <p className="admin-dialog-description">
+            {t("common.reauthDescription")}
+          </p>
+          <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        </div>
       </Modal>
     </>
   );

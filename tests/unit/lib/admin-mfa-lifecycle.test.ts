@@ -27,6 +27,7 @@ function currentCode(secret: string) {
 
 describe("admin MFA lifecycle", () => {
   const userId = `admin-mfa-${randomUUID()}`;
+  const baseSessionId = `admin-mfa-session-${randomUUID()}`;
   const enrollmentLockUserId = `admin-mfa-enrollment-lock-${randomUUID()}`;
   const recoveryLockUserId = `admin-mfa-recovery-lock-${randomUUID()}`;
   const schema = quoteIdentifier(getDatabaseSchemaName());
@@ -44,6 +45,12 @@ describe("admin MFA lifecycle", () => {
         [id],
       );
     }
+    await getDatabasePool().query(
+      `INSERT INTO "session"
+        (id, "expiresAt", token, "createdAt", "updatedAt", "userId")
+       VALUES ($1, now() + interval '8 hours', $2, now(), now(), $3)`,
+      [baseSessionId, `base-token-${randomUUID()}`, userId],
+    );
   });
 
   afterAll(async () => {
@@ -61,6 +68,10 @@ describe("admin MFA lifecycle", () => {
       }
       await getDatabasePool().query(
         `DELETE FROM ${schema}.admin_principals WHERE user_id = $1`,
+        [id],
+      );
+      await getDatabasePool().query(
+        `DELETE FROM "session" WHERE "userId" = $1`,
         [id],
       );
       await getDatabasePool().query(`DELETE FROM "user" WHERE id = $1`, [id]);
@@ -116,7 +127,27 @@ describe("admin MFA lifecycle", () => {
       deviceId: second.deviceId,
       token: currentCode(second.secret),
     });
+    await getDatabasePool().query(
+      `INSERT INTO ${schema}.admin_sessions
+        (user_id, base_session_id, mfa_device_id, token_hash, access_version,
+         last_seen_at, idle_expires_at, absolute_expires_at, created_at)
+       VALUES ($1, $2, $3, $4, 1, now(), now() + interval '1 hour',
+         now() + interval '8 hours', now())`,
+      [userId, baseSessionId, first.deviceId, `token-${randomUUID()}`],
+    );
     await removeAdminMfaDevice(userId, first.deviceId);
+
+    const activeSessions = await getDatabasePool().query<{
+      mfaDeviceId: string | null;
+      revokedAt: Date | null;
+    }>(
+      `SELECT mfa_device_id AS "mfaDeviceId", revoked_at AS "revokedAt"
+         FROM ${schema}.admin_sessions WHERE user_id = $1`,
+      [userId],
+    );
+    expect(activeSessions.rows).toEqual([
+      { mfaDeviceId: null, revokedAt: null },
+    ]);
 
     await expect(getAdminSecuritySummary(userId)).resolves.toMatchObject({
       devices: [expect.objectContaining({ id: second.deviceId, name: "Backup" })],

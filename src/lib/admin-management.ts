@@ -30,6 +30,26 @@ function schemaName() {
   return quoteIdentifier(getDatabaseSchemaName());
 }
 
+async function assertAdminRoleMutable(
+  client: PoolClient,
+  schema: string,
+  roleId: string,
+) {
+  const role = await client.query<{ systemKey: string | null }>(
+    `SELECT system_key AS "systemKey"
+       FROM ${schema}.admin_roles
+      WHERE id = $1
+      FOR UPDATE`,
+    [roleId],
+  );
+  if (!role.rows[0]) throw new AdminManagementNotFoundError();
+  if (role.rows[0].systemKey !== null) {
+    throw new AdminManagementConflictError(
+      "System roles cannot be modified or deleted",
+    );
+  }
+}
+
 async function assertUserOperationAllowed({
   client,
   schema,
@@ -128,6 +148,7 @@ export async function updateAdminRole(input: {
   const permissions = normalizeAdminPermissions(input.permissions);
   try {
     await client.query("BEGIN");
+    await assertAdminRoleMutable(client, schema, input.roleId);
     const updated = await client.query(
       `UPDATE ${schema}.admin_roles
           SET name = $2, description = $3, permissions = $4::jsonb,
@@ -176,6 +197,7 @@ export async function deleteAdminRole(actorUserId: string, roleId: string) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
+    await assertAdminRoleMutable(client, schema, roleId);
     const result = await client.query(
       `DELETE FROM ${schema}.admin_roles WHERE id = $1 RETURNING id`,
       [roleId],

@@ -1,11 +1,12 @@
 "use client";
 
-import { Alert, Button, Input, Modal } from "antd";
+import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
 import { AdminPagedSelect } from "@/components/admin/AdminPagedSelect";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -17,18 +18,17 @@ export function AdminInviteUser({
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
+  const { toast } = useAppFeedback();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState<string>();
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string>();
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
 
   async function submit() {
     setPending(true);
-    setError(undefined);
     const response = await fetch("/api/manage/users/invite", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -40,7 +40,7 @@ export function AdminInviteUser({
       return;
     }
     if (!response.ok) {
-      setError(
+      toast.error(
         response.status === 409 ? t("invite.conflict") : t("invite.failed"),
       );
       return;
@@ -61,7 +61,7 @@ export function AdminInviteUser({
     });
     setPending(false);
     if (!response.ok) {
-      setError(t("common.invalidCode"));
+      toast.error(t("common.invalidCode"));
       return;
     }
     setReauthOpen(false);
@@ -80,8 +80,7 @@ export function AdminInviteUser({
         open={open}
         title={t("invite.title")}
       >
-        <div style={{ display: "grid", gap: 12 }}>
-          {error ? <Alert message={error} showIcon type="error" /> : null}
+        <div className="admin-dialog-form">
           <Input maxLength={80} onChange={(event) => setName(event.target.value)} placeholder={t("invite.name")} value={name} />
           <Input maxLength={254} onChange={(event) => setEmail(event.target.value)} placeholder={t("invite.email")} type="email" value={email} />
           {canAssignRole ? (
@@ -102,7 +101,12 @@ export function AdminInviteUser({
         open={reauthOpen}
         title={t("common.reauthTitle")}
       >
-        <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        <div className="admin-dialog-form">
+          <p className="admin-dialog-description">
+            {t("common.reauthDescription")}
+          </p>
+          <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        </div>
       </Modal>
     </>
   );

@@ -1,4 +1,5 @@
 import { getDatabaseSchemaName } from "@/db";
+import type { PdfExportJobStatus } from "@/db/schema";
 import type { QueryResultRow } from "pg";
 import {
   createPageResult,
@@ -7,7 +8,10 @@ import {
   type PageResult,
 } from "@/lib/pagination";
 
-import { normalizeAdminPermissions } from "./admin-permissions";
+import {
+  isAdminSystemRoleKey,
+  normalizeAdminPermissions,
+} from "./admin-permissions";
 import { getDatabasePool } from "./database";
 import { validateRuntimeConfiguration } from "./runtime-configuration";
 
@@ -85,7 +89,7 @@ export async function listAdminUsers(request: AdminListRequest) {
     normalizeSearchQuery(request.query),
   );
 
-  return runPagedQuery<{
+  const result = await runPagedQuery<{
     id: string;
     name: string;
     email: string;
@@ -94,6 +98,7 @@ export async function listAdminUsers(request: AdminListRequest) {
     resumes: number;
     principalKind: string | null;
     roleName: string | null;
+    roleSystemKey: string | null;
     suspended: boolean;
   }>(
     request,
@@ -102,6 +107,7 @@ export async function listAdminUsers(request: AdminListRequest) {
       identity."emailVerified", identity."createdAt",
       count(resume.id)::int AS resumes,
       principal.kind AS "principalKind", role.name AS "roleName",
+      role.system_key AS "roleSystemKey",
       (restriction.user_id IS NOT NULL AND
        (restriction.suspended_until IS NULL OR restriction.suspended_until > now())) AS suspended
     FROM "user" AS identity
@@ -114,12 +120,23 @@ export async function listAdminUsers(request: AdminListRequest) {
     LEFT JOIN ${schema}.account_restrictions AS restriction
       ON restriction.user_id = identity.id
     ${search.clause}
-    GROUP BY identity.id, principal.kind, role.name, restriction.user_id,
+    GROUP BY identity.id, principal.kind, role.name, role.system_key,
+      restriction.user_id,
       restriction.suspended_until
     ORDER BY identity."createdAt" DESC, identity.id DESC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
   );
+
+  return {
+    ...result,
+    items: result.items.map((row) => ({
+      ...row,
+      roleSystemKey: isAdminSystemRoleKey(row.roleSystemKey)
+        ? row.roleSystemKey
+        : null,
+    })),
+  };
 }
 
 export async function listAssignableAdminUsers(request: AdminListRequest) {
@@ -200,7 +217,7 @@ export async function listAdminExports(request: AdminListRequest) {
   return runPagedQuery<{
     id: string;
     filename: string;
-    status: string;
+    status: PdfExportJobStatus;
     attempts: number;
     requesterEmail: string | null;
     createdAt: Date;
@@ -234,12 +251,14 @@ export async function listAdminRoles(request: AdminListRequest) {
     name: string;
     description: string;
     permissions: unknown;
+    systemKey: string | null;
     members: number;
     updatedAt: Date;
   }>(
     request,
     `SELECT count(*)::text AS total FROM ${schema}.admin_roles AS role ${search.clause}`,
     `SELECT role.id::text, role.name, role.description, role.permissions,
+      role.system_key AS "systemKey",
       count(assignment.user_id)::int AS members,
       role.updated_at AS "updatedAt"
     FROM ${schema}.admin_roles AS role
@@ -247,7 +266,13 @@ export async function listAdminRoles(request: AdminListRequest) {
       ON assignment.role_id = role.id
     ${search.clause}
     GROUP BY role.id
-    ORDER BY lower(role.name) ASC, role.id ASC
+    ORDER BY CASE role.system_key
+      WHEN 'read_only_auditor' THEN 0
+      WHEN 'support_operator' THEN 1
+      WHEN 'content_reviewer' THEN 2
+      WHEN 'system_operator' THEN 3
+      ELSE 4 END ASC,
+      lower(role.name) ASC, role.id ASC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
   );
@@ -257,6 +282,7 @@ export async function listAdminRoles(request: AdminListRequest) {
     items: result.items.map((row) => ({
       ...row,
       permissions: normalizeAdminPermissions(row.permissions),
+      systemKey: isAdminSystemRoleKey(row.systemKey) ? row.systemKey : null,
     })),
   };
 }
@@ -269,12 +295,13 @@ export async function listAdminAdministrators(request: AdminListRequest) {
   );
   const where = appendCondition(search.clause, "principal.kind = 'delegated_admin'");
 
-  return runPagedQuery<{
+  const result = await runPagedQuery<{
     id: string;
     name: string;
     email: string;
     principalKind: string;
     roleName: string | null;
+    roleSystemKey: string | null;
   }>(
     request,
     `SELECT count(*)::text AS total
@@ -284,7 +311,8 @@ export async function listAdminAdministrators(request: AdminListRequest) {
        LEFT JOIN ${schema}.admin_roles AS role ON role.id = assignment.role_id
        ${where}`,
     `SELECT identity.id, identity.name, identity.email,
-      principal.kind AS "principalKind", role.name AS "roleName"
+      principal.kind AS "principalKind", role.name AS "roleName",
+      role.system_key AS "roleSystemKey"
     FROM ${schema}.admin_principals AS principal
     JOIN "user" AS identity ON identity.id = principal.user_id
     LEFT JOIN ${schema}.admin_assignments AS assignment ON assignment.user_id = identity.id
@@ -294,6 +322,16 @@ export async function listAdminAdministrators(request: AdminListRequest) {
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
   );
+
+  return {
+    ...result,
+    items: result.items.map((row) => ({
+      ...row,
+      roleSystemKey: isAdminSystemRoleKey(row.roleSystemKey)
+        ? row.roleSystemKey
+        : null,
+    })),
+  };
 }
 
 export async function listAdminAuditEvents(request: AdminListRequest) {

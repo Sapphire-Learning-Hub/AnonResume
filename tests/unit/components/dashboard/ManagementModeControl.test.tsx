@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const routerMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
@@ -24,6 +30,17 @@ describe("ManagementModeControl", () => {
     expect(screen.getByText("验证管理身份")).toBeInTheDocument();
     expect(screen.getAllByRole("textbox")).toHaveLength(6);
 
+    const alternatives = screen.getByTestId("management-auth-alternatives");
+    expect(
+      within(alternatives).getAllByRole("button").map((button) => button.textContent),
+    ).toEqual(["使用一次性恢复码", "无法使用 MFA 或恢复码"]);
+    expect(within(alternatives).getAllByRole("button")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ className: expect.stringContaining("ant-btn-link") }),
+        expect.objectContaining({ className: expect.stringContaining("ant-btn-link") }),
+      ]),
+    );
+
     fireEvent.click(
       screen.getByRole("button", { name: "使用一次性恢复码" }),
     );
@@ -31,6 +48,28 @@ describe("ManagementModeControl", () => {
     expect(
       screen.getByPlaceholderText("XXXX-XXXX-XXXX-XXXX-XXXX"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the MFA reset request dialog mounted after closing the challenge", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ request: null }), { status: 200 }),
+    );
+    render(<ManagementModeControl state="available" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "进入管理模式" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "无法使用 MFA 或恢复码" }),
+    );
+
+    const resetTitle = await screen.findByText("申请重置管理 MFA");
+    const challengeDialog = screen
+      .getByText("验证管理身份")
+      .closest("[role='dialog']");
+    const resetDialog = resetTitle.closest("[role='dialog']");
+
+    expect(challengeDialog).toHaveClass("ant-zoom-leave");
+    expect(resetDialog).not.toHaveClass("ant-zoom-leave");
+    expect(resetDialog).toBeInTheDocument();
   });
 
   it("starts MFA enrollment instead of requesting an unavailable code", async () => {

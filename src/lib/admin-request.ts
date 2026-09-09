@@ -17,7 +17,7 @@ export async function getAdminRequestContext() {
   ]);
   if (!baseSession) throw new AdminAuthenticationError();
 
-  return authorizeAdminRequest({
+  const context = await authorizeAdminRequest({
     store: new PostgresAdminAuthorizationStore(),
     baseSession: {
       userId: baseSession.user.id,
@@ -26,6 +26,11 @@ export async function getAdminRequestContext() {
     rawAdminToken: cookieStore.get(ADMIN_SESSION_COOKIE)?.value,
     idleSeconds: resolveAdminSecurityConfiguration(process.env).idleSeconds,
   });
+
+  return {
+    ...context,
+    userEmail: baseSession.user.email,
+  };
 }
 
 export function getAdminSessionCookieOptions(maxAgeSeconds: number) {

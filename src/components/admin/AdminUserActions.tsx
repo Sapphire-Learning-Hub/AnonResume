@@ -1,10 +1,12 @@
 "use client";
 
-import { Button, Input, Modal, Space, message } from "antd";
+import { Button, Input, Modal } from "antd";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
+import { AdminTableActions } from "@/components/admin/AdminPage";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -22,7 +24,7 @@ export function AdminUserActions({
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
-  const [messageApi, contextHolder] = message.useMessage();
+  const { toast } = useAppFeedback();
   const [reason, setReason] = useState("");
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reauthOpen, setReauthOpen] = useState(false);
@@ -42,10 +44,10 @@ export function AdminUserActions({
       if (!response.ok) throw new Error(t("common.operationFailed"));
       setSuspendOpen(false);
       setReason("");
-      messageApi.success(t("common.operationComplete"));
+      toast.success(t("common.operationComplete"));
       router.refresh();
     } catch {
-      messageApi.error(t("users.operationFailed"));
+      toast.error(t("users.operationFailed"));
     } finally {
       setPending(false);
     }
@@ -60,7 +62,7 @@ export function AdminUserActions({
     });
     setPending(false);
     if (!response.ok) {
-      messageApi.error(t("common.invalidCode"));
+      toast.error(t("common.invalidCode"));
       return;
     }
     setReauthOpen(false);
@@ -72,29 +74,26 @@ export function AdminUserActions({
 
   return (
     <>
-      {contextHolder}
-      <Space size={4}>
+      <AdminTableActions>
         {canSuspend ? (
           suspended ? (
             <Button
               loading={pending}
               onClick={() => run(() => fetch(`/api/manage/users/${userId}/suspension`, { method: "DELETE" }))}
-              size="small"
               type="link"
             >{t("users.restore")}</Button>
           ) : (
-            <Button danger onClick={() => setSuspendOpen(true)} size="small" type="link">{t("users.suspend")}</Button>
+            <Button danger onClick={() => setSuspendOpen(true)} type="link">{t("users.suspend")}</Button>
           )
         ) : null}
         {canRevokeSessions ? (
           <Button
             loading={pending}
             onClick={() => run(() => fetch(`/api/manage/users/${userId}/sessions`, { method: "DELETE" }))}
-            size="small"
             type="link"
           >{t("users.revokeSessions")}</Button>
         ) : null}
-      </Space>
+      </AdminTableActions>
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ danger: true, disabled: !reason.trim(), loading: pending }}
@@ -125,7 +124,12 @@ export function AdminUserActions({
         open={reauthOpen}
         title={t("common.reauthTitle")}
       >
-        <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        <div className="admin-dialog-form">
+          <p className="admin-dialog-description">
+            {t("common.reauthDescription")}
+          </p>
+          <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        </div>
       </Modal>
     </>
   );

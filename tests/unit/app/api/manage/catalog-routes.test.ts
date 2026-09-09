@@ -16,6 +16,10 @@ vi.mock("@/lib/admin-query", () => ({
   listAssignableAdminUsers: mocks.listUsers,
 }));
 
+vi.mock("@/i18n/server", () => ({
+  getRequestLocale: () => Promise.resolve("zh-CN"),
+}));
+
 vi.mock("@/lib/admin-management", () => ({
   AdminManagementConflictError: class extends Error {},
   createAdminRole: vi.fn(),
@@ -29,7 +33,14 @@ describe("management paginated catalog routes", () => {
     vi.clearAllMocks();
     mocks.requireAdmin.mockResolvedValue({ userId: "admin" });
     mocks.listRoles.mockResolvedValue({
-      items: [{ id: "role-1", name: "Support", description: "", permissions: [], members: 0 }],
+      items: [{
+        id: "role-1",
+        name: "database-name",
+        description: "",
+        permissions: [],
+        members: 0,
+        systemKey: "support_operator",
+      }],
       page: 2,
       pageSize: 10,
       total: 11,
@@ -56,7 +67,7 @@ describe("management paginated catalog routes", () => {
       query: "support",
     });
     await expect(response.json()).resolves.toMatchObject({
-      items: [{ id: "role-1", label: "Support" }],
+      items: [{ id: "role-1", label: "支持专员（系统角色）" }],
       page: 2,
       totalPages: 2,
     });

@@ -24,6 +24,7 @@ const messages = {
     "common.interfaceSettingsDescription":
       "切换界面语言。现有简历内容不会被自动翻译。",
     "common.openInterfaceSettings": "打开界面设置",
+    "common.floatingActions": "悬浮操作",
     "common.settings.navigation": "设置分类",
     "common.settings.general": "常规",
     "common.settings.appearance": "外观",
@@ -67,16 +68,22 @@ const messages = {
     "common.downloadPdf": "下载 PDF",
     "pdfExport.title": "PDF 导出",
     "pdfExport.queued": "排队第 {position} 位，共 {count} 项",
+    "pdfExport.workerUnavailable": "导出服务暂时不可用，任务将继续排队",
     "pdfExport.running": "正在生成",
     "pdfExport.cancelling": "正在取消",
     "pdfExport.completed": "已完成并开始下载",
     "pdfExport.failed": "导出失败",
     "pdfExport.cancelled": "已取消",
     "pdfExport.cancel": "取消任务",
+    "pdfExport.openStatus": "查看 PDF 导出状态",
+    "pdfExport.collapseStatus": "收起 PDF 导出状态",
+    "pdfExport.closePanel": "关闭导出状态面板",
+    "pdfExport.clearHistory": "清除已结束记录",
     "pdfExport.error.userQueueLimit":
       "你最多可以同时提交 {limit} 个导出任务。请等待任务完成或先取消一个任务。",
     "pdfExport.error.queueFull": "当前导出队列已满，请稍后再试。",
     "pdfExport.error.anonymousDisabled": "请登录后再导出 PDF。",
+    "pdfExport.error.workerUnavailable": "PDF 导出服务暂时不可用，请稍后再试。",
     "pdfExport.error.generic": "无法创建导出任务，请稍后再试。",
     "common.back": "返回工作台",
     "common.backToEditor": "返回编辑器",
@@ -141,6 +148,7 @@ const messages = {
     "auth.lead":
       "简历草稿按账号隔离。邮箱密码注册需要先完成邮箱验证，也可以使用已配置的 GitHub 登录。",
     "auth.errorFallback": "认证请求失败",
+    "auth.accountSuspended": "该账户已被停用，请联系管理员。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
     "auth.verificationSent": "验证邮件已发送",
     "auth.verificationSentDescription":
@@ -175,6 +183,7 @@ const messages = {
     "management.navigation.audit": "审计",
     "management.navigation.system": "系统状态",
     "management.navigation.security": "管理安全",
+    "management.navigation.mfaResets": "安全审批",
     "management.enter": "进入管理模式",
     "management.exit": "退出管理模式",
     "management.superAdmin": "超级管理员",
@@ -685,6 +694,7 @@ const messages = {
     "common.interfaceSettingsDescription":
       "Switch the interface language. Existing resume content is not translated automatically.",
     "common.openInterfaceSettings": "Open interface settings",
+    "common.floatingActions": "Floating actions",
     "common.settings.navigation": "Settings sections",
     "common.settings.general": "General",
     "common.settings.appearance": "Appearance",
@@ -731,17 +741,23 @@ const messages = {
     "common.downloadPdf": "Download PDF",
     "pdfExport.title": "PDF export",
     "pdfExport.queued": "Position {position} of {count}",
+    "pdfExport.workerUnavailable": "The export service is unavailable. This task will remain queued.",
     "pdfExport.running": "Generating",
     "pdfExport.cancelling": "Cancelling",
     "pdfExport.completed": "Completed and downloading",
     "pdfExport.failed": "Export failed",
     "pdfExport.cancelled": "Cancelled",
     "pdfExport.cancel": "Cancel export",
+    "pdfExport.openStatus": "View PDF export status",
+    "pdfExport.collapseStatus": "Collapse PDF export status",
+    "pdfExport.closePanel": "Close PDF export status panel",
+    "pdfExport.clearHistory": "Clear finished exports",
     "pdfExport.error.userQueueLimit":
       "You can have up to {limit} active exports. Wait for one to finish or cancel a task first.",
     "pdfExport.error.queueFull":
       "The export queue is currently full. Try again later.",
     "pdfExport.error.anonymousDisabled": "Sign in to export a PDF.",
+    "pdfExport.error.workerUnavailable": "The PDF export service is temporarily unavailable. Try again later.",
     "pdfExport.error.generic":
       "The export task could not be created. Try again later.",
     "common.back": "Back to workspace",
@@ -808,6 +824,8 @@ const messages = {
     "auth.lead":
       "Resume drafts are isolated per account. Email registration requires verification, or use GitHub when OAuth is configured.",
     "auth.errorFallback": "Authentication request failed",
+    "auth.accountSuspended":
+      "This account has been suspended. Contact the administrator.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.verificationSent": "Verification email sent",
     "auth.verificationSentDescription":
@@ -843,6 +861,7 @@ const messages = {
     "management.navigation.audit": "Audit",
     "management.navigation.system": "System status",
     "management.navigation.security": "Management security",
+    "management.navigation.mfaResets": "Security approvals",
     "management.enter": "Enter management mode",
     "management.exit": "Exit management mode",
     "management.superAdmin": "Super administrator",

@@ -13,7 +13,7 @@ export default async function ManagementSecurityPage() {
   const t = createAdminTranslator(await getRequestLocale());
   return (
     <AdminPage title={t("nav.security")}>
-      <AdminSecurityPanel {...security} />
+      <AdminSecurityPanel {...security} email={context.userEmail} />
     </AdminPage>
   );
 }

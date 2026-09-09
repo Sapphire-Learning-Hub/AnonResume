@@ -73,6 +73,7 @@ describe("app navigation", () => {
           "/app/manage/roles",
           "/app/manage/audit",
           "/app/manage/system",
+          "/app/manage/mfa-resets",
           "/app/manage/security",
         ],
       },

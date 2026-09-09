@@ -1,6 +1,6 @@
 "use client";
 
-import { Alert, Button, Input } from "antd";
+import { Button, Input } from "antd";
 import { createStyles } from "antd-style";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
 import { AdminRecoveryCodesPanel } from "@/components/admin/AdminRecoveryCodesPanel";
 import { ManagementMfaChallenge } from "@/components/admin/ManagementMfaChallenge";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -72,13 +73,6 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
 }));
 
-function errorMessage(value: unknown, fallback: string) {
-  if (value && typeof value === "object" && "message" in value) {
-    return String(value.message);
-  }
-  return fallback;
-}
-
 export function AdminAccessShell({ children }: { children: React.ReactNode }) {
   const { styles } = useStyles();
   return (
@@ -133,6 +127,7 @@ export function AdminActivationPanel({
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
+  const { toast } = useAppFeedback();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [deviceName, setDeviceName] = useState(() =>
@@ -142,23 +137,24 @@ export function AdminActivationPanel({
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function start(event: React.FormEvent) {
     event.preventDefault();
     if (password !== confirmPassword) {
-      setError(t("activation.passwordMismatch"));
+      toast.error(t("activation.passwordMismatch"));
       return;
     }
     setPending(true);
-    setError(null);
     try {
       const response = await fetch("/api/manage/activation/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, password, deviceName }),
       });
-      if (!response.ok) throw new Error(t("activation.invalid"));
+      if (!response.ok) {
+        toast.error(t("activation.invalid"));
+        return;
+      }
       const body = (await response.json()) as
         | { completed: true }
         | ({ completed: false } & Enrollment);
@@ -167,8 +163,8 @@ export function AdminActivationPanel({
         return;
       }
       setEnrollment(body);
-    } catch (caught) {
-      setError(errorMessage(caught, t("activation.startFailed")));
+    } catch {
+      toast.error(t("activation.startFailed"));
     } finally {
       setPending(false);
     }
@@ -178,7 +174,6 @@ export function AdminActivationPanel({
     event.preventDefault();
     if (!enrollment) return;
     setPending(true);
-    setError(null);
     try {
       const response = await fetch("/api/manage/activation/complete", {
         method: "POST",
@@ -195,16 +190,20 @@ export function AdminActivationPanel({
         recoveryCodes?: string[];
       };
       if (!response.ok) {
-        throw new Error(
+        toast.error(
           body.error === "mfa_locked"
             ? t("auth.mfaLocked")
             : t("common.invalidCode"),
         );
+        return;
       }
-      if (!body.recoveryCodes) throw new Error(t("activation.completeFailed"));
+      if (!body.recoveryCodes) {
+        toast.error(t("activation.completeFailed"));
+        return;
+      }
       setRecoveryCodes(body.recoveryCodes);
-    } catch (caught) {
-      setError(errorMessage(caught, t("activation.completeFailed")));
+    } catch {
+      toast.error(t("activation.completeFailed"));
     } finally {
       setPending(false);
     }
@@ -232,7 +231,6 @@ export function AdminActivationPanel({
         </div>
         <p className={styles.secret}>{enrollment.secret}</p>
         <form className={styles.form} onSubmit={complete}>
-          {error ? <Alert message={error} showIcon type="error" /> : null}
           <AdminOtpInput onChange={setCode} value={code} />
           <Button
             disabled={code.length !== 6}
@@ -259,7 +257,6 @@ export function AdminActivationPanel({
           : t("activation.invitedDescription", { email })}
       </p>
       <form className={styles.form} onSubmit={start}>
-        {error ? <Alert message={error} showIcon type="error" /> : null}
         <Input.Password
           autoComplete="new-password"
           onChange={(event) => setPassword(event.target.value)}

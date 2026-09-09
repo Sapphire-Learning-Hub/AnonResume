@@ -14,6 +14,7 @@ const codes = [
 ];
 
 afterEach(() => {
+  delete document.documentElement.dataset.adminRecoveryPrinting;
   vi.useRealTimers();
 });
 
@@ -73,6 +74,12 @@ describe("AdminRecoveryCodesPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "打印恢复码" }));
     expect(print).toHaveBeenCalledOnce();
+    expect(document.documentElement.dataset.adminRecoveryPrinting).toBe(
+      "true",
+    );
+
+    window.dispatchEvent(new Event("afterprint"));
+    expect(document.documentElement.dataset.adminRecoveryPrinting).toBeUndefined();
   });
 
   it("renders the same browser-time-zone timestamp used by the export", () => {

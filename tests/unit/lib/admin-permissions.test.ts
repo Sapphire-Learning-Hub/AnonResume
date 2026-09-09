@@ -1,6 +1,6 @@
 import {
   ADMIN_PERMISSION_KEYS,
-  ADMIN_ROLE_PRESETS,
+  ADMIN_SYSTEM_ROLES,
   isAdminPermission,
   normalizeAdminPermissions,
 } from "@/lib/admin-permissions";
@@ -39,23 +39,23 @@ describe("admin permission catalog", () => {
     expect(normalizeAdminPermissions(null)).toEqual([]);
   });
 
-  it("provides immutable least-privilege role presets", () => {
-    expect(Object.keys(ADMIN_ROLE_PRESETS)).toEqual([
+  it("defines the four immutable system roles", () => {
+    expect(Object.keys(ADMIN_SYSTEM_ROLES)).toEqual([
       "read_only_auditor",
       "support_operator",
       "content_reviewer",
       "system_operator",
     ]);
 
-    for (const preset of Object.values(ADMIN_ROLE_PRESETS)) {
-      expect(preset.permissions.every(isAdminPermission)).toBe(true);
-      expect(new Set(preset.permissions).size).toBe(preset.permissions.length);
+    for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
+      expect(role.permissions.every(isAdminPermission)).toBe(true);
+      expect(new Set(role.permissions).size).toBe(role.permissions.length);
     }
 
-    expect(ADMIN_ROLE_PRESETS.read_only_auditor.permissions).not.toContain(
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).not.toContain(
       "resumes.content.read",
     );
-    expect(ADMIN_ROLE_PRESETS.support_operator.permissions).not.toContain(
+    expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).not.toContain(
       "users.invite",
     );
   });

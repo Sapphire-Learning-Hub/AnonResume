@@ -1,11 +1,13 @@
 "use client";
 
-import { Button, Input, Modal, Space, message } from "antd";
+import { Button, Input, Modal } from "antd";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
+import { AdminTableActions } from "@/components/admin/AdminPage";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -25,7 +27,7 @@ export function AdminResumeActions({
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
-  const [messageApi, contextHolder] = message.useMessage();
+  const { toast } = useAppFeedback();
   const [pending, setPending] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
   const [reauthOpen, setReauthOpen] = useState(false);
@@ -48,10 +50,10 @@ export function AdminResumeActions({
       return;
     }
     if (!response.ok) {
-      messageApi.error(t("resumes.unpublishFailed"));
+      toast.error(t("resumes.unpublishFailed"));
       return;
     }
-    messageApi.success(t("resumes.unpublishSuccess"));
+    toast.success(t("resumes.unpublishSuccess"));
     setReasonOpen(false);
     setReason("");
     router.refresh();
@@ -66,7 +68,7 @@ export function AdminResumeActions({
     });
     setPending(false);
     if (!response.ok) {
-      messageApi.error(t("common.invalidCode"));
+      toast.error(t("common.invalidCode"));
       return;
     }
     setReauthOpen(false);
@@ -76,17 +78,19 @@ export function AdminResumeActions({
 
   return (
     <>
-      {contextHolder}
-      <Space size={4}>
+      <AdminTableActions>
         {canReadContent ? (
-          <Link href={`/app/manage/resumes/${encodeURIComponent(userId)}/${encodeURIComponent(resumeId)}`}>
+          <Link
+            className="admin-table-action-link"
+            href={`/app/manage/resumes/${encodeURIComponent(userId)}/${encodeURIComponent(resumeId)}`}
+          >
             {t("resumes.readContent")}
           </Link>
         ) : null}
         {published && canUnpublish ? (
-          <Button danger loading={pending} onClick={() => setReasonOpen(true)} size="small" type="link">{t("resumes.unpublish")}</Button>
+          <Button danger loading={pending} onClick={() => setReasonOpen(true)} type="link">{t("resumes.unpublish")}</Button>
         ) : null}
-      </Space>
+      </AdminTableActions>
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ danger: true, disabled: !reason.trim(), loading: pending }}
@@ -113,7 +117,12 @@ export function AdminResumeActions({
         open={reauthOpen}
         title={t("common.reauthTitle")}
       >
-        <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        <div className="admin-dialog-form">
+          <p className="admin-dialog-description">
+            {t("common.reauthDescription")}
+          </p>
+          <AdminOtpInput onChange={setReauthCode} value={reauthCode} />
+        </div>
       </Modal>
     </>
   );

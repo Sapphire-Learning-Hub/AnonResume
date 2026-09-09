@@ -7,6 +7,7 @@ import {
   AdminManagementConflictError,
   assignAdminRole,
   createAdminRole,
+  deleteAdminRole,
   removeDelegatedAdmin,
   restoreUser,
   revokeUserSessions,
@@ -59,8 +60,10 @@ describe("admin role management", () => {
     const schema = quoteIdentifier(getDatabaseSchemaName());
     await getDatabasePool().query(
       `TRUNCATE ${schema}.admin_audit_events, ${schema}.admin_sessions,
-        ${schema}.admin_assignments, ${schema}.admin_roles,
-        ${schema}.admin_principals CASCADE`,
+        ${schema}.admin_assignments, ${schema}.admin_principals CASCADE`,
+    );
+    await getDatabasePool().query(
+      `DELETE FROM ${schema}.admin_roles WHERE system_key IS NULL`,
     );
     await getDatabasePool().query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [
       [
@@ -121,6 +124,28 @@ describe("admin role management", () => {
         userId: superAdminId,
         roleId: created.id,
       }),
+    ).rejects.toBeInstanceOf(AdminManagementConflictError);
+  });
+
+  it("prevents system roles from being modified or deleted", async () => {
+    const schema = quoteIdentifier(getDatabaseSchemaName());
+    const result = await getDatabasePool().query<{ id: string }>(
+      `SELECT id::text FROM ${schema}.admin_roles
+        WHERE system_key = 'read_only_auditor'`,
+    );
+    const roleId = result.rows[0]!.id;
+
+    await expect(
+      updateAdminRole({
+        actorUserId: superAdminId,
+        roleId,
+        name: "Changed",
+        description: "Changed",
+        permissions: ["users.read"],
+      }),
+    ).rejects.toBeInstanceOf(AdminManagementConflictError);
+    await expect(
+      deleteAdminRole(superAdminId, roleId),
     ).rejects.toBeInstanceOf(AdminManagementConflictError);
   });
 

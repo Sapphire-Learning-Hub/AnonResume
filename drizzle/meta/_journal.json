@@ -71,6 +71,20 @@
       "when": 1788928763990,
       "tag": "0009_mature_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788942459460,
+      "tag": "0010_zippy_cerebro",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788949832636,
+      "tag": "0011_misty_human_fly",
+      "breakpoints": true
     }
   ]
 }

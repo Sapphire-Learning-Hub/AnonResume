@@ -1,4 +1,9 @@
-import { AdminPage, AdminTable } from "@/components/admin/AdminPage";
+import {
+  AdminIdentity,
+  AdminPage,
+  AdminStatus,
+  AdminTable,
+} from "@/components/admin/AdminPage";
 import { AdminInviteUser } from "@/components/admin/AdminInviteUser";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { requireAdminPage } from "@/lib/admin-page";
@@ -8,7 +13,10 @@ import {
   readSearchParam,
   type PaginationSearchParams,
 } from "@/lib/pagination";
-import { createAdminTranslator } from "@/i18n/admin-messages";
+import {
+  createAdminTranslator,
+  getAdminSystemRolePresentation,
+} from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 
 export default async function ManagementUsersPage({
@@ -24,16 +32,20 @@ export default async function ManagementUsersPage({
   });
   const locale = await getRequestLocale();
   const t = createAdminTranslator(locale);
+  const canInvite =
+    context.kind === "super_admin" ||
+    context.permissions.includes("users.invite");
   return (
-    <AdminPage title={t("nav.users")}>
-      {context.kind === "super_admin" || context.permissions.includes("users.invite") ? (
-        <div style={{ marginBottom: 16 }}>
-          <AdminInviteUser
-            canAssignRole={context.kind === "super_admin"}
-          />
-        </div>
-      ) : null}
+    <AdminPage
+      actions={
+        canInvite ? (
+          <AdminInviteUser canAssignRole={context.kind === "super_admin"} />
+        ) : null
+      }
+      title={t("nav.users")}
+    >
       <AdminTable
+        actionColumn
         headers={[t("nav.users"), t("users.emailVerification"), t("users.resumeCount"), t("users.adminIdentity"), t("users.status"), t("users.createdAt"), t("common.actions")]}
         pagination={{
           basePath: "/app/manage/users",
@@ -47,11 +59,29 @@ export default async function ManagementUsersPage({
           const canOperateTarget =
             context.kind === "super_admin" || user.principalKind === null;
           return [
-            <span key="identity"><strong>{user.name}</strong><small>{user.email}</small></span>,
-            user.emailVerified ? t("users.verified") : t("users.unverified"),
+            <AdminIdentity
+              description={user.email}
+              key="identity"
+              title={user.name}
+            />,
+            <AdminStatus
+              key="verification"
+              tone={user.emailVerified ? "success" : "warning"}
+            >
+              {user.emailVerified ? t("users.verified") : t("users.unverified")}
+            </AdminStatus>,
             user.resumes,
-            user.principalKind === "super_admin" ? t("shell.superAdmin") : user.roleName || t("users.regular"),
-            user.suspended ? t("users.suspended") : t("users.normal"),
+            user.principalKind === "super_admin"
+              ? t("shell.superAdmin")
+              : user.roleSystemKey
+                ? getAdminSystemRolePresentation(t, user.roleSystemKey).name
+                : user.roleName || t("users.regular"),
+            <AdminStatus
+              key="status"
+              tone={user.suspended ? "danger" : "success"}
+            >
+              {user.suspended ? t("users.suspended") : t("users.normal")}
+            </AdminStatus>,
             user.createdAt.toLocaleString(locale),
             user.principalKind === "super_admin" ? "-" : (
               <AdminUserActions

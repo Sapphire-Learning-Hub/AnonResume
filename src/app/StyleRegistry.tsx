@@ -2,7 +2,7 @@
 
 import type { PropsWithChildren } from "react";
 
-import { ConfigProvider } from "antd";
+import { App as AntdApp, ConfigProvider } from "antd";
 import { StyleProvider, extractStaticStyle } from "antd-style";
 import { useServerInsertedHTML } from "next/navigation";
 
@@ -26,7 +26,19 @@ export default function StyleRegistry({ children }: PropsWithChildren) {
         locale={getAntdLocale(locale)}
         theme={getAppTheme(resolvedMode, accent)}
       >
-        {children}
+        <AntdApp
+          component={false}
+          message={{ duration: 3, maxCount: 3, pauseOnHover: true }}
+          notification={{
+            duration: 5,
+            maxCount: 4,
+            pauseOnHover: true,
+            placement: "topRight",
+            stack: { threshold: 3 },
+          }}
+        >
+          {children}
+        </AntdApp>
       </ConfigProvider>
     </StyleProvider>
   );

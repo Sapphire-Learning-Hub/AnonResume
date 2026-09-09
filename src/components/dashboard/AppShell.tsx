@@ -2,6 +2,7 @@
 
 import {
   AuditOutlined,
+  CheckSquareOutlined,
   CloudServerOutlined,
   DashboardOutlined,
   FileTextOutlined,
@@ -296,6 +297,7 @@ const useStyles = createStyles(({ token, css }) => ({
 }));
 
 const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
+  approvals: <CheckSquareOutlined />,
   audit: <AuditOutlined />,
   dashboard: <DashboardOutlined />,
   exports: <CloudServerOutlined />,

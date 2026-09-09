@@ -30,15 +30,22 @@ export function normalizeAdminPermissions(value: unknown): AdminPermission[] {
   return [...new Set(value.filter(isAdminPermission))];
 }
 
-export type AdminRolePresetKey = keyof typeof ADMIN_ROLE_PRESETS;
+export const ADMIN_SYSTEM_ROLE_KEYS = [
+  "read_only_auditor",
+  "support_operator",
+  "content_reviewer",
+  "system_operator",
+] as const;
 
-export interface AdminRolePreset {
+export type AdminSystemRoleKey = (typeof ADMIN_SYSTEM_ROLE_KEYS)[number];
+
+export interface AdminSystemRoleDefinition {
   name: string;
   description: string;
   permissions: readonly AdminPermission[];
 }
 
-export const ADMIN_ROLE_PRESETS = {
+export const ADMIN_SYSTEM_ROLES = {
   read_only_auditor: {
     name: "只读审计员",
     description: "查看系统概览、用户与审计记录，不读取简历正文。",
@@ -89,4 +96,16 @@ export const ADMIN_ROLE_PRESETS = {
       "system.read",
     ],
   },
-} as const satisfies Record<string, AdminRolePreset>;
+} as const satisfies Record<AdminSystemRoleKey, AdminSystemRoleDefinition>;
+
+const ADMIN_SYSTEM_ROLE_KEY_SET: ReadonlySet<string> = new Set(
+  ADMIN_SYSTEM_ROLE_KEYS,
+);
+
+export function isAdminSystemRoleKey(
+  value: unknown,
+): value is AdminSystemRoleKey {
+  return (
+    typeof value === "string" && ADMIN_SYSTEM_ROLE_KEY_SET.has(value)
+  );
+}

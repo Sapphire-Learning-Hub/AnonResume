@@ -18,7 +18,10 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type { ResumeDocument } from "@/domain/resume/schema";
-import type { AdminPermission } from "@/lib/admin-permissions";
+import type {
+  AdminPermission,
+  AdminSystemRoleKey,
+} from "@/lib/admin-permissions";
 
 export type PdfExportJobStatus =
   | "queued"
@@ -235,7 +238,8 @@ const adminRoleColumns = {
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   permissions: jsonb("permissions").$type<AdminPermission[]>().notNull(),
-  createdByUserId: text("created_by_user_id").notNull(),
+  systemKey: text("system_key").$type<AdminSystemRoleKey>(),
+  createdByUserId: text("created_by_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -243,10 +247,32 @@ const adminRoleColumns = {
 export const adminRoles =
   schemaName === "public"
     ? pgTable("admin_roles", adminRoleColumns, (table) => [
-        uniqueIndex("admin_roles_name_unique").on(sql`lower(${table.name})`),
+        uniqueIndex("admin_roles_name_unique")
+          .on(sql`lower(${table.name})`)
+          .where(sql`${table.systemKey} IS NULL`),
+        uniqueIndex("admin_roles_system_key_unique").on(table.systemKey),
+        check(
+          "admin_roles_system_key_check",
+          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator')`,
+        ),
+        check(
+          "admin_roles_origin_check",
+          sql`(${table.systemKey} IS NULL AND ${table.createdByUserId} IS NOT NULL) OR (${table.systemKey} IS NOT NULL AND ${table.createdByUserId} IS NULL)`,
+        ),
       ])
     : pgSchema(schemaName).table("admin_roles", adminRoleColumns, (table) => [
-        uniqueIndex("admin_roles_name_unique").on(sql`lower(${table.name})`),
+        uniqueIndex("admin_roles_name_unique")
+          .on(sql`lower(${table.name})`)
+          .where(sql`${table.systemKey} IS NULL`),
+        uniqueIndex("admin_roles_system_key_unique").on(table.systemKey),
+        check(
+          "admin_roles_system_key_check",
+          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator')`,
+        ),
+        check(
+          "admin_roles_origin_check",
+          sql`(${table.systemKey} IS NULL AND ${table.createdByUserId} IS NOT NULL) OR (${table.systemKey} IS NOT NULL AND ${table.createdByUserId} IS NULL)`,
+        ),
       ]);
 
 const adminAssignmentColumns = {
@@ -351,6 +377,70 @@ export const adminSecurityStates =
     : pgSchema(schemaName).table(
         "admin_security_states",
         adminSecurityStateColumns,
+      );
+
+export type AdminMfaResetRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "expired";
+
+const adminMfaResetRequestColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requesterUserId: text("requester_user_id").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status")
+    .$type<AdminMfaResetRequestStatus>()
+    .notNull()
+    .default("pending"),
+  reviewerUserId: text("reviewer_user_id"),
+  reviewReason: text("review_reason"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const adminMfaResetRequests =
+  schemaName === "public"
+    ? pgTable("admin_mfa_reset_requests", adminMfaResetRequestColumns, (table) => [
+        check(
+          "admin_mfa_reset_requests_status_check",
+          sql`${table.status} IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')`,
+        ),
+        uniqueIndex("admin_mfa_reset_requests_requester_pending_unique")
+          .on(table.requesterUserId)
+          .where(sql`${table.status} = 'pending'`),
+        index("admin_mfa_reset_requests_status_created_idx").on(
+          table.status,
+          table.createdAt.desc(),
+        ),
+        index("admin_mfa_reset_requests_requester_created_idx").on(
+          table.requesterUserId,
+          table.createdAt.desc(),
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "admin_mfa_reset_requests",
+        adminMfaResetRequestColumns,
+        (table) => [
+          check(
+            "admin_mfa_reset_requests_status_check",
+            sql`${table.status} IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')`,
+          ),
+          uniqueIndex("admin_mfa_reset_requests_requester_pending_unique")
+            .on(table.requesterUserId)
+            .where(sql`${table.status} = 'pending'`),
+          index("admin_mfa_reset_requests_status_created_idx").on(
+            table.status,
+            table.createdAt.desc(),
+          ),
+          index("admin_mfa_reset_requests_requester_created_idx").on(
+            table.requesterUserId,
+            table.createdAt.desc(),
+          ),
+        ],
       );
 
 const accountRestrictionColumns = {

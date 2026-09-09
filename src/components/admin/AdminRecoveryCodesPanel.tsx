@@ -114,6 +114,25 @@ function downloadRecoveryCodes({
   URL.revokeObjectURL(objectUrl);
 }
 
+function printRecoveryCodes() {
+  const root = document.documentElement;
+  root.dataset.adminRecoveryPrinting = "true";
+
+  const cleanup = () => {
+    delete root.dataset.adminRecoveryPrinting;
+    window.removeEventListener("afterprint", cleanup);
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+
+  try {
+    window.print();
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
+}
+
 export function AdminRecoveryCodesPanel({
   codes,
   continueLabel,
@@ -183,7 +202,7 @@ export function AdminRecoveryCodesPanel({
         >
           {t("activation.downloadCodes")}
         </Button>
-        <Button block onClick={() => window.print()} size="large">
+        <Button block onClick={printRecoveryCodes} size="large">
           {t("activation.printCodes")}
         </Button>
         <Button block onClick={onContinue} size="large" type="link">
