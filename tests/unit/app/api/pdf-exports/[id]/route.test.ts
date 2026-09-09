@@ -1,4 +1,5 @@
 import { getOptionalSession } from "@/lib/auth-session";
+import { getPdfExportWorkerAvailability } from "@/lib/pdf-export-availability";
 import {
   claimPdfExportJobs,
   completePdfExport,
@@ -19,9 +20,18 @@ vi.mock("@/lib/auth-session", () => ({
   getOptionalSession: vi.fn(),
 }));
 
+vi.mock("@/lib/pdf-export-availability", () => ({
+  getPdfExportWorkerAvailability: vi.fn(),
+  PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
+  PDF_EXPORT_OFFLINE_POLL_MS: 30_000,
+}));
+
 describe("PDF export job routes", () => {
   beforeEach(async () => {
     vi.mocked(getOptionalSession).mockResolvedValue(null);
+    vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
+      available: true,
+    });
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
@@ -75,6 +85,29 @@ describe("PDF export job routes", () => {
     expect(cancelled.status).toBe(200);
     expect(await cancelled.json()).toMatchObject({
       job: { status: "cancelled" },
+    });
+  });
+
+  it("slows queued polling while the PDF worker is unavailable", async () => {
+    vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
+      available: false,
+    });
+    const job = await createPublicJob();
+    const response = await GET(
+      new Request(`http://localhost/api/pdf-exports/${job.jobId}`, {
+        headers: { authorization: `Bearer ${job.accessToken}` },
+      }),
+      { params: Promise.resolve({ id: job.jobId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("retry-after")).toBe("30");
+    await expect(response.json()).resolves.toMatchObject({
+      job: {
+        status: "queued",
+        pollAfterMs: 30_000,
+        workerAvailable: false,
+      },
     });
   });
 

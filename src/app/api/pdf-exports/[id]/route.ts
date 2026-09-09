@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth-session";
+import { PDF_EXPORT_OFFLINE_POLL_MS } from "@/lib/pdf-export-availability";
 import {
   cancelPdfExport,
   getPdfExportStatus,
@@ -42,7 +43,16 @@ export async function GET(
       ...getAccess(request, session?.user.id),
     });
 
-    return NextResponse.json({ job });
+    const response = NextResponse.json({ job });
+
+    if (job.pollAfterMs) {
+      response.headers.set(
+        "Retry-After",
+        String(Math.ceil(job.pollAfterMs / 1_000)),
+      );
+    }
+
+    return response;
   } catch (error) {
     return handleAccessError(error);
   }
@@ -66,7 +76,16 @@ export async function DELETE(
     await cancelPdfExport({ jobId: id, ...access });
     const job = await getPdfExportStatus({ jobId: id, ...access });
 
-    return NextResponse.json({ job });
+    const response = NextResponse.json({ job });
+
+    if (job.workerAvailable === false) {
+      response.headers.set(
+        "Retry-After",
+        String(PDF_EXPORT_OFFLINE_POLL_MS / 1_000),
+      );
+    }
+
+    return response;
   } catch (error) {
     return handleAccessError(error);
   }

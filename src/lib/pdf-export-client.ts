@@ -16,6 +16,8 @@ export interface PdfExportClientTask {
   error?: string | null;
   errorCode?: string;
   errorLimit?: number;
+  pollAfterMs?: number;
+  workerAvailable?: boolean;
   downloaded: boolean;
 }
 
@@ -222,6 +224,12 @@ export async function cancelPdfExportTask(task: PdfExportClientTask) {
 
 export function dismissPdfExportTask(id: string) {
   setTasks(tasks.filter((task) => task.id !== id));
+}
+
+export function dismissTerminalPdfExportTasks() {
+  setTasks(
+    tasks.filter((task) => ["queued", "running"].includes(task.status)),
+  );
 }
 
 export function subscribePdfExportTasks(listener: () => void) {

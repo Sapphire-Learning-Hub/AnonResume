@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getOptionalSession } from "@/lib/auth-session";
+import { getPdfExportWorkerAvailability } from "@/lib/pdf-export-availability";
 import {
   createGeneratedResumeRecord,
   getResumeRecord,
@@ -13,6 +14,12 @@ import { POST } from "@/app/api/resumes/[id]/pdf/route";
 
 vi.mock("@/lib/auth-session", () => ({
   getOptionalSession: vi.fn(),
+}));
+
+vi.mock("@/lib/pdf-export-availability", () => ({
+  getPdfExportWorkerAvailability: vi.fn(),
+  PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
+  PDF_EXPORT_OFFLINE_POLL_MS: 30_000,
 }));
 
 async function listResumeVersionSnapshots(userId: string, resumeId: string) {
@@ -28,6 +35,9 @@ async function listResumeVersionSnapshots(userId: string, resumeId: string) {
 
 describe("pdf route", () => {
   beforeEach(async () => {
+    vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
+      available: true,
+    });
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
@@ -107,6 +117,29 @@ describe("pdf route", () => {
     expect(
       await listResumeVersionSnapshots("user-demo", "resume-foundation"),
     ).toHaveLength(0);
+  });
+
+  it("rejects new exports while no PDF worker is available", async () => {
+    vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
+      available: false,
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/resumes/resume-foundation/pdf", {
+        method: "POST",
+        headers: {
+          cookie: "better-auth.session_token=demo-session",
+          origin: "http://localhost",
+        },
+      }),
+      { params: Promise.resolve({ id: "resume-foundation" }) },
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("30");
+    await expect(response.json()).resolves.toEqual({
+      error: "pdf_worker_unavailable",
+    });
   });
 
   it("does not create a missing resume during pdf export", async () => {

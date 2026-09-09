@@ -273,7 +273,7 @@ export function LocaleSwitcher() {
   ];
 
   return (
-    <div data-print-chrome="screen">
+    <div data-floating-action-item="settings" data-print-chrome="screen">
       <FloatButton
         aria-label={t("common.openInterfaceSettings")}
         tooltip={<span>{t("common.interfaceSettings")}</span>}

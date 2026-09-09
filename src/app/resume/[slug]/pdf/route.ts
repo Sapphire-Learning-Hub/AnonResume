@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { getOptionalSession } from "@/lib/auth-session";
 import { createPdfFilename } from "@/lib/download-filename";
 import {
+  getPdfExportWorkerAvailability,
+  PDF_EXPORT_OFFLINE_POLL_MS,
+} from "@/lib/pdf-export-availability";
+import {
   enqueuePdfExport,
   getPdfExportQueueConfig,
   PdfExportQueueFullError,
@@ -41,6 +45,20 @@ export async function POST(
 
   if (!session) {
     warnIfAnonymousPdfExportIsEnabled();
+  }
+
+  const worker = await getPdfExportWorkerAvailability();
+
+  if (!worker.available) {
+    return NextResponse.json(
+      { error: "pdf_worker_unavailable" },
+      {
+        status: 503,
+        headers: {
+          "Retry-After": String(PDF_EXPORT_OFFLINE_POLL_MS / 1_000),
+        },
+      },
+    );
   }
 
   try {

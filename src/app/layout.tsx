@@ -19,8 +19,8 @@ import "./globals.css";
 import "@/styles/print.css";
 
 import { I18nProvider } from "@/i18n/I18nProvider";
-import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import { SystemStatePage } from "@/components/system/SystemStatePage";
+import { GlobalFloatingActions } from "@/components/ui/GlobalFloatingActions";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
 import {
@@ -29,7 +29,6 @@ import {
 } from "@/lib/runtime-configuration";
 import { UI_FONT_FAMILY } from "@/styles/ui-font";
 import { AppThemeProvider } from "@/theme/AppThemeProvider";
-import { PdfExportTaskOverlay } from "@/components/pdf/PdfExportTaskOverlay";
 import { getAppThemeCssVariables } from "@/theme/app-palette";
 import { getRequestAppTheme } from "@/theme/server";
 
@@ -121,9 +120,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             initialResolvedMode={initialTheme.resolvedMode}
           >
             <StyleRegistry>
-              <LocaleSwitcher />
               {children}
-              <PdfExportTaskOverlay />
+              <GlobalFloatingActions />
             </StyleRegistry>
           </AppThemeProvider>
         </I18nProvider>

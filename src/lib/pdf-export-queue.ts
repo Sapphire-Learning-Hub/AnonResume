@@ -19,6 +19,11 @@ import {
 
 import { db, pdfExportJobs } from "@/db";
 import type { ResumeDocument } from "@/domain/resume/schema";
+import {
+  getPdfExportWorkerAvailability,
+  PDF_EXPORT_ACTIVE_POLL_MS,
+  PDF_EXPORT_OFFLINE_POLL_MS,
+} from "@/lib/pdf-export-availability";
 
 const PDF_QUEUE_LOCK = "anonresume:pdf-export-capacity";
 const DEFAULT_QUEUE_LIMIT = 100;
@@ -258,6 +263,10 @@ export async function getPdfExportStatus(params: {
   accessToken?: string | null;
 }) {
   const row = await requireAccessibleJob(params);
+  const active = row.status === "queued" || row.status === "running";
+  const workerAvailability = active
+    ? await getPdfExportWorkerAvailability()
+    : null;
   let position: number | null = null;
   let queuedCount = 0;
 
@@ -301,6 +310,12 @@ export async function getPdfExportStatus(params: {
     createdAt: row.createdAt.getTime(),
     startedAt: row.startedAt?.getTime() ?? null,
     completedAt: row.completedAt?.getTime() ?? null,
+    pollAfterMs: active
+      ? workerAvailability?.available
+        ? PDF_EXPORT_ACTIVE_POLL_MS
+        : PDF_EXPORT_OFFLINE_POLL_MS
+      : null,
+    workerAvailable: workerAvailability?.available ?? null,
   };
 }
 

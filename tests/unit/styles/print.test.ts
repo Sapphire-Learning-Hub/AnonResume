@@ -12,4 +12,13 @@ describe("print.css", () => {
     expect(css).toContain("gap: 0 !important;");
     expect(css).toContain("margin: 0 !important;");
   });
+
+  it("does not hide unrelated print surfaces for recovery-code printing", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+
+    expect(css).not.toMatch(/\n\s*body \* \{\s*visibility: hidden !important;/);
+    expect(css).toContain(
+      'html[data-admin-recovery-printing="true"] body *',
+    );
+  });
 });

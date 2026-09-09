@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getOptionalSession } from "@/lib/auth-session";
+import { getPdfExportWorkerAvailability } from "@/lib/pdf-export-availability";
 import { getPdfExportStatus } from "@/lib/pdf-export-queue";
 import {
   createGeneratedResumeRecord,
@@ -14,10 +15,19 @@ vi.mock("@/lib/auth-session", () => ({
   getOptionalSession: vi.fn(),
 }));
 
+vi.mock("@/lib/pdf-export-availability", () => ({
+  getPdfExportWorkerAvailability: vi.fn(),
+  PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
+  PDF_EXPORT_OFFLINE_POLL_MS: 30_000,
+}));
+
 describe("public resume pdf route", () => {
   beforeEach(async () => {
     vi.unstubAllEnvs();
     vi.mocked(getOptionalSession).mockResolvedValue(null);
+    vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
+      available: true,
+    });
     await resetResumeRepository();
   });
 
