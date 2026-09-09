@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ConfigProvider } from "antd";
 
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
@@ -16,6 +16,71 @@ function renderPicker(onSelect = vi.fn()) {
 }
 
 describe("ResumeIconPicker", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the icon catalog in viewport-sized batches", async () => {
+    const observers: MockIntersectionObserver[] = [];
+    let nextFrame: FrameRequestCallback | undefined;
+
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      nextFrame = callback;
+      return 1;
+    });
+
+    class MockIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = "";
+      readonly thresholds = [];
+      readonly disconnect = vi.fn();
+      readonly observe = vi.fn();
+      readonly takeRecords = vi.fn(() => []);
+      readonly unobserve = vi.fn();
+      readonly callback: IntersectionObserverCallback;
+
+      constructor(callback: IntersectionObserverCallback) {
+        this.callback = callback;
+        observers.push(this);
+      }
+    }
+
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    renderPicker();
+    const dialog = await screen.findByRole("dialog", { name: "图标库" });
+    const grid = within(dialog).getByTestId("resume-icon-grid");
+
+    expect(within(grid).getAllByRole("button")).toHaveLength(72);
+    expect(within(dialog).getByText("共 454 枚图标")).toBeInTheDocument();
+
+    const loadMore = within(grid).getByTestId("resume-icon-load-more");
+    const gridObserver = observers.find((observer) =>
+      observer.observe.mock.calls.some(([target]) => target === loadMore),
+    );
+    expect(gridObserver).toBeDefined();
+    act(() => {
+      gridObserver?.callback(
+        [
+          {
+            isIntersecting: true,
+            target: loadMore,
+          } as unknown as IntersectionObserverEntry,
+        ],
+        {} as IntersectionObserver,
+      );
+    });
+
+    expect(loadMore).toHaveAttribute("data-loading", "true");
+    expect(within(grid).getAllByRole("button")).toHaveLength(72);
+
+    act(() => {
+      nextFrame?.(0);
+    });
+
+    expect(within(grid).getAllByRole("button")).toHaveLength(144);
+  });
+
   it("searches the local catalog and inserts the chosen icon", async () => {
     const { onSelect } = renderPicker();
     const dialog = await screen.findByRole("dialog", { name: "图标库" });

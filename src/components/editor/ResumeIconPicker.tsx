@@ -1,8 +1,8 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
-import { Button, Empty, Input, Modal, Segmented, Tooltip } from "antd";
+import { Button, Empty, Input, Modal, Segmented, Spin, Tooltip } from "antd";
 import { createStyles } from "antd-style";
 
 import { ResumeInlineIcon } from "@/components/resume/ResumeInlineIcon";
@@ -53,12 +53,20 @@ const useResumeIconPickerStyles = createStyles(({ token, css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    grid-auto-rows: 82px;
+    grid-auto-rows: max-content;
     gap: 10px;
     min-height: 0;
     padding: 2px 6px 16px 2px;
     overflow-y: auto;
     overscroll-behavior: contain;
+  `,
+  loadMore: css`
+    display: grid;
+    width: 100%;
+    height: 36px;
+    grid-column: 1 / -1;
+    place-items: center;
+    pointer-events: none;
   `,
   iconButton: css`
     && {
@@ -105,6 +113,8 @@ const categories: Array<ResumeIconCategory | "all"> = [
   "other",
 ];
 
+const ICON_BATCH_SIZE = 72;
+
 function getCategoryMessageKey(category: ResumeIconCategory | "all") {
   return `editor.iconLibrary.category.${category}` as const;
 }
@@ -122,8 +132,56 @@ export function ResumeIconPicker({
   const { locale, t } = useI18n();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ResumeIconCategory | "all">("all");
+  const [visibleCount, setVisibleCount] = useState(ICON_BATCH_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [gridElement, setGridElement] = useState<HTMLDivElement | null>(null);
+  const [loadMoreElement, setLoadMoreElement] =
+    useState<HTMLDivElement | null>(null);
   const deferredQuery = useDeferredValue(query);
   const icons = filterResumeIcons(deferredQuery, category);
+  const visibleIcons = icons.slice(0, visibleCount);
+
+  useEffect(() => {
+    if (!open || visibleCount >= icons.length) return;
+
+    if (!gridElement || !loadMoreElement) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      const fallbackTimer = window.setTimeout(() => {
+        setVisibleCount(icons.length);
+      }, 0);
+      return () => window.clearTimeout(fallbackTimer);
+    }
+
+    let scheduledFrame: number | undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (scheduledFrame !== undefined) return;
+        observer.unobserve(loadMoreElement);
+        setLoadingMore(true);
+        scheduledFrame = window.requestAnimationFrame(() => {
+          scheduledFrame = undefined;
+          setVisibleCount((current) =>
+            Math.min(current + ICON_BATCH_SIZE, icons.length),
+          );
+          setLoadingMore(false);
+        });
+      },
+      {
+        root: gridElement,
+        rootMargin: "180px 0px",
+      },
+    );
+
+    observer.observe(loadMoreElement);
+    return () => {
+      observer.disconnect();
+      if (scheduledFrame !== undefined) {
+        window.cancelAnimationFrame(scheduledFrame);
+      }
+    };
+  }, [category, gridElement, icons.length, loadMoreElement, open, query, visibleCount]);
 
   return (
     <Modal
@@ -131,6 +189,8 @@ export function ResumeIconPicker({
         if (!visible) {
           setQuery("");
           setCategory("all");
+          setVisibleCount(ICON_BATCH_SIZE);
+          setLoadingMore(false);
         }
       }}
       centered
@@ -149,7 +209,11 @@ export function ResumeIconPicker({
         className={styles.search}
         placeholder={t("editor.iconLibrary.searchPlaceholder")}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setVisibleCount(ICON_BATCH_SIZE);
+          setLoadingMore(false);
+        }}
       />
       <Segmented
         aria-label={t("editor.iconLibrary.categories")}
@@ -160,17 +224,23 @@ export function ResumeIconPicker({
           value,
         }))}
         value={category}
-        onChange={(value) =>
-          setCategory(value as ResumeIconCategory | "all")
-        }
+        onChange={(value) => {
+          setCategory(value as ResumeIconCategory | "all");
+          setVisibleCount(ICON_BATCH_SIZE);
+          setLoadingMore(false);
+        }}
       />
       <div className={styles.resultsMeta}>
         <span>{t("editor.iconLibrary.resultCount", { count: icons.length })}</span>
         <span>{t("editor.iconLibrary.localOnly")}</span>
       </div>
       {icons.length ? (
-        <div className={styles.grid} data-testid="resume-icon-grid">
-          {icons.map((icon) => {
+        <div
+          className={styles.grid}
+          data-testid="resume-icon-grid"
+          ref={setGridElement}
+        >
+          {visibleIcons.map((icon) => {
             const label = locale === "zh-CN" ? icon.labelZh : icon.labelEn;
             const actionLabel = t("editor.iconLibrary.insertNamed", { name: label });
 
@@ -189,6 +259,21 @@ export function ResumeIconPicker({
               </Tooltip>
             );
           })}
+          {visibleCount < icons.length ? (
+            <div
+              aria-hidden={loadingMore ? undefined : true}
+              aria-label={
+                loadingMore ? t("editor.iconLibrary.loadingMore") : undefined
+              }
+              className={styles.loadMore}
+              data-loading={loadingMore}
+              data-testid="resume-icon-load-more"
+              ref={setLoadMoreElement}
+              role={loadingMore ? "status" : undefined}
+            >
+              {loadingMore ? <Spin size="small" /> : null}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className={styles.empty}>
