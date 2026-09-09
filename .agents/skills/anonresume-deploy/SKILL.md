@@ -18,8 +18,9 @@ instance-specific addresses in the repository.
 - Use a preconfigured SSH alias backed by an SSH key, agent, OS credential
   store, or interactive prompt. Do not use `sshpass`, inline passwords, or
   generated key files.
-- Treat the server's environment file as write-only operational state. Verify
-  that it exists without printing, downloading, or diffing its values.
+- Treat the server's environment files as write-only operational state. Verify
+  that they exist and contain required variable names without printing,
+  downloading, or diffing their values.
 - Do not overwrite a dirty local or server worktree. Stop and report the
   unexpected files.
 - Do not run destructive Git commands or automatically reverse database
@@ -73,6 +74,12 @@ Save the current full hash as `PREVIOUS_COMMIT`. Require a clean worktree and
 verify that `PREVIOUS_COMMIT` is an ancestor of `TARGET_COMMIT`; otherwise stop
 instead of forcing history.
 
+Also inspect the existing Web and PDF Worker service definitions to identify
+their configured environment files. Do not print the files or their values.
+The deployment must use the environment files already referenced by the
+services; do not create replacement files or change service definitions as
+part of an ordinary release.
+
 ### 3. Transfer the commit
 
 Prefer a bounded `git fetch` from the configured remote. Verify the fetched
@@ -92,7 +99,35 @@ On the server, fetch `RELEASE_REF` from the bundle, verify `FETCH_HEAD` equals
 a transport fallback; never copy a working tree or build output over the
 server checkout. Remove local and remote temporary bundles after verification.
 
-### 4. Build before interrupting services
+### 4. Verify target-version environment configuration
+
+Before installing dependencies or starting the production build, determine
+the required environment variable names for `TARGET_COMMIT`. Inspect the
+target version's `.env.example`, environment schema/validation, build-time
+configuration, and service-specific startup configuration. Include variables
+required by both the Web service and the PDF Worker, and distinguish required
+variables from documented optional variables.
+
+Create a names-only manifest in the current process or an untracked temporary
+file. Never include values, secrets, or the contents of an environment file in
+the manifest, logs, Git, command arguments, or chat responses. On the server,
+compare the manifest with the variable names present in each existing service
+environment file, without printing values. A variable that is required by the
+target version but absent from its environment file is a hard stop.
+
+If a required variable is missing, do not install, build, migrate, or restart.
+Ask the operator to configure it through the existing server secret or
+environment management process, then repeat the names-only preflight. Do not
+invent values, copy local development values, or modify production
+environment files without explicit operational authorization. If the target
+version changes which service consumes a variable, verify the correct service
+environment file separately.
+
+Only continue once all required target-version variables are present for the
+services that need them. This check must happen before the production build so
+build-time configuration failures are caught before any service interruption.
+
+### 5. Build before interrupting services
 
 From `DEPLOY_PATH`, run:
 
@@ -105,7 +140,7 @@ Keep the currently running processes alive while these commands execute. If
 installation or build fails, do not restart services. Restore the checkout to
 `PREVIOUS_COMMIT`, report the failure, and leave the running version in place.
 
-### 5. Apply migrations
+### 6. Apply migrations
 
 After a successful build and immediately before restart, run the repository's
 required forward migrations:
@@ -119,7 +154,7 @@ For a migration that removes or rewrites data, require a confirmed backup and
 an explicit user decision before continuing. If migration fails, do not
 restart. Do not attempt automatic schema rollback.
 
-### 6. Restart runtime services
+### 7. Restart runtime services
 
 Restart the Web and PDF Worker units together, then wait briefly for startup:
 
@@ -132,7 +167,7 @@ Both units must report `active`. Use the existing service definitions; do not
 replace systemd units or change network exposure as part of an ordinary
 release.
 
-### 7. Verify the deployment
+### 8. Verify the deployment
 
 Verify all of the following with fresh output:
 
