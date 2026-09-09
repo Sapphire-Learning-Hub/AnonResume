@@ -1,9 +1,20 @@
 import {
   buildVerificationEmail,
+  closeEmailTransporter,
   resolveEmailDeliveryConfig,
 } from "@/lib/email";
 
 describe("email delivery configuration", () => {
+  it("closes and clears the shared SMTP transporter", () => {
+    const close = vi.fn();
+    globalThis.__anonResumeEmailTransporter = { close } as never;
+
+    closeEmailTransporter();
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(globalThis.__anonResumeEmailTransporter).toBeUndefined();
+  });
+
   it("uses configured SMTP in development", () => {
     expect(
       resolveEmailDeliveryConfig(

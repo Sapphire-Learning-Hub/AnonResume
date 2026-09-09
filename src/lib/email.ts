@@ -266,6 +266,12 @@ function getSmtpTransporter(config: Extract<EmailDeliveryConfig, { transport: "s
   return globalThis.__anonResumeEmailTransporter;
 }
 
+export function closeEmailTransporter() {
+  const transporter = globalThis.__anonResumeEmailTransporter;
+  globalThis.__anonResumeEmailTransporter = undefined;
+  transporter?.close();
+}
+
 export async function sendVerificationEmail({
   email,
   name,

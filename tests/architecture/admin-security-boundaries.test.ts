@@ -79,8 +79,11 @@ describe("admin security architecture", () => {
     expect(packageJson.scripts?.dev).toBe(
       "bun run scripts/admin-bootstrap.ts development && next dev",
     );
-    expect(
-      readFileSync(resolve(root, "scripts/admin-bootstrap.ts"), "utf8"),
-    ).toContain("bootstrapConfiguredSuperAdmin");
+    const bootstrapScript = readFileSync(
+      resolve(root, "scripts/admin-bootstrap.ts"),
+      "utf8",
+    );
+    expect(bootstrapScript).toContain("bootstrapConfiguredSuperAdmin");
+    expect(bootstrapScript).toContain("closeEmailTransporter");
   });
 });
