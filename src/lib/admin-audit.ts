@@ -17,24 +17,72 @@ const FORBIDDEN_METADATA_KEYS = new Set([
   "result",
 ]);
 
+export interface AdminAuditChange {
+  field: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface AdminAuditResourceSnapshot {
+  type: string;
+  id: string;
+  label: string;
+  description?: string | null;
+}
+
 function normalizedMetadataKey(key: string) {
   return key.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
 }
 
+function isForbiddenMetadataKey(key: string) {
+  return FORBIDDEN_METADATA_KEYS.has(normalizedMetadataKey(key));
+}
+
+function isSensitiveChange(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const field = (value as Record<string, unknown>).field;
+  return typeof field === "string" && isForbiddenMetadataKey(field);
+}
+
 function sanitizeValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sanitizeValue);
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => !isSensitiveChange(item))
+      .map(sanitizeValue);
+  }
   if (!value || typeof value !== "object") return value;
   if (value instanceof Date) return value.toISOString();
 
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => !FORBIDDEN_METADATA_KEYS.has(normalizedMetadataKey(key)))
+      .filter(([key]) => !isForbiddenMetadataKey(key))
       .map(([key, nested]) => [key, sanitizeValue(nested)]),
   );
 }
 
 export function sanitizeAdminAuditMetadata(value: Record<string, unknown>) {
   return sanitizeValue(value) as Record<string, unknown>;
+}
+
+function auditValuesEqual(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function createAdminAuditChanges(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): AdminAuditChange[] {
+  const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...fields].flatMap((field) =>
+    isForbiddenMetadataKey(field) ||
+      auditValuesEqual(before[field] ?? null, after[field] ?? null)
+      ? []
+      : [{
+          field,
+          before: before[field] ?? null,
+          after: after[field] ?? null,
+        }],
+  );
 }
 
 function quoteIdentifier(value: string) {

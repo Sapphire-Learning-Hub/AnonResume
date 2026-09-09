@@ -86,9 +86,22 @@ describe("admin paginated queries", () => {
     );
     await pool.query(
       `INSERT INTO ${schema}.admin_audit_events
-        (actor_user_id, action, target_type, target_id, outcome, metadata)
-       VALUES ($1, $2, 'pagination', $3, 'success', '{}'::jsonb)`,
-      [userIds[0], `${marker}.action`, marker],
+        (actor_user_id, action, target_type, target_id, outcome, metadata,
+         request_id, ip_hash)
+       VALUES ($1, $2, 'user', $1, 'success', $3::jsonb, $4, $5)`,
+      [
+        userIds[0],
+        `${marker}.action`,
+        JSON.stringify({
+          roleIds: [roleIds[0]],
+          targetSnapshot: {
+            label: `${marker} Historical user`,
+            description: `${marker}-historical@example.com`,
+          },
+        }),
+        `${marker}-request`,
+        `${marker}-ip-hash`,
+      ],
     );
     await pool.query(
       `INSERT INTO ${schema}.worker_heartbeats
@@ -101,7 +114,7 @@ describe("admin paginated queries", () => {
   afterAll(async () => {
     const pool = getDatabasePool();
     await pool.query(`DELETE FROM ${schema}.worker_heartbeats WHERE worker_id LIKE $1`, [`${marker}%`]);
-    await pool.query(`DELETE FROM ${schema}.admin_audit_events WHERE target_id = $1`, [marker]);
+    await pool.query(`DELETE FROM ${schema}.admin_audit_events WHERE action = $1`, [`${marker}.action`]);
     await pool.query(`DELETE FROM ${schema}.pdf_export_jobs WHERE filename = $1`, [`${marker}.pdf`]);
     await pool.query(
       `DELETE FROM ${schema}.admin_assignments WHERE role_id = ANY($1::uuid[])`,
@@ -155,6 +168,35 @@ describe("admin paginated queries", () => {
       expect(result).toMatchObject({ page: 1, pageSize: 20, total: 1, totalPages: 1 });
       expect(result.items).toHaveLength(1);
     }
+    expect(events.items[0]).toMatchObject({
+      actor: {
+        description: `${marker}-0@example.com`,
+        id: userIds[0],
+        label: `${marker} User 0`,
+      },
+      ipHash: `${marker}-ip-hash`,
+      metadata: {
+        roleIds: [roleIds[0]],
+        targetSnapshot: {
+          description: `${marker}-historical@example.com`,
+          label: `${marker} Historical user`,
+        },
+      },
+      requestId: `${marker}-request`,
+      resourceLabels: {
+        [`admin_role:${roleIds[0]}`]: {
+          id: roleIds[0],
+          label: `${marker} Role`,
+          type: "admin_role",
+        },
+      },
+      target: {
+        description: `${marker}-historical@example.com`,
+        id: userIds[0],
+        label: `${marker} Historical user`,
+        type: "user",
+      },
+    });
     expect(assignableUsers).toMatchObject({
       page: 1,
       pageSize: 20,

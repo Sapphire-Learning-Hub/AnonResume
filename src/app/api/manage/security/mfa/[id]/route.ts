@@ -17,13 +17,18 @@ export async function DELETE(
       allowRecoveryRequired: true,
     });
     const deviceId = (await params).id;
-    await removeAdminMfaDevice(context.userId, deviceId);
+    const device = await removeAdminMfaDevice(context.userId, deviceId);
     await writeAdminAuditEvent({
       actorUserId: context.userId,
       action: "mfa.device.remove",
       targetType: "mfa_device",
       targetId: deviceId,
       outcome: "success",
+      metadata: {
+        changes: [{ field: "verified", before: true, after: null }],
+        targetSnapshot: { label: device.name },
+        userId: context.userId,
+      },
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

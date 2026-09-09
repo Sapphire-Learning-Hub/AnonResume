@@ -1,4 +1,7 @@
-import { sanitizeAdminAuditMetadata } from "@/lib/admin-audit";
+import {
+  createAdminAuditChanges,
+  sanitizeAdminAuditMetadata,
+} from "@/lib/admin-audit";
 
 describe("admin audit metadata", () => {
   it("recursively strips credentials, content and binary result fields", () => {
@@ -15,6 +18,31 @@ describe("admin audit metadata", () => {
     ).toEqual({
       reason: "policy violation",
       nested: { count: 3 },
+    });
+  });
+
+  it("records only changed fields and strips secrets inside change values", () => {
+    const metadata = sanitizeAdminAuditMetadata({
+      changes: createAdminAuditChanges(
+        {
+          description: "before",
+          name: "unchanged",
+          secret: "old-secret",
+        },
+        {
+          description: "after",
+          name: "unchanged",
+          secret: "new-secret",
+        },
+      ),
+    });
+
+    expect(metadata).toEqual({
+      changes: [{
+        field: "description",
+        before: "before",
+        after: "after",
+      }],
     });
   });
 });

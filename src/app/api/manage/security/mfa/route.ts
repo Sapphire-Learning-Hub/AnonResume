@@ -10,6 +10,7 @@ import {
   AdminMfaLockedError,
   AdminMfaVerificationError,
   beginAdminMfaEnrollment,
+  listAdminMfaDevices,
   verifyAdminMfaEnrollment,
 } from "@/lib/admin-store";
 
@@ -33,12 +34,22 @@ export async function POST(request: Request) {
         deviceId: confirmation.data.deviceId,
         token: confirmation.data.code,
       });
+      const device = (await listAdminMfaDevices(context.userId))
+        .find((item) => item.id === confirmation.data.deviceId);
       await writeAdminAuditEvent({
         actorUserId: context.userId,
         action: "mfa.device.add",
-        targetType: "admin_identity",
-        targetId: context.userId,
+        targetType: "mfa_device",
+        targetId: confirmation.data.deviceId,
         outcome: "success",
+        metadata: {
+          changes: [{ field: "verified", before: false, after: true }],
+          recoveryCodesRegenerated: recoveryCodes.length > 0,
+          targetSnapshot: {
+            label: device?.name ?? confirmation.data.deviceId,
+          },
+          userId: context.userId,
+        },
       });
       return NextResponse.json({ recoveryCodes });
     }

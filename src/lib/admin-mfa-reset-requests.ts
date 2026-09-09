@@ -3,7 +3,10 @@ import { getDatabaseSchemaName } from "@/db";
 import type { PageRequest, PageResult } from "@/lib/pagination";
 import { createPageResult, resolvePage } from "@/lib/pagination";
 
-import { writeAdminAuditEventWithClient } from "./admin-audit";
+import {
+  createAdminAuditChanges,
+  writeAdminAuditEventWithClient,
+} from "./admin-audit";
 import { getDatabasePool } from "./database";
 
 const REQUEST_TTL_MS = 72 * 60 * 60 * 1000;
@@ -203,7 +206,19 @@ export async function submitAdminMfaResetRequest({
       targetType: "admin_mfa_reset_request",
       targetId: inserted.rows[0]!.id,
       outcome: "success",
-      metadata: { expiresAt },
+      metadata: {
+        changes: createAdminAuditChanges(
+          { status: null },
+          { status: "pending" },
+        ),
+        expiresAt,
+        reason: normalizedReason,
+        requesterUserId: userId,
+        targetSnapshot: {
+          label: principal.requesterName,
+          description: principal.requesterEmail,
+        },
+      },
     });
     await client.query("COMMIT");
     return inserted.rows[0]!;
@@ -247,11 +262,18 @@ export async function cancelAdminMfaResetRequest({
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const request = await client.query<{ expiresAt: Date; status: string }>(
-      `SELECT expires_at AS "expiresAt", status
-         FROM ${schema}.admin_mfa_reset_requests
-        WHERE id = $1 AND requester_user_id = $2
-        FOR UPDATE`,
+    const request = await client.query<{
+      expiresAt: Date;
+      requesterEmail: string;
+      requesterName: string;
+      status: string;
+    }>(
+      `SELECT request.expires_at AS "expiresAt", request.status,
+          identity.name AS "requesterName", identity.email AS "requesterEmail"
+         FROM ${schema}.admin_mfa_reset_requests AS request
+         JOIN "user" AS identity ON identity.id = request.requester_user_id
+        WHERE request.id = $1 AND request.requester_user_id = $2
+        FOR UPDATE OF request`,
       [requestId, userId],
     );
     const current = request.rows[0];
@@ -270,6 +292,16 @@ export async function cancelAdminMfaResetRequest({
       targetType: "admin_mfa_reset_request",
       targetId: requestId,
       outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          { status: current.status },
+          { status: "cancelled" },
+        ),
+        targetSnapshot: {
+          label: current.requesterName,
+          description: current.requesterEmail,
+        },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -407,7 +439,23 @@ export async function reviewAdminMfaResetRequest({
       targetType: "user",
       targetId: current.requesterUserId,
       outcome: "success",
-      metadata: { requestId },
+      metadata: {
+        changes: createAdminAuditChanges(
+          { status: current.status, reviewReason: null },
+          { status: decision, reviewReason: normalizedReason },
+        ),
+        requestId,
+        resources: [{
+          type: "admin_mfa_reset_request",
+          id: requestId,
+          label: current.requesterName,
+          description: current.requesterEmail,
+        }],
+        targetSnapshot: {
+          label: current.requesterName,
+          description: current.requesterEmail,
+        },
+      },
     });
     await client.query("COMMIT");
     return updated.rows[0]!;

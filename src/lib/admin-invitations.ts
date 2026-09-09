@@ -3,6 +3,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { getDatabaseSchemaName } from "@/db";
 
 import { hashAdminSecret } from "./admin-crypto";
+import {
+  createAdminAuditChanges,
+  writeAdminAuditEventWithClient,
+} from "./admin-audit";
 import { getDatabasePool } from "./database";
 import { sendUserInvitationEmail } from "./email";
 import { resolveApplicationOriginForBootstrap } from "./runtime-configuration";
@@ -35,6 +39,11 @@ export async function inviteUser(input: {
   const client = await getDatabasePool().connect();
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
+  let roleSnapshots: Array<{
+    description: string;
+    id: string;
+    name: string;
+  }> = [];
   try {
     await client.query("BEGIN");
     await client.query(
@@ -49,13 +58,19 @@ export async function inviteUser(input: {
       throw new AdminInvitationConflictError("An account with this email already exists");
     }
     if (roleIds.length > 0) {
-      const roles = await client.query(
-        `SELECT id FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
+      const roles = await client.query<{
+        description: string;
+        id: string;
+        name: string;
+      }>(
+        `SELECT id::text, name, description
+           FROM ${schema}.admin_roles WHERE id = ANY($1::uuid[])`,
         [roleIds],
       );
       if (roles.rowCount !== roleIds.length) {
         throw new AdminInvitationNotFoundError();
       }
+      roleSnapshots = roles.rows;
     }
 
     const userId = randomUUID();
@@ -92,19 +107,28 @@ export async function inviteUser(input: {
         new Date(Date.now() + INVITATION_TTL_MS),
       ],
     );
-    await client.query(
-      `INSERT INTO ${schema}.admin_audit_events
-        (actor_user_id, action, target_type, target_id, outcome, metadata)
-       VALUES ($1, 'user.invite', 'user', $2, 'success', $3::jsonb)`,
-      [
-        input.actorUserId,
-        userId,
-        JSON.stringify({
-          grantsManagementAccess: roleIds.length > 0,
-          roleIds,
-        }),
-      ],
-    );
+    await writeAdminAuditEventWithClient(client, {
+      actorUserId: input.actorUserId,
+      action: "user.invite",
+      targetType: "user",
+      targetId: userId,
+      outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          { status: null, roleIds: [] },
+          { status: "invited", roleIds },
+        ),
+        grantsManagementAccess: roleIds.length > 0,
+        resources: roleSnapshots.map((role) => ({
+          type: "admin_role",
+          id: role.id,
+          label: role.name,
+          description: role.description,
+        })),
+        roleIds,
+        targetSnapshot: { label: name, description: email },
+      },
+    });
 
     const url = new URL(
       "/activate",

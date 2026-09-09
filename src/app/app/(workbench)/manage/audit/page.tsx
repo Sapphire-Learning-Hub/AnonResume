@@ -1,8 +1,5 @@
-import {
-  AdminPage,
-  AdminStatus,
-  AdminTable,
-} from "@/components/admin/AdminPage";
+import { AdminAuditLog } from "@/components/admin/AdminAuditLog";
+import { AdminPage } from "@/components/admin/AdminPage";
 import { requireAdminPage } from "@/lib/admin-page";
 import { listAdminAuditEvents } from "@/lib/admin-query";
 import {
@@ -28,28 +25,16 @@ export default async function ManagementAuditPage({
   const t = createAdminTranslator(locale);
   return (
     <AdminPage title={t("nav.audit")}>
-      <AdminTable
-        headers={[t("audit.action"), t("audit.actor"), t("audit.target"), t("audit.outcome"), t("audit.time")]}
-        pagination={{
-          basePath: "/app/manage/audit",
-          page: events.page,
-          pageSize: events.pageSize,
-          searchParams: resolvedSearchParams,
-          total: events.total,
-          totalPages: events.totalPages,
+      <AdminAuditLog
+        events={{
+          ...events,
+          items: events.items.map((event) => ({
+            ...event,
+            createdAt: event.createdAt.toISOString(),
+          })),
         }}
-        rows={events.items.map((event) => [
-          event.action,
-          event.actorUserId || t("audit.system"),
-          `${event.targetType}${event.targetId ? ` · ${event.targetId}` : ""}`,
-          <AdminStatus
-            key="outcome"
-            tone={event.outcome === "success" ? "success" : "danger"}
-          >
-            {event.outcome}
-          </AdminStatus>,
-          event.createdAt.toLocaleString(locale),
-        ])}
+        locale={locale}
+        searchParams={resolvedSearchParams}
       />
     </AdminPage>
   );

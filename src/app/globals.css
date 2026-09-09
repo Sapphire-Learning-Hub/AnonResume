@@ -643,10 +643,132 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
   white-space: pre-wrap;
 }
 
+.admin-audit-details {
+  display: grid;
+  gap: 20px;
+}
+
+.admin-audit-change-section {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-audit-change-section h3,
+.admin-audit-change-list h4 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.admin-audit-change-section h3 {
+  font-size: 15px;
+}
+
+.admin-audit-change-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+}
+
+.admin-audit-change-list article {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.admin-audit-change-list article:last-child {
+  border-bottom: 0;
+}
+
+.admin-audit-change-list h4,
+.admin-audit-change-list article > div {
+  min-width: 0;
+  padding: 12px;
+}
+
+.admin-audit-change-list h4 {
+  background: color-mix(in srgb, var(--app-text) 4%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-audit-change-list article > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  border-left: 1px solid var(--app-border);
+  overflow-wrap: anywhere;
+}
+
+.admin-audit-change-list article > div > span {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+}
+
+.admin-audit-value-list {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-audit-resource-value {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.admin-audit-resource-value strong {
+  color: var(--app-text);
+  font-weight: 500;
+}
+
+.admin-audit-resource-value code,
+.admin-audit-raw code {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.admin-audit-raw {
+  border-top: 1px solid var(--app-border);
+  padding-top: 14px;
+}
+
+.admin-audit-raw summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--app-accent);
+  user-select: none;
+}
+
+.admin-audit-raw[open] summary {
+  margin-bottom: 8px;
+}
+
+.admin-audit-raw pre {
+  max-height: 240px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--app-text) 5%, transparent);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 520px) {
   .admin-detail-list > div {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .admin-audit-change-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-audit-change-list article > div {
+    border-top: 1px solid var(--app-border);
+    border-left: 0;
   }
 }
 

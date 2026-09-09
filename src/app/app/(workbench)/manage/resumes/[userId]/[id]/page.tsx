@@ -28,7 +28,10 @@ export default async function ManagementResumeContentPage({
     targetType: "resume",
     targetId: id,
     outcome: "success",
-    metadata: { ownerUserId: userId },
+    metadata: {
+      ownerUserId: userId,
+      targetSnapshot: { label: resume.title },
+    },
   });
 
   return (

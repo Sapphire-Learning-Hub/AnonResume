@@ -759,8 +759,8 @@ export async function removeAdminMfaDevice(userId: string, deviceId: string) {
       `SELECT pg_advisory_xact_lock(hashtext('admin-mfa:' || $1))`,
       [userId],
     );
-    const devices = await client.query<{ id: string }>(
-      `SELECT id::text FROM ${schema}.admin_mfa_devices
+    const devices = await client.query<{ id: string; name: string }>(
+      `SELECT id::text, name FROM ${schema}.admin_mfa_devices
         WHERE user_id = $1 AND verified_at IS NOT NULL FOR UPDATE`,
       [userId],
     );
@@ -775,6 +775,7 @@ export async function removeAdminMfaDevice(userId: string, deviceId: string) {
       [deviceId, userId],
     );
     await client.query("COMMIT");
+    return devices.rows.find((device) => device.id === deviceId)!;
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     throw error;

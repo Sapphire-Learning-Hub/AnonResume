@@ -24,6 +24,29 @@ export interface AdminAssignedRole {
   systemKey: ReturnType<typeof normalizeSystemRoleKey>;
 }
 
+export interface AdminAuditResource {
+  description?: string | null;
+  id: string;
+  label: string;
+  type: string;
+}
+
+export interface AdminAuditEvent {
+  id: string;
+  actorUserId: string | null;
+  actor: AdminAuditResource | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  target: AdminAuditResource;
+  outcome: string;
+  metadata: Record<string, unknown>;
+  resourceLabels: Record<string, AdminAuditResource>;
+  requestId: string | null;
+  ipHash: string | null;
+  createdAt: Date;
+}
+
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
 }
@@ -52,6 +75,164 @@ function normalizeAssignedRoles(value: unknown): AdminAssignedRole[] {
       systemKey: normalizeSystemRoleKey(role.systemKey),
     }];
   });
+}
+
+function normalizeAuditMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function auditResourceKey(type: string, id: string) {
+  return `${type}:${id}`;
+}
+
+function canonicalAuditResourceType(type: string) {
+  if (type === "admin_identity") return "user";
+  return type;
+}
+
+const auditReferenceFields: Record<string, string> = {
+  roleid: "admin_role",
+  roleids: "admin_role",
+  previousroleids: "admin_role",
+  userid: "user",
+  userids: "user",
+  owneruserid: "user",
+  requesteruserid: "user",
+  quarantineduserids: "user",
+  affecteduserids: "user",
+  jobid: "pdf_export",
+  jobids: "pdf_export",
+  retriedjobid: "pdf_export",
+  deviceid: "mfa_device",
+  deviceids: "mfa_device",
+};
+
+function collectAuditResourceIds(
+  metadata: Record<string, unknown>,
+  targetType: string,
+  targetId: string | null,
+) {
+  const ids = new Map<string, Set<string>>();
+  const add = (type: string, id: string) => {
+    const canonicalType = canonicalAuditResourceType(type);
+    const current = ids.get(canonicalType) ?? new Set<string>();
+    current.add(id);
+    ids.set(canonicalType, current);
+  };
+
+  if (targetId) add(targetType, targetId);
+
+  function visit(value: unknown, field?: string) {
+    if (typeof value === "string" && field) {
+      const type = auditReferenceFields[field];
+      if (type) add(type, value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, field);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      visit(nested, key.toLowerCase().replaceAll(/[^a-z0-9]/g, ""));
+    }
+  }
+
+  visit(metadata);
+  return ids;
+}
+
+function readAuditResourceSnapshots(metadata: Record<string, unknown>) {
+  const snapshots: AdminAuditResource[] = [];
+  const resources = metadata.resources;
+  if (!Array.isArray(resources)) return snapshots;
+  for (const value of resources) {
+    if (!value || typeof value !== "object") continue;
+    const resource = value as Record<string, unknown>;
+    if (
+      typeof resource.type !== "string" ||
+      typeof resource.id !== "string" ||
+      typeof resource.label !== "string"
+    ) continue;
+    snapshots.push({
+      type: canonicalAuditResourceType(resource.type),
+      id: resource.id,
+      label: resource.label,
+      description: typeof resource.description === "string"
+        ? resource.description
+        : null,
+    });
+  }
+  return snapshots;
+}
+
+async function resolveAuditResourceLabels(
+  rows: Array<{ metadata: unknown; targetId: string | null; targetType: string }>,
+) {
+  const ids = new Map<string, Set<string>>();
+  const resources: Record<string, AdminAuditResource> = {};
+  for (const row of rows) {
+    const metadata = normalizeAuditMetadata(row.metadata);
+    for (const resource of readAuditResourceSnapshots(metadata)) {
+      resources[auditResourceKey(resource.type, resource.id)] = resource;
+    }
+    for (const [type, values] of collectAuditResourceIds(
+      metadata,
+      row.targetType,
+      row.targetId,
+    )) {
+      const current = ids.get(type) ?? new Set<string>();
+      for (const id of values) current.add(id);
+      ids.set(type, current);
+    }
+  }
+
+  const values = (type: string) => [...(ids.get(type) ?? [])];
+  if ([...ids.values()].every((entries) => entries.size === 0)) return resources;
+
+  const schema = schemaName();
+  const result = await getDatabasePool().query<AdminAuditResource>(
+    `SELECT 'user'::text AS type, id::text, name AS label,
+        email AS description FROM "user" WHERE id = ANY($1::text[])
+     UNION ALL
+     SELECT 'admin_role', id::text, name, description
+       FROM ${schema}.admin_roles WHERE id::text = ANY($2::text[])
+     UNION ALL
+     SELECT 'resume', id::text, name, slug
+       FROM ${schema}.resumes WHERE id = ANY($3::text[])
+     UNION ALL
+     SELECT 'pdf_export', id::text, filename, status
+       FROM ${schema}.pdf_export_jobs WHERE id::text = ANY($4::text[])
+     UNION ALL
+     SELECT 'mfa_device', id::text, name, NULL
+       FROM ${schema}.admin_mfa_devices WHERE id::text = ANY($5::text[])
+     UNION ALL
+     SELECT 'admin_mfa_reset_request', request.id::text, identity.name,
+        identity.email
+       FROM ${schema}.admin_mfa_reset_requests AS request
+       JOIN "user" AS identity ON identity.id = request.requester_user_id
+      WHERE request.id::text = ANY($6::text[])
+     UNION ALL
+     SELECT 'admin_session', session.id::text, identity.name, identity.email
+       FROM ${schema}.admin_sessions AS session
+       JOIN "user" AS identity ON identity.id = session.user_id
+      WHERE session.id::text = ANY($7::text[])`,
+    [
+      values("user"),
+      values("admin_role"),
+      values("resume"),
+      values("pdf_export"),
+      values("mfa_device"),
+      values("admin_mfa_reset_request"),
+      values("admin_session"),
+    ],
+  );
+  for (const resource of result.rows) {
+    resources[auditResourceKey(resource.type, resource.id)] = resource;
+  }
+  return resources;
 }
 
 function normalizeSearchQuery(query?: string) {
@@ -384,30 +565,97 @@ export async function listAdminAdministrators(request: AdminListRequest) {
 export async function listAdminAuditEvents(request: AdminListRequest) {
   const schema = schemaName();
   const search = searchWhere(
-    ["action", "target_type", "target_id", "outcome", "actor_user_id"],
+    [
+      "event.action",
+      "event.target_type",
+      "event.target_id",
+      "event.outcome",
+      "event.actor_user_id",
+      "actor.name",
+      "actor.email",
+    ],
     normalizeSearchQuery(request.query),
   );
 
-  return runPagedQuery<{
+  const result = await runPagedQuery<{
     id: string;
     actorUserId: string | null;
+    actorName: string | null;
+    actorEmail: string | null;
     action: string;
     targetType: string;
     targetId: string | null;
     outcome: string;
+    metadata: unknown;
+    requestId: string | null;
+    ipHash: string | null;
     createdAt: Date;
   }>(
     request,
-    `SELECT count(*)::text AS total FROM ${schema}.admin_audit_events ${search.clause}`,
-    `SELECT id::text, actor_user_id AS "actorUserId", action,
-      target_type AS "targetType", target_id AS "targetId", outcome,
-      created_at AS "createdAt"
-    FROM ${schema}.admin_audit_events
+    `SELECT count(*)::text AS total
+       FROM ${schema}.admin_audit_events AS event
+       LEFT JOIN "user" AS actor ON actor.id = event.actor_user_id
+       ${search.clause}`,
+    `SELECT event.id::text, event.actor_user_id AS "actorUserId",
+      actor.name AS "actorName", actor.email AS "actorEmail", event.action,
+      event.target_type AS "targetType", event.target_id AS "targetId",
+      event.outcome, event.metadata, event.request_id AS "requestId",
+      event.ip_hash AS "ipHash", event.created_at AS "createdAt"
+    FROM ${schema}.admin_audit_events AS event
+    LEFT JOIN "user" AS actor ON actor.id = event.actor_user_id
     ${search.clause}
-    ORDER BY created_at DESC, id DESC
+    ORDER BY event.created_at DESC, event.id DESC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
   );
+
+  const resourceLabels = await resolveAuditResourceLabels(result.items);
+  return {
+    ...result,
+    items: result.items.map((row): AdminAuditEvent => {
+      const metadata = normalizeAuditMetadata(row.metadata);
+      const canonicalTargetType = canonicalAuditResourceType(row.targetType);
+      const currentTarget = row.targetId
+        ? resourceLabels[auditResourceKey(canonicalTargetType, row.targetId)]
+        : undefined;
+      const targetSnapshot = metadata.targetSnapshot &&
+        typeof metadata.targetSnapshot === "object" &&
+        !Array.isArray(metadata.targetSnapshot)
+        ? metadata.targetSnapshot as Record<string, unknown>
+        : {};
+      const target: AdminAuditResource = {
+        type: row.targetType,
+        id: row.targetId ?? "",
+        label: typeof targetSnapshot.label === "string"
+          ? targetSnapshot.label
+          : currentTarget?.label ?? row.targetId ?? row.targetType,
+        description: typeof targetSnapshot.description === "string"
+          ? targetSnapshot.description
+          : currentTarget?.description ?? null,
+      };
+
+      return {
+        id: row.id,
+        actorUserId: row.actorUserId,
+        actor: row.actorUserId ? {
+          type: "user",
+          id: row.actorUserId,
+          label: row.actorName ?? row.actorUserId,
+          description: row.actorEmail,
+        } : null,
+        action: row.action,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        target,
+        outcome: row.outcome,
+        metadata,
+        resourceLabels,
+        requestId: row.requestId,
+        ipHash: row.ipHash,
+        createdAt: row.createdAt,
+      };
+    }),
+  };
 }
 
 export async function listAdminWorkers(request: AdminListRequest) {

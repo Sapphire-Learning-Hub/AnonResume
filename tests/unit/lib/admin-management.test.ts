@@ -118,6 +118,31 @@ describe("admin role management", () => {
       permissions: ["users.read", "users.sessions.revoke"],
     });
 
+    const audit = await getDatabasePool().query<{ metadata: Record<string, unknown> }>(
+      `SELECT metadata FROM ${quoteIdentifier(getDatabaseSchemaName())}.admin_audit_events
+        WHERE action = 'role.update' AND target_id = $1
+        ORDER BY created_at DESC LIMIT 1`,
+      [supportRole.id],
+    );
+    expect(audit.rows[0]?.metadata).toMatchObject({
+      changes: [
+        {
+          after: "Updated",
+          before: "Support operators",
+          field: "description",
+        },
+        {
+          after: ["users.read", "users.sessions.revoke"],
+          before: ["users.read"],
+          field: "permissions",
+        },
+      ],
+      targetSnapshot: {
+        description: "Support operators",
+        label: "Support",
+      },
+    });
+
     await expect(getAdminAccessForUser(userId)).resolves.toMatchObject({
       accessVersion: 2,
       permissions: ["users.read", "users.sessions.revoke", "audit.read"],

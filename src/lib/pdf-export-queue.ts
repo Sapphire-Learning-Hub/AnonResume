@@ -368,14 +368,24 @@ export async function adminCancelPdfExport(jobId: string) {
           completedAt: new Date(),
         })
         .where(eq(pdfExportJobs.id, jobId));
-      return;
+      return {
+        cancelRequested: true,
+        filename: row.filename,
+        previousStatus: row.status,
+        status: "cancelled" as const,
+      };
     }
     if (row.status === "running") {
       await transaction
         .update(pdfExportJobs)
         .set({ cancelRequested: true })
         .where(eq(pdfExportJobs.id, jobId));
-      return;
+      return {
+        cancelRequested: true,
+        filename: row.filename,
+        previousStatus: row.status,
+        status: row.status,
+      };
     }
     throw new PdfExportStateConflictError(jobId);
   });
@@ -424,7 +434,11 @@ export async function adminRetryPdfExport(
         filename: row.filename,
       })
       .returning({ id: pdfExportJobs.id });
-    return { jobId: retried!.id };
+    return {
+      filename: row.filename,
+      jobId: retried!.id,
+      previousStatus: row.status,
+    };
   });
 }
 

@@ -3,6 +3,10 @@ import { randomBytes } from "node:crypto";
 import { getDatabaseSchemaName } from "@/db";
 
 import { hashAdminSecret } from "./admin-crypto";
+import {
+  createAdminAuditChanges,
+  writeAdminAuditEventWithClient,
+} from "./admin-audit";
 import { getDatabasePool } from "./database";
 import { sendSuperAdminActivationEmail } from "./email";
 import { resolveApplicationOriginForBootstrap } from "./runtime-configuration";
@@ -117,12 +121,19 @@ export async function repairSuperAdminSingleton(keepUserId: string) {
         WHERE user_id = $1 AND kind = 'super_admin'`,
       [keepUserId],
     );
-    await client.query(
-      `INSERT INTO ${schema}.admin_audit_events
-        (actor_user_id, action, target_type, target_id, outcome, metadata)
-       VALUES (NULL, 'super_admin.repair', 'user', $1, 'success', $2::jsonb)`,
-      [keepUserId, JSON.stringify({ quarantinedUserIds: quarantinedIds })],
-    );
+    await writeAdminAuditEventWithClient(client, {
+      action: "super_admin.repair",
+      targetType: "user",
+      targetId: keepUserId,
+      outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          { activeSuperAdminIds: result.rows.map((row) => row.userId) },
+          { activeSuperAdminIds: [keepUserId] },
+        ),
+        quarantinedUserIds: quarantinedIds,
+      },
+    });
     await client.query("COMMIT");
     return { keepUserId, quarantinedUserIds: quarantinedIds };
   } catch (error) {
@@ -195,12 +206,22 @@ export async function resetSuperAdminMfa(email: string) {
         new Date(Date.now() + MFA_RESET_TTL_MS),
       ],
     );
-    await client.query(
-      `INSERT INTO ${schema}.admin_audit_events
-        (actor_user_id, action, target_type, target_id, outcome, metadata)
-       VALUES (NULL, 'super_admin.mfa_reset', 'user', $1, 'success', '{}'::jsonb)`,
-      [identity.userId],
-    );
+    await writeAdminAuditEventWithClient(client, {
+      action: "super_admin.mfa_reset",
+      targetType: "user",
+      targetId: identity.userId,
+      outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          { mfaState: "configured" },
+          { mfaState: "recovery_required" },
+        ),
+        targetSnapshot: {
+          label: identity.email,
+          description: identity.email,
+        },
+      },
+    });
 
     const url = new URL(
       "/activate",

@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import type { AdminPermission } from "./admin-permissions";
 import { normalizeAdminPermissions } from "./admin-permissions";
 import {
+  createAdminAuditChanges,
   writeAdminAuditEvent,
   writeAdminAuditEventWithClient,
 } from "./admin-audit";
@@ -35,8 +36,13 @@ async function assertAdminRoleMutable(
   schema: string,
   roleId: string,
 ) {
-  const role = await client.query<{ systemKey: string | null }>(
-    `SELECT system_key AS "systemKey"
+  const role = await client.query<{
+    description: string;
+    name: string;
+    permissions: AdminPermission[];
+    systemKey: string | null;
+  }>(
+    `SELECT name, description, permissions, system_key AS "systemKey"
        FROM ${schema}.admin_roles
       WHERE id = $1
       FOR UPDATE`,
@@ -48,6 +54,7 @@ async function assertAdminRoleMutable(
       "System roles cannot be modified or deleted",
     );
   }
+  return role.rows[0];
 }
 
 async function assertUserOperationAllowed({
@@ -72,8 +79,13 @@ async function assertUserOperationAllowed({
     );
   }
 
-  const target = await client.query<{ principalKind: string | null }>(
-    `SELECT principal.kind AS "principalKind"
+  const target = await client.query<{
+    email: string;
+    name: string;
+    principalKind: string | null;
+  }>(
+    `SELECT identity.name, identity.email,
+        principal.kind AS "principalKind"
        FROM "user" AS identity
        LEFT JOIN ${schema}.admin_principals AS principal
          ON principal.user_id = identity.id
@@ -95,6 +107,7 @@ async function assertUserOperationAllowed({
       "Delegated administrators cannot change management identities",
     );
   }
+  return target.rows[0];
 }
 
 export async function createAdminRole(input: {
@@ -121,7 +134,21 @@ export async function createAdminRole(input: {
       targetType: "admin_role",
       targetId: id,
       outcome: "success",
-      metadata: { permissionCount: permissions.length },
+      metadata: {
+        changes: createAdminAuditChanges(
+          { name: null, description: null, permissions: [] },
+          {
+            name: input.name.trim(),
+            description: input.description.trim(),
+            permissions,
+          },
+        ),
+        permissionCount: permissions.length,
+        targetSnapshot: {
+          label: input.name.trim(),
+          description: input.description.trim(),
+        },
+      },
     });
     await client.query("COMMIT");
     return { id };
@@ -148,7 +175,7 @@ export async function updateAdminRole(input: {
   const permissions = normalizeAdminPermissions(input.permissions);
   try {
     await client.query("BEGIN");
-    await assertAdminRoleMutable(client, schema, input.roleId);
+    const previous = await assertAdminRoleMutable(client, schema, input.roleId);
     const updated = await client.query(
       `UPDATE ${schema}.admin_roles
           SET name = $2, description = $3, permissions = $4::jsonb,
@@ -181,7 +208,26 @@ export async function updateAdminRole(input: {
       targetType: "admin_role",
       targetId: input.roleId,
       outcome: "success",
-      metadata: { permissionCount: permissions.length, affectedAdmins: affected.rowCount },
+      metadata: {
+        affectedAdmins: affected.rowCount,
+        changes: createAdminAuditChanges(
+          {
+            name: previous.name,
+            description: previous.description,
+            permissions: normalizeAdminPermissions(previous.permissions),
+          },
+          {
+            name: input.name.trim(),
+            description: input.description.trim(),
+            permissions,
+          },
+        ),
+        permissionCount: permissions.length,
+        targetSnapshot: {
+          label: previous.name,
+          description: previous.description,
+        },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -200,7 +246,7 @@ export async function deleteAdminRole(actorUserId: string, roleId: string) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    await assertAdminRoleMutable(client, schema, roleId);
+    const previous = await assertAdminRoleMutable(client, schema, roleId);
     const result = await client.query(
       `DELETE FROM ${schema}.admin_roles WHERE id = $1 RETURNING id`,
       [roleId],
@@ -212,6 +258,20 @@ export async function deleteAdminRole(actorUserId: string, roleId: string) {
       targetType: "admin_role",
       targetId: roleId,
       outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          {
+            name: previous.name,
+            description: previous.description,
+            permissions: normalizeAdminPermissions(previous.permissions),
+          },
+          { name: null, description: null, permissions: [] },
+        ),
+        targetSnapshot: {
+          label: previous.name,
+          description: previous.description,
+        },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -237,8 +297,8 @@ export async function setAdminRoles(input: {
   const roleIds = [...new Set(input.roleIds)].sort();
   try {
     await client.query("BEGIN");
-    const user = await client.query(
-      `SELECT id FROM "user" WHERE id = $1 FOR UPDATE`,
+    const user = await client.query<{ email: string; id: string; name: string }>(
+      `SELECT id, name, email FROM "user" WHERE id = $1 FOR UPDATE`,
       [input.userId],
     );
     if (user.rowCount !== 1) throw new AdminManagementNotFoundError();
@@ -279,6 +339,18 @@ export async function setAdminRoles(input: {
       await client.query("COMMIT");
       return;
     }
+
+    const roleSnapshots = await client.query<{
+      description: string;
+      id: string;
+      name: string;
+    }>(
+      `SELECT id::text, name, description
+         FROM ${schema}.admin_roles
+        WHERE id = ANY($1::uuid[])
+        ORDER BY lower(name), id`,
+      [[...new Set([...previousRoleIds, ...roleIds])]],
+    );
 
     if (roleIds.length === 0) {
       await client.query(
@@ -331,7 +403,24 @@ export async function setAdminRoles(input: {
       targetType: "user",
       targetId: input.userId,
       outcome: "success",
-      metadata: { previousRoleIds, roleIds },
+      metadata: {
+        changes: createAdminAuditChanges(
+          { roleIds: previousRoleIds },
+          { roleIds },
+        ),
+        previousRoleIds,
+        resources: roleSnapshots.rows.map((role) => ({
+          type: "admin_role",
+          id: role.id,
+          label: role.name,
+          description: role.description,
+        })),
+        roleIds,
+        targetSnapshot: {
+          label: user.rows[0]!.name,
+          description: user.rows[0]!.email,
+        },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -356,12 +445,24 @@ export async function suspendUser(input: {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    await assertUserOperationAllowed({
+    const target = await assertUserOperationAllowed({
       client,
       schema,
       actorUserId: input.actorUserId,
       targetUserId: input.userId,
     });
+    const previous = await client.query<{
+      reason: string;
+      suspendedUntil: Date | null;
+    }>(
+      `SELECT reason, suspended_until AS "suspendedUntil"
+         FROM ${schema}.account_restrictions
+        WHERE user_id = $1 FOR UPDATE`,
+      [input.userId],
+    );
+    const previousRestriction = previous.rows[0];
+    const suspendedUntil = input.suspendedUntil?.toISOString() ?? null;
+    const reason = input.reason.trim();
     await client.query(
       `INSERT INTO ${schema}.account_restrictions
         (user_id, suspended_at, suspended_until, reason, actor_user_id, updated_at)
@@ -370,7 +471,7 @@ export async function suspendUser(input: {
          suspended_at = now(), suspended_until = EXCLUDED.suspended_until,
          reason = EXCLUDED.reason, actor_user_id = EXCLUDED.actor_user_id,
          updated_at = now()`,
-      [input.userId, input.suspendedUntil ?? null, input.reason.trim(), input.actorUserId],
+      [input.userId, input.suspendedUntil ?? null, reason, input.actorUserId],
     );
     await client.query(`DELETE FROM "session" WHERE "userId" = $1`, [input.userId]);
     await client.query(
@@ -384,7 +485,19 @@ export async function suspendUser(input: {
       targetType: "user",
       targetId: input.userId,
       outcome: "success",
-      metadata: { suspendedUntil: input.suspendedUntil?.toISOString() ?? null },
+      metadata: {
+        changes: createAdminAuditChanges(
+          {
+            status: previousRestriction ? "suspended" : "active",
+            suspendedUntil: previousRestriction?.suspendedUntil?.toISOString() ?? null,
+            reason: previousRestriction?.reason ?? null,
+          },
+          { status: "suspended", suspendedUntil, reason },
+        ),
+        reason,
+        suspendedUntil,
+        targetSnapshot: { label: target.name, description: target.email },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -400,22 +513,38 @@ export async function restoreUser(actorUserId: string, userId: string) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    await assertUserOperationAllowed({
+    const target = await assertUserOperationAllowed({
       client,
       schema,
       actorUserId,
       targetUserId: userId,
     });
-    await client.query(
-      `DELETE FROM ${schema}.account_restrictions WHERE user_id = $1`,
+    const deleted = await client.query<{
+      reason: string;
+      suspendedUntil: Date | null;
+    }>(
+      `DELETE FROM ${schema}.account_restrictions WHERE user_id = $1
+       RETURNING reason, suspended_until AS "suspendedUntil"`,
       [userId],
     );
+    const previousRestriction = deleted.rows[0];
     await writeAdminAuditEventWithClient(client, {
       actorUserId,
       action: "user.restore",
       targetType: "user",
       targetId: userId,
       outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          {
+            status: previousRestriction ? "suspended" : "active",
+            suspendedUntil: previousRestriction?.suspendedUntil?.toISOString() ?? null,
+            reason: previousRestriction?.reason ?? null,
+          },
+          { status: "active", suspendedUntil: null, reason: null },
+        ),
+        targetSnapshot: { label: target.name, description: target.email },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -431,16 +560,19 @@ export async function revokeUserSessions(actorUserId: string, userId: string) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    await assertUserOperationAllowed({
+    const target = await assertUserOperationAllowed({
       client,
       schema,
       actorUserId,
       targetUserId: userId,
     });
-    await client.query(`DELETE FROM "session" WHERE "userId" = $1`, [userId]);
-    await client.query(
+    const productSessions = await client.query(
+      `DELETE FROM "session" WHERE "userId" = $1 RETURNING id`,
+      [userId],
+    );
+    const adminSessions = await client.query(
       `UPDATE ${schema}.admin_sessions SET revoked_at = now()
-        WHERE user_id = $1 AND revoked_at IS NULL`,
+        WHERE user_id = $1 AND revoked_at IS NULL RETURNING id`,
       [userId],
     );
     await writeAdminAuditEventWithClient(client, {
@@ -449,6 +581,18 @@ export async function revokeUserSessions(actorUserId: string, userId: string) {
       targetType: "user",
       targetId: userId,
       outcome: "success",
+      metadata: {
+        changes: createAdminAuditChanges(
+          {
+            activeProductSessions: productSessions.rowCount,
+            activeAdminSessions: adminSessions.rowCount,
+          },
+          { activeProductSessions: 0, activeAdminSessions: 0 },
+        ),
+        revokedAdminSessions: adminSessions.rowCount,
+        revokedProductSessions: productSessions.rowCount,
+        targetSnapshot: { label: target.name, description: target.email },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -469,11 +613,15 @@ export async function adminUnpublishResume(input: {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const result = await client.query(
+    const result = await client.query<{
+      id: string;
+      name: string;
+      slug: string;
+    }>(
       `UPDATE ${schema}.resumes
           SET published = false, updated_at = now()
         WHERE user_id = $1 AND id = $2 AND published = true
-        RETURNING id`,
+        RETURNING id, name, slug`,
       [input.userId, input.resumeId],
     );
     if (result.rowCount !== 1) throw new AdminManagementNotFoundError();
@@ -483,7 +631,18 @@ export async function adminUnpublishResume(input: {
       targetType: "resume",
       targetId: input.resumeId,
       outcome: "success",
-      metadata: { ownerUserId: input.userId, reason: input.reason.trim() },
+      metadata: {
+        changes: createAdminAuditChanges(
+          { published: true },
+          { published: false },
+        ),
+        ownerUserId: input.userId,
+        reason: input.reason.trim(),
+        targetSnapshot: {
+          label: result.rows[0]!.name,
+          description: result.rows[0]!.slug,
+        },
+      },
     });
     await client.query("COMMIT");
   } catch (error) {
@@ -495,13 +654,26 @@ export async function adminUnpublishResume(input: {
 }
 
 export async function adminCancelExport(actorUserId: string, jobId: string) {
-  await adminCancelPdfExport(jobId);
+  const cancelled = await adminCancelPdfExport(jobId);
   await writeAdminAuditEvent({
     actorUserId,
     action: "export.cancel",
     targetType: "pdf_export",
     targetId: jobId,
     outcome: "success",
+    metadata: {
+      changes: createAdminAuditChanges(
+        {
+          status: cancelled.previousStatus,
+          cancelRequested: false,
+        },
+        {
+          status: cancelled.status,
+          cancelRequested: cancelled.cancelRequested,
+        },
+      ),
+      targetSnapshot: { label: cancelled.filename },
+    },
   });
 }
 
@@ -513,7 +685,19 @@ export async function adminRetryExport(actorUserId: string, jobId: string) {
     targetType: "pdf_export",
     targetId: jobId,
     outcome: "success",
-    metadata: { retriedJobId: retried.jobId },
+    metadata: {
+      changes: createAdminAuditChanges(
+        { status: retried.previousStatus },
+        { status: "queued" },
+      ),
+      resources: [{
+        type: "pdf_export",
+        id: retried.jobId,
+        label: retried.filename,
+      }],
+      retriedJobId: retried.jobId,
+      targetSnapshot: { label: retried.filename },
+    },
   });
   return retried;
 }
