@@ -2,16 +2,26 @@ import { AdminPage, AdminTable } from "@/components/admin/AdminPage";
 import { AdminInviteUser } from "@/components/admin/AdminInviteUser";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
 import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminRoles, listAdminUsers } from "@/lib/admin-query";
+import { listAdminUsers } from "@/lib/admin-query";
+import {
+  parsePageRequest,
+  readSearchParam,
+  type PaginationSearchParams,
+} from "@/lib/pagination";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 
-export default async function ManagementUsersPage() {
+export default async function ManagementUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<PaginationSearchParams>;
+}) {
   const context = await requireAdminPage("users.read");
-  const [users, roles] = await Promise.all([
-    listAdminUsers(),
-    context.kind === "super_admin" ? listAdminRoles() : Promise.resolve([]),
-  ]);
+  const resolvedSearchParams = await searchParams;
+  const users = await listAdminUsers({
+    ...parsePageRequest(resolvedSearchParams),
+    query: readSearchParam(resolvedSearchParams, "q"),
+  });
   const locale = await getRequestLocale();
   const t = createAdminTranslator(locale);
   return (
@@ -20,13 +30,20 @@ export default async function ManagementUsersPage() {
         <div style={{ marginBottom: 16 }}>
           <AdminInviteUser
             canAssignRole={context.kind === "super_admin"}
-            roles={roles.map(({ id, name }) => ({ id, name }))}
           />
         </div>
       ) : null}
       <AdminTable
         headers={[t("nav.users"), t("users.emailVerification"), t("users.resumeCount"), t("users.adminIdentity"), t("users.status"), t("users.createdAt"), t("common.actions")]}
-        rows={users.map((user) => {
+        pagination={{
+          basePath: "/app/manage/users",
+          page: users.page,
+          pageSize: users.pageSize,
+          searchParams: resolvedSearchParams,
+          total: users.total,
+          totalPages: users.totalPages,
+        }}
+        rows={users.items.map((user) => {
           const canOperateTarget =
             context.kind === "super_admin" || user.principalKind === null;
           return [

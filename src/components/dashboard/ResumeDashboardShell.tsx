@@ -5,6 +5,7 @@ import { Button, Dropdown, Input, Modal } from "antd";
 import { createStyles } from "antd-style";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
+import { NumberedPagination } from "@/components/common/NumberedPagination";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
 import { SearchIcon } from "@/components/ui/InlineIcons";
@@ -13,6 +14,7 @@ import {
   type ResumeSummaryUpdateResult,
 } from "@/components/resume/ResumeSummaryEditor";
 import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
+import type { PageResult, PaginationSearchParams } from "@/lib/pagination";
 import {
   exportResumePdfDocument,
   publishResume,
@@ -643,6 +645,9 @@ function ResumeRowActions({
 export function ResumeDashboardShell({
   resumes,
   createAction,
+  pagination,
+  searchParams = {},
+  searchQuery = "",
   exportPdfDocument: exportPdf = exportResumePdfDocument,
   publishDocument = publishResume,
   unpublishDocument = unpublishResume,
@@ -650,6 +655,9 @@ export function ResumeDashboardShell({
 }: {
   resumes: ResumeCatalogEntry[];
   createAction: string;
+  pagination?: PageResult<ResumeCatalogEntry>;
+  searchParams?: PaginationSearchParams;
+  searchQuery?: string;
   exportPdfDocument?: (params: { resumeId: string }) => Promise<void>;
   publishDocument?: (params: { resumeId: string }) => Promise<{ slug: string }>;
   unpublishDocument?: (params: { resumeId: string }) => Promise<void>;
@@ -662,7 +670,7 @@ export function ResumeDashboardShell({
   const { styles } = useStyles();
   const { locale, t } = useI18n();
   const editorAccess = useEditorViewportAccess();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState(searchQuery);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [importPickerOpen, setImportPickerOpen] = useState(false);
   const [summaryUpdates, setSummaryUpdates] = useState<
@@ -692,9 +700,9 @@ export function ResumeDashboardShell({
       : updatedResume;
   });
 
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredSearchQuery = useDeferredValue(activeSearchQuery);
   const normalizedSearchQuery = deferredSearchQuery.trim().toLocaleLowerCase(locale);
-  const hasResumes = catalogResumes.length > 0;
+  const hasResumes = (pagination?.total ?? catalogResumes.length) > 0;
   const hasSearch = normalizedSearchQuery.length > 0;
   const filteredResumes = normalizedSearchQuery
     ? catalogResumes.filter((resume) =>
@@ -749,20 +757,28 @@ export function ResumeDashboardShell({
               >
                 {t("dashboard.importPicker.open")}
               </Button>
-              <Input
-                allowClear
-                aria-label={t("dashboard.searchResume")}
-                className={styles.search}
-                data-testid="dashboard-search-input"
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t("dashboard.searchResumePlaceholder")}
-                prefix={<SearchIcon size={16} />}
-                type="search"
-                value={searchQuery}
-              />
+              <form action="/app" method="get">
+                <Input
+                  allowClear
+                  aria-label={t("dashboard.searchResume")}
+                  className={styles.search}
+                  data-testid="dashboard-search-input"
+                  name="q"
+                  onChange={(event) => setActiveSearchQuery(event.target.value)}
+                  placeholder={t("dashboard.searchResumePlaceholder")}
+                  prefix={<SearchIcon size={16} />}
+                  type="search"
+                  value={activeSearchQuery}
+                />
+              </form>
             </div>
             <span aria-live="polite" className={styles.catalogCount}>
-              {t("dashboard.resumeCount", { count: filteredResumes.length })}
+              {t("dashboard.resumeCount", {
+                count:
+                  deferredSearchQuery === searchQuery
+                    ? pagination?.total ?? filteredResumes.length
+                    : filteredResumes.length,
+              })}
             </span>
           </div>
 
@@ -875,6 +891,16 @@ export function ResumeDashboardShell({
               </table>
             </div>
           )}
+          {pagination ? (
+            <NumberedPagination
+              basePath="/app"
+              page={pagination.page}
+              pageSize={pagination.pageSize}
+              searchParams={searchParams}
+              total={pagination.total}
+              totalPages={pagination.totalPages}
+            />
+          ) : null}
       </section>
       <ResumeTemplatePicker
         createAction={createAction}

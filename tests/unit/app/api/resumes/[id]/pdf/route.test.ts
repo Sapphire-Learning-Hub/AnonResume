@@ -4,7 +4,7 @@ import { getOptionalSession } from "@/lib/auth-session";
 import {
   createGeneratedResumeRecord,
   getResumeRecord,
-  listResumeVersionSnapshots,
+  paginateResumeVersionSnapshots,
   resetResumeRepository,
 } from "@/lib/resume-repository";
 import { getPdfExportStatus } from "@/lib/pdf-export-queue";
@@ -14,6 +14,17 @@ import { POST } from "@/app/api/resumes/[id]/pdf/route";
 vi.mock("@/lib/auth-session", () => ({
   getOptionalSession: vi.fn(),
 }));
+
+async function listResumeVersionSnapshots(userId: string, resumeId: string) {
+  return (
+    await paginateResumeVersionSnapshots({
+      userId,
+      resumeId,
+      page: 1,
+      pageSize: 100,
+    })
+  ).items;
+}
 
 describe("pdf route", () => {
   beforeEach(async () => {

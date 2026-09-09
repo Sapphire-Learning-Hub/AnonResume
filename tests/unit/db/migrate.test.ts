@@ -33,6 +33,26 @@ describe("database migrations", () => {
     ]);
   });
 
+  it("creates composite indexes for paginated resume queries", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{ indexname: string }>(
+      `SELECT indexname
+         FROM pg_indexes
+        WHERE schemaname = $1
+          AND indexname IN (
+            'resumes_user_updated_id_idx',
+            'resume_versions_resume_created_id_idx'
+          )
+        ORDER BY indexname`,
+      [schemaName],
+    );
+
+    expect(result.rows).toEqual([
+      { indexname: "resume_versions_resume_created_id_idx" },
+      { indexname: "resumes_user_updated_id_idx" },
+    ]);
+  });
+
   it("adds the Better Auth account issuer required by credential sign-up", async () => {
     const migration = await readFile(
       resolve(process.cwd(), "drizzle/0005_better_auth_account_issuer.sql"),

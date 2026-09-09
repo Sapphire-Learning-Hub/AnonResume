@@ -13,6 +13,7 @@ import {
   Button,
   Input,
   Modal,
+  Pagination,
   Popconfirm,
   Select,
   Tag,
@@ -109,6 +110,7 @@ import {
   type ResumeEditorStoreState,
 } from "@/stores/resume-editor";
 import { useI18n } from "@/i18n/I18nProvider";
+import type { PageResult } from "@/lib/pagination";
 
 import { useResumeEditorShellStyles } from "./ResumeEditorShell.style";
 import { getActiveResumePageIndex } from "./resume-page-navigation";
@@ -305,7 +307,10 @@ export function ResumeEditorShell({
   publishDocument?: (params: { resumeId: string }) => Promise<{ slug: string }>;
   unpublishDocument?: (params: { resumeId: string }) => Promise<void>;
   exportPdfDocument?: (params: { resumeId: string }) => Promise<void>;
-  loadVersionSnapshots?: (resumeId: string) => Promise<ResumeVersionSnapshotSummary[]>;
+  loadVersionSnapshots?: (
+    resumeId: string,
+    request: { page: number; pageSize: number },
+  ) => Promise<PageResult<ResumeVersionSnapshotSummary>>;
   loadVersionSnapshot?: (params: {
     resumeId: string;
     snapshotId: string;
@@ -557,6 +562,12 @@ export function ResumeEditorShell({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [versionSnapshots, setVersionSnapshots] = useState<ResumeVersionSnapshotSummary[]>([]);
+  const [versionHistoryPage, setVersionHistoryPage] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  });
   const [versionHistoryBusy, setVersionHistoryBusy] = useState(false);
   const [versionHistoryError, setVersionHistoryError] = useState(false);
   const [versionDiffOpen, setVersionDiffOpen] = useState(false);
@@ -922,19 +933,29 @@ export function ResumeEditorShell({
     }
   }
 
-  async function loadVersionHistory() {
-    const snapshots = await resolvedLoadVersionSnapshots(resumeId);
+  async function loadVersionHistory(page: number) {
+    const result = await resolvedLoadVersionSnapshots(resumeId, {
+      page,
+      pageSize: 20,
+    });
 
-    setVersionSnapshots(snapshots);
+    setVersionSnapshots(result.items);
+    setVersionHistoryPage({
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      totalPages: result.totalPages,
+    });
   }
 
   async function handleOpenVersionHistory() {
     setVersionHistoryOpen(true);
+    setVersionHistoryPage((current) => ({ ...current, page: 1 }));
     setVersionHistoryBusy(true);
     setVersionHistoryError(false);
 
     try {
-      await loadVersionHistory();
+      await loadVersionHistory(1);
     } catch {
       setVersionHistoryError(true);
     } finally {
@@ -952,7 +973,20 @@ export function ResumeEditorShell({
       }
 
       await resolvedCreateVersionSnapshot(resumeId);
-      await loadVersionHistory();
+      await loadVersionHistory(1);
+    } catch {
+      setVersionHistoryError(true);
+    } finally {
+      setVersionHistoryBusy(false);
+    }
+  }
+
+  async function handleVersionHistoryPageChange(page: number) {
+    setVersionHistoryBusy(true);
+    setVersionHistoryError(false);
+
+    try {
+      await loadVersionHistory(page);
     } catch {
       setVersionHistoryError(true);
     } finally {
@@ -2353,6 +2387,16 @@ export function ResumeEditorShell({
               </div>
             ))}
           </div>
+          {versionHistoryPage.totalPages > 1 ? (
+            <Pagination
+              current={versionHistoryPage.page}
+              disabled={versionHistoryBusy}
+              pageSize={versionHistoryPage.pageSize}
+              showSizeChanger={false}
+              total={versionHistoryPage.total}
+              onChange={(page) => void handleVersionHistoryPageChange(page)}
+            />
+          ) : null}
           {!versionHistoryBusy && !versionHistoryError && versionSnapshots.length === 0 ? (
             <p className={styles.versionHistoryDescription}>
               {t("editor.versionHistoryEmpty")}

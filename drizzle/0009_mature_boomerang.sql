@@ -1,0 +1,2 @@
+CREATE INDEX "resume_versions_resume_created_id_idx" ON "resume_versions" USING btree ("user_id","resume_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "resumes_user_updated_id_idx" ON "resumes" USING btree ("user_id","updated_at" DESC NULLS LAST,"id");

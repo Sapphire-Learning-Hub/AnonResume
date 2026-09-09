@@ -4,7 +4,7 @@ import { createResumeDocumentFromTemplate } from "@/domain/resume/templates";
 import { requireSession } from "@/lib/auth-session";
 import {
   getResumeRecord,
-  listResumeEntries,
+  paginateResumeEntries,
   resetResumeRepository,
 } from "@/lib/resume-repository";
 
@@ -14,6 +14,12 @@ import { MAX_RESUME_IMPORT_REQUEST_BYTES } from "@/lib/request-body";
 vi.mock("@/lib/auth-session", () => ({
   requireSession: vi.fn(),
 }));
+
+async function listResumeEntries(userId: string) {
+  return (
+    await paginateResumeEntries({ userId, page: 1, pageSize: 100 })
+  ).items;
+}
 
 function createRequest(
   templateId?: string,

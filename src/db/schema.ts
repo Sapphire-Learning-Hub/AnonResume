@@ -64,6 +64,11 @@ export const resumes =
           .on(table.id)
           .where(sql`${table.id} ~ '^resume-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        index("resumes_user_updated_id_idx").on(
+          table.userId,
+          table.updatedAt.desc(),
+          table.id.asc(),
+        ),
       ])
     : pgSchema(schemaName).table("resumes", resumeColumns, (table) => [
         primaryKey({
@@ -73,6 +78,11 @@ export const resumes =
           .on(table.id)
           .where(sql`${table.id} ~ '^resume-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        index("resumes_user_updated_id_idx").on(
+          table.userId,
+          table.updatedAt.desc(),
+          table.id.asc(),
+        ),
       ]);
 
 const resumeVersionColumns = {
@@ -95,6 +105,12 @@ export const resumeVersions =
           foreignColumns: [resumes.userId, resumes.id],
           name: "resume_versions_resume_fk",
         }).onDelete("cascade"),
+        index("resume_versions_resume_created_id_idx").on(
+          table.userId,
+          table.resumeId,
+          table.createdAt.desc(),
+          table.id.desc(),
+        ),
       ])
     : pgSchema(schemaName).table("resume_versions", resumeVersionColumns, (table) => [
         primaryKey({
@@ -105,6 +121,12 @@ export const resumeVersions =
           foreignColumns: [resumes.userId, resumes.id],
           name: "resume_versions_resume_fk",
         }).onDelete("cascade"),
+        index("resume_versions_resume_created_id_idx").on(
+          table.userId,
+          table.resumeId,
+          table.createdAt.desc(),
+          table.id.desc(),
+        ),
       ]);
 
 const pdfExportJobColumns = {

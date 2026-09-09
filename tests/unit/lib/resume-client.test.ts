@@ -5,6 +5,7 @@ import * as resumeClient from "@/lib/resume-client";
 
 import {
   fetchCurrentResumeDocument,
+  fetchResumeEntriesPage,
   fetchResumeVersionSnapshots,
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
@@ -13,6 +14,37 @@ import {
   updateResumeSummary,
   exportResumePdfDocument,
 } from "@/lib/resume-client";
+
+describe("fetchResumeEntriesPage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("loads a numbered and filtered resume catalog page", async () => {
+    const page = {
+      items: [],
+      page: 2,
+      pageSize: 10,
+      total: 21,
+      totalPages: 3,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(page), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(
+      fetchResumeEntriesPage({ page: 2, pageSize: 10, query: "frontend" }),
+    ).resolves.toEqual(page);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/resumes?page=2&pageSize=10&q=frontend",
+    );
+  });
+});
 
 describe("exportResumePdfDocument", () => {
   afterEach(() => {
@@ -215,19 +247,31 @@ describe("resume version client", () => {
       vi.fn().mockResolvedValue(
         new Response(
           JSON.stringify({
-            versions: [
+            items: [
               { id: "snapshot-1", version: 3, createdAt: 800 },
             ],
+            page: 2,
+            pageSize: 20,
+            total: 21,
+            totalPages: 2,
           }),
           { headers: { "content-type": "application/json" } },
         ),
       ),
     );
 
-    await expect(fetchResumeVersionSnapshots("resume-demo")).resolves.toEqual([
-      { id: "snapshot-1", version: 3, createdAt: 800 },
-    ]);
-    expect(fetch).toHaveBeenCalledWith("/api/resumes/resume-demo/versions");
+    await expect(
+      fetchResumeVersionSnapshots("resume-demo", { page: 2, pageSize: 20 }),
+    ).resolves.toEqual({
+      items: [{ id: "snapshot-1", version: 3, createdAt: 800 }],
+      page: 2,
+      pageSize: 20,
+      total: 21,
+      totalPages: 2,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/resumes/resume-demo/versions?page=2&pageSize=20",
+    );
   });
 
   it("loads one complete version snapshot for comparison", async () => {

@@ -586,11 +586,23 @@ describe("ResumeEditorShell", () => {
   it("creates a restore point from the version history panel", async () => {
     const loadVersionSnapshots = vi
       .fn()
-      .mockResolvedValueOnce([{ id: "snapshot-1", version: 3, createdAt: 800 }])
-      .mockResolvedValueOnce([
-        { id: "snapshot-2", version: 3, createdAt: 900 },
-        { id: "snapshot-1", version: 3, createdAt: 800 },
-      ]);
+      .mockResolvedValueOnce({
+        items: [{ id: "snapshot-1", version: 3, createdAt: 800 }],
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        totalPages: 1,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          { id: "snapshot-2", version: 3, createdAt: 900 },
+          { id: "snapshot-1", version: 3, createdAt: 800 },
+        ],
+        page: 1,
+        pageSize: 20,
+        total: 2,
+        totalPages: 1,
+      });
     const createVersionSnapshot = vi.fn().mockResolvedValue({
       id: "snapshot-2",
       version: 3,
@@ -616,7 +628,10 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("文档");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("历史记录") }));
 
-    expect(loadVersionSnapshots).toHaveBeenCalledWith("resume-demo");
+    expect(loadVersionSnapshots).toHaveBeenCalledWith("resume-demo", {
+      page: 1,
+      pageSize: 20,
+    });
     expect(await screen.findByText("版本 3")).toBeInTheDocument();
     expect(
       screen.getByText("最多保留 7 个恢复点；超出后会自动移除最早的记录。"),
@@ -641,9 +656,13 @@ describe("ResumeEditorShell", () => {
       <ResumeEditorShell
         resumeId="resume-demo"
         initialDocument={currentDocument}
-        loadVersionSnapshots={async () => [
-          { id: "snapshot-1", version: 3, createdAt: 800 },
-        ]}
+        loadVersionSnapshots={async () => ({
+          items: [{ id: "snapshot-1", version: 3, createdAt: 800 }],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1,
+        })}
         loadVersionSnapshot={async () => ({
           id: "snapshot-1",
           version: 3,

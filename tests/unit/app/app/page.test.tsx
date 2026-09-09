@@ -4,6 +4,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { requireSession } from "@/lib/auth-session";
 import {
   createGeneratedResumeRecord,
+  createResumeRecord,
   publishResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume-repository";
@@ -176,5 +177,24 @@ describe("Dashboard workbench view", () => {
     await waitFor(() => {
       expect(screen.getByText("没有匹配的简历")).toBeInTheDocument();
     });
+  });
+
+  it("renders URL-driven numbered pages", async () => {
+    for (let index = 0; index < 21; index += 1) {
+      await createResumeRecord("user-demo", `resume-page-${String(index).padStart(2, "0")}`);
+    }
+
+    render(
+      await DashboardPage({
+        searchParams: Promise.resolve({ page: "2" }),
+      }),
+    );
+
+    expect(screen.getAllByRole("link", { name: "打开" })).toHaveLength(1);
+    expect(screen.getByRole("navigation", { name: "分页导航" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "第 1 页" })).toHaveAttribute(
+      "href",
+      "/app?page=1",
+    );
   });
 });

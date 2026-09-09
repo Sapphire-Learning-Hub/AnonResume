@@ -35,18 +35,24 @@ describe("resume version routes", () => {
     const existing = await snapshotResumeVersion("user-demo", "resume-foundation");
 
     const listResponse = await GET(
-      new Request("http://localhost/api/resumes/resume-foundation/versions"),
+      new Request(
+        "http://localhost/api/resumes/resume-foundation/versions?page=1&pageSize=20",
+      ),
       { params: Promise.resolve({ id: "resume-foundation" }) },
     );
 
     expect(listResponse.status).toBe(200);
     await expect(listResponse.json()).resolves.toEqual({
-      versions: [
+      items: [
         expect.objectContaining({
           id: existing.id,
           version: existing.version,
         }),
       ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
     });
 
     const createResponse = await POST(

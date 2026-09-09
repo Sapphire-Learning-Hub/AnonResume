@@ -262,14 +262,25 @@ export async function getPdfExportStatus(params: {
   let queuedCount = 0;
 
   if (row.status === "queued") {
-    const queued = await db
-      .select({ id: pdfExportJobs.id })
-      .from(pdfExportJobs)
-      .where(eq(pdfExportJobs.status, "queued"))
-      .orderBy(asc(pdfExportJobs.createdAt), asc(pdfExportJobs.id));
+    const queueStats = await db.execute<{
+      position: number;
+      queuedCount: number;
+    }>(sql`
+      SELECT
+        (
+          SELECT count(*)::int
+          FROM ${pdfExportJobs} AS all_queued
+          WHERE all_queued.status = 'queued'
+        ) AS "queuedCount",
+        count(*)::int AS position
+      FROM ${pdfExportJobs} AS queued
+      JOIN ${pdfExportJobs} AS target ON target.id = ${row.id}
+      WHERE queued.status = 'queued'
+        AND (queued.created_at, queued.id) <= (target.created_at, target.id)
+    `);
 
-    queuedCount = queued.length;
-    position = queued.findIndex((job) => job.id === row.id) + 1;
+    queuedCount = queueStats.rows[0]?.queuedCount ?? 0;
+    position = queueStats.rows[0]?.position ?? 0;
   } else {
     const [queued] = await db
       .select({ value: count() })

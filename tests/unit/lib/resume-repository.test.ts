@@ -10,8 +10,8 @@ import {
   duplicateGeneratedResumeRecord,
   getResumeRecord,
   getOrCreateResumeRecord,
-  listResumeEntries,
-  listResumeVersionSnapshots,
+  paginateResumeEntries,
+  paginateResumeVersionSnapshots,
   getPublishedResumeBySlug,
   publishResumeRecord,
   resetResumeRepository,
@@ -19,6 +19,23 @@ import {
   saveResumeRecord,
   snapshotResumeVersion,
 } from "@/lib/resume-repository";
+
+async function listResumeEntries(userId: string) {
+  return (
+    await paginateResumeEntries({ userId, page: 1, pageSize: 100 })
+  ).items;
+}
+
+async function listResumeVersionSnapshots(userId: string, resumeId: string) {
+  return (
+    await paginateResumeVersionSnapshots({
+      userId,
+      resumeId,
+      page: 1,
+      pageSize: 100,
+    })
+  ).items;
+}
 
 describe("resume repository persistence", () => {
   beforeEach(async () => {
@@ -34,6 +51,67 @@ describe("resume repository persistence", () => {
   it("keeps a new user's resume list empty across repeated reads", async () => {
     await expect(listResumeEntries("new-user")).resolves.toEqual([]);
     await expect(listResumeEntries("new-user")).resolves.toEqual([]);
+  });
+
+  it("paginates a user's resume catalog with stable ordering", async () => {
+    for (const [index, title] of ["Alpha", "Bravo", "Charlie", "Delta", "Echo"].entries()) {
+      const document = createDefaultResumeDocument();
+      const resumeId = `resume-page-${index}`;
+      document.meta.title = title;
+      await createResumeRecord("user-page", resumeId);
+      await saveResumeRecord({
+        userId: "user-page",
+        resumeId,
+        version: 1,
+        document,
+      });
+      await getDatabasePool().query(
+        `UPDATE "${process.env.ANONRESUME_DB_SCHEMA || "public"}".resumes
+            SET updated_at = $1
+          WHERE user_id = $2 AND id = $3`,
+        [new Date(Date.UTC(2026, 0, index + 1)), "user-page", resumeId],
+      );
+    }
+
+    const result = await paginateResumeEntries({
+      userId: "user-page",
+      page: 2,
+      pageSize: 2,
+    });
+
+    expect(result).toMatchObject({
+      page: 2,
+      pageSize: 2,
+      total: 5,
+      totalPages: 3,
+    });
+    expect(result.items.map((resume) => resume.title)).toEqual([
+      "Charlie",
+      "Bravo",
+    ]);
+  });
+
+  it("searches the full scoped resume catalog before paginating", async () => {
+    for (const [userId, resumeId, title] of [
+      ["user-search", "resume-frontend", "Frontend Engineer"],
+      ["user-search", "resume-backend", "Backend Engineer"],
+      ["user-other", "resume-other-frontend", "Frontend Manager"],
+    ] as const) {
+      const document = createDefaultResumeDocument();
+      document.meta.title = title;
+      await createResumeRecord(userId, resumeId);
+      await saveResumeRecord({ userId, resumeId, version: 1, document });
+    }
+
+    const result = await paginateResumeEntries({
+      userId: "user-search",
+      page: 8,
+      pageSize: 1,
+      query: "frontEND",
+    });
+
+    expect(result).toMatchObject({ page: 1, total: 1, totalPages: 1 });
+    expect(result.items.map((resume) => resume.id)).toEqual(["resume-frontend"]);
   });
 
   it("does not recreate a user's last deleted resume", async () => {
@@ -291,9 +369,6 @@ describe("resume repository persistence", () => {
       version: number;
       document: unknown;
     }) => Promise<Awaited<ReturnType<typeof saveResumeRecord>>>;
-    const listScopedResumeEntries = listResumeEntries as unknown as (
-      userId: string,
-    ) => Promise<Awaited<ReturnType<typeof listResumeEntries>>>;
     const userADocument = createDefaultResumeDocument();
     const userBDocument = createDefaultResumeDocument();
 
@@ -327,12 +402,12 @@ describe("resume repository persistence", () => {
       "User B Resume",
     );
     expect(
-      (await listScopedResumeEntries("user-a")).some(
+      (await listResumeEntries("user-a")).some(
         (resume) => resume.id === "resume-shared" && resume.title === "User A Resume",
       ),
     ).toBe(true);
     expect(
-      (await listScopedResumeEntries("user-b")).some(
+      (await listResumeEntries("user-b")).some(
         (resume) => resume.id === "resume-shared" && resume.title === "User B Resume",
       ),
     ).toBe(true);
@@ -375,6 +450,33 @@ describe("resume repository persistence", () => {
     await expect(
       listResumeVersionSnapshots("user-demo", "resume-foundation"),
     ).resolves.toHaveLength(2);
+  });
+
+  it("paginates retained version snapshots", async () => {
+    vi.stubEnv("RESUME_VERSION_HISTORY_LIMIT", "10");
+    await createResumeRecord("user-history-page", "resume-history-page");
+    for (let index = 0; index < 5; index += 1) {
+      await snapshotResumeVersion("user-history-page", "resume-history-page");
+    }
+
+    const first = await paginateResumeVersionSnapshots({
+      userId: "user-history-page",
+      resumeId: "resume-history-page",
+      page: 1,
+      pageSize: 2,
+    });
+    const last = await paginateResumeVersionSnapshots({
+      userId: "user-history-page",
+      resumeId: "resume-history-page",
+      page: 99,
+      pageSize: 2,
+    });
+
+    expect(first).toMatchObject({ page: 1, total: 5, totalPages: 3 });
+    expect(first.items).toHaveLength(2);
+    expect(last).toMatchObject({ page: 3, total: 5, totalPages: 3 });
+    expect(last.items).toHaveLength(1);
+    expect(last.items[0]?.id).not.toBe(first.items[0]?.id);
   });
 
   it("deletes only the selected user's resume and its version history", async () => {

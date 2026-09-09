@@ -3,6 +3,7 @@ import { ConfigProvider } from "antd";
 
 import { appTheme } from "@/styles/app-theme";
 import { FontMarket } from "@/components/fonts/FontMarket";
+import { fetchResumeEntriesPage } from "@/lib/resume-client";
 
 const resumes = [
   {
@@ -15,12 +16,14 @@ const resumes = [
   },
 ];
 
+vi.mock("@/lib/resume-client", () => ({
+  fetchResumeEntriesPage: vi.fn(),
+}));
+
 function renderFontMarket() {
   return render(
     <ConfigProvider theme={appTheme}>
-      <FontMarket
-        resumes={resumes}
-      />
+      <FontMarket />
     </ConfigProvider>,
   );
 }
@@ -42,6 +45,16 @@ function installEditorViewport(matches: boolean) {
 }
 
 describe("FontMarket", () => {
+  beforeEach(() => {
+    vi.mocked(fetchResumeEntriesPage).mockResolvedValue({
+      items: resumes,
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
   it("filters bundled fonts and renders editable preview text with the real font", async () => {
     renderFontMarket();
 
@@ -138,6 +151,32 @@ describe("FontMarket", () => {
         "name",
         "returnTo",
       );
+    });
+  });
+
+  it("loads target resumes page by page inside the apply dialog", async () => {
+    vi.mocked(fetchResumeEntriesPage).mockResolvedValueOnce({
+      items: resumes,
+      page: 1,
+      pageSize: 10,
+      total: 21,
+      totalPages: 3,
+    });
+    renderFontMarket();
+    const card = screen
+      .getByRole("heading", { name: "LXGW WenKai" })
+      .closest("article");
+
+    fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
+    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    fireEvent.click(within(dialog).getByTitle("2"));
+
+    await waitFor(() => {
+      expect(fetchResumeEntriesPage).toHaveBeenLastCalledWith({
+        page: 2,
+        pageSize: 10,
+        query: "",
+      });
     });
   });
 });

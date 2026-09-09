@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { db } from "@/db";
@@ -11,6 +11,12 @@ import {
 } from "@/domain/resume/templates";
 import { validateResumeDocument } from "@/domain/resume/validation";
 import { defaultLocale, type AppLocale } from "@/i18n/messages";
+import {
+  createPageResult,
+  resolvePage,
+  type PageRequest,
+  type PageResult,
+} from "@/lib/pagination";
 
 import {
   createResumeId,
@@ -337,41 +343,52 @@ export async function resetResumeRepository(options?: {
   await db.delete(resumes);
 }
 
-export async function listResumeEntries(): Promise<ResumeCatalogEntry[]>;
-export async function listResumeEntries(userId: string): Promise<ResumeCatalogEntry[]>;
-export async function listResumeEntries(userId?: string) {
-  const rows = userId
-    ? await db
-        .select({
-          id: resumes.id,
-          title: resumes.name,
-          summary: resumes.summary,
-          customSummary: resumes.customSummary,
-          version: resumes.version,
-          document: resumes.document,
-          updatedAt: resumes.updatedAt,
-          published: resumes.published,
-          slug: resumes.slug,
-        })
-        .from(resumes)
-        .where(eq(resumes.userId, userId))
-        .orderBy(desc(resumes.updatedAt), asc(resumes.id))
-    : await db
-        .select({
-          id: resumes.id,
-          title: resumes.name,
-          summary: resumes.summary,
-          customSummary: resumes.customSummary,
-          version: resumes.version,
-          document: resumes.document,
-          updatedAt: resumes.updatedAt,
-          published: resumes.published,
-          slug: resumes.slug,
-        })
-        .from(resumes)
-        .orderBy(desc(resumes.updatedAt), asc(resumes.id));
-
-  return rows.map(({ customSummary, document, slug, updatedAt, ...row }) => ({
+export async function paginateResumeEntries({
+  userId,
+  page,
+  pageSize,
+  query,
+}: PageRequest & {
+  userId: string;
+  query?: string;
+}): Promise<PageResult<ResumeCatalogEntry>> {
+  const normalizedQuery = query?.trim().slice(0, 100);
+  const searchPattern = normalizedQuery ? `%${normalizedQuery}%` : undefined;
+  const filter = searchPattern
+    ? and(
+        eq(resumes.userId, userId),
+        or(
+          ilike(resumes.name, searchPattern),
+          ilike(resumes.summary, searchPattern),
+          ilike(resumes.customSummary, searchPattern),
+        ),
+      )
+    : eq(resumes.userId, userId);
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(resumes)
+    .where(filter);
+  const total = totalRow?.value ?? 0;
+  const request = { page, pageSize };
+  const resolved = resolvePage(total, request);
+  const rows = await db
+    .select({
+      id: resumes.id,
+      title: resumes.name,
+      summary: resumes.summary,
+      customSummary: resumes.customSummary,
+      version: resumes.version,
+      document: resumes.document,
+      updatedAt: resumes.updatedAt,
+      published: resumes.published,
+      slug: resumes.slug,
+    })
+    .from(resumes)
+    .where(filter)
+    .orderBy(desc(resumes.updatedAt), asc(resumes.id))
+    .limit(pageSize)
+    .offset(resolved.offset);
+  const items = rows.map(({ customSummary, document, slug, updatedAt, ...row }) => ({
     ...row,
     summary: resolveSummary({
       customSummary,
@@ -381,24 +398,39 @@ export async function listResumeEntries(userId?: string) {
     updatedAt: updatedAt.getTime(),
     slug: slug ?? undefined,
   }));
+
+  return createPageResult(items, total, request);
 }
 
-export async function listResumeVersionSnapshots(
-  userId: string,
-  resumeId: string,
-): Promise<ResumeVersionSnapshot[]> {
+export async function paginateResumeVersionSnapshots({
+  userId,
+  resumeId,
+  page,
+  pageSize,
+}: PageRequest & {
+  userId: string;
+  resumeId: string;
+}): Promise<PageResult<ResumeVersionSnapshot>> {
+  const filter = and(
+    eq(resumeVersions.userId, userId),
+    eq(resumeVersions.resumeId, resumeId),
+  );
+  const [totalRow] = await db
+    .select({ value: count() })
+    .from(resumeVersions)
+    .where(filter);
+  const total = totalRow?.value ?? 0;
+  const request = { page, pageSize };
+  const resolved = resolvePage(total, request);
   const rows = await db
     .select()
     .from(resumeVersions)
-    .where(
-      and(
-        eq(resumeVersions.userId, userId),
-        eq(resumeVersions.resumeId, resumeId),
-      ),
-    )
-    .orderBy(desc(resumeVersions.createdAt), desc(resumeVersions.id));
+    .where(filter)
+    .orderBy(desc(resumeVersions.createdAt), desc(resumeVersions.id))
+    .limit(pageSize)
+    .offset(resolved.offset);
 
-  return rows.map(mapResumeVersionRow);
+  return createPageResult(rows.map(mapResumeVersionRow), total, request);
 }
 
 export async function getResumeVersionSnapshot(

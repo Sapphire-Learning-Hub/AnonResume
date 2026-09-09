@@ -1,8 +1,8 @@
 "use client";
 
-import { Button, Input, Modal, Segmented, Select, Tag } from "antd";
+import { Button, Input, Modal, Pagination, Segmented, Select, Spin, Tag } from "antd";
 import { createStyles } from "antd-style";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import { SearchIcon } from "@/components/ui/InlineIcons";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
@@ -12,7 +12,9 @@ import {
   type ResumeFontPreset,
 } from "@/domain/resume/font-presets";
 import { useI18n } from "@/i18n/I18nProvider";
+import type { PageResult } from "@/lib/pagination";
 import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
+import { fetchResumeEntriesPage } from "@/lib/resume-client";
 
 type FontMarketCategory = ResumeFontCategory | "all";
 
@@ -234,11 +236,15 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
 }));
 
-export function FontMarket({
-  resumes,
-}: {
-  resumes: ResumeCatalogEntry[];
-}) {
+const emptyResumePage: PageResult<ResumeCatalogEntry> = {
+  items: [],
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  totalPages: 0,
+};
+
+export function FontMarket() {
   const { styles } = useStyles();
   const { t } = useI18n();
   const editorAccess = useEditorViewportAccess();
@@ -246,7 +252,11 @@ export function FontMarket({
   const [category, setCategory] = useState<FontMarketCategory>("all");
   const [previewText, setPreviewText] = useState(t("fontMarket.defaultPreview"));
   const [selectedPreset, setSelectedPreset] = useState<ResumeFontPreset>();
-  const [selectedResumeId, setSelectedResumeId] = useState(resumes[0]?.id ?? "");
+  const [selectedResumeId, setSelectedResumeId] = useState("");
+  const [resumePage, setResumePage] = useState(emptyResumePage);
+  const [resumePageNumber, setResumePageNumber] = useState(1);
+  const [resumeQuery, setResumeQuery] = useState("");
+  const [resumeLoading, setResumeLoading] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const filteredPresets = filterResumeFontPresets(deferredQuery, {
     category,
@@ -262,9 +272,45 @@ export function FontMarket({
     { label: t("fontMarket.category.handwriting"), value: "handwriting" },
   ];
 
+  useEffect(() => {
+    if (!selectedPreset) return;
+
+    let active = true;
+    void fetchResumeEntriesPage({
+      page: resumePageNumber,
+      pageSize: 10,
+      query: resumeQuery,
+    })
+      .then((result) => {
+        if (!active) return;
+        setResumePage(result);
+        setSelectedResumeId((current) =>
+          result.items.some((resume) => resume.id === current)
+            ? current
+            : result.items[0]?.id ?? "",
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setResumePage(emptyResumePage);
+        setSelectedResumeId("");
+      })
+      .finally(() => {
+        if (active) setResumeLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [resumePageNumber, resumeQuery, selectedPreset]);
+
   function openApplyDialog(preset: ResumeFontPreset) {
+    setResumePage(emptyResumePage);
+    setResumePageNumber(1);
+    setResumeQuery("");
+    setResumeLoading(true);
     setSelectedPreset(preset);
-    setSelectedResumeId((current) => current || resumes[0]?.id || "");
+    setSelectedResumeId("");
   }
 
   return (
@@ -385,7 +431,9 @@ export function FontMarket({
         }
       >
         {selectedPreset ? (
-          resumes.length > 0 ? (
+          resumeLoading && resumePage.items.length === 0 ? (
+            <Spin />
+          ) : resumePage.total > 0 ? (
             <form
               action={`/app/resumes/${selectedResumeId}/font`}
               className={styles.modalBody}
@@ -404,15 +452,38 @@ export function FontMarket({
               />
               <label className={styles.modalField}>
                 <span className={styles.fieldLabel}>{t("fontMarket.targetResume")}</span>
+                <Input.Search
+                  allowClear
+                  aria-label={t("dashboard.searchResume")}
+                  defaultValue={resumeQuery}
+                  placeholder={t("dashboard.searchResumePlaceholder")}
+                  onSearch={(value) => {
+                    setResumeLoading(true);
+                    setResumePageNumber(1);
+                    setResumeQuery(value.trim());
+                  }}
+                />
                 <Select
                   aria-label={t("fontMarket.targetResume")}
                   onChange={setSelectedResumeId}
-                  options={resumes.map((resume) => ({
+                  options={resumePage.items.map((resume) => ({
                     label: resume.title,
                     value: resume.id,
                   }))}
                   value={selectedResumeId}
                 />
+                {resumePage.totalPages > 1 ? (
+                  <Pagination
+                    current={resumePage.page}
+                    pageSize={resumePage.pageSize}
+                    showSizeChanger={false}
+                    total={resumePage.total}
+                    onChange={(page) => {
+                      setResumeLoading(true);
+                      setResumePageNumber(page);
+                    }}
+                  />
+                ) : null}
               </label>
               <div className={styles.modalActions}>
                 <Button htmlType="button" onClick={() => setSelectedPreset(undefined)}>

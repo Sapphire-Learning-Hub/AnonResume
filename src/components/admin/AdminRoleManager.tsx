@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
+import { AdminPagedSelect } from "@/components/admin/AdminPagedSelect";
+import { AdminTable } from "@/components/admin/AdminPage";
 import {
   createAdminTranslator,
   type AdminMessageKey,
@@ -17,6 +19,7 @@ import {
   type AdminPermission,
   type AdminRolePresetKey,
 } from "@/lib/admin-permissions";
+import type { PageResult, PaginationSearchParams } from "@/lib/pagination";
 
 const useStyles = createStyles(({ token, css }) => ({
   toolbar: css`
@@ -94,11 +97,13 @@ const presetMessageKeys: Record<
 };
 
 export function AdminRoleManager({
+  administrators,
   roles,
-  users,
+  searchParams,
 }: {
-  roles: RoleSummary[];
-  users: UserSummary[];
+  administrators: PageResult<UserSummary>;
+  roles: PageResult<RoleSummary>;
+  searchParams: PaginationSearchParams;
 }) {
   const { styles } = useStyles();
   const { locale } = useI18n();
@@ -187,17 +192,16 @@ export function AdminRoleManager({
       {error ? <Alert closable message={error} onClose={() => setError(null)} showIcon type="error" /> : null}
       <div className={styles.toolbar}>
         <Button onClick={() => openRoleForm()} type="primary">{t("roles.create")}</Button>
-        <Select
+        <AdminPagedSelect
+          endpoint="/api/manage/users"
           onChange={setSelectedUser}
-          options={users.filter((user) => user.principalKind !== "super_admin").map((user) => ({ label: `${user.name} · ${user.email}`, value: user.id }))}
           placeholder={t("roles.selectUser")}
-          showSearch
           style={{ minWidth: 260 }}
           value={selectedUser}
         />
-        <Select
+        <AdminPagedSelect
+          endpoint="/api/manage/roles"
           onChange={setSelectedRole}
-          options={roles.map((role) => ({ label: role.name, value: role.id }))}
           placeholder={t("roles.selectRole")}
           style={{ minWidth: 180 }}
           value={selectedRole}
@@ -214,16 +218,22 @@ export function AdminRoleManager({
           {t("roles.assign")}
         </Button>
       </div>
-      <div className="admin-table-shell">
-        <table className="admin-table">
-          <thead><tr><th>{t("roles.role")}</th><th>{t("roles.permissions")}</th><th>{t("roles.administrators")}</th><th>{t("common.actions")}</th></tr></thead>
-          <tbody>
-            {roles.map((role) => (
-              <tr key={role.id}>
-                <td><span><strong>{role.name}</strong><small>{role.description}</small></span></td>
-                <td>{t("roles.permissionCount", { count: role.permissions.length })}</td>
-                <td>{role.members}</td>
-                <td>
+      <AdminTable
+        headers={[t("roles.role"), t("roles.permissions"), t("roles.administrators"), t("common.actions")]}
+        pagination={{
+          basePath: "/app/manage/roles",
+          page: roles.page,
+          pageParam: "rolePage",
+          pageSize: roles.pageSize,
+          searchParams,
+          total: roles.total,
+          totalPages: roles.totalPages,
+        }}
+        rows={roles.items.map((role) => [
+          <span key="role"><strong>{role.name}</strong><small>{role.description}</small></span>,
+          t("roles.permissionCount", { count: role.permissions.length }),
+          role.members,
+          <span key="actions">
                   <Button
                     onClick={() => openRoleForm(role)}
                     size="small"
@@ -237,23 +247,26 @@ export function AdminRoleManager({
                     size="small"
                     type="text"
                   >{t("common.delete")}</Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          </span>,
+        ])}
+      />
 
       <h2 className="admin-section-title">{t("roles.authorized")}</h2>
-      <div className="admin-table-shell">
-        <table className="admin-table">
-          <thead><tr><th>{t("roles.user")}</th><th>{t("roles.role")}</th><th>{t("common.actions")}</th></tr></thead>
-          <tbody>
-            {users.filter((user) => user.principalKind === "delegated_admin").map((user) => (
-              <tr key={user.id}>
-                <td><span><strong>{user.name}</strong><small>{user.email}</small></span></td>
-                <td>{user.roleName || t("roles.unassigned")}</td>
-                <td>
+      <AdminTable
+        headers={[t("roles.user"), t("roles.role"), t("common.actions")]}
+        pagination={{
+          basePath: "/app/manage/roles",
+          page: administrators.page,
+          pageParam: "adminPage",
+          pageSize: administrators.pageSize,
+          searchParams,
+          total: administrators.total,
+          totalPages: administrators.totalPages,
+        }}
+        rows={administrators.items.map((user) => [
+          <span key="user"><strong>{user.name}</strong><small>{user.email}</small></span>,
+          user.roleName || t("roles.unassigned"),
+          <span key="actions">
                   <Button
                     danger
                     loading={pending}
@@ -265,12 +278,9 @@ export function AdminRoleManager({
                     size="small"
                     type="text"
                   >{t("roles.removeAdmin")}</Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          </span>,
+        ])}
+      />
 
       <Modal
         destroyOnHidden

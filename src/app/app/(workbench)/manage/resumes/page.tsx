@@ -2,19 +2,40 @@ import { AdminPage, AdminTable } from "@/components/admin/AdminPage";
 import { AdminResumeActions } from "@/components/admin/AdminResumeActions";
 import { requireAdminPage } from "@/lib/admin-page";
 import { listAdminResumeMetadata } from "@/lib/admin-query";
+import {
+  parsePageRequest,
+  readSearchParam,
+  type PaginationSearchParams,
+} from "@/lib/pagination";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 
-export default async function ManagementResumesPage() {
+export default async function ManagementResumesPage({
+  searchParams,
+}: {
+  searchParams: Promise<PaginationSearchParams>;
+}) {
   const context = await requireAdminPage("resumes.metadata.read");
-  const resumes = await listAdminResumeMetadata();
+  const resolvedSearchParams = await searchParams;
+  const resumes = await listAdminResumeMetadata({
+    ...parsePageRequest(resolvedSearchParams),
+    query: readSearchParam(resolvedSearchParams, "q"),
+  });
   const locale = await getRequestLocale();
   const t = createAdminTranslator(locale);
   return (
     <AdminPage title={t("nav.resumes")}>
       <AdminTable
         headers={[t("nav.resumes"), t("resumes.owner"), t("resumes.status"), t("resumes.updatedAt"), t("common.actions")]}
-        rows={resumes.map((resume) => [
+        pagination={{
+          basePath: "/app/manage/resumes",
+          page: resumes.page,
+          pageSize: resumes.pageSize,
+          searchParams: resolvedSearchParams,
+          total: resumes.total,
+          totalPages: resumes.totalPages,
+        }}
+        rows={resumes.items.map((resume) => [
           <span key="resume"><strong>{resume.name}</strong><small>{resume.summary || resume.id}</small></span>,
           resume.ownerEmail,
           resume.published ? t("resumes.published") : t("resumes.draft"),

@@ -110,6 +110,11 @@ const messages = {
     "common.hidden": "已隐藏",
     "common.up": "上移",
     "common.down": "下移",
+    "pagination.navigation": "分页导航",
+    "pagination.previous": "上一页",
+    "pagination.next": "下一页",
+    "pagination.page": "第 {page} 页",
+    "pagination.total": "共 {count} 条",
     "system.notFound.title": "页面不存在",
     "system.notFound.description":
       "没有找到你要访问的页面，它可能已被移动、删除或从未存在。",
@@ -771,6 +776,11 @@ const messages = {
     "common.hidden": "Hidden",
     "common.up": "Up",
     "common.down": "Down",
+    "pagination.navigation": "Pagination",
+    "pagination.previous": "Previous",
+    "pagination.next": "Next",
+    "pagination.page": "Page {page}",
+    "pagination.total": "{count} total",
     "system.notFound.title": "Page not found",
     "system.notFound.description":
       "The page you requested may have moved, been deleted, or never existed.",

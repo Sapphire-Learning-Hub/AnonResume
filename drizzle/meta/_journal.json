@@ -64,6 +64,13 @@
       "when": 1788865967918,
       "tag": "0008_last_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788928763990,
+      "tag": "0009_mature_boomerang",
+      "breakpoints": true
     }
   ]
 }

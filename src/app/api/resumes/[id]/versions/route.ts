@@ -3,10 +3,11 @@ import { NextResponse } from "next/server";
 import { getOptionalSession } from "@/lib/auth-session";
 import { requireSameOrigin } from "@/lib/request-origin";
 import {
-  listResumeVersionSnapshots,
+  paginateResumeVersionSnapshots,
   ResumeNotFoundError,
   snapshotResumeVersion,
 } from "@/lib/resume-repository";
+import { parsePageRequest } from "@/lib/pagination";
 
 function toVersionSummary(snapshot: Awaited<ReturnType<typeof snapshotResumeVersion>>) {
   return {
@@ -17,7 +18,7 @@ function toVersionSummary(snapshot: Awaited<ReturnType<typeof snapshotResumeVers
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getOptionalSession();
@@ -27,11 +28,19 @@ export async function GET(
   }
 
   const { id } = await params;
+  const url = new URL(request.url);
+  const pageRequest = parsePageRequest(
+    Object.fromEntries(url.searchParams.entries()),
+  );
+  const result = await paginateResumeVersionSnapshots({
+    userId: session.user.id,
+    resumeId: id,
+    ...pageRequest,
+  });
 
   return NextResponse.json({
-    versions: (await listResumeVersionSnapshots(session.user.id, id)).map(
-      toVersionSummary,
-    ),
+    ...result,
+    items: result.items.map(toVersionSummary),
   });
 }
 

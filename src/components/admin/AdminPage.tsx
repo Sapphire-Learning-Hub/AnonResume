@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { NumberedPagination } from "@/components/common/NumberedPagination";
+import type { PaginationSearchParams } from "@/lib/pagination";
+
 export function AdminPage({
   title,
   actions,
@@ -22,25 +25,38 @@ export function AdminPage({
 
 export function AdminTable({
   headers,
+  pagination,
   rows,
 }: {
   headers: string[];
+  pagination?: {
+    basePath: string;
+    page: number;
+    pageParam?: string;
+    pageSize: number;
+    searchParams: PaginationSearchParams;
+    total: number;
+    totalPages: number;
+  };
   rows: ReactNode[][];
 }) {
   return (
-    <div className="admin-table-shell">
-      <table className="admin-table">
-        <thead>
-          <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="admin-table-shell">
+        <table className="admin-table">
+          <thead>
+            <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {pagination ? <NumberedPagination {...pagination} /> : null}
+    </>
   );
 }

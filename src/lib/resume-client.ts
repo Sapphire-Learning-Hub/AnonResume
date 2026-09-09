@@ -1,5 +1,7 @@
 import type { ResumeDocument } from "@/domain/resume/schema";
 import type { ResumeValidationIssue } from "@/domain/resume/validation";
+import type { PageResult } from "@/lib/pagination";
+import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
 
 export class ResumeVersionConflictClientError extends Error {
   currentVersion: number;
@@ -30,6 +32,26 @@ export interface ResumeVersionSnapshotSummary {
 export interface ResumeVersionSnapshotDetail
   extends ResumeVersionSnapshotSummary {
   document: ResumeDocument;
+}
+
+export async function fetchResumeEntriesPage({
+  page,
+  pageSize,
+  query = "",
+}: {
+  page: number;
+  pageSize: number;
+  query?: string;
+}): Promise<PageResult<ResumeCatalogEntry>> {
+  const searchParams = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  if (query) searchParams.set("q", query);
+  const response = await fetch(`/api/resumes?${searchParams.toString()}`);
+
+  return (await parseJson(response)) as unknown as PageResult<ResumeCatalogEntry>;
 }
 
 export async function fetchCurrentResumeDocument(
@@ -137,11 +159,18 @@ export async function updateResumeSummary(params: {
 
 export async function fetchResumeVersionSnapshots(
   resumeId: string,
-): Promise<ResumeVersionSnapshotSummary[]> {
-  const response = await fetch(`/api/resumes/${resumeId}/versions`);
+  request: { page: number; pageSize: number } = { page: 1, pageSize: 20 },
+): Promise<PageResult<ResumeVersionSnapshotSummary>> {
+  const searchParams = new URLSearchParams({
+    page: String(request.page),
+    pageSize: String(request.pageSize),
+  });
+  const response = await fetch(
+    `/api/resumes/${resumeId}/versions?${searchParams.toString()}`,
+  );
   const payload = await parseJson(response);
 
-  return payload.versions as ResumeVersionSnapshotSummary[];
+  return payload as unknown as PageResult<ResumeVersionSnapshotSummary>;
 }
 
 export async function fetchResumeVersionSnapshot(params: {

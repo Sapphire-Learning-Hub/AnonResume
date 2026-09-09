@@ -1,18 +1,17 @@
 "use client";
 
-import { Alert, Button, Input, Modal, Select } from "antd";
+import { Alert, Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
+import { AdminPagedSelect } from "@/components/admin/AdminPagedSelect";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
 export function AdminInviteUser({
-  roles,
   canAssignRole,
 }: {
-  roles: Array<{ id: string; name: string }>;
   canAssignRole: boolean;
 }) {
   const { locale } = useI18n();
@@ -86,10 +85,10 @@ export function AdminInviteUser({
           <Input maxLength={80} onChange={(event) => setName(event.target.value)} placeholder={t("invite.name")} value={name} />
           <Input maxLength={254} onChange={(event) => setEmail(event.target.value)} placeholder={t("invite.email")} type="email" value={email} />
           {canAssignRole ? (
-            <Select
+            <AdminPagedSelect
               allowClear
+              endpoint="/api/manage/roles"
               onChange={setRoleId}
-              options={roles.map((role) => ({ label: role.name, value: role.id }))}
               placeholder={t("invite.role")}
               value={roleId}
             />
