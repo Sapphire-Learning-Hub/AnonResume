@@ -1,12 +1,13 @@
 "use client";
 
 import { GithubOutlined } from "@ant-design/icons";
-import { Alert, Button, Divider, Input, Tooltip } from "antd";
+import { Button, Divider, Input, Tooltip } from "antd";
 import { createStyles } from "antd-style";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
 import { authClient } from "@/lib/auth-client";
 
@@ -119,10 +120,6 @@ const useStyles = createStyles(({ token, css }) => ({
     text-align: center;
     overflow-wrap: anywhere;
   `,
-  verificationFeedback: css`
-    width: 100%;
-    margin-top: 16px;
-  `,
   verificationActions: css`
     display: grid;
     width: 100%;
@@ -154,19 +151,6 @@ const verificationFailureCodes = new Set([
   "token_expired",
 ]);
 
-function getAuthErrorMessage(error: unknown, fallback: string) {
-  if (
-    typeof error === "object" &&
-    error &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
-  }
-
-  return fallback;
-}
-
 function getAuthErrorCode(error: unknown) {
   if (
     typeof error === "object" &&
@@ -180,6 +164,16 @@ function getAuthErrorCode(error: unknown) {
   return null;
 }
 
+function getAuthFeedbackMessage(
+  error: unknown,
+  fallback: string,
+  suspendedMessage: string,
+) {
+  return getAuthErrorCode(error) === "ACCOUNT_SUSPENDED"
+    ? suspendedMessage
+    : fallback;
+}
+
 export function AuthPanel({
   githubEnabled,
   verificationError,
@@ -190,17 +184,43 @@ export function AuthPanel({
   const { styles } = useStyles();
   const router = useRouter();
   const { t } = useI18n();
+  const { notification, toast } = useAppFeedback();
   const [mode, setMode] = useState<AuthMode>("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
   const [resendSeconds, setResendSeconds] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const pageErrorMessage =
+    verificationError === "ACCOUNT_SUSPENDED"
+      ? t("auth.accountSuspended")
+      : verificationError && verificationFailureCodes.has(verificationError)
+        ? t("auth.invalidVerificationLink")
+        : null;
+
+  useEffect(() => {
+    const key = "authentication-page-error";
+
+    if (pageErrorMessage) {
+      notification.error({
+        duration: false,
+        key,
+        role: "alert",
+        title: pageErrorMessage,
+      });
+    } else {
+      notification.destroy(key);
+    }
+
+    return () => notification.destroy(key);
+  }, [notification, pageErrorMessage]);
+
+  useEffect(() => {
+    return () => notification.destroy("authentication-email-verification");
+  }, [notification]);
 
   useEffect(() => {
     if (resendSeconds <= 0) {
@@ -216,11 +236,8 @@ export function AuthPanel({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
-    setNoticeMessage(null);
-
     if (mode === "sign-up" && password !== confirmPassword) {
-      setErrorMessage(t("auth.passwordMismatch"));
+      toast.error(t("auth.passwordMismatch"));
       return;
     }
 
@@ -236,7 +253,13 @@ export function AuthPanel({
         });
 
         if (result.error) {
-          setErrorMessage(getAuthErrorMessage(result.error, t("auth.errorFallback")));
+          toast.error(
+            getAuthFeedbackMessage(
+              result.error,
+              t("auth.errorFallback"),
+              t("auth.accountSuspended"),
+            ),
+          );
           return;
         }
 
@@ -253,19 +276,30 @@ export function AuthPanel({
         if (result.error) {
           if (getAuthErrorCode(result.error) === "EMAIL_NOT_VERIFIED") {
             setVerificationEmail(email);
-            setErrorMessage(t("auth.verifyBeforeSignIn"));
+            notification.warning({
+              duration: false,
+              key: "authentication-email-verification",
+              role: "alert",
+              title: t("auth.verifyBeforeSignIn"),
+            });
             return;
           }
 
-          setErrorMessage(getAuthErrorMessage(result.error, t("auth.errorFallback")));
+          toast.error(
+            getAuthFeedbackMessage(
+              result.error,
+              t("auth.errorFallback"),
+              t("auth.accountSuspended"),
+            ),
+          );
           return;
         }
       }
 
       router.push("/sign-in");
       router.refresh();
-    } catch (error) {
-      setErrorMessage(getAuthErrorMessage(error, t("auth.errorFallback")));
+    } catch {
+      toast.error(t("auth.errorFallback"));
     } finally {
       setIsPending(false);
     }
@@ -278,8 +312,6 @@ export function AuthPanel({
       return;
     }
 
-    setErrorMessage(null);
-    setNoticeMessage(null);
     setIsResending(true);
 
     try {
@@ -289,25 +321,21 @@ export function AuthPanel({
       });
 
       if (result.error) {
-        setErrorMessage(
-          getAuthErrorMessage(result.error, t("auth.resendVerificationFailed")),
-        );
+        toast.error(t("auth.resendVerificationFailed"));
         return;
       }
 
-      setNoticeMessage(t("auth.verificationResent"));
+      notification.destroy("authentication-email-verification");
+      toast.success(t("auth.verificationResent"));
       setResendSeconds(60);
-    } catch (error) {
-      setErrorMessage(
-        getAuthErrorMessage(error, t("auth.resendVerificationFailed")),
-      );
+    } catch {
+      toast.error(t("auth.resendVerificationFailed"));
     } finally {
       setIsResending(false);
     }
   }
 
   async function handleGitHubSignIn() {
-    setErrorMessage(null);
     setIsPending(true);
 
     try {
@@ -317,10 +345,10 @@ export function AuthPanel({
       });
 
       if (result.error) {
-        setErrorMessage(getAuthErrorMessage(result.error, t("auth.errorFallback")));
+        toast.error(t("auth.errorFallback"));
       }
-    } catch (error) {
-      setErrorMessage(getAuthErrorMessage(error, t("auth.errorFallback")));
+    } catch {
+      toast.error(t("auth.errorFallback"));
       setIsPending(false);
     }
   }
@@ -388,16 +416,6 @@ export function AuthPanel({
           >
             {verificationEmail}
           </p>
-          {noticeMessage ? (
-            <div className={styles.verificationFeedback}>
-              <Alert type="success" title={noticeMessage} showIcon />
-            </div>
-          ) : null}
-          {errorMessage ? (
-            <div className={styles.verificationFeedback}>
-              <Alert type="error" title={errorMessage} showIcon />
-            </div>
-          ) : null}
           <div className={styles.verificationActions}>
             <Button
               type="primary"
@@ -414,10 +432,9 @@ export function AuthPanel({
               className={styles.verificationBack}
               type="text"
               onClick={() => {
+                notification.destroy("authentication-email-verification");
                 setMode("sign-in");
                 setVerificationEmail(null);
-                setErrorMessage(null);
-                setNoticeMessage(null);
                 setResendSeconds(0);
               }}
             >
@@ -427,13 +444,6 @@ export function AuthPanel({
         </div>
       ) : (
         <>
-          {verificationError && verificationFailureCodes.has(verificationError) ? (
-            <Alert
-              type="error"
-              title={t("auth.invalidVerificationLink")}
-              showIcon
-            />
-          ) : null}
           <form className={styles.form} onSubmit={handleSubmit} data-testid="auth-form">
         {mode === "sign-up" ? (
           <Input
@@ -472,8 +482,6 @@ export function AuthPanel({
             required
           />
         ) : null}
-        {errorMessage ? <Alert type="error" title={errorMessage} showIcon /> : null}
-        {noticeMessage ? <Alert type="success" title={noticeMessage} showIcon /> : null}
         {verificationEmail && mode === "sign-in" ? (
           <Button
             onClick={handleResendVerification}

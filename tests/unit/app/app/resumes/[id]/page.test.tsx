@@ -15,6 +15,17 @@ vi.mock("@/lib/auth-session", () => ({
   requireSession: vi.fn(),
 }));
 
+vi.mock("@/components/ui/useAppFeedback", () => ({
+  useAppFeedback: () => ({
+    notification: {
+      destroy: vi.fn(),
+      error: vi.fn(),
+      warning: vi.fn(),
+    },
+    toast: { error: vi.fn() },
+  }),
+}));
+
 vi.mock("@/components/editor/EditorViewportGuard", () => ({
   EditorViewportGuard: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="editor-viewport-guard">{children}</div>

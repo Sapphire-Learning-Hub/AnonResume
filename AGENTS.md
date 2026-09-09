@@ -123,6 +123,24 @@ nodes.
   square or small-radius selected segments unless the design explicitly calls
   for it.
 
+### Feedback and errors
+
+- Use the shared `useAppFeedback` hook for transient client feedback. Do not
+  create component-local `message.useMessage` holders or insert generic API
+  errors into page and form layouts with `Alert` or ad hoc error paragraphs.
+- Use toast messages for immediate, one-line operation results that require no
+  user action. Give repeatable async operations a stable key so identical
+  failures update instead of stacking.
+- Use notifications for persistent, actionable, account, security, and
+  background-task failures. Persistent notifications must use `duration:
+  false`, a stable key, and explicit actions when recovery is possible.
+- Keep validation attached to a field when the user must fix that field. Keep
+  contextual diagnostics, task progress/details, loading states, empty states,
+  no-change states, and full-page route errors in their owning surface rather
+  than turning them into global feedback.
+- Never expose raw backend or exception text directly to users. Map known
+  errors to localized messages and use a deliberate generic fallback.
+
 ## Data, authentication, and security
 
 - Every private resume read or mutation must authenticate the request and

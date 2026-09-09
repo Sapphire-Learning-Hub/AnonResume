@@ -7,6 +7,24 @@ import {
   within,
 } from "@testing-library/react";
 
+const feedbackMocks = vi.hoisted(() => ({
+  notificationDestroy: vi.fn(),
+  notificationError: vi.fn(),
+  notificationWarning: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock("@/components/ui/useAppFeedback", () => ({
+  useAppFeedback: () => ({
+    notification: {
+      destroy: feedbackMocks.notificationDestroy,
+      error: feedbackMocks.notificationError,
+      warning: feedbackMocks.notificationWarning,
+    },
+    toast: { error: feedbackMocks.toastError },
+  }),
+}));
+
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   ResumeValidationClientError,
@@ -83,6 +101,7 @@ class MockResizeObserver {
 
 describe("ResumeEditorShell", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
   });
 
@@ -1223,26 +1242,24 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
 
-    expect(
-      await screen.findByText("检测到云端版本冲突"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("最新云端版本为 7。本地编辑仍保留在浏览器草稿中。"),
-    ).toBeInTheDocument();
     await waitFor(() => expect(loadCurrentResume).toHaveBeenCalledWith("resume-demo"));
 
-    const prompt = screen.getByRole("status", { name: "版本冲突" });
-
-    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
-    expect(prompt.parentElement).toHaveAttribute(
-      "data-editor-floating-notice-stack",
-      "true",
-    );
-    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
-      "fixed",
-    );
-    const viewDiffButton = screen.getByRole("button", { name: /查看差异/ });
-    await waitFor(() => expect(viewDiffButton).toBeEnabled());
+    await waitFor(() => {
+      expect(feedbackMocks.notificationWarning).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          description: "最新云端版本为 7。本地编辑仍保留在浏览器草稿中。",
+          duration: false,
+          key: "editor-version-conflict",
+          title: "检测到云端版本冲突",
+        }),
+      );
+    });
+    const conflictNotification = feedbackMocks.notificationWarning.mock.calls.at(-1)?.[0];
+    const actions = render(conflictNotification.actions);
+    const viewDiffButton = within(actions.container).getByRole("button", {
+      name: /查看差异/,
+    });
+    expect(viewDiffButton).toBeEnabled();
     fireEvent.click(viewDiffButton);
 
     const dialog = (await screen.findByText("版本差异")).closest(
@@ -1280,21 +1297,16 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
 
-    expect(await screen.findByText("简历校验失败")).toBeInTheDocument();
-    expect(
-      screen.getByText("强调色必须是有效的十六进制颜色值。"),
-    ).toBeInTheDocument();
-
-    const prompt = screen.getByRole("status", { name: "简历校验失败" });
-
-    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
-    expect(prompt.parentElement).toHaveAttribute(
-      "data-editor-floating-notice-stack",
-      "true",
-    );
-    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
-      "fixed",
-    );
+    await waitFor(() => {
+      expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: "强调色必须是有效的十六进制颜色值。",
+          duration: false,
+          key: "editor-save-validation",
+          title: "简历校验失败",
+        }),
+      );
+    });
   });
 
   it("updates inspector content when selecting a section from the outline", () => {
@@ -2042,19 +2054,20 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    expect(await screen.findByText("发现较新的本地草稿")).toBeInTheDocument();
-
-    const prompt = screen.getByRole("status", { name: "本地草稿恢复" });
-
-    expect(prompt).toHaveAttribute("data-editor-floating-notice", "true");
-    expect(prompt.parentElement).toHaveAttribute(
-      "data-editor-floating-notice-stack",
-      "true",
+    await waitFor(() => {
+      expect(feedbackMocks.notificationWarning).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: false,
+          key: "editor-version-recovery",
+          title: "发现较新的本地草稿",
+        }),
+      );
+    });
+    const recoveryNotification = feedbackMocks.notificationWarning.mock.calls.at(-1)?.[0];
+    const actions = render(recoveryNotification.actions);
+    fireEvent.click(
+      within(actions.container).getByRole("button", { name: /查看差异/ }),
     );
-    expect(window.getComputedStyle(prompt.parentElement as HTMLElement).position).toBe(
-      "fixed",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /查看差异/ }));
 
     const dialog = (await screen.findByText("版本差异")).closest(
       "[role='dialog']",
@@ -2066,7 +2079,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: spacedLabel("关闭") }));
 
     fireEvent.click(
-      within(prompt).getByRole("button", {
+      within(actions.container).getByRole("button", {
         name: spacedLabel("恢复本地版本"),
       }),
     );

@@ -12,6 +12,14 @@ const routerMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
+const feedbackMocks = vi.hoisted(() => ({
+  notificationDestroy: vi.fn(),
+  notificationError: vi.fn(),
+  notificationWarning: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+}));
+
 vi.mock("@/lib/auth-client", () => ({
   authClient: {
     sendVerificationEmail: authMocks.sendVerificationEmail,
@@ -27,6 +35,20 @@ vi.mock("@/lib/auth-client", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => routerMocks,
+}));
+
+vi.mock("@/components/ui/useAppFeedback", () => ({
+  useAppFeedback: () => ({
+    notification: {
+      destroy: feedbackMocks.notificationDestroy,
+      error: feedbackMocks.notificationError,
+      warning: feedbackMocks.notificationWarning,
+    },
+    toast: {
+      error: feedbackMocks.toastError,
+      success: feedbackMocks.toastSuccess,
+    },
+  }),
 }));
 
 import { AuthPanel } from "@/components/auth/AuthPanel";
@@ -69,7 +91,7 @@ describe("AuthPanel email verification", () => {
     expect(screen.getByTestId("verification-email")).toHaveTextContent(
       "user@example.com",
     );
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(feedbackMocks.toastError).not.toHaveBeenCalled();
     expect(routerMocks.push).not.toHaveBeenCalled();
     expect(authMocks.signUpEmail).toHaveBeenCalledWith(
       expect.objectContaining({ callbackURL: "/sign-in?verified=1" }),
@@ -97,7 +119,9 @@ describe("AuthPanel email verification", () => {
     const resend = await screen.findByRole("button", {
       name: "重新发送验证邮件",
     });
-    expect(screen.getByText("请先验证邮箱后再登录。")).toBeInTheDocument();
+    expect(feedbackMocks.notificationWarning).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "请先验证邮箱后再登录。" }),
+    );
 
     fireEvent.click(resend);
 
@@ -107,7 +131,33 @@ describe("AuthPanel email verification", () => {
         email: "user@example.com",
       });
     });
-    expect(await screen.findByText("验证邮件已重新发送。")).toBeInTheDocument();
+    expect(feedbackMocks.toastSuccess).toHaveBeenCalledWith(
+      "验证邮件已重新发送。",
+    );
+  });
+
+  it("does not expose raw authentication service errors", async () => {
+    authMocks.signInEmail.mockResolvedValue({
+      data: null,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "database host db.internal.example refused connection",
+        status: 500,
+      },
+    });
+
+    render(<AuthPanel githubEnabled={false} />);
+    fillEmailPasswordForm();
+    fireEvent.click(screen.getByTestId("auth-submit"));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith(
+        "认证请求失败",
+      );
+    });
+    expect(feedbackMocks.toastError).not.toHaveBeenCalledWith(
+      expect.stringContaining("db.internal.example"),
+    );
   });
 
   it.each(["INVALID_TOKEN", "TOKEN_EXPIRED"])(
@@ -120,9 +170,24 @@ describe("AuthPanel email verification", () => {
         />,
       );
 
-      expect(
-        screen.getByText("验证链接无效或已经过期，请重新发送验证邮件。"),
-      ).toBeInTheDocument();
+      expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "验证链接无效或已经过期，请重新发送验证邮件。",
+        }),
+      );
     },
   );
+
+  it("explains that a suspended account cannot sign in", () => {
+    render(
+      <AuthPanel
+        githubEnabled={false}
+        verificationError="ACCOUNT_SUSPENDED"
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "该账户已被停用，请联系管理员。" }),
+    );
+  });
 });

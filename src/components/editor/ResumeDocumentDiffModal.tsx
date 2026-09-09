@@ -12,8 +12,6 @@ import { ResumeDiffCanvas } from "./ResumeDiffCanvas";
 import { useResumeVersionDiffPromptStyles } from "./ResumeVersionDiffPrompt.style";
 
 export function ResumeDocumentDiffModal({
-  error = false,
-  errorMessage,
   footer,
   loading = false,
   loadingMessage,
@@ -25,8 +23,6 @@ export function ResumeDocumentDiffModal({
   targetLabel,
   title,
 }: {
-  error?: boolean;
-  errorMessage: string;
   footer: ReactNode;
   loading?: boolean;
   loadingMessage: string;
@@ -69,8 +65,7 @@ export function ResumeDocumentDiffModal({
             <Spin description={loadingMessage} />
           </div>
         ) : null}
-        {error ? <div className={styles.stateMessage}>{errorMessage}</div> : null}
-        {!loading && !error && result && presentation && sourceDocument ? (
+        {!loading && result && presentation && sourceDocument ? (
           result.summary.total === 0 ? (
             <div className={styles.stateMessage}>{t("editor.diff.noChanges")}</div>
           ) : (

@@ -63,11 +63,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     font-size: 13px;
     line-height: 1.55;
   `,
-  versionHistoryError: css`
-    margin: 0;
-    color: ${token.colorError};
-    font-size: 13px;
-  `,
   versionHistoryList: css`
     display: grid;
     gap: 8px;

@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { useI18n } from "@/i18n/I18nProvider";
 import { updateResumeSummary } from "@/lib/resume-client";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 
 export interface ResumeSummaryUpdateResult {
   summary: string;
@@ -29,11 +30,6 @@ const useStyles = createStyles(({ token, css }) => ({
     color: ${token.colorTextSecondary};
     font-size: 12px;
     line-height: 1;
-  `,
-  error: css`
-    margin: 0;
-    color: ${token.colorError};
-    font-size: 13px;
   `,
 }));
 
@@ -68,10 +64,10 @@ export function ResumeSummaryEditor({
 }) {
   const { styles } = useStyles();
   const { t } = useI18n();
+  const { toast } = useAppFeedback();
   const [internalOpen, setInternalOpen] = useState(false);
   const [draft, setDraft] = useState(initialSummary);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
   const open = controlledOpen ?? internalOpen;
 
   function setOpen(nextOpen: boolean) {
@@ -85,7 +81,6 @@ export function ResumeSummaryEditor({
   function handleOpen() {
     onBeforeOpen?.();
     setDraft(initialSummary);
-    setError(false);
     setOpen(true);
   }
 
@@ -97,7 +92,6 @@ export function ResumeSummaryEditor({
     }
 
     setSaving(true);
-    setError(false);
 
     try {
       const resolvedVersion = prepareSave ? await prepareSave() : version;
@@ -106,7 +100,7 @@ export function ResumeSummaryEditor({
       onSaved?.(result);
       setOpen(false);
     } catch {
-      setError(true);
+      toast.error(t("dashboard.summarySaveError"));
     } finally {
       setSaving(false);
     }
@@ -145,11 +139,6 @@ export function ResumeSummaryEditor({
           <span aria-live="polite" className={styles.count}>
             {draft.length} / 160
           </span>
-          {error ? (
-            <p className={styles.error} role="alert">
-              {t("dashboard.summarySaveError")}
-            </p>
-          ) : null}
         </div>
       </Modal>
     </>

@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -36,14 +37,11 @@ import {
 } from "@/components/editor/EditorRibbon";
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
-import {
-  EditorFloatingNotice,
-  EditorFloatingNoticeStack,
-} from "@/components/editor/EditorFloatingNotice";
 import { ResumeDocumentDiffModal } from "@/components/editor/ResumeDocumentDiffModal";
 import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPrompt";
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
   DocumentIcon,
   EnterFullscreenIcon,
@@ -339,6 +337,7 @@ export function ResumeEditorShell({
 }) {
   const { styles } = useResumeEditorShellStyles();
   const { locale, t } = useI18n();
+  const { notification, toast } = useAppFeedback();
   const [resolvedDraftRepository] = useState(
     () => draftRepository ?? createResumeDraftRepository(),
   );
@@ -572,7 +571,6 @@ export function ResumeEditorShell({
   const [versionHistoryError, setVersionHistoryError] = useState(false);
   const [versionDiffOpen, setVersionDiffOpen] = useState(false);
   const [versionDiffLoading, setVersionDiffLoading] = useState(false);
-  const [versionDiffError, setVersionDiffError] = useState(false);
   const [versionDiffSnapshot, setVersionDiffSnapshot] =
     useState<ResumeVersionSnapshotDetail>();
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -591,6 +589,52 @@ export function ResumeEditorShell({
   const [pageCount, setPageCount] = useState(1);
   const [activePage, setActivePage] = useState(1);
   const resolvedActivePage = Math.min(Math.max(activePage, 1), pageCount);
+  const showSaveValidationNotification = useEffectEvent(() => {
+    if (!saveValidation) return;
+
+    notification.error({
+      actions: (
+        <Button
+          size="small"
+          onClick={() => store.getState().clearSaveValidation()}
+        >
+          {t("common.dismiss")}
+        </Button>
+      ),
+      description:
+        saveValidation.issues[0]?.message ?? t("editor.invalidPayload"),
+      duration: false,
+      key: "editor-save-validation",
+      role: "alert",
+      title: t("editor.validationTitle"),
+    });
+  });
+
+  useEffect(() => {
+    if (!saveValidation) {
+      notification.destroy("editor-save-validation");
+      return;
+    }
+
+    showSaveValidationNotification();
+    return () => notification.destroy("editor-save-validation");
+  }, [notification, saveValidation]);
+
+  useEffect(() => {
+    const key = "editor-autosave-error";
+    if (saveStatus !== "error") {
+      notification.destroy(key);
+      return;
+    }
+
+    notification.error({
+      duration: false,
+      key,
+      role: "alert",
+      title: t("editor.saveError"),
+    });
+    return () => notification.destroy(key);
+  }, [notification, saveStatus, t]);
 
   useEffect(() => {
     function syncFullscreenState() {
@@ -958,6 +1002,10 @@ export function ResumeEditorShell({
       await loadVersionHistory(1);
     } catch {
       setVersionHistoryError(true);
+      toast.error({
+        content: t("editor.versionHistoryError"),
+        key: "editor-version-history-error",
+      });
     } finally {
       setVersionHistoryBusy(false);
     }
@@ -976,6 +1024,10 @@ export function ResumeEditorShell({
       await loadVersionHistory(1);
     } catch {
       setVersionHistoryError(true);
+      toast.error({
+        content: t("editor.versionHistoryError"),
+        key: "editor-version-history-error",
+      });
     } finally {
       setVersionHistoryBusy(false);
     }
@@ -989,6 +1041,10 @@ export function ResumeEditorShell({
       await loadVersionHistory(page);
     } catch {
       setVersionHistoryError(true);
+      toast.error({
+        content: t("editor.versionHistoryError"),
+        key: "editor-version-history-error",
+      });
     } finally {
       setVersionHistoryBusy(false);
     }
@@ -997,7 +1053,6 @@ export function ResumeEditorShell({
   async function handleOpenVersionDiff(snapshotId: string) {
     setVersionDiffOpen(true);
     setVersionDiffLoading(true);
-    setVersionDiffError(false);
     setVersionDiffSnapshot(undefined);
 
     try {
@@ -1008,7 +1063,11 @@ export function ResumeEditorShell({
 
       setVersionDiffSnapshot(snapshot);
     } catch {
-      setVersionDiffError(true);
+      setVersionDiffOpen(false);
+      toast.error({
+        content: t("editor.diff.historyLoadError"),
+        key: "editor-version-diff-error",
+      });
     } finally {
       setVersionDiffLoading(false);
     }
@@ -1040,6 +1099,10 @@ export function ResumeEditorShell({
       }
 
       setVersionHistoryError(true);
+      toast.error({
+        content: t("editor.versionHistoryError"),
+        key: "editor-version-history-error",
+      });
     } finally {
       setVersionHistoryBusy(false);
     }
@@ -2355,9 +2418,6 @@ export function ResumeEditorShell({
           >
             {t("editor.createVersionSnapshot")}
           </Button>
-          {versionHistoryError ? (
-            <p className={styles.versionHistoryError}>{t("editor.versionHistoryError")}</p>
-          ) : null}
           <div className={styles.versionHistoryList}>
             {versionSnapshots.map((snapshot) => (
               <div className={styles.versionHistoryItem} key={snapshot.id}>
@@ -2406,8 +2466,6 @@ export function ResumeEditorShell({
       </Modal>
 
       <ResumeDocumentDiffModal
-        error={versionDiffError}
-        errorMessage={t("editor.diff.historyLoadError")}
         footer={
           <Button onClick={() => setVersionDiffOpen(false)}>
             {t("common.dismiss")}
@@ -2424,8 +2482,8 @@ export function ResumeEditorShell({
         onCancel={() => setVersionDiffOpen(false)}
       />
 
-      {recoveryDraft || saveValidation || saveConflict ? (
-        <EditorFloatingNoticeStack>
+      {recoveryDraft || saveConflict ? (
+        <>
           {recoveryDraft ? (
             <ResumeVersionDiffPrompt
               cloudDocument={initialDocument}
@@ -2437,24 +2495,6 @@ export function ResumeEditorShell({
                 await resolvedDraftRepository.deleteDraft(resumeId);
               }}
               onUseLocal={() => store.getState().restoreRecoveryDraft()}
-            />
-          ) : null}
-
-          {saveValidation ? (
-            <EditorFloatingNotice
-              actions={
-                <Button
-                  onClick={() => store.getState().clearSaveValidation()}
-                  size="small"
-                >
-                  {t("common.dismiss")}
-                </Button>
-              }
-              ariaLabel={t("editor.validationTitle")}
-              description={
-                saveValidation.issues[0]?.message ?? t("editor.invalidPayload")
-              }
-              title={t("editor.validationTitle")}
             />
           ) : null}
 
@@ -2482,7 +2522,7 @@ export function ResumeEditorShell({
               }}
             />
           ) : null}
-        </EditorFloatingNoticeStack>
+        </>
       ) : null}
 
       <ResumeIconPicker

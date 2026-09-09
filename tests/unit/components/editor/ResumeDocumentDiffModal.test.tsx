@@ -31,7 +31,6 @@ describe("ResumeDocumentDiffModal", () => {
 
     render(
       <ResumeDocumentDiffModal
-        errorMessage="加载失败"
         footer={null}
         loadingMessage="加载中"
         open
