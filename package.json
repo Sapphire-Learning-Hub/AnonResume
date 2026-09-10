@@ -16,7 +16,7 @@
     "db:migrate": "bun run scripts/migrate.ts",
     "db:push": "drizzle-kit push",
     "worker:pdf": "bun run scripts/pdf-worker.ts",
-    "auth:migrate": "bunx @better-auth/cli migrate --config src/lib/auth.ts",
+    "auth:migrate": "bunx @better-auth/cli migrate --config src/lib/auth/config.ts",
     "admin:doctor": "bun run scripts/admin-doctor.ts",
     "admin:bootstrap": "bun run scripts/admin-bootstrap.ts",
     "admin:repair-super-admin": "bun run scripts/admin-repair-super-admin.ts",
