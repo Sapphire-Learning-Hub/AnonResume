@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   createResumeRecord,
   resetResumeRepository,
   saveResumeRecord,
   snapshotResumeVersion,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 

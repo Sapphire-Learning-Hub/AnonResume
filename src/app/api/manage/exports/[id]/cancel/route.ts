@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
-import { adminCancelExport } from "@/lib/admin-management";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
+import { adminCancelExport } from "@/lib/admin/management";
 import {
   PdfExportNotFoundError,
   PdfExportStateConflictError,
-} from "@/lib/pdf-export-queue";
+} from "@/lib/pdf/export-queue";
 
 export async function POST(
   _request: Request,

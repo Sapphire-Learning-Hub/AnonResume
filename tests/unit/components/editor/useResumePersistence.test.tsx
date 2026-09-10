@@ -5,8 +5,8 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
-} from "@/lib/resume-client";
-import type { LocalResumeDraft } from "@/lib/resume-drafts";
+} from "@/lib/resume/client";
+import type { LocalResumeDraft } from "@/lib/resume/drafts";
 import { createResumeEditorStore } from "@/stores/resume-editor";
 
 import { useResumePersistence } from "@/components/editor/useResumePersistence";

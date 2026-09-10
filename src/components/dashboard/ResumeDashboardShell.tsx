@@ -14,14 +14,14 @@ import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
 } from "@/components/resume/ResumeSummaryEditor";
-import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
-import type { PageResult, PaginationSearchParams } from "@/lib/pagination";
+import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
+import type { PageResult, PaginationSearchParams } from "@/lib/shared/pagination";
 import {
   exportResumePdfDocument,
   publishResume,
   unpublishResume,
   updateResumeSummary,
-} from "@/lib/resume-client";
+} from "@/lib/resume/client";
 
 import { ResumeImportPicker } from "./ResumeImportPicker";
 import { ResumeTemplatePicker } from "./ResumeTemplatePicker";

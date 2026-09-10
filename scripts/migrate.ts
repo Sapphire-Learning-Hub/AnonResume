@@ -1,5 +1,5 @@
 import { migrateDatabase } from "@/db/migrate";
-import { getDatabasePool } from "@/lib/database";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 try {
   await migrateDatabase();

@@ -1,12 +1,12 @@
 import { AdminAuditLog } from "@/components/admin/AdminAuditLog";
 import { AdminPage } from "@/components/admin/AdminPage";
-import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminAuditEvents } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { listAdminAuditEvents } from "@/lib/admin/query";
 import {
   parsePageRequest,
   readSearchParam,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 

@@ -5,13 +5,13 @@ import {
 } from "@/components/admin/AdminPage";
 import { AdminExportActions } from "@/components/admin/AdminExportActions";
 import type { PdfExportJobStatus } from "@/db/schema";
-import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminExports } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { listAdminExports } from "@/lib/admin/query";
 import {
   parsePageRequest,
   readSearchParam,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 import {
   createAdminTranslator,
   type AdminMessageKey,

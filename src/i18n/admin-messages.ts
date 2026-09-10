@@ -1,5 +1,5 @@
 import type { AppLocale } from "./messages";
-import type { AdminSystemRoleKey } from "@/lib/admin-permissions";
+import type { AdminSystemRoleKey } from "@/lib/admin/permissions";
 
 const zhCN = {
   "shell.superAdmin": "超级管理员",

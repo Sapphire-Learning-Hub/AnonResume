@@ -2,14 +2,14 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getPdfExportDocumentForWorker } from "@/lib/pdf-export-queue";
+import { getPdfExportDocumentForWorker } from "@/lib/pdf/export-queue";
 
 import PdfExportPrintPage from "@/app/pdf-export/[id]/print/page";
 
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
-vi.mock("@/lib/pdf-export-queue", () => ({
+vi.mock("@/lib/pdf/export-queue", () => ({
   getPdfExportDocumentForWorker: vi.fn(),
 }));
 

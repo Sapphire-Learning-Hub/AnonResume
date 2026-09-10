@@ -20,7 +20,7 @@ import {
   dismissPdfExportTask,
   getPdfExportTasksSnapshot,
   startResumePdfExport,
-} from "@/lib/pdf-export-client";
+} from "@/lib/pdf/export-client";
 
 describe("PdfExportTaskOverlay", () => {
   afterEach(() => {

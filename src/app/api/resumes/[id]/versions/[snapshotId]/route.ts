@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   getResumeVersionSnapshot,
   ResumeVersionSnapshotNotFoundError,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export async function GET(
   _request: Request,

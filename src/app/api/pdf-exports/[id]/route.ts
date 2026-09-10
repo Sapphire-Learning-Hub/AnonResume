@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { PDF_EXPORT_OFFLINE_POLL_MS } from "@/lib/pdf-export-availability";
+import { getOptionalSession } from "@/lib/auth/session";
+import { PDF_EXPORT_OFFLINE_POLL_MS } from "@/lib/pdf/export-availability";
 import {
   cancelPdfExport,
   getPdfExportStatus,
   PdfExportAccessError,
   PdfExportNotFoundError,
-} from "@/lib/pdf-export-queue";
-import { getBearerToken } from "@/lib/request-authorization";
-import { requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/pdf/export-queue";
+import { getBearerToken } from "@/lib/http/request-authorization";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 
 function getAccess(request: Request, requesterUserId?: string) {
   return {

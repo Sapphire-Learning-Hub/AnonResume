@@ -1,12 +1,12 @@
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   createResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { GET } from "@/app/api/resumes/route";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 

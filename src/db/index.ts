@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 
-import { getDatabasePool } from "@/lib/database";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 import {
   accountRestrictions,

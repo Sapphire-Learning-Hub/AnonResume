@@ -6,13 +6,13 @@ import {
 } from "@/components/admin/AdminPage";
 import { AdminInviteUser } from "@/components/admin/AdminInviteUser";
 import { AdminUserActions } from "@/components/admin/AdminUserActions";
-import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminUsers } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { listAdminUsers } from "@/lib/admin/query";
 import {
   parsePageRequest,
   readSearchParam,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 import {
   createAdminTranslator,
   getAdminSystemRolePresentation,

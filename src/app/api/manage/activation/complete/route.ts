@@ -4,11 +4,11 @@ import { z } from "zod";
 import {
   AdminActivationError,
   completeAdminActivation,
-} from "@/lib/admin-activation";
+} from "@/lib/admin/activation";
 import {
   AdminMfaLockedError,
   AdminMfaVerificationError,
-} from "@/lib/admin-store";
+} from "@/lib/admin/store";
 
 const bodySchema = z.object({
   token: z.string().min(32).max(256),

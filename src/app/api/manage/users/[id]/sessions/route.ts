@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   AdminManagementConflictError,
   AdminManagementNotFoundError,
   revokeUserSessions,
-} from "@/lib/admin-management";
+} from "@/lib/admin/management";
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import { AppShell } from "@/components/dashboard/AppShell";
-import { requireAppShellContext } from "@/lib/app-shell-context";
+import { requireAppShellContext } from "@/lib/auth/app-shell-context";
 
 export default async function WorkbenchLayout({
   children,

@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 
 import FontMarketPage from "@/app/app/(workbench)/fonts/page";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
 }));
 

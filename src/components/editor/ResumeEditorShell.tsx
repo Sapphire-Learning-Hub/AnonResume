@@ -86,7 +86,7 @@ import type {
 import {
   createResumeDraftRepository,
   type ResumeDraftRepository,
-} from "@/lib/resume-drafts";
+} from "@/lib/resume/drafts";
 import {
   exportResumePdfDocument,
   createResumeVersionSnapshot,
@@ -102,7 +102,7 @@ import {
   updateResumeSummary,
   type ResumeVersionSnapshotDetail,
   type ResumeVersionSnapshotSummary,
-} from "@/lib/resume-client";
+} from "@/lib/resume/client";
 import {
   createResumeEditorStore,
   RESUME_EDITOR_ZOOM_MAX,
@@ -111,7 +111,7 @@ import {
   type ResumeEditorStoreState,
 } from "@/stores/resume-editor";
 import { useI18n } from "@/i18n/I18nProvider";
-import type { PageResult } from "@/lib/pagination";
+import type { PageResult } from "@/lib/shared/pagination";
 
 import { useResumeEditorShellStyles } from "./ResumeEditorShell.style";
 import { getActiveResumePageIndex } from "./resume-page-navigation";

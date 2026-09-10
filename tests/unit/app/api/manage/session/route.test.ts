@@ -14,12 +14,12 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({ set: mocks.cookieSet }),
 }));
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalIdentitySession: mocks.getIdentity,
 }));
 
-vi.mock("@/lib/admin-store", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/lib/admin-store")>();
+vi.mock("@/lib/admin/store", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/admin/store")>();
   return {
     ...original,
     beginAdminMfaEnrollment: mocks.beginEnrollment,

@@ -6,8 +6,8 @@ import type { StoreApi } from "zustand/vanilla";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
-} from "@/lib/resume-client";
-import type { ResumeDraftRepository } from "@/lib/resume-drafts";
+} from "@/lib/resume/client";
+import type { ResumeDraftRepository } from "@/lib/resume/drafts";
 import type { ResumeEditorStoreState } from "@/stores/resume-editor";
 
 export function useResumePersistence({

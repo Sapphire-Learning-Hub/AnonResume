@@ -5,7 +5,7 @@ import {
   createGeneratedResumeRecord,
   publishResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import PublicResumePrintPage from "@/app/resume/[slug]/print/page";
 

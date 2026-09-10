@@ -12,9 +12,9 @@ import {
   type ResumeFontPreset,
 } from "@/domain/resume/font-presets";
 import { useI18n } from "@/i18n/I18nProvider";
-import type { PageResult } from "@/lib/pagination";
-import type { ResumeCatalogEntry } from "@/lib/resume-catalog";
-import { fetchResumeEntriesPage } from "@/lib/resume-client";
+import type { PageResult } from "@/lib/shared/pagination";
+import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
+import { fetchResumeEntriesPage } from "@/lib/resume/client";
 
 type FontMarketCategory = ResumeFontCategory | "all";
 

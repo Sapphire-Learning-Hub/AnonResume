@@ -21,7 +21,7 @@ import type { ResumeDocument } from "@/domain/resume/schema";
 import type {
   AdminPermission,
   AdminSystemRoleKey,
-} from "@/lib/admin-permissions";
+} from "@/lib/admin/permissions";
 
 export type PdfExportJobStatus =
   | "queued"

@@ -1,5 +1,5 @@
-import { getDatabasePool } from "@/lib/database";
-import { runPdfExportWorker } from "@/lib/pdf-export-worker";
+import { getDatabasePool } from "@/lib/runtime/database";
+import { runPdfExportWorker } from "@/lib/pdf/export-worker";
 
 const controller = new AbortController();
 const stop = () => controller.abort();

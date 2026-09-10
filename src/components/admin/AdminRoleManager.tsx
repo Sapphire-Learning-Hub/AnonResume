@@ -29,8 +29,8 @@ import {
   ADMIN_PERMISSION_KEYS,
   type AdminPermission,
   type AdminSystemRoleKey,
-} from "@/lib/admin-permissions";
-import type { PageResult, PaginationSearchParams } from "@/lib/pagination";
+} from "@/lib/admin/permissions";
+import type { PageResult, PaginationSearchParams } from "@/lib/shared/pagination";
 
 const useStyles = createStyles(({ token, css }) => ({
   form: css`

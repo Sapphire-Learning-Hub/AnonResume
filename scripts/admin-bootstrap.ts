@@ -1,7 +1,7 @@
-import { bootstrapConfiguredSuperAdmin } from "@/lib/admin-bootstrap";
-import { getDatabasePool } from "@/lib/database";
-import { closeEmailTransporter } from "@/lib/email";
-import { validateRuntimeConfiguration } from "@/lib/runtime-configuration";
+import { bootstrapConfiguredSuperAdmin } from "@/lib/admin/bootstrap";
+import { getDatabasePool } from "@/lib/runtime/database";
+import { closeEmailTransporter } from "@/lib/runtime/email";
+import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
 
 const requestedMode = process.argv[2];
 if (

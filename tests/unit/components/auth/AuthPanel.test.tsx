@@ -20,7 +20,7 @@ const feedbackMocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
 }));
 
-vi.mock("@/lib/auth-client", () => ({
+vi.mock("@/lib/auth/client", () => ({
   authClient: {
     sendVerificationEmail: authMocks.sendVerificationEmail,
     signIn: {

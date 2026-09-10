@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
-import { writeAdminAuditEvent } from "@/lib/admin-audit";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
+import { writeAdminAuditEvent } from "@/lib/admin/audit";
 import {
   AdminMfaDeviceConflictError,
   removeAdminMfaDevice,
-} from "@/lib/admin-store";
+} from "@/lib/admin/store";
 
 export async function DELETE(
   _request: Request,

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ResumePrintShell } from "@/components/resume/ResumePrintShell";
 import { getRequestMessages } from "@/i18n/server";
-import { getPublishedResumeBySlug } from "@/lib/resume-repository";
+import { getPublishedResumeBySlug } from "@/lib/resume/repository";
 
 export const metadata: Metadata = {
   robots: {

@@ -10,12 +10,12 @@ import {
 import type { AdminMfaResetRequestStatus } from "@/db/schema";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
-import { listAdminMfaResetRequests } from "@/lib/admin-mfa-reset-requests";
-import { requireAdminPage } from "@/lib/admin-page";
+import { listAdminMfaResetRequests } from "@/lib/admin/mfa-reset-requests";
+import { requireAdminPage } from "@/lib/admin/page";
 import {
   parsePageRequest,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 
 function statusPresentation(status: AdminMfaResetRequestStatus) {
   switch (status) {

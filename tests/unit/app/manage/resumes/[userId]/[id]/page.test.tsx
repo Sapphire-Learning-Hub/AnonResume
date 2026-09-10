@@ -6,15 +6,15 @@ const mocks = vi.hoisted(() => ({
   writeAdminAuditEvent: vi.fn(),
 }));
 
-vi.mock("@/lib/admin-page", () => ({
+vi.mock("@/lib/admin/page", () => ({
   requireAdminPage: mocks.requireAdminPage,
 }));
 
-vi.mock("@/lib/admin-audit", () => ({
+vi.mock("@/lib/admin/audit", () => ({
   writeAdminAuditEvent: mocks.writeAdminAuditEvent,
 }));
 
-vi.mock("@/lib/resume-repository", () => ({
+vi.mock("@/lib/resume/repository", () => ({
   getResumeRecord: mocks.getResumeRecord,
 }));
 

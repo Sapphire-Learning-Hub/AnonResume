@@ -31,7 +31,7 @@ describe("admin security architecture", () => {
   it("keeps direct Better Auth session access behind the shared session boundary", () => {
     const files = listSourceFiles("src");
     const offenders = files.filter((file) => {
-      if (file === "src/lib/auth-session.ts") return false;
+      if (file === "src/lib/auth/session.ts") return false;
       return readFileSync(resolve(root, file), "utf8").includes("auth.api.getSession");
     });
 
@@ -57,7 +57,7 @@ describe("admin security architecture", () => {
 
   it("keeps management cookies secure across shared pages and APIs", () => {
     const requestBoundary = readFileSync(
-      resolve(root, "src/lib/admin-request.ts"),
+      resolve(root, "src/lib/admin/request.ts"),
       "utf8",
     );
     expect(requestBoundary).toContain('path: "/"');

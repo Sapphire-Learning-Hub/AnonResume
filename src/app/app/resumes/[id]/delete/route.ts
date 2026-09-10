@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { requireSession } from "@/lib/auth-session";
-import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
+import { requireSession } from "@/lib/auth/session";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
 import {
   deleteResumeRecord,
   getResumeRecord,
   ResumeNotFoundError,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,

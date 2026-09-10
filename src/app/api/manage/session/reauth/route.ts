@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   AdminMfaLockedError,
   AdminMfaVerificationError,
   reauthenticateAdminSession,
-} from "@/lib/admin-store";
+} from "@/lib/admin/store";
 
 const bodySchema = z.object({ code: z.string().regex(/^\d{6}$/) });
 

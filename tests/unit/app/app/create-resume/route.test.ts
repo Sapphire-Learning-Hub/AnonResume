@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createResumeDocumentFromTemplate } from "@/domain/resume/templates";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   getResumeRecord,
   paginateResumeEntries,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { POST } from "@/app/app/create-resume/route";
-import { MAX_RESUME_IMPORT_REQUEST_BYTES } from "@/lib/request-body";
+import { MAX_RESUME_IMPORT_REQUEST_BYTES } from "@/lib/http/request-body";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
 }));
 

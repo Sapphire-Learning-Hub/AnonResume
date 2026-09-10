@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 
 import { EditorViewportGuard } from "@/components/editor/EditorViewportGuard";
 import { ResumeEditorShell } from "@/components/editor/ResumeEditorShell";
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   getResumeRecord,
   getResumeVersionHistoryLimit,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export default async function ResumeEditorPage({
   params,

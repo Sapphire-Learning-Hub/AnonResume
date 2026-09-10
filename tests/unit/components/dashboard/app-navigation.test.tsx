@@ -1,5 +1,5 @@
 import { buildAppNavigation } from "@/components/dashboard/app-navigation";
-import type { AppShellAccess } from "@/lib/app-shell-access";
+import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 const label = (key: string) => key;
 

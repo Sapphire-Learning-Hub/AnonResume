@@ -1,6 +1,6 @@
 import type { MessageKey } from "@/i18n/messages";
-import type { AdminPermission } from "@/lib/admin-permissions";
-import type { AppShellAccess } from "@/lib/app-shell-access";
+import type { AdminPermission } from "@/lib/admin/permissions";
+import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 export type AppNavigationIcon =
   | "approvals"

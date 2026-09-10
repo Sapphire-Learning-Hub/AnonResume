@@ -5,12 +5,12 @@ const mocks = vi.hoisted(() => ({
   setRoles: vi.fn(),
 }));
 
-vi.mock("@/lib/admin-api", () => ({
+vi.mock("@/lib/admin/api", () => ({
   adminApiErrorResponse: () => null,
   requireAdminApi: mocks.requireAdmin,
 }));
 
-vi.mock("@/lib/admin-management", () => ({
+vi.mock("@/lib/admin/management", () => ({
   AdminManagementConflictError: class extends Error {},
   AdminManagementNotFoundError: class extends Error {},
   removeDelegatedAdmin: vi.fn(),

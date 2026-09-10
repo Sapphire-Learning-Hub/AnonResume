@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   AdminActivationError,
   startAdminActivation,
-} from "@/lib/admin-activation";
+} from "@/lib/admin/activation";
 
 const bodySchema = z.object({
   token: z.string().min(32).max(256),

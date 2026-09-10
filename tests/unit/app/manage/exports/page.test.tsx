@@ -5,11 +5,11 @@ const mocks = vi.hoisted(() => ({
   requireAdminPage: vi.fn(),
 }));
 
-vi.mock("@/lib/admin-page", () => ({
+vi.mock("@/lib/admin/page", () => ({
   requireAdminPage: mocks.requireAdminPage,
 }));
 
-vi.mock("@/lib/admin-query", () => ({
+vi.mock("@/lib/admin/query", () => ({
   listAdminExports: mocks.listAdminExports,
 }));
 

@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { getResumeFontPreset } from "@/domain/resume/font-presets";
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedFormDataRequest,
   RequestBodyTooLargeError,
-} from "@/lib/request-body";
-import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/http/request-body";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
 import {
   getResumeRecord,
   ResumeNotFoundError,
   saveResumeRecord,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,

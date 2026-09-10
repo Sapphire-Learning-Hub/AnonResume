@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getResumeFontPreset } from "@/domain/resume/font-presets";
-import { requireSession } from "@/lib/auth-session";
-import { MAX_ACTION_REQUEST_BYTES } from "@/lib/request-body";
+import { requireSession } from "@/lib/auth/session";
+import { MAX_ACTION_REQUEST_BYTES } from "@/lib/http/request-body";
 import {
   createGeneratedResumeRecord,
   getResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { POST } from "@/app/app/resumes/[id]/font/route";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
 }));
 

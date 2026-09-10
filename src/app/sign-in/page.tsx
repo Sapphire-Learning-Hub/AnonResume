@@ -6,15 +6,15 @@ import {
   AdminAccessShell,
   AdminMfaPanel,
 } from "@/components/admin/AdminAccessPanel";
-import { isGitHubAuthEnabled } from "@/lib/auth";
+import { isGitHubAuthEnabled } from "@/lib/auth/config";
 import {
   AdminAuthenticationError,
   type AdminAuthorizationContext,
-} from "@/lib/admin-authorization";
-import { getAdminRequestContext } from "@/lib/admin-request";
-import { resolveAuthenticatedEntry } from "@/lib/admin-sign-in-flow";
-import { getAdminAccessForUser, isAccountSuspended } from "@/lib/admin-store";
-import { getOptionalIdentitySession } from "@/lib/auth-session";
+} from "@/lib/admin/authorization";
+import { getAdminRequestContext } from "@/lib/admin/request";
+import { resolveAuthenticatedEntry } from "@/lib/admin/sign-in-flow";
+import { getAdminAccessForUser, isAccountSuspended } from "@/lib/admin/store";
+import { getOptionalIdentitySession } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   robots: {

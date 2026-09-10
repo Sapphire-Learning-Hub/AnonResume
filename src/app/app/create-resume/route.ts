@@ -7,13 +7,13 @@ import {
 import { importResumeMarkdown } from "@/domain/resume/import/markdown";
 import { isResumeMarkdownDialect } from "@/domain/resume/import/types";
 import { getRequestLocale } from "@/i18n/server";
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   parseLimitedFormDataRequest,
   RequestBodyTooLargeError,
-} from "@/lib/request-body";
-import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
-import { createGeneratedResumeRecord } from "@/lib/resume-repository";
+} from "@/lib/http/request-body";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
+import { createGeneratedResumeRecord } from "@/lib/resume/repository";
 
 export async function POST(request: Request) {
   const forbiddenResponse = requireSameOrigin(request);

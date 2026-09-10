@@ -8,8 +8,8 @@ import {
   cancelAdminMfaResetRequest,
   getAdminMfaResetRequestForUser,
   submitAdminMfaResetRequest,
-} from "@/lib/admin-mfa-reset-requests";
-import { getOptionalIdentitySession } from "@/lib/auth-session";
+} from "@/lib/admin/mfa-reset-requests";
+import { getOptionalIdentitySession } from "@/lib/auth/session";
 
 const submissionSchema = z.object({
   reason: z.string().trim().min(10).max(1000),

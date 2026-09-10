@@ -17,8 +17,8 @@ import type { AppLocale } from "@/i18n/messages";
 import type {
   AdminAuditEvent,
   AdminAuditResource,
-} from "@/lib/admin-query";
-import type { PaginationSearchParams } from "@/lib/pagination";
+} from "@/lib/admin/query";
+import type { PaginationSearchParams } from "@/lib/shared/pagination";
 
 type SerializedAuditEvent = Omit<AdminAuditEvent, "createdAt"> & {
   createdAt: string;

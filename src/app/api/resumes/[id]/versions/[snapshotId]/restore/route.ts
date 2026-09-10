@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedJsonRequest,
   RequestBodyTooLargeError,
-} from "@/lib/request-body";
-import { requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/http/request-body";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import {
   restoreResumeVersion,
   ResumeNotFoundError,
   ResumeVersionConflictError,
   ResumeVersionSnapshotNotFoundError,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 const restoreVersionSchema = z.object({
   version: z.number().int().positive(),

@@ -6,11 +6,11 @@ import {
   getAdminSystemRolePresentation,
 } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
-import { createAdminRole, AdminManagementConflictError } from "@/lib/admin-management";
-import { ADMIN_PERMISSION_KEYS } from "@/lib/admin-permissions";
-import { listAdminRoles } from "@/lib/admin-query";
-import { parsePageRequest } from "@/lib/pagination";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
+import { createAdminRole, AdminManagementConflictError } from "@/lib/admin/management";
+import { ADMIN_PERMISSION_KEYS } from "@/lib/admin/permissions";
+import { listAdminRoles } from "@/lib/admin/query";
+import { parsePageRequest } from "@/lib/shared/pagination";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(80),

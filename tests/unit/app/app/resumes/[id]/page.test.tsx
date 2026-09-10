@@ -2,16 +2,16 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import { notFound } from "next/navigation";
 
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   createGeneratedResumeRecord,
   publishResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import ResumeEditorPage from "@/app/app/resumes/[id]/page";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
 }));
 

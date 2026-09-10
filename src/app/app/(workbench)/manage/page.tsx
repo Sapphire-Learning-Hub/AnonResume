@@ -3,8 +3,8 @@ import {
   AdminMetricGrid,
   AdminPage,
 } from "@/components/admin/AdminPage";
-import { requireAdminPage } from "@/lib/admin-page";
-import { getAdminOverview } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { getAdminOverview } from "@/lib/admin/query";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 

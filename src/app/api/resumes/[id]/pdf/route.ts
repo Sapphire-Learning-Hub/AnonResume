@@ -1,22 +1,22 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { createPdfFilename } from "@/lib/download-filename";
+import { getOptionalSession } from "@/lib/auth/session";
+import { createPdfFilename } from "@/lib/shared/download-filename";
 import {
   getPdfExportWorkerAvailability,
   PDF_EXPORT_OFFLINE_POLL_MS,
-} from "@/lib/pdf-export-availability";
+} from "@/lib/pdf/export-availability";
 import {
   enqueuePdfExport,
   getPdfExportQueueConfig,
   PdfExportQueueFullError,
   PdfExportUserQueueLimitError,
-} from "@/lib/pdf-export-queue";
-import { requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/pdf/export-queue";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import {
   getResumeRecord,
   ResumeNotFoundError,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,

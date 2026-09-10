@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getOptionalIdentitySession } from "@/lib/auth-session";
+import { getOptionalIdentitySession } from "@/lib/auth/session";
 import {
   AdminMfaDeviceConflictError,
   createAdminSession,
@@ -15,13 +15,13 @@ import {
   verifyAdminMfaCode,
   AdminMfaLockedError,
   AdminMfaVerificationError,
-} from "@/lib/admin-store";
+} from "@/lib/admin/store";
 import {
   ADMIN_SESSION_COOKIE,
   getAdminSessionClearCookieOptions,
   getAdminSessionCookieOptions,
-} from "@/lib/admin-request";
-import { resolveAdminSecurityConfiguration } from "@/lib/admin-configuration";
+} from "@/lib/admin/request";
+import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 
 const verificationSchema = z.object({
   code: z.string().trim().regex(/^(?:\d{6}|[A-Fa-f0-9]{4}(?:-[A-Fa-f0-9]{4}){4})$/),

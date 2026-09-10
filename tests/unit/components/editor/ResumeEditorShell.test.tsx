@@ -29,7 +29,7 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
-} from "@/lib/resume-client";
+} from "@/lib/resume/client";
 import type { RichTextContent } from "@/domain/resume/schema";
 
 import { ResumeEditorShell } from "@/components/editor/ResumeEditorShell";

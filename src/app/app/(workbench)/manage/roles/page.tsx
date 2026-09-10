@@ -2,13 +2,13 @@ import { redirect } from "next/navigation";
 
 import { AdminPage } from "@/components/admin/AdminPage";
 import { AdminRoleManager } from "@/components/admin/AdminRoleManager";
-import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminAdministrators, listAdminRoles } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { listAdminAdministrators, listAdminRoles } from "@/lib/admin/query";
 import {
   parsePageRequest,
   readSearchParam,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 

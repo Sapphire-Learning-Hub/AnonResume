@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
-import { writeAdminAuditEvent } from "@/lib/admin-audit";
-import { getOptionalIdentitySession } from "@/lib/auth-session";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
+import { writeAdminAuditEvent } from "@/lib/admin/audit";
+import { getOptionalIdentitySession } from "@/lib/auth/session";
 import {
   AdminMfaDeviceConflictError,
   AdminMfaDeviceLimitError,
@@ -12,7 +12,7 @@ import {
   beginAdminMfaEnrollment,
   listAdminMfaDevices,
   verifyAdminMfaEnrollment,
-} from "@/lib/admin-store";
+} from "@/lib/admin/store";
 
 const beginSchema = z.object({ name: z.string().trim().min(1).max(60) });
 const confirmSchema = z.object({

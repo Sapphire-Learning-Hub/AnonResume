@@ -1,5 +1,5 @@
-import { diagnoseAdminState } from "@/lib/admin-maintenance";
-import { getDatabasePool } from "@/lib/database";
+import { diagnoseAdminState } from "@/lib/admin/maintenance";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 try {
   const report = await diagnoseAdminState();

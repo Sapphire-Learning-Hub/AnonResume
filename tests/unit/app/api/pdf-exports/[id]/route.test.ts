@@ -1,14 +1,14 @@
-import { getOptionalSession } from "@/lib/auth-session";
-import { getPdfExportWorkerAvailability } from "@/lib/pdf-export-availability";
+import { getOptionalSession } from "@/lib/auth/session";
+import { getPdfExportWorkerAvailability } from "@/lib/pdf/export-availability";
 import {
   claimPdfExportJobs,
   completePdfExport,
   enqueuePdfExport,
-} from "@/lib/pdf-export-queue";
+} from "@/lib/pdf/export-queue";
 import {
   createGeneratedResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import {
   DELETE,
@@ -16,11 +16,11 @@ import {
 } from "@/app/api/pdf-exports/[id]/route";
 import { GET as DOWNLOAD } from "@/app/api/pdf-exports/[id]/download/route";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 
-vi.mock("@/lib/pdf-export-availability", () => ({
+vi.mock("@/lib/pdf/export-availability", () => ({
   getPdfExportWorkerAvailability: vi.fn(),
   PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
   PDF_EXPORT_OFFLINE_POLL_MS: 30_000,

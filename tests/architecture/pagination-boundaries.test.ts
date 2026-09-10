@@ -16,7 +16,7 @@ function listSourceFiles(directory: string): string[] {
 describe("pagination architecture", () => {
   it("does not expose legacy unbounded resume-list repository functions", () => {
     const repository = readFileSync(
-      resolve(root, "src/lib/resume-repository.ts"),
+      resolve(root, "src/lib/resume/repository.ts"),
       "utf8",
     );
 

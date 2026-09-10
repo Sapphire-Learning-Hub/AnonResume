@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useI18n } from "@/i18n/I18nProvider";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth/client";
 
 export function SignOutButton() {
   const [isPending, setIsPending] = useState(false);

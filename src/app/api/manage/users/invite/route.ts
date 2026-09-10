@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   AdminInvitationConflictError,
   AdminInvitationNotFoundError,
   inviteUser,
-} from "@/lib/admin-invitations";
+} from "@/lib/admin/invitations";
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(80),

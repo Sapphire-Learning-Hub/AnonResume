@@ -6,7 +6,7 @@ import { db, getDatabaseSchemaName } from "@/db";
 import { migrateDatabase } from "@/db/migrate";
 import { pdfExportJobs, resumes, resumeVersions } from "@/db/schema";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
-import { getDatabasePool } from "@/lib/database";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 describe("database migrations", () => {
   beforeAll(async () => {

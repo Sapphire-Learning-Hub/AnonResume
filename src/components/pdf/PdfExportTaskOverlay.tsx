@@ -22,7 +22,7 @@ import {
   refreshPdfExportTask,
   subscribePdfExportTasks,
   type PdfExportClientTask,
-} from "@/lib/pdf-export-client";
+} from "@/lib/pdf/export-client";
 
 const MAX_QUEUED_POLL_MS = 10_000;
 const MAX_ERROR_POLL_MS = 30_000;

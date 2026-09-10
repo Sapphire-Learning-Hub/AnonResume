@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   adminUnpublishResume,
   AdminManagementNotFoundError,
-} from "@/lib/admin-management";
+} from "@/lib/admin/management";
 
 const bodySchema = z.object({ reason: z.string().trim().min(1).max(240) });
 

@@ -27,7 +27,7 @@ import {
   type AppNavigationIcon,
 } from "@/components/dashboard/app-navigation";
 import { useI18n } from "@/i18n/I18nProvider";
-import type { AppShellAccess } from "@/lib/app-shell-access";
+import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 const useStyles = createStyles(({ token, css }) => ({
   shell: css`

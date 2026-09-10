@@ -6,9 +6,9 @@ import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
 import { ResponsiveResumeViewport } from "@/components/resume/ResponsiveResumeViewport";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
-import { requireAdminPage } from "@/lib/admin-page";
-import { writeAdminAuditEvent } from "@/lib/admin-audit";
-import { getResumeRecord } from "@/lib/resume-repository";
+import { requireAdminPage } from "@/lib/admin/page";
+import { writeAdminAuditEvent } from "@/lib/admin/audit";
+import { getResumeRecord } from "@/lib/resume/repository";
 
 export default async function ManagementResumeContentPage({
   params,

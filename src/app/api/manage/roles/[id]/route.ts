@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   deleteAdminRole,
   updateAdminRole,
   AdminManagementConflictError,
   AdminManagementNotFoundError,
-} from "@/lib/admin-management";
-import { ADMIN_PERMISSION_KEYS } from "@/lib/admin-permissions";
+} from "@/lib/admin/management";
+import { ADMIN_PERMISSION_KEYS } from "@/lib/admin/permissions";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(80),

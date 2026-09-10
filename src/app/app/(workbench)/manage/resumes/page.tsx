@@ -5,13 +5,13 @@ import {
   AdminTable,
 } from "@/components/admin/AdminPage";
 import { AdminResumeActions } from "@/components/admin/AdminResumeActions";
-import { requireAdminPage } from "@/lib/admin-page";
-import { listAdminResumeMetadata } from "@/lib/admin-query";
+import { requireAdminPage } from "@/lib/admin/page";
+import { listAdminResumeMetadata } from "@/lib/admin/query";
 import {
   parsePageRequest,
   readSearchParam,
   type PaginationSearchParams,
-} from "@/lib/pagination";
+} from "@/lib/shared/pagination";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 

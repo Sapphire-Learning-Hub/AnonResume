@@ -1,21 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { getPdfExportWorkerAvailability } from "@/lib/pdf-export-availability";
-import { getPdfExportStatus } from "@/lib/pdf-export-queue";
+import { getOptionalSession } from "@/lib/auth/session";
+import { getPdfExportWorkerAvailability } from "@/lib/pdf/export-availability";
+import { getPdfExportStatus } from "@/lib/pdf/export-queue";
 import {
   createGeneratedResumeRecord,
   publishResumeRecord,
   resetResumeRepository,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { POST } from "@/app/resume/[slug]/pdf/route";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 
-vi.mock("@/lib/pdf-export-availability", () => ({
+vi.mock("@/lib/pdf/export-availability", () => ({
   getPdfExportWorkerAvailability: vi.fn(),
   PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
   PDF_EXPORT_OFFLINE_POLL_MS: 30_000,

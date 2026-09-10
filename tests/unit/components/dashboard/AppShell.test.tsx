@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { AppShell } from "@/components/dashboard/AppShell";
-import type { AppShellAccess } from "@/lib/app-shell-access";
+import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 const navigationState = vi.hoisted(() => ({ pathname: "/app/fonts" }));
 

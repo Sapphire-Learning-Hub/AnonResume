@@ -9,7 +9,7 @@ import { getRequestLocale } from "@/i18n/server";
 import {
   AdminActivationError,
   inspectAdminActivation,
-} from "@/lib/admin-activation";
+} from "@/lib/admin/activation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = createAdminTranslator(await getRequestLocale());

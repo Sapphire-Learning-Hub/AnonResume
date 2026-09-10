@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { createDownloadContentDisposition } from "@/lib/download-filename";
+import { getOptionalSession } from "@/lib/auth/session";
+import { createDownloadContentDisposition } from "@/lib/shared/download-filename";
 import {
   getPdfExportDownload,
   PdfExportAccessError,
   PdfExportNotFoundError,
   PdfExportNotReadyError,
-} from "@/lib/pdf-export-queue";
-import { getBearerToken } from "@/lib/request-authorization";
+} from "@/lib/pdf/export-queue";
+import { getBearerToken } from "@/lib/http/request-authorization";
 
 export async function GET(
   request: Request,

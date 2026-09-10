@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   createGeneratedResumeRecord,
@@ -8,12 +8,12 @@ import {
   getResumeRecord,
   resetResumeRepository,
   saveResumeRecord,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { GET, PATCH, PUT } from "@/app/api/resumes/[id]/route";
-import { MAX_RESUME_JSON_REQUEST_BYTES } from "@/lib/request-body";
+import { MAX_RESUME_JSON_REQUEST_BYTES } from "@/lib/http/request-body";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 

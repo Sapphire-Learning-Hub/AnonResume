@@ -8,7 +8,7 @@ import type { CSSProperties } from "react";
 import {
   ADMIN_PERMISSION_KEYS,
   type AdminPermission,
-} from "@/lib/admin-permissions";
+} from "@/lib/admin/permissions";
 
 export interface AdminSelectOption {
   id: string;

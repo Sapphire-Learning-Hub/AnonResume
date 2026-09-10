@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-import { resolveReleaseMetadata } from "./src/lib/release-metadata";
+import { resolveReleaseMetadata } from "./src/lib/runtime/release-metadata";
 
 const release = resolveReleaseMetadata();
 

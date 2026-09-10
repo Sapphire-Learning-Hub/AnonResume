@@ -1,7 +1,7 @@
 import { AdminPage } from "@/components/admin/AdminPage";
 import { AdminSecurityPanel } from "@/components/admin/AdminSecurityPanel";
-import { requireAdminPage } from "@/lib/admin-page";
-import { getAdminSecuritySummary } from "@/lib/admin-store";
+import { requireAdminPage } from "@/lib/admin/page";
+import { getAdminSecuritySummary } from "@/lib/admin/store";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
 

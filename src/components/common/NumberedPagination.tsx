@@ -4,7 +4,7 @@ import Link from "next/link";
 import { createStyles } from "antd-style";
 
 import { useI18n } from "@/i18n/I18nProvider";
-import type { PaginationSearchParams } from "@/lib/pagination";
+import type { PaginationSearchParams } from "@/lib/shared/pagination";
 
 const useStyles = createStyles(({ css, token }) => ({
   root: css`

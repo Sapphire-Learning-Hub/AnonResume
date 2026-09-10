@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { ResumePrintShell } from "@/components/resume/ResumePrintShell";
-import { getPdfExportDocumentForWorker } from "@/lib/pdf-export-queue";
-import { PDF_EXPORT_WORKER_COOKIE } from "@/lib/request-authorization";
+import { getPdfExportDocumentForWorker } from "@/lib/pdf/export-queue";
+import { PDF_EXPORT_WORKER_COOKIE } from "@/lib/http/request-authorization";
 
 export const metadata: Metadata = {
   robots: {

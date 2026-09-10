@@ -26,7 +26,7 @@ import { getRequestLocale } from "@/i18n/server";
 import {
   resolveApplicationOriginForBootstrap,
   validateRuntimeConfiguration,
-} from "@/lib/runtime-configuration";
+} from "@/lib/runtime/configuration";
 import { UI_FONT_FAMILY } from "@/styles/ui-font";
 import { AppThemeProvider } from "@/theme/AppThemeProvider";
 import { getAppThemeCssVariables } from "@/theme/app-palette";

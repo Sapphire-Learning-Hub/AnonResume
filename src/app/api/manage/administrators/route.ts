@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   setAdminRoles,
   removeDelegatedAdmin,
   AdminManagementConflictError,
   AdminManagementNotFoundError,
-} from "@/lib/admin-management";
+} from "@/lib/admin/management";
 
 const assignSchema = z.object({
   userId: z.string().min(1),

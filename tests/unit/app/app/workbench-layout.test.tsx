@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
-import { requireAppShellContext } from "@/lib/app-shell-context";
+import { requireAppShellContext } from "@/lib/auth/app-shell-context";
 
 import WorkbenchLayout from "@/app/app/(workbench)/layout";
 import { metadata as privateAppMetadata } from "@/app/app/layout";
 
-vi.mock("@/lib/app-shell-context", () => ({
+vi.mock("@/lib/auth/app-shell-context", () => ({
   requireAppShellContext: vi.fn(),
 }));
 

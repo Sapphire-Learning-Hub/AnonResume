@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { parsePageRequest } from "@/lib/pagination";
-import { paginateResumeEntries } from "@/lib/resume-repository";
+import { getOptionalSession } from "@/lib/auth/session";
+import { parsePageRequest } from "@/lib/shared/pagination";
+import { paginateResumeEntries } from "@/lib/resume/repository";
 
 export async function GET(request: Request) {
   const session = await getOptionalSession();

@@ -3,7 +3,7 @@ import { ConfigProvider } from "antd";
 
 import { appTheme } from "@/styles/app-theme";
 import { FontMarket } from "@/components/fonts/FontMarket";
-import { fetchResumeEntriesPage } from "@/lib/resume-client";
+import { fetchResumeEntriesPage } from "@/lib/resume/client";
 
 const resumes = [
   {
@@ -16,7 +16,7 @@ const resumes = [
   },
 ];
 
-vi.mock("@/lib/resume-client", () => ({
+vi.mock("@/lib/resume/client", () => ({
   fetchResumeEntriesPage: vi.fn(),
 }));
 

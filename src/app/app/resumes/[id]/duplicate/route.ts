@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
-import { requireSession } from "@/lib/auth-session";
+import { requireSession } from "@/lib/auth/session";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedFormDataRequest,
   RequestBodyTooLargeError,
-} from "@/lib/request-body";
-import { createApplicationUrl, requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/http/request-body";
+import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
 import {
   duplicateGeneratedResumeRecord,
   getResumeRecord,
   ResumeNotFoundError,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,

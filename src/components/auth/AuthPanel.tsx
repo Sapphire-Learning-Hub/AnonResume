@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth/client";
 
 const useStyles = createStyles(({ token, css }) => ({
   shell: css`

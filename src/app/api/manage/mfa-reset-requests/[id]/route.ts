@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import {
   AdminMfaResetRequestConflictError,
   AdminMfaResetRequestForbiddenError,
   AdminMfaResetRequestNotFoundError,
   reviewAdminMfaResetRequest,
-} from "@/lib/admin-mfa-reset-requests";
+} from "@/lib/admin/mfa-reset-requests";
 
 const reviewSchema = z.discriminatedUnion("decision", [
   z.object({

@@ -5,7 +5,7 @@ import { createStyles } from "antd-style";
 import { useState } from "react";
 
 import { useI18n } from "@/i18n/I18nProvider";
-import { updateResumeSummary } from "@/lib/resume-client";
+import { updateResumeSummary } from "@/lib/resume/client";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 
 export interface ResumeSummaryUpdateResult {

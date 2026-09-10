@@ -6,7 +6,7 @@ import {
   publishResumeRecord,
   resetResumeRepository,
   saveResumeRecord,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import PublicResumePage, { generateMetadata } from "@/app/resume/[slug]/page";
 

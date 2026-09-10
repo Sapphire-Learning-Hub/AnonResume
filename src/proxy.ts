@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { getExpectedRequestOrigin } from "@/lib/request-origin";
-import { validateRuntimeConfiguration } from "@/lib/runtime-configuration";
+import { getExpectedRequestOrigin } from "@/lib/http/request-origin";
+import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
 
 const configurationErrorPath = "/configuration-error";
 

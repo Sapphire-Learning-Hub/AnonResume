@@ -50,8 +50,10 @@ surface diverges are regressions.
 - `src/stores/` owns editor runtime state, history, selection, and document
   transactions. Document mutations should go through store actions rather than
   ad hoc component state.
-- `src/lib/` owns persistence repositories and external-system adapters such as
-  authentication, email, and PDF export.
+- `src/lib/` owns persistence repositories and external-system adapters. Keep
+  modules grouped by responsibility: `admin/`, `auth/`, `pdf/`, `resume/`,
+  `http/`, `runtime/`, and `shared/`. Do not add TypeScript files directly to
+  `src/lib/` or reintroduce compatibility forwarding files for old paths.
 - `src/db/` owns Drizzle schema definitions and database construction. Runtime
   application code must not create or alter tables.
 - `src/theme/`, `src/styles/`, and `src/i18n/` are shared infrastructure. Add
@@ -60,6 +62,9 @@ surface diverges are regressions.
 - `tests/unit/` mirrors production behavior, `tests/integration/` covers
   subsystem boundaries, and `tests/architecture/` enforces repository rules.
   Do not place tests under `src/` or import test utilities into production code.
+- Keep every source and unit-test directory at no more than 20 direct
+  TypeScript files. When a directory reaches that limit, create a cohesive
+  functional subdirectory instead of using arbitrary alphabetical grouping.
 
 Use the typed block catalog in `src/domain/resume/block-presets.ts` for block
 creation. Put recursive tree traversal and structural cleanup in

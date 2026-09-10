@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin-api";
-import { listAssignableAdminUsers } from "@/lib/admin-query";
-import { parsePageRequest } from "@/lib/pagination";
+import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
+import { listAssignableAdminUsers } from "@/lib/admin/query";
+import { parsePageRequest } from "@/lib/shared/pagination";
 
 export async function GET(request: Request) {
   try {

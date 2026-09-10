@@ -3,7 +3,7 @@
 import { Button } from "antd";
 import { useState } from "react";
 
-import { startPublicResumePdfExport } from "@/lib/pdf-export-client";
+import { startPublicResumePdfExport } from "@/lib/pdf/export-client";
 
 export function PublicPdfExportButton({
   label,

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ResumeViewShell } from "@/components/resume/ResumeViewShell";
 import { getRequestMessages } from "@/i18n/server";
-import { getPublishedResumeBySlug } from "@/lib/resume-repository";
+import { getPublishedResumeBySlug } from "@/lib/resume/repository";
 
 interface PublicResumePageProps {
   params: Promise<{ slug: string }>;

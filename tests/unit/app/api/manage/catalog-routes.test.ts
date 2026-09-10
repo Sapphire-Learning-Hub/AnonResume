@@ -6,12 +6,12 @@ const mocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
 }));
 
-vi.mock("@/lib/admin-api", () => ({
+vi.mock("@/lib/admin/api", () => ({
   adminApiErrorResponse: () => null,
   requireAdminApi: mocks.requireAdmin,
 }));
 
-vi.mock("@/lib/admin-query", () => ({
+vi.mock("@/lib/admin/query", () => ({
   listAdminRoles: mocks.listRoles,
   listAssignableAdminUsers: mocks.listUsers,
 }));
@@ -20,7 +20,7 @@ vi.mock("@/i18n/server", () => ({
   getRequestLocale: () => Promise.resolve("zh-CN"),
 }));
 
-vi.mock("@/lib/admin-management", () => ({
+vi.mock("@/lib/admin/management", () => ({
   AdminManagementConflictError: class extends Error {},
   createAdminRole: vi.fn(),
 }));

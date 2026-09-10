@@ -1,5 +1,5 @@
-import { repairSuperAdminSingleton } from "@/lib/admin-maintenance";
-import { getDatabasePool } from "@/lib/database";
+import { repairSuperAdminSingleton } from "@/lib/admin/maintenance";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 const keepIndex = process.argv.indexOf("--keep");
 const keepUserId = keepIndex >= 0 ? process.argv[keepIndex + 1] : undefined;

@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
-import { getOptionalSession } from "@/lib/auth-session";
-import { MAX_ACTION_REQUEST_BYTES } from "@/lib/request-body";
+import { getOptionalSession } from "@/lib/auth/session";
+import { MAX_ACTION_REQUEST_BYTES } from "@/lib/http/request-body";
 import {
   createResumeRecord,
   resetResumeRepository,
   saveResumeRecord,
   snapshotResumeVersion,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 import { POST } from "@/app/api/resumes/[id]/versions/[snapshotId]/restore/route";
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
 }));
 

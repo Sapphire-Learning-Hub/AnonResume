@@ -10,16 +10,16 @@ const mocks = vi.hoisted(() => ({
   submit: vi.fn(),
 }));
 
-vi.mock("@/lib/auth-session", () => ({
+vi.mock("@/lib/auth/session", () => ({
   getOptionalIdentitySession: mocks.getSession,
 }));
 
-vi.mock("@/lib/admin-api", () => ({
+vi.mock("@/lib/admin/api", () => ({
   adminApiErrorResponse: () => null,
   requireAdminApi: mocks.requireAdmin,
 }));
 
-vi.mock("@/lib/admin-mfa-reset-requests", () => ({
+vi.mock("@/lib/admin/mfa-reset-requests", () => ({
   AdminMfaResetRequestConflictError: class extends Error {},
   AdminMfaResetRequestForbiddenError: class extends Error {},
   AdminMfaResetRequestNotFoundError: class extends Error {},

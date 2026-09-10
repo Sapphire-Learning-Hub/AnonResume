@@ -1,5 +1,5 @@
-import { resetSuperAdminMfa } from "@/lib/admin-maintenance";
-import { getDatabasePool } from "@/lib/database";
+import { resetSuperAdminMfa } from "@/lib/admin/maintenance";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 const emailIndex = process.argv.indexOf("--email");
 const email = emailIndex >= 0 ? process.argv[emailIndex + 1] : undefined;

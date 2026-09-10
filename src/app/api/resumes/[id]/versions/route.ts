@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getOptionalSession } from "@/lib/auth-session";
-import { requireSameOrigin } from "@/lib/request-origin";
+import { getOptionalSession } from "@/lib/auth/session";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import {
   paginateResumeVersionSnapshots,
   ResumeNotFoundError,
   snapshotResumeVersion,
-} from "@/lib/resume-repository";
-import { parsePageRequest } from "@/lib/pagination";
+} from "@/lib/resume/repository";
+import { parsePageRequest } from "@/lib/shared/pagination";
 
 function toVersionSummary(snapshot: Awaited<ReturnType<typeof snapshotResumeVersion>>) {
   return {

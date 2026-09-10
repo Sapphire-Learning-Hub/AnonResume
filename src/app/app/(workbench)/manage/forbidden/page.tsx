@@ -1,7 +1,7 @@
 import { AdminPage } from "@/components/admin/AdminPage";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { getRequestLocale } from "@/i18n/server";
-import { requireAdminPage } from "@/lib/admin-page";
+import { requireAdminPage } from "@/lib/admin/page";
 
 export default async function ManagementForbiddenPage() {
   await requireAdminPage();

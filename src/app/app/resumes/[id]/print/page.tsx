@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 
 import { ResumePrintShell } from "@/components/resume/ResumePrintShell";
 import { getRequestMessages } from "@/i18n/server";
-import { requireSession } from "@/lib/auth-session";
-import { getResumeRecord } from "@/lib/resume-repository";
+import { requireSession } from "@/lib/auth/session";
+import { getResumeRecord } from "@/lib/resume/repository";
 
 export default async function ResumePrintPage({
   params,

@@ -5,18 +5,18 @@ import {
   isResumeStructureValidationError,
   ResumeDocumentValidationError,
 } from "@/domain/resume/validation";
-import { getOptionalSession } from "@/lib/auth-session";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   parseLimitedJsonRequest,
   RequestBodyTooLargeError,
-} from "@/lib/request-body";
-import { requireSameOrigin } from "@/lib/request-origin";
+} from "@/lib/http/request-body";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import {
   getResumeRecord,
   ResumeNotFoundError,
   ResumeVersionConflictError,
   saveResumeRecord,
-} from "@/lib/resume-repository";
+} from "@/lib/resume/repository";
 
 const updateResumeSchema = z.object({
   version: z.number().int().positive(),

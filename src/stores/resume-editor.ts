@@ -50,7 +50,7 @@ import type {
 } from "@/domain/resume/schema";
 import type { ResumeValidationIssue } from "@/domain/resume/validation";
 import { resolveLocale } from "@/i18n/messages";
-import type { LocalResumeDraft } from "@/lib/resume-drafts";
+import type { LocalResumeDraft } from "@/lib/resume/drafts";
 
 export const RESUME_EDITOR_ZOOM_MIN = 0.6;
 export const RESUME_EDITOR_ZOOM_MAX = 1.6;

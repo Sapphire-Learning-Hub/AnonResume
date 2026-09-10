@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { NumberedPagination } from "@/components/common/NumberedPagination";
-import type { PaginationSearchParams } from "@/lib/pagination";
+import type { PaginationSearchParams } from "@/lib/shared/pagination";
 
 type AdminTone = "danger" | "default" | "info" | "success" | "warning";
 
