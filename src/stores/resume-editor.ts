@@ -27,6 +27,7 @@ import {
   removeListItemFromDocument,
   removeSectionFromDocument,
   setSectionTitleColorInDocument,
+  setSectionTitleFontSizeInDocument,
   setTextBlockColorInDocument,
   setSectionVisibilityInDocument,
   updateSectionLayoutInDocument,
@@ -106,6 +107,10 @@ export interface ResumeEditorActions {
   setSectionTitleColor: (params: {
     sectionId: string;
     color?: string;
+  }) => void;
+  setSectionTitleFontSize: (params: {
+    sectionId: string;
+    fontSize?: number;
   }) => void;
   updateSectionLayout: (params: {
     sectionId: string;
@@ -291,6 +296,11 @@ export function createResumeEditorStore({
     setSectionTitleColor: ({ sectionId, color }) => {
       get().updateDocument((document) =>
         setSectionTitleColorInDocument({ document, sectionId, color }),
+      );
+    },
+    setSectionTitleFontSize: ({ sectionId, fontSize }) => {
+      get().updateDocument((document) =>
+        setSectionTitleFontSizeInDocument({ document, sectionId, fontSize }),
       );
     },
     updateSectionLayout: ({ sectionId, layout }) => {

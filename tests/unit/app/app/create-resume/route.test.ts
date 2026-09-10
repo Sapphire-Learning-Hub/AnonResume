@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createResumeDocumentFromTemplate } from "@/domain/resume/templates";
+import { getPlainTextFromRichText } from "@/domain/resume/operations";
 import { requireSession } from "@/lib/auth-session";
 import {
   getResumeRecord,
@@ -175,10 +176,12 @@ describe("create resume route", () => {
       dialect: "mujicv",
       originalSource: expect.stringContaining("icon:phone"),
     });
-    expect(created?.document.sections[0]?.blocks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: "text" }),
-      ]),
+    expect(
+      getPlainTextFromRichText(created!.document.sections[0]!.title!),
+    ).toBe("Imported Person");
+    expect(created?.document.sections[0]?.titleStyle).toEqual({ fontSize: 28 });
+    expect(JSON.stringify(created?.document.sections[0]?.blocks)).toContain(
+      "123456",
     );
   });
 

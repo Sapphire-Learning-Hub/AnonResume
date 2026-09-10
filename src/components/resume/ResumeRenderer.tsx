@@ -527,9 +527,10 @@ function renderSectionTitle(
 
   const plainText = getPlainTextFromRichText(section.title);
   const titleColor = section.titleStyle?.color ?? "var(--resume-accent)";
+  const titleFontSize = section.titleStyle?.fontSize ?? 24;
   const titleStyle: CSSProperties = {
     margin: 0,
-    fontSize: 24,
+    fontSize: titleFontSize,
     fontWeight: 700,
     color: titleColor,
     letterSpacing: "-0.02em",
@@ -541,7 +542,7 @@ function renderSectionTitle(
       <header
         className={context.styles.sectionTitle}
         data-resume-section-title="true"
-        style={{ color: titleColor }}
+        style={{ color: titleColor, fontSize: titleFontSize }}
       >
         {selected ? (
           renderSelectedEditorShell({
@@ -600,12 +601,12 @@ function renderSectionTitle(
     <ResumeDiffTarget
       nodeType="section"
       nodeId={section.id}
-      fields={["title", "titleStyle.color"]}
+      fields={["title", "titleStyle.color", "titleStyle.fontSize"]}
     >
       <header
         className={context.styles.sectionTitle}
         data-resume-section-title="true"
-        style={{ color: titleColor }}
+        style={{ color: titleColor, fontSize: titleFontSize }}
       >
         <RichTextView
           content={section.title}

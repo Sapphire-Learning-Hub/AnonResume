@@ -104,4 +104,20 @@ describe("compareResumeDocuments", () => {
       }),
     ]);
   });
+
+  it("reports a per-section title size as a section appearance change", () => {
+    const previous = createDefaultResumeDocument();
+    const current = structuredClone(previous);
+    current.sections[0]!.titleStyle = { fontSize: 28 };
+
+    expect(compareResumeDocuments(previous, current).changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "titleStyle.fontSize",
+          cloudValue: "",
+          localValue: "28",
+        }),
+      ]),
+    );
+  });
 });

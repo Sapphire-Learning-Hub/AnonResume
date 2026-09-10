@@ -10,6 +10,8 @@ import {
   moveBlockInDocument,
   removeBlockFromDocument,
   removeListItemFromDocument,
+  setSectionTitleColorInDocument,
+  setSectionTitleFontSizeInDocument,
   updateTextBlockContentInDocument,
 } from "@/domain/resume/operations";
 import type { RichTextContent } from "@/domain/resume/schema";
@@ -52,6 +54,24 @@ describe("resume operations", () => {
         ],
       }),
     ).toBe(" 13800000000");
+  });
+
+  it("updates section title appearance without discarding another override", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.titleStyle = { color: "#be123c", fontSize: 28 };
+
+    const withoutColor = setSectionTitleColorInDocument({
+      document,
+      sectionId: "section-profile",
+    });
+    const resized = setSectionTitleFontSizeInDocument({
+      document: withoutColor,
+      sectionId: "section-profile",
+      fontSize: 32,
+    });
+
+    expect(withoutColor.sections[0]?.titleStyle).toEqual({ fontSize: 28 });
+    expect(resized.sections[0]?.titleStyle).toEqual({ fontSize: 32 });
   });
 
   it("appends a component to the selected section", () => {

@@ -1490,6 +1490,29 @@ describe("ResumeEditorShell", () => {
     );
   });
 
+  it("lets the user override a section title font size", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.titleStyle = { fontSize: 28 };
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    const canvas = screen.getByRole("article");
+    const title = within(canvas).getByText("个人简介");
+    fireEvent.click(title.closest("button")!);
+    openRibbonTab("属性");
+
+    const sizeInput = screen.getByLabelText("区块标题字号");
+    expect(sizeInput).toHaveValue(28);
+
+    fireEvent.change(sizeInput, { target: { value: "32" } });
+
+    expect(
+      canvas.querySelector("[data-resume-section-title='true']"),
+    ).toHaveStyle({ fontSize: "32px" });
+  });
+
   it("shows a tiptap editor when selecting a text block from the canvas", () => {
     render(
       <ResumeEditorShell

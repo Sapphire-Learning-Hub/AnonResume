@@ -767,9 +767,45 @@ export function setSectionTitleColorInDocument({
         return section;
       }
 
+      const titleStyle = {
+        ...section.titleStyle,
+        color,
+      };
+
       return {
         ...section,
-        titleStyle: color ? { color } : undefined,
+        titleStyle:
+          titleStyle.color || titleStyle.fontSize ? titleStyle : undefined,
+      };
+    }),
+  };
+}
+
+export function setSectionTitleFontSizeInDocument({
+  document,
+  sectionId,
+  fontSize,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  fontSize?: number;
+}): ResumeDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.id !== sectionId) {
+        return section;
+      }
+
+      const titleStyle = {
+        ...section.titleStyle,
+        fontSize,
+      };
+
+      return {
+        ...section,
+        titleStyle:
+          titleStyle.color || titleStyle.fontSize ? titleStyle : undefined,
       };
     }),
   };

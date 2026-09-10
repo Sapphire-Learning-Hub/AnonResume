@@ -392,13 +392,8 @@ function buildDocument(
 
       if (heading.depth === 1 && !title) {
         title = headingText;
-        currentSection = createSection(context, undefined, "profile");
-        currentSection.blocks.push(
-          createTextBlock(context, richText, {
-            fontSize: 28,
-            fontWeight: 700,
-          }),
-        );
+        currentSection = createSection(context, richText, "profile");
+        currentSection.titleStyle = { fontSize: 28 };
         sections.push(currentSection);
         continue;
       }

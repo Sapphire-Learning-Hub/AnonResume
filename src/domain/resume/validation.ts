@@ -622,6 +622,15 @@ function collectResumeValidationIssues(document: ResumeDocument) {
     }
     pushRangeIssue(
       issues,
+      `${sectionPath}.titleStyle.fontSize`,
+      getValidationLabel(messages, "validation.label.sectionTitleFontSize"),
+      section.titleStyle?.fontSize,
+      resumeValidationLimits.minFontSize,
+      resumeValidationLimits.maxFontSize,
+      messages,
+    );
+    pushRangeIssue(
+      issues,
       `${sectionPath}.layout.gap`,
       getValidationLabel(messages, "validation.label.sectionGap"),
       section.layout?.gap,

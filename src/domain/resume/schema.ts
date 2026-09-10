@@ -220,6 +220,7 @@ export interface ResumeSection {
   title?: RichTextContent;
   titleStyle?: {
     color?: string;
+    fontSize?: number;
   };
   semantic?: string;
   visible: boolean;
@@ -270,6 +271,7 @@ const resumeSectionSchema: z.ZodType<ResumeSection> = z.object({
         .string()
         .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
         .optional(),
+      fontSize: z.number().positive().max(72).optional(),
     })
     .optional(),
   semantic: z.string().min(1).optional(),

@@ -28,7 +28,7 @@ describe("importResumeMarkdown Mujicv dialect", () => {
       expect.objectContaining({ code: "dialect_auto_detected", line: 3 }),
     ]);
 
-    const row = result.document.sections[0]?.blocks[1];
+    const row = result.document.sections[0]?.blocks[0];
 
     expect(row).toMatchObject({
       type: "row",

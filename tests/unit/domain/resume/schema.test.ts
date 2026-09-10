@@ -172,20 +172,26 @@ describe("resumeDocumentSchema", () => {
     expect(() => resumeDocumentSchema.parse(document)).not.toThrow();
   });
 
-  it("preserves a valid per-section title color and rejects invalid colors", () => {
+  it("preserves valid per-section title appearance and rejects invalid values", () => {
     const document = createDefaultResumeDocument();
     const section = document.sections[0] as unknown as {
-      titleStyle?: { color?: string };
+      titleStyle?: { color?: string; fontSize?: number };
     };
-    section.titleStyle = { color: "#be123c" };
+    section.titleStyle = { color: "#be123c", fontSize: 28 };
 
     const parsed = resumeDocumentSchema.parse(document) as typeof document & {
-      sections: Array<{ titleStyle?: { color?: string } }>;
+      sections: Array<{ titleStyle?: { color?: string; fontSize?: number } }>;
     };
 
-    expect(parsed.sections[0]?.titleStyle).toEqual({ color: "#be123c" });
+    expect(parsed.sections[0]?.titleStyle).toEqual({
+      color: "#be123c",
+      fontSize: 28,
+    });
 
     section.titleStyle = { color: "red" };
+    expect(() => resumeDocumentSchema.parse(document)).toThrow();
+
+    section.titleStyle = { fontSize: 0 };
     expect(() => resumeDocumentSchema.parse(document)).toThrow();
   });
 

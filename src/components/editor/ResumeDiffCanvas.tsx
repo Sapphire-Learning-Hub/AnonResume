@@ -153,6 +153,7 @@ function getFieldLabel(field: string, t: ReturnType<typeof useI18n>["t"]) {
     "theme.textColor": "common.textThemeColor",
     "theme.mutedColor": "common.mutedThemeColor",
     "titleStyle.color": "editor.diff.field.sectionTitleColor",
+    "titleStyle.fontSize": "editor.diff.field.sectionTitleFontSize",
   };
   const key = labels[field];
 

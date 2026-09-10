@@ -56,13 +56,14 @@ describe("current Mujicv resume import", () => {
     expect(document.sections.map((section) =>
       section.title ? getPlainTextFromRichText(section.title) : undefined,
     )).toEqual([
-      undefined,
+      "邹权",
       "技能",
       "开源经历",
       "实习经历",
       "教育背景",
       "项目",
     ]);
+    expect(document.sections[0]?.titleStyle).toEqual({ fontSize: 28 });
     expect(result.report.diagnostics).toEqual([]);
 
     const allBlocks = collectBlocks(

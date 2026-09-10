@@ -808,6 +808,17 @@ export function ResumeEditorShell({
     });
   }
 
+  function setSelectedSectionTitleFontSize(fontSize?: number) {
+    if (!selectedSection || !selectedSectionTitle) {
+      return;
+    }
+
+    store.getState().setSectionTitleFontSize({
+      sectionId: selectedSection.id,
+      fontSize,
+    });
+  }
+
   function updateSelectedBadgeItems(items: BadgeBlock["items"]) {
     if (!selection.sectionId || !selection.blockPath) {
       return;
@@ -1194,25 +1205,48 @@ export function ResumeEditorShell({
   const inspectorContent = selectedSectionTitle && selectedSection ? (
     <>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionTitleStyle")}>
-        <div className={styles.ribbonControlGroup}>
-          <span className={styles.inspectorControlLabel}>
-            {t("editor.sectionTitleColor")}
-          </span>
-          <PaletteColorPicker
-            allowClear
-            className={styles.ribbonColorControl}
-            label={t("editor.sectionTitleColor")}
-            paletteLabel={t("common.colorPalette")}
-            value={selectedSection.titleStyle?.color ?? ""}
-            placeholder={document.settings.theme.accent}
-            onChange={setSelectedSectionTitleColor}
-            onClear={() => setSelectedSectionTitleColor(undefined)}
-          />
+        <div className={styles.inspectorControlGrid}>
+          <div className={styles.ribbonControlGroup}>
+            <span className={styles.inspectorControlLabel}>
+              {t("editor.sectionTitleColor")}
+            </span>
+            <PaletteColorPicker
+              allowClear
+              className={styles.ribbonColorControl}
+              label={t("editor.sectionTitleColor")}
+              paletteLabel={t("common.colorPalette")}
+              value={selectedSection.titleStyle?.color ?? ""}
+              placeholder={document.settings.theme.accent}
+              onChange={setSelectedSectionTitleColor}
+              onClear={() => setSelectedSectionTitleColor(undefined)}
+            />
+            <Button
+              disabled={!selectedSection.titleStyle?.color}
+              onClick={() => setSelectedSectionTitleColor(undefined)}
+            >
+              {t("editor.inheritGlobalAccent")}
+            </Button>
+          </div>
+          <div className={styles.inspectorControlRow} data-field-size="compact">
+            <span className={styles.inspectorControlLabel}>
+              {t("editor.sectionTitleFontSize")}
+            </span>
+            <DraftInput
+              aria-label={t("editor.sectionTitleFontSize")}
+              min={8}
+              max={72}
+              type="number"
+              value={selectedSection.titleStyle?.fontSize?.toString() ?? ""}
+              placeholder="24"
+              parseValue={parsePositiveNumber}
+              onValidValueChange={setSelectedSectionTitleFontSize}
+            />
+          </div>
           <Button
-            disabled={!selectedSection.titleStyle?.color}
-            onClick={() => setSelectedSectionTitleColor(undefined)}
+            disabled={!selectedSection.titleStyle?.fontSize}
+            onClick={() => setSelectedSectionTitleFontSize(undefined)}
           >
-            {t("editor.inheritGlobalAccent")}
+            {t("editor.restoreDefaultTitleSize")}
           </Button>
         </div>
       </EditorRibbonPropertyGroup>

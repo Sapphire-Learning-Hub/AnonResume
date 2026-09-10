@@ -28,15 +28,16 @@ describe("importResumeMarkdown standard Markdown", () => {
     expect(result.document.meta.title).toBe("Jane Doe");
     expect(result.document.sections.map((section) =>
       section.title ? getPlainTextFromRichText(section.title) : undefined,
-    )).toEqual([undefined, "Experience"]);
+    )).toEqual(["Jane Doe", "Experience"]);
+    expect(result.document.sections[0]).toMatchObject({
+      semantic: "profile",
+      titleStyle: { fontSize: 28 },
+    });
 
     const profileBlocks = result.document.sections[0]?.blocks ?? [];
-    const summary = profileBlocks[1];
+    const summary = profileBlocks[0];
 
-    expect(profileBlocks[0]).toMatchObject({
-      type: "text",
-      style: { fontSize: 28, fontWeight: 700 },
-    });
+    expect(profileBlocks).toHaveLength(2);
     expect(summary?.type).toBe("text");
 
     if (summary?.type !== "text") {
@@ -52,7 +53,7 @@ describe("importResumeMarkdown standard Markdown", () => {
       ]),
     );
 
-    const linkBlock = profileBlocks[2];
+    const linkBlock = profileBlocks[1];
 
     expect(linkBlock?.type).toBe("text");
 
@@ -122,7 +123,7 @@ describe("importResumeMarkdown standard Markdown", () => {
       locale: "zh-CN",
       markdown: "# Name\n\n<script>alert('x')</script>",
     });
-    const block = result.document.sections[0]?.blocks[1];
+    const block = result.document.sections[0]?.blocks[0];
 
     expect(block?.type).toBe("text");
 
