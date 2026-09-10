@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
+  getAdminSystemStatus,
   listAdminAdministrators,
   listAdminAuditEvents,
   listAdminExports,
@@ -203,5 +204,29 @@ describe("admin paginated queries", () => {
       total: 2,
       totalPages: 1,
     });
+  });
+
+  it("reports the build tag together with the current commit", async () => {
+    const previousTag = process.env.ANONRESUME_BUILD_TAG;
+    const previousCommit = process.env.ANONRESUME_BUILD_COMMIT;
+    process.env.ANONRESUME_BUILD_TAG = "v1.2.3";
+    process.env.ANONRESUME_BUILD_COMMIT = "abcdef1234567890abcdef1234567890";
+
+    try {
+      await expect(getAdminSystemStatus()).resolves.toMatchObject({
+        release: "v1.2.3 · abcdef123456",
+      });
+    } finally {
+      if (previousTag === undefined) {
+        delete process.env.ANONRESUME_BUILD_TAG;
+      } else {
+        process.env.ANONRESUME_BUILD_TAG = previousTag;
+      }
+      if (previousCommit === undefined) {
+        delete process.env.ANONRESUME_BUILD_COMMIT;
+      } else {
+        process.env.ANONRESUME_BUILD_COMMIT = previousCommit;
+      }
+    }
   });
 });

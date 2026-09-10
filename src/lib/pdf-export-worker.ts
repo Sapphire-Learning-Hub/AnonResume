@@ -12,6 +12,7 @@ import {
 } from "@/lib/pdf-export-queue";
 import { exportResumePdf } from "@/lib/pdf";
 import { PDF_EXPORT_WORKER_COOKIE } from "@/lib/request-authorization";
+import { getApplicationRelease } from "@/lib/release-metadata";
 import {
   resolveApplicationOriginForBootstrap,
   validateRuntimeConfiguration,
@@ -161,6 +162,7 @@ export async function runPdfExportWorker(options?: {
   );
   let lastCleanupAt = 0;
   const startedAt = new Date();
+  const release = getApplicationRelease();
 
   while (!options?.signal?.aborted) {
     const now = Date.now();
@@ -168,6 +170,7 @@ export async function runPdfExportWorker(options?: {
     await recordWorkerHeartbeat({
       workerId,
       workerType: "pdf-export",
+      release,
       startedAt,
       metadata: { maxConcurrency: config.maxConcurrency },
       now: new Date(now),

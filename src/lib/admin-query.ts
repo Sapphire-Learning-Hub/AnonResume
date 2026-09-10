@@ -13,6 +13,7 @@ import {
   normalizeAdminPermissions,
 } from "./admin-permissions";
 import { getDatabasePool } from "./database";
+import { getApplicationRelease } from "./release-metadata";
 import { validateRuntimeConfiguration } from "./runtime-configuration";
 
 export type AdminListRequest = PageRequest & { query?: string };
@@ -690,7 +691,7 @@ export async function getAdminSystemStatus() {
   }>(`SELECT current_database() AS database, now() AS "serverTime"`);
   const configuration = validateRuntimeConfiguration(process.env);
   return {
-    release: process.env.ANONRESUME_RELEASE || "development",
+    release: getApplicationRelease(),
     database: database.rows[0],
     configurationValid: configuration.valid,
     configurationIssues: configuration.issues,

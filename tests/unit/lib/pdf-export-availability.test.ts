@@ -34,4 +34,19 @@ describe("PDF export worker availability", () => {
       }),
     ).resolves.toEqual({ available: false });
   });
+
+  it("records the worker build tag and commit in its heartbeat", async () => {
+    await recordWorkerHeartbeat({
+      workerId,
+      workerType: "pdf-export",
+      release: "v1.2.3 · abcdef123456",
+      startedAt: heartbeatAt,
+      now: heartbeatAt,
+    });
+
+    const heartbeat = await db.query.workerHeartbeats.findFirst({
+      where: eq(workerHeartbeats.workerId, workerId),
+    });
+    expect(heartbeat?.release).toBe("v1.2.3 · abcdef123456");
+  });
 });
