@@ -6,7 +6,7 @@ import { getMessages } from "@/i18n/messages";
 import HomePage from "@/app/page";
 
 describe("HomePage", () => {
-  it("renders the AnonResume foundation screen", () => {
+  it("presents the product and primary conversion path", () => {
     render(
       <I18nProvider
         initialLocale="zh-CN"
@@ -16,7 +16,12 @@ describe("HomePage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByRole("heading", { name: "AnonResume", level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "让每段经历，以专业方式被看见",
+        level: 1,
+      }),
+    ).toBeInTheDocument();
     expect(document.querySelector('img[src="/brand/anonresume-lockup.png"]')).toHaveAttribute(
       "alt",
       "AnonResume",
@@ -25,14 +30,18 @@ describe("HomePage", () => {
       "loading",
       "eager",
     );
-    expect(screen.getAllByText("共享渲染器基础").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /登\s*录/ })).toHaveAttribute(
+    expect(screen.getByRole("navigation", { name: "首页导航" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "看看它能做什么" })).toHaveAttribute(
+      "href",
+      "#features",
+    );
+    expect(screen.getAllByRole("link", { name: "开始制作" })[0]).toHaveAttribute(
       "href",
       "/sign-in",
     );
   });
 
-  it("shows the default resume document inside the foundation page", () => {
+  it("uses responsive product imagery and describes supported capabilities", () => {
     render(
       <I18nProvider
         initialLocale="zh-CN"
@@ -42,9 +51,17 @@ describe("HomePage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("个人简介")).toBeInTheDocument();
-    expect(
-      screen.getByText("基于流式布局的结构化简历编辑基础能力"),
-    ).toBeInTheDocument();
+    const editorImage = screen.getByRole("img", {
+      name: "AnonResume 简历编辑器界面",
+    });
+
+    expect(editorImage).toHaveAttribute(
+      "sizes",
+      "(max-width: 768px) 94vw, (max-width: 1200px) 88vw, 1120px",
+    );
+    expect(screen.getByText("像写文档一样编辑简历")).toBeInTheDocument();
+    expect(screen.getByText("Markdown 导入")).toBeInTheDocument();
+    expect(screen.getByText("改过什么，一眼看清")).toBeInTheDocument();
+    expect(screen.getByText("发布与 PDF 导出")).toBeInTheDocument();
   });
 });

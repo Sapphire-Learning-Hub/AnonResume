@@ -34,7 +34,7 @@ describe("I18nProvider", () => {
 
     expect(screen.getByText("zh-CN")).toBeInTheDocument();
     expect(screen.getByText("登录")).toBeInTheDocument();
-    expect(screen.getByText("共享渲染器基础")).toBeInTheDocument();
+    expect(screen.getByText("简单好用 · 随心排版 · 所见即所得")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "打开界面设置" }));
     expect(screen.getAllByText("界面设置")).toHaveLength(2);
@@ -113,7 +113,7 @@ describe("I18nProvider", () => {
 
     expect(screen.getByText("en-US")).toBeInTheDocument();
     expect(screen.getByText("Sign In")).toBeInTheDocument();
-    expect(screen.getByText("Renderer foundation")).toBeInTheDocument();
+    expect(screen.getByText("Easy to use · Flexible design · True preview")).toBeInTheDocument();
     expect(screen.getAllByText("Interface Settings")).toHaveLength(2);
   });
 });

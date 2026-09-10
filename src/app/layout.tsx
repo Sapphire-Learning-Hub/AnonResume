@@ -45,6 +45,7 @@ function getMetadataBase() {
 export async function generateMetadata(): Promise<Metadata> {
   const configuration = validateRuntimeConfiguration(process.env);
   const locale = await getRequestLocale();
+  const messages = getMessages(locale);
 
   return {
     metadataBase: getMetadataBase(),
@@ -53,8 +54,8 @@ export async function generateMetadata(): Promise<Metadata> {
           default: "AnonResume",
           template: "%s | AnonResume",
         }
-      : getMessages(locale)["system.configuration.documentTitle"],
-    description: "结构化在线简历编辑器基础能力",
+      : messages["system.configuration.documentTitle"],
+    description: messages["home.metaDescription"],
     openGraph: {
       type: "website",
       siteName: "AnonResume",
