@@ -98,15 +98,15 @@ describe("Dashboard workbench view", () => {
       screen.getByRole("searchbox", { name: "搜索简历" }),
     );
     fireEvent.click(screen.getByTestId("open-resume-template-picker"));
-    expect(screen.getByTestId("create-resume-template-form")).toHaveAttribute(
-      "action",
-      "/app/create-resume",
-    );
-    expect(screen.getByTestId("create-resume-template-form")).toHaveAttribute(
-      "method",
-      "post",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
+    const templateDialog = screen.getByRole("dialog", { name: /^模板中心/ });
+    const templateForms = templateDialog.querySelectorAll("form");
+
+    expect(templateForms).toHaveLength(5);
+    templateForms.forEach((form) => {
+      expect(form).toHaveAttribute("action", "/app/create-resume");
+      expect(form).toHaveAttribute("method", "post");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "关闭模板中心" }));
     const resumeTitleLink = screen.getByRole("link", { name: "居中叙事简历" });
     expect(resumeTitleLink).toHaveAttribute(
       "href",

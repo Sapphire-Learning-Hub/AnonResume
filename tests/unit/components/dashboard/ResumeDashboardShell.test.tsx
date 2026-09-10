@@ -55,7 +55,7 @@ describe("ResumeDashboardShell", () => {
 
     fireEvent.click(screen.getByTestId("open-resume-template-picker"));
 
-    expect(screen.getByRole("dialog", { name: "选择简历模板" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /^模板中心/ })).toBeInTheDocument();
   });
 
   it("opens the resume import flow separately from template creation", async () => {
@@ -73,7 +73,7 @@ describe("ResumeDashboardShell", () => {
     const importDialog = screen.getByRole("dialog", { name: "导入简历" });
 
     expect(within(importDialog).getByRole("button", { name: /Markdown/ })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "选择简历模板" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /^模板中心/ })).not.toBeInTheDocument();
 
     fireEvent.click(within(importDialog).getByRole("button", { name: /Markdown/ }));
 

@@ -14,9 +14,28 @@ import {
   type MessageKey,
 } from "@/i18n/messages";
 
+export const resumeTemplateCollectionIds = [
+  "all",
+  "recommended",
+  "minimal",
+  "classic",
+  "structured",
+  "compact",
+] as const;
+
+export type ResumeTemplateCollectionId =
+  (typeof resumeTemplateCollectionIds)[number];
+
+type AssignedResumeTemplateCollectionId = Exclude<
+  ResumeTemplateCollectionId,
+  "all"
+>;
+
 interface ResumeTemplateDefinition {
   nameKey: MessageKey;
   descriptionKey: MessageKey;
+  collectionIds: readonly AssignedResumeTemplateCollectionId[];
+  searchKeywords: Record<AppLocale, readonly string[]>;
   createDocument: (locale: AppLocale) => ResumeDocument;
 }
 
@@ -101,26 +120,51 @@ const templateDefinitions = {
   blank: {
     nameKey: "dashboard.template.blank.name",
     descriptionKey: "dashboard.template.blank.description",
+    collectionIds: ["minimal"],
+    searchKeywords: {
+      "zh-CN": ["空白", "基础", "自定义", "从零开始"],
+      "en-US": ["blank", "basic", "custom", "start from scratch"],
+    },
     createDocument: createBlankResumeDocument,
   },
   centered: {
     nameKey: "dashboard.template.centered.name",
     descriptionKey: "dashboard.template.centered.description",
+    collectionIds: ["recommended", "minimal"],
+    searchKeywords: {
+      "zh-CN": ["居中", "简约", "个人品牌", "创意", "叙事"],
+      "en-US": ["centered", "minimal", "personal brand", "creative", "narrative"],
+    },
     createDocument: createCenteredResumeDocument,
   },
   classic: {
     nameKey: "dashboard.template.classic.name",
     descriptionKey: "dashboard.template.classic.description",
+    collectionIds: ["recommended", "classic"],
+    searchKeywords: {
+      "zh-CN": ["经典", "商务", "通用", "管理", "留白"],
+      "en-US": ["classic", "business", "general", "management", "whitespace"],
+    },
     createDocument: createClassicResumeDocument,
   },
   modular: {
     nameKey: "dashboard.template.modular.name",
     descriptionKey: "dashboard.template.modular.description",
+    collectionIds: ["recommended", "structured"],
+    searchKeywords: {
+      "zh-CN": ["双列", "模块", "技术", "结构化", "技能"],
+      "en-US": ["two-column", "modular", "technical", "structured", "skills"],
+    },
     createDocument: createModularResumeDocument,
   },
   compact: {
     nameKey: "dashboard.template.compact.name",
     descriptionKey: "dashboard.template.compact.description",
+    collectionIds: ["compact"],
+    searchKeywords: {
+      "zh-CN": ["紧凑", "单页", "高密度", "资深", "经历丰富"],
+      "en-US": ["compact", "single page", "dense", "senior", "experienced"],
+    },
     createDocument: createCompactResumeDocument,
   },
 } as const satisfies Record<string, ResumeTemplateDefinition>;
@@ -135,6 +179,8 @@ export interface ResumeTemplate {
   id: ResumeTemplateId;
   nameKey: MessageKey;
   descriptionKey: MessageKey;
+  collectionIds: readonly AssignedResumeTemplateCollectionId[];
+  searchKeywords: readonly string[];
   document: ResumeDocument;
 }
 
@@ -155,6 +201,8 @@ export function listResumeTemplates(
       id,
       nameKey: definition.nameKey,
       descriptionKey: definition.descriptionKey,
+      collectionIds: definition.collectionIds,
+      searchKeywords: definition.searchKeywords[locale],
       document: definition.createDocument(locale),
     };
   });

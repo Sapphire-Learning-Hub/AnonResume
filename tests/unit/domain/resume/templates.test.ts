@@ -4,6 +4,7 @@ import {
   createResumeDocumentFromTemplate,
   isResumeTemplateId,
   listResumeTemplates,
+  resumeTemplateCollectionIds,
   resumeTemplateIds,
 } from "@/domain/resume/templates";
 
@@ -30,6 +31,29 @@ it("recognizes only stable resume template identifiers", () => {
   ]);
   expect(isResumeTemplateId("unknown")).toBe(false);
   expect(isResumeTemplateId(null)).toBe(false);
+});
+
+it("exposes localized market metadata for filtering and search", () => {
+  expect(resumeTemplateCollectionIds).toEqual([
+    "all",
+    "recommended",
+    "minimal",
+    "classic",
+    "structured",
+    "compact",
+  ]);
+
+  const zhTemplates = listResumeTemplates("zh-CN");
+  const enTemplates = listResumeTemplates("en-US");
+
+  expect(zhTemplates.find(({ id }) => id === "modular")).toMatchObject({
+    collectionIds: ["recommended", "structured"],
+    searchKeywords: expect.arrayContaining(["双列", "技术"]),
+  });
+  expect(enTemplates.find(({ id }) => id === "modular")).toMatchObject({
+    collectionIds: ["recommended", "structured"],
+    searchKeywords: expect.arrayContaining(["two-column", "technical"]),
+  });
 });
 
 it.each(["zh-CN", "en-US"] as const)(
