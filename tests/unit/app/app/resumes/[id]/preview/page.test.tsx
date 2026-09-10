@@ -17,7 +17,7 @@ describe("ResumePreviewPage", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(requireSession).mockResolvedValue({
@@ -45,11 +45,9 @@ describe("ResumePreviewPage", () => {
     render(page);
 
     expect(screen.getByText("预览")).toBeInTheDocument();
-    expect(screen.getByText("基础版简历")).toBeInTheDocument();
-    expect(screen.getByText("个人简介")).toBeInTheDocument();
-    expect(
-      screen.getByText("基于流式布局的结构化简历编辑基础能力"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("居中叙事简历")).toBeInTheDocument();
+    expect(screen.getByText("林知夏")).toBeInTheDocument();
+    expect(screen.getByText("品牌策划与内容创意")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "返回编辑器" })).toHaveAttribute(
       "href",
       "/app/resumes/resume-foundation",

@@ -19,7 +19,7 @@ describe("duplicate resume route", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(requireSession).mockResolvedValue({
@@ -48,7 +48,7 @@ describe("duplicate resume route", () => {
     expect(copyId).toMatch(/^resume-\d{8}-\d{6}-[0-9a-f-]{36}$/i);
     await expect(getResumeRecord("user-demo", copyId!)).resolves.toMatchObject({
       id: copyId,
-      title: "基础版简历 - 副本",
+      title: "居中叙事简历 - 副本",
       published: false,
       version: 1,
     });

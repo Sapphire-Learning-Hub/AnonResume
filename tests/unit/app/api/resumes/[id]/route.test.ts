@@ -22,7 +22,7 @@ describe("resume route", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(getOptionalSession).mockResolvedValue({
@@ -66,10 +66,10 @@ describe("resume route", () => {
     const body = await response.json();
 
     expect(body.resume.id).toBe("resume-foundation");
-    expect(body.resume.title).toBe("基础版简历");
+    expect(body.resume.title).toBe("居中叙事简历");
     expect(body.resume.published).toBe(false);
     expect(body.resume.slug).toBeUndefined();
-    expect((await getResumeRecord("user-demo", "resume-foundation"))?.title).toBe("基础版简历");
+    expect((await getResumeRecord("user-demo", "resume-foundation"))?.title).toBe("居中叙事简历");
   });
 
   it("does not create a missing resume on read", async () => {

@@ -720,6 +720,8 @@ function renderListBlock(
     ? "decimal"
     : block.marker === "square"
       ? "square"
+      : block.marker === "dash"
+        ? '"- "'
       : block.marker === "none"
         ? "none"
         : "disc";
@@ -824,7 +826,13 @@ function renderBadgeBlock(
   },
 ): ReactNode {
   return (
-    <div className={context.styles.badges}>
+    <div
+      className={context.styles.badges}
+      style={{
+        flexWrap: block.wrap ? "wrap" : "nowrap",
+        gap: block.gap ?? 8,
+      }}
+    >
       {block.items.map((item) => {
         const selected = isSelectedBadgeItem(
           context.selection,
@@ -1037,6 +1045,7 @@ function SortableBlockItem({
   const usesFloatingHandle = shouldUseFloatingSortHandle(block, blockPath);
   const handlePlacement = usesFloatingHandle ? "floating" : "inset";
   const over = isOver && !isDragging;
+  const handleEnabled = draggable || Boolean(onSelectBlock);
 
   return (
     <ResumeDiffTarget
@@ -1066,17 +1075,18 @@ function SortableBlockItem({
             data-testid={`resume-sort-chrome-${blockPath.join("-")}`}
           />
         ) : null}
-        {draggable ? (
+        {handleEnabled ? (
           <button
             ref={setActivatorNodeRef}
             type="button"
-            aria-label={t("renderer.dragLabel", {
+            aria-label={t(draggable ? "renderer.dragLabel" : "renderer.selectLabel", {
               label: dragLabel,
             })}
             className={styles.blockDragHandle}
             data-resume-handle-placement={handlePlacement}
-            {...attributes}
-            {...listeners}
+            {...(draggable ? attributes : {})}
+            {...(draggable ? listeners : {})}
+            onClick={() => onSelectBlock?.({ sectionId, blockPath })}
           >
             ⋮⋮
           </button>
@@ -1155,10 +1165,14 @@ function SortableBlockChildren({
     editSurfaceMode === "layout" &&
     Boolean(onMoveBlock) &&
     blocks.length > 1;
+  const layoutHandleEnabled =
+    mode === "edit" &&
+    editSurfaceMode === "layout" &&
+    (Boolean(onSelectBlock) || sortableEnabled);
   const content = blocks.map((block) => {
     const blockPath = [...parentPath, block.id];
 
-    if (!sortableEnabled) {
+    if (!layoutHandleEnabled) {
       return (
         <ResumeDiffTarget
           key={block.id}
@@ -1195,7 +1209,7 @@ function SortableBlockChildren({
         block={block}
         sectionId={sectionId}
         blockPath={blockPath}
-        draggable
+        draggable={sortableEnabled}
         mode={mode}
         editSurfaceMode={editSurfaceMode}
         selection={selection}
@@ -1209,7 +1223,7 @@ function SortableBlockChildren({
     );
   });
 
-  if (!sortableEnabled) {
+  if (!layoutHandleEnabled) {
     return (
       <div
         className={className}

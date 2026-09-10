@@ -18,7 +18,7 @@ describe("resume version routes", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(getOptionalSession).mockResolvedValue({

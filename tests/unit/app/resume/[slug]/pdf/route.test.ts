@@ -39,7 +39,7 @@ describe("public resume pdf route", () => {
   it("rejects anonymous public PDF exports by default", async () => {
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     const published = await publishResumeRecord("user-demo", "resume-foundation");
@@ -61,7 +61,7 @@ describe("public resume pdf route", () => {
     vi.stubEnv("PDF_EXPORT_ALLOW_ANONYMOUS", "true");
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     const published = await publishResumeRecord("user-demo", "resume-foundation");

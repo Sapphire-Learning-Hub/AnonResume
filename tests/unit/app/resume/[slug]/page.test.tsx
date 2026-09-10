@@ -15,7 +15,7 @@ describe("PublicResumePage", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await publishResumeRecord("user-demo", "resume-foundation");
@@ -35,7 +35,7 @@ describe("PublicResumePage", () => {
     render(page);
 
     expect(screen.getByText("公开简历")).toBeInTheDocument();
-    expect(screen.getByText("基础版简历")).toBeInTheDocument();
+    expect(screen.getByText("居中叙事简历")).toBeInTheDocument();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -53,7 +53,7 @@ describe("PublicResumePage", () => {
         method: "POST",
       }),
     );
-    expect(screen.getByText("个人简介")).toBeInTheDocument();
+    expect(screen.getByText("林知夏")).toBeInTheDocument();
     expect(
       screen.getByTestId("responsive-resume-viewport"),
     ).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("PublicResumePage", () => {
     });
 
     expect(metadata).toMatchObject({
-      title: "基础版简历",
+      title: "居中叙事简历",
       description: "面向复杂业务的前端平台工程师",
       alternates: {
         canonical: "/resume/resume-foundation",

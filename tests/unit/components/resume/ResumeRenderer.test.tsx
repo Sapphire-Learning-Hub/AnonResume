@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
@@ -70,6 +70,47 @@ describe("ResumeRenderer", () => {
       ).toHaveStyle({ color: "#be123c" });
     },
   );
+
+  it("renders badge wrapping and spacing from the document model", () => {
+    const document = createDefaultResumeDocument();
+    const badges = document.sections[0]?.blocks.find(
+      (block) => block.type === "badges",
+    );
+
+    if (!badges || badges.type !== "badges") {
+      throw new Error("default badge block missing");
+    }
+
+    badges.wrap = false;
+    badges.gap = 3;
+
+    const { container } = render(
+      <ResumeRenderer document={document} mode="view" />,
+    );
+    const badgeContainer = container.querySelector(
+      `[data-resume-block-path="${badges.id}"] > div`,
+    );
+
+    expect(badgeContainer).toHaveStyle({ flexWrap: "nowrap", gap: "3px" });
+  });
+
+  it("renders the dash list marker supported by the document model", () => {
+    const document = createDefaultResumeDocument();
+    const list = document.sections[0]?.blocks.find(
+      (block) => block.type === "list",
+    );
+
+    if (!list || list.type !== "list") {
+      throw new Error("Expected a list block in the default document");
+    }
+
+    list.marker = "dash";
+    const { container } = render(<ResumeRenderer document={document} mode="view" />);
+
+    expect(container.querySelector("ul")).toHaveStyle({
+      listStyleType: '"- "',
+    });
+  });
 
   it("annotates semantic resume nodes only when a diff presentation is supplied", () => {
     const document = createDefaultResumeDocument();
@@ -871,6 +912,53 @@ describe("ResumeRenderer", () => {
       "data-resume-handle-placement",
       "floating",
     );
+  });
+
+  it("selects a structural block from its existing layout drag handle", () => {
+    const onSelectBlock = vi.fn();
+
+    render(
+      <ResumeRenderer
+        document={createDefaultResumeDocument()}
+        mode="edit"
+        editSurfaceMode="layout"
+        onMoveBlock={vi.fn()}
+        onSelectBlock={onSelectBlock}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "拖动 行 Block" }));
+
+    expect(onSelectBlock).toHaveBeenCalledWith({
+      sectionId: "section-experience",
+      blockPath: [
+        "group-experience-anonresume",
+        "row-experience-header",
+      ],
+    });
+  });
+
+  it("keeps a selection handle for a sole structural block", () => {
+    const onSelectBlock = vi.fn();
+
+    render(
+      <ResumeRenderer
+        document={createDefaultResumeDocument()}
+        mode="edit"
+        editSurfaceMode="layout"
+        onMoveBlock={vi.fn()}
+        onSelectBlock={onSelectBlock}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "选择 分组 Block" }),
+    );
+
+    expect(onSelectBlock).toHaveBeenCalledWith({
+      sectionId: "section-experience",
+      blockPath: ["group-experience-anonresume"],
+    });
   });
 
   it("shows nested drag handles for row children in layout sort mode", () => {

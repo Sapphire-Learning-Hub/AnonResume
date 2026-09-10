@@ -125,12 +125,12 @@ describe("resume repository persistence", () => {
     const created = await createGeneratedResumeRecord({
       userId: "user-template",
       locale: "zh-CN",
-      templateId: "frontend",
+      templateId: "modular",
     });
 
-    expect(created.title).toBe("前端版简历");
+    expect(created.title).toBe("等宽模块简历");
     expect(created.version).toBe(1);
-    expect(created.document.meta.title).toBe("前端版简历");
+    expect(created.document.meta.title).toBe("等宽模块简历");
   });
 
   it("creates a generated resume from a validated imported document", async () => {
@@ -340,7 +340,7 @@ describe("resume repository persistence", () => {
   it("persists published slugs across repository resets", async () => {
     await createGeneratedResumeRecord({
       userId: "__legacy_single_user__",
-      templateId: "fullstack",
+      templateId: "classic",
       createId: () => "resume-fullstack",
     });
     const published = await publishResumeRecord("resume-fullstack");
@@ -416,7 +416,7 @@ describe("resume repository persistence", () => {
   it("records a snapshot when a resume is published", async () => {
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await publishResumeRecord("user-demo", "resume-foundation");
@@ -432,14 +432,14 @@ describe("resume repository persistence", () => {
       resumeId: "resume-foundation",
       version: 1,
     });
-    expect(snapshots[0]?.document.meta.title).toBe("基础版简历");
+    expect(snapshots[0]?.document.meta.title).toBe("居中叙事简历");
   });
 
   it("retains only the configured maximum number of version snapshots", async () => {
     vi.stubEnv("RESUME_VERSION_HISTORY_LIMIT", "2");
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
 
@@ -482,7 +482,7 @@ describe("resume repository persistence", () => {
   it("deletes only the selected user's resume and its version history", async () => {
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await createResumeRecord("user-other", "resume-foundation");
@@ -565,7 +565,7 @@ describe("resume repository persistence", () => {
   it("includes publication state and edit time in scoped catalog entries", async () => {
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await publishResumeRecord("user-demo", "resume-foundation");

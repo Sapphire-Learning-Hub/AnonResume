@@ -2,6 +2,12 @@ import { createDefaultResumeDocument } from "./default-document";
 import { createRichTextFromPlainText } from "./operations";
 import type { ResumeDocument } from "./schema";
 import {
+  createCenteredResumeDocument,
+  createClassicResumeDocument,
+  createCompactResumeDocument,
+  createModularResumeDocument,
+} from "./visual-template-documents";
+import {
   defaultLocale,
   getMessages,
   type AppLocale,
@@ -91,96 +97,31 @@ function createBlankResumeDocument(locale: AppLocale): ResumeDocument {
   return document;
 }
 
-function createPopulatedResumeDocument({
-  locale,
-  titleKey,
-  summaryHeadingKey,
-  summaryBulletKey,
-}: {
-  locale: AppLocale;
-  titleKey: MessageKey;
-  summaryHeadingKey: MessageKey;
-  summaryBulletKey: MessageKey;
-}): ResumeDocument {
-  const messages = getMessages(locale);
-  const document = createDefaultResumeDocument(locale);
-
-  document.meta.title = messages[titleKey];
-
-  const profileSection = document.sections.find(
-    (section) => section.id === "section-profile",
-  );
-  const headingBlock = profileSection?.blocks.find(
-    (block) => block.id === "block-profile-summary",
-  );
-  const highlightBlock = profileSection?.blocks.find(
-    (block) => block.id === "block-profile-highlights",
-  );
-  const firstHighlightItem =
-    highlightBlock?.type === "list"
-      ? highlightBlock.items.find((item) => item.id === "item-foundation-1")
-      : undefined;
-  const firstHighlightText = firstHighlightItem?.children.find(
-    (block) => block.id === "item-foundation-1-text",
-  );
-
-  if (
-    headingBlock?.type !== "text" ||
-    highlightBlock?.type !== "list" ||
-    !firstHighlightItem ||
-    firstHighlightText?.type !== "text"
-  ) {
-    throw new Error("Default resume document no longer matches template anchors");
-  }
-
-  headingBlock.content = createRichTextFromPlainText(
-    messages[summaryHeadingKey],
-  );
-  firstHighlightText.content = createRichTextFromPlainText(
-    messages[summaryBulletKey],
-  );
-
-  return document;
-}
-
 const templateDefinitions = {
   blank: {
     nameKey: "dashboard.template.blank.name",
     descriptionKey: "dashboard.template.blank.description",
     createDocument: createBlankResumeDocument,
   },
-  foundation: {
-    nameKey: "dashboard.template.foundation.name",
-    descriptionKey: "dashboard.template.foundation.description",
-    createDocument: (locale) =>
-      createPopulatedResumeDocument({
-        locale,
-        titleKey: "catalog.foundationTitle",
-        summaryHeadingKey: "catalog.foundationHeading",
-        summaryBulletKey: "catalog.foundationBullet",
-      }),
+  centered: {
+    nameKey: "dashboard.template.centered.name",
+    descriptionKey: "dashboard.template.centered.description",
+    createDocument: createCenteredResumeDocument,
   },
-  frontend: {
-    nameKey: "dashboard.template.frontend.name",
-    descriptionKey: "dashboard.template.frontend.description",
-    createDocument: (locale) =>
-      createPopulatedResumeDocument({
-        locale,
-        titleKey: "catalog.frontendTitle",
-        summaryHeadingKey: "catalog.frontendHeading",
-        summaryBulletKey: "catalog.frontendBullet",
-      }),
+  classic: {
+    nameKey: "dashboard.template.classic.name",
+    descriptionKey: "dashboard.template.classic.description",
+    createDocument: createClassicResumeDocument,
   },
-  fullstack: {
-    nameKey: "dashboard.template.fullstack.name",
-    descriptionKey: "dashboard.template.fullstack.description",
-    createDocument: (locale) =>
-      createPopulatedResumeDocument({
-        locale,
-        titleKey: "catalog.fullstackTitle",
-        summaryHeadingKey: "catalog.fullstackHeading",
-        summaryBulletKey: "catalog.fullstackBullet",
-      }),
+  modular: {
+    nameKey: "dashboard.template.modular.name",
+    descriptionKey: "dashboard.template.modular.description",
+    createDocument: createModularResumeDocument,
+  },
+  compact: {
+    nameKey: "dashboard.template.compact.name",
+    descriptionKey: "dashboard.template.compact.description",
+    createDocument: createCompactResumeDocument,
   },
 } as const satisfies Record<string, ResumeTemplateDefinition>;
 

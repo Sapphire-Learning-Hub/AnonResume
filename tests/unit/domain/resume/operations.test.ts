@@ -10,8 +10,11 @@ import {
   moveBlockInDocument,
   removeBlockFromDocument,
   removeListItemFromDocument,
+  setSectionTitleInDocument,
   setSectionTitleColorInDocument,
   setSectionTitleFontSizeInDocument,
+  updateBlockSettingsInDocument,
+  updateSectionPaginationInDocument,
   updateTextBlockContentInDocument,
 } from "@/domain/resume/operations";
 import type { RichTextContent } from "@/domain/resume/schema";
@@ -72,6 +75,105 @@ describe("resume operations", () => {
 
     expect(withoutColor.sections[0]?.titleStyle).toEqual({ fontSize: 28 });
     expect(resized.sections[0]?.titleStyle).toEqual({ fontSize: 32 });
+  });
+
+  it("adds and removes a section title without leaving stale title styles", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.titleStyle = { color: "#be123c", fontSize: 28 };
+
+    const withoutTitle = setSectionTitleInDocument({
+      document,
+      sectionId: "section-profile",
+    });
+    const restored = setSectionTitleInDocument({
+      document: withoutTitle,
+      sectionId: "section-profile",
+      title: richText("自定义标题"),
+    });
+
+    expect(withoutTitle.sections[0]?.title).toBeUndefined();
+    expect(withoutTitle.sections[0]?.titleStyle).toBeUndefined();
+    expect(restored.sections[0]?.title).toEqual(richText("自定义标题"));
+  });
+
+  it("updates section pagination independently from section content", () => {
+    const document = createDefaultResumeDocument();
+
+    const updated = updateSectionPaginationInDocument({
+      document,
+      sectionId: "section-profile",
+      pagination: { keepTogether: false },
+    });
+
+    expect(updated.sections[0]?.pagination).toEqual({ keepTogether: false });
+    expect(updated.sections[0]?.blocks).toBe(document.sections[0]?.blocks);
+  });
+
+  it("updates typed settings for every structural block", () => {
+    const document = createDefaultResumeDocument();
+    const profile = document.sections[0]!;
+    profile.blocks.push(
+      {
+        id: "group-settings",
+        type: "group",
+        direction: "vertical",
+        children: [{ id: "group-text", type: "text", content: richText("Group") }],
+      },
+      {
+        id: "row-settings",
+        type: "row",
+        children: [{ id: "row-text", type: "text", content: richText("Row") }],
+      },
+    );
+
+    const listUpdated = updateBlockSettingsInDocument({
+      document,
+      sectionId: "section-profile",
+      blockPath: ["block-profile-highlights"],
+      settings: { type: "list", ordered: true, marker: "square", gap: 3 },
+    });
+    const badgesUpdated = updateBlockSettingsInDocument({
+      document: listUpdated,
+      sectionId: "section-profile",
+      blockPath: ["block-profile-stack"],
+      settings: { type: "badges", wrap: false, gap: 4 },
+    });
+    const groupUpdated = updateBlockSettingsInDocument({
+      document: badgesUpdated,
+      sectionId: "section-profile",
+      blockPath: ["group-settings"],
+      settings: { type: "group", direction: "horizontal", align: "center", gap: 5 },
+    });
+    const rowUpdated = updateBlockSettingsInDocument({
+      document: groupUpdated,
+      sectionId: "section-profile",
+      blockPath: ["row-settings"],
+      settings: { type: "row", align: "end", justify: "end", gap: 6 },
+    });
+
+    expect(rowUpdated.sections[0]?.blocks[1]).toMatchObject({
+      type: "list",
+      ordered: true,
+      marker: "square",
+      gap: 3,
+    });
+    expect(rowUpdated.sections[0]?.blocks[2]).toMatchObject({
+      type: "badges",
+      wrap: false,
+      gap: 4,
+    });
+    expect(rowUpdated.sections[0]?.blocks[3]).toMatchObject({
+      type: "group",
+      direction: "horizontal",
+      align: "center",
+      gap: 5,
+    });
+    expect(rowUpdated.sections[0]?.blocks[4]).toMatchObject({
+      type: "row",
+      align: "end",
+      justify: "end",
+      gap: 6,
+    });
   });
 
   it("appends a component to the selected section", () => {

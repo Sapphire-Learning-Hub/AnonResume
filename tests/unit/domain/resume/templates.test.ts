@@ -7,12 +7,13 @@ import {
   resumeTemplateIds,
 } from "@/domain/resume/templates";
 
-it("exposes the four stable resume templates", () => {
+it("exposes the blank template and four visually distinct resume templates", () => {
   expect(resumeTemplateIds).toEqual([
     "blank",
-    "foundation",
-    "frontend",
-    "fullstack",
+    "centered",
+    "classic",
+    "modular",
+    "compact",
   ]);
   expect(listResumeTemplates("zh-CN").map(({ id }) => id)).toEqual(
     resumeTemplateIds,
@@ -21,6 +22,7 @@ it("exposes the four stable resume templates", () => {
 
 it("recognizes only stable resume template identifiers", () => {
   expect(resumeTemplateIds.map((id) => isResumeTemplateId(id))).toEqual([
+    true,
     true,
     true,
     true,
@@ -40,6 +42,7 @@ it.each(["zh-CN", "en-US"] as const)(
       first.map(({ document }) => document),
     );
     expect(first.map(({ document }) => document.meta.locale)).toEqual([
+      locale,
       locale,
       locale,
       locale,
@@ -82,9 +85,33 @@ it("creates a minimal localized blank editor foundation", () => {
 });
 
 it("returns independent template documents", () => {
-  const first = createResumeDocumentFromTemplate("frontend", "zh-CN");
-  const second = createResumeDocumentFromTemplate("frontend", "zh-CN");
+  const first = createResumeDocumentFromTemplate("centered", "zh-CN");
+  const second = createResumeDocumentFromTemplate("centered", "zh-CN");
 
   first.meta.title = "Changed";
-  expect(second.meta.title).toBe("前端版简历");
+  expect(second.meta.title).toBe("居中叙事简历");
+});
+
+it("builds each visual template from a materially different document structure", () => {
+  const centered = createResumeDocumentFromTemplate("centered", "zh-CN");
+  const classic = createResumeDocumentFromTemplate("classic", "zh-CN");
+  const modular = createResumeDocumentFromTemplate("modular", "zh-CN");
+  const compact = createResumeDocumentFromTemplate("compact", "zh-CN");
+
+  expect(centered.sections[0]?.title).toBeUndefined();
+  expect(centered.settings.typography.fontFamily).toContain("Noto Serif SC");
+  expect(centered.sections[0]?.layout?.gap).toBe(9);
+
+  expect(classic.settings.theme.accent).toBe("#18534b");
+  expect(classic.sections[0]?.blocks[0]).toMatchObject({ type: "row" });
+
+  expect(modular.sections[1]?.layout?.columns).toBe(2);
+  expect(
+    modular.sections[1]?.blocks.some((block) => block.type === "badges"),
+  ).toBe(true);
+
+  expect(compact.settings.typography.baseFontSize).toBe(12);
+  expect(compact.sections[0]?.blocks[0]).toMatchObject({
+    type: "row",
+  });
 });

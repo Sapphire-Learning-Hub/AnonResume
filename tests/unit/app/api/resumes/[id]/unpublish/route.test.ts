@@ -20,7 +20,7 @@ describe("unpublish route", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await publishResumeRecord("user-demo", "resume-foundation");

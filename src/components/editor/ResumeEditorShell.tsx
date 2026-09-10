@@ -17,6 +17,7 @@ import {
   Pagination,
   Popconfirm,
   Select,
+  Switch,
   Tag,
   Tooltip,
 } from "antd";
@@ -61,6 +62,7 @@ import type {
   TiptapTextBlockEditorHandle,
 } from "@/components/resume/TiptapTextBlockEditor";
 import {
+  createRichTextFromPlainText,
   findBlockByPath,
   findTextBlock,
   getBlockSiblingPosition,
@@ -708,13 +710,17 @@ export function ResumeEditorShell({
     selection.sectionId && selection.blockPath
       ? findTextBlock(document, selection.sectionId, selection.blockPath)
       : undefined;
-  const selectedBadgeBlock =
+  const selectedBlock =
     selection.sectionId && selection.blockPath
       ? findBlockByPath(
           selectedSection?.blocks ?? [],
           selection.blockPath,
         )
       : undefined;
+  const selectedBadgeBlock =
+    selectedBlock?.type === "badges" ? selectedBlock : undefined;
+  const selectedStructuralBlock =
+    selectedBlock && selectedBlock.type !== "text" ? selectedBlock : undefined;
   const selectedBadgeItem =
     selectedBadgeBlock?.type === "badges" && selection.badgeItemId
       ? selectedBadgeBlock.items.find((item) => item.id === selection.badgeItemId)
@@ -831,6 +837,58 @@ export function ResumeEditorShell({
     });
   }
 
+  function updateSelectedBlockSettings(
+    settings: Parameters<ResumeEditorStoreState["updateBlockSettings"]>[0]["settings"],
+  ) {
+    if (!selection.sectionId || !selection.blockPath) {
+      return;
+    }
+
+    store.getState().updateBlockSettings({
+      sectionId: selection.sectionId,
+      blockPath: selection.blockPath,
+      settings,
+    });
+  }
+
+  function updateSelectedBlockGap(gap: number) {
+    if (!selectedStructuralBlock) return;
+
+    switch (selectedStructuralBlock.type) {
+      case "list":
+        updateSelectedBlockSettings({
+          type: "list",
+          ordered: selectedStructuralBlock.ordered,
+          marker: selectedStructuralBlock.marker,
+          gap,
+        });
+        break;
+      case "badges":
+        updateSelectedBlockSettings({
+          type: "badges",
+          wrap: selectedStructuralBlock.wrap,
+          gap,
+        });
+        break;
+      case "group":
+        updateSelectedBlockSettings({
+          type: "group",
+          direction: selectedStructuralBlock.direction,
+          align: selectedStructuralBlock.align,
+          gap,
+        });
+        break;
+      case "row":
+        updateSelectedBlockSettings({
+          type: "row",
+          align: selectedStructuralBlock.align,
+          justify: selectedStructuralBlock.justify,
+          gap,
+        });
+        break;
+    }
+  }
+
   function updateSelectedSectionLayout(
     layout: Parameters<ResumeEditorStoreState["updateSectionLayout"]>[0]["layout"],
   ) {
@@ -910,12 +968,12 @@ export function ResumeEditorShell({
   const canMoveSelectedSectionDown =
     selectedSectionIndex > -1 && selectedSectionIndex < document.sections.length - 1;
   const canMoveSelectedBlockUp =
-    Boolean(selectedTextBlock) && (selectedBlockPosition?.index ?? -1) > 0;
+    Boolean(selectedBlock) && (selectedBlockPosition?.index ?? -1) > 0;
   const canMoveSelectedBlockDown =
-    Boolean(selectedTextBlock) &&
+    Boolean(selectedBlock) &&
     selectedBlockPosition !== undefined &&
     selectedBlockPosition.index < selectedBlockPosition.count - 1;
-  const canDeleteSelectedBlock = Boolean(selectedTextBlock);
+  const canDeleteSelectedBlock = Boolean(selectedBlock);
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
   const canZoomOut = zoom > RESUME_EDITOR_ZOOM_MIN;
@@ -1253,6 +1311,14 @@ export function ResumeEditorShell({
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionActions")}>
         <div className={styles.panelActionRow}>
         <Button
+          onClick={() => {
+            store.getState().setSectionTitle({ sectionId: selectedSection.id });
+            store.getState().setSelection({ sectionId: selectedSection.id });
+          }}
+        >
+          {t("editor.removeSectionTitle")}
+        </Button>
+        <Button
           disabled={!canMoveSelectedSectionUp}
           onClick={() =>
             store.getState().moveSection({
@@ -1560,6 +1626,224 @@ export function ResumeEditorShell({
         </div>
       </EditorRibbonPropertyGroup>
     </>
+  ) : selectedStructuralBlock && selection.sectionId && selection.blockPath ? (
+    <>
+      <EditorRibbonPropertyGroup
+        label={t(`editor.ribbon.property.${selectedStructuralBlock.type}Layout`)}
+      >
+        <div className={styles.inspectorControlGrid}>
+          <div className={styles.inspectorControlRow} data-field-size="compact">
+            <span className={styles.inspectorControlLabel}>{t("editor.contentGap")}</span>
+            <DraftInput
+              aria-label={t("editor.contentGap")}
+              min={0}
+              type="number"
+              value={selectedStructuralBlock.gap?.toString() ?? ""}
+              parseValue={parseNonNegativeNumber}
+              onValidValueChange={updateSelectedBlockGap}
+            />
+          </div>
+          {selectedStructuralBlock.type === "list" ? (
+            <>
+              <div className={styles.inspectorControlRow} data-field-size="auto">
+                <span className={styles.inspectorControlLabel}>{t("editor.orderedList")}</span>
+                <Switch
+                  aria-label={t("editor.orderedList")}
+                  checked={selectedStructuralBlock.ordered ?? false}
+                  onChange={(ordered) =>
+                    updateSelectedBlockSettings({
+                      type: "list",
+                      ordered,
+                      marker: selectedStructuralBlock.marker,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+              <div className={styles.inspectorControlRow} data-field-size="select-compact">
+                <span className={styles.inspectorControlLabel}>{t("editor.listMarker")}</span>
+                <Select
+                  aria-label={t("editor.listMarker")}
+                  value={selectedStructuralBlock.marker ?? "disc"}
+                  options={[
+                    { value: "disc", label: t("editor.listMarker.disc") },
+                    { value: "square", label: t("editor.listMarker.square") },
+                    { value: "dash", label: t("editor.listMarker.dash") },
+                    { value: "none", label: t("editor.listMarker.none") },
+                  ]}
+                  onChange={(marker) =>
+                    updateSelectedBlockSettings({
+                      type: "list",
+                      ordered: selectedStructuralBlock.ordered,
+                      marker,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+          {selectedStructuralBlock.type === "badges" ? (
+            <div className={styles.inspectorControlRow} data-field-size="auto">
+              <span className={styles.inspectorControlLabel}>{t("editor.wrapBadges")}</span>
+              <Switch
+                aria-label={t("editor.wrapBadges")}
+                checked={selectedStructuralBlock.wrap}
+                onChange={(wrap) =>
+                  updateSelectedBlockSettings({
+                    type: "badges",
+                    wrap,
+                    gap: selectedStructuralBlock.gap,
+                  })
+                }
+              />
+            </div>
+          ) : null}
+          {selectedStructuralBlock.type === "group" ? (
+            <>
+              <div className={styles.inspectorControlRow} data-field-size="select-compact">
+                <span className={styles.inspectorControlLabel}>{t("editor.layoutDirection")}</span>
+                <Select
+                  aria-label={t("editor.layoutDirection")}
+                  value={selectedStructuralBlock.direction}
+                  options={[
+                    { value: "vertical", label: t("editor.verticalLayout") },
+                    { value: "horizontal", label: t("editor.horizontalLayout") },
+                  ]}
+                  onChange={(direction) =>
+                    updateSelectedBlockSettings({
+                      type: "group",
+                      direction,
+                      align: selectedStructuralBlock.align,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+              <div className={styles.inspectorControlRow} data-field-size="select-compact">
+                <span className={styles.inspectorControlLabel}>{t("editor.crossAxisAlign")}</span>
+                <Select
+                  aria-label={t("editor.crossAxisAlign")}
+                  value={selectedStructuralBlock.align ?? "stretch"}
+                  options={[
+                    { value: "start", label: t("editor.align.start") },
+                    { value: "center", label: t("editor.align.center") },
+                    { value: "end", label: t("editor.align.end") },
+                    { value: "stretch", label: t("editor.align.stretch") },
+                  ]}
+                  onChange={(align) =>
+                    updateSelectedBlockSettings({
+                      type: "group",
+                      direction: selectedStructuralBlock.direction,
+                      align,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+          {selectedStructuralBlock.type === "row" ? (
+            <>
+              <div className={styles.inspectorControlRow} data-field-size="select-compact">
+                <span className={styles.inspectorControlLabel}>{t("editor.verticalAlign")}</span>
+                <Select
+                  aria-label={t("editor.verticalAlign")}
+                  value={selectedStructuralBlock.align ?? "start"}
+                  options={[
+                    { value: "start", label: t("editor.align.start") },
+                    { value: "center", label: t("editor.align.center") },
+                    { value: "end", label: t("editor.align.end") },
+                  ]}
+                  onChange={(align) =>
+                    updateSelectedBlockSettings({
+                      type: "row",
+                      align,
+                      justify: selectedStructuralBlock.justify,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+              <div className={styles.inspectorControlRow} data-field-size="select-compact">
+                <span className={styles.inspectorControlLabel}>{t("editor.horizontalJustify")}</span>
+                <Select
+                  aria-label={t("editor.horizontalJustify")}
+                  value={selectedStructuralBlock.justify ?? "start"}
+                  options={[
+                    { value: "start", label: t("editor.justify.start") },
+                    { value: "between", label: t("editor.justify.between") },
+                    { value: "end", label: t("editor.justify.end") },
+                  ]}
+                  onChange={(justify) =>
+                    updateSelectedBlockSettings({
+                      type: "row",
+                      align: selectedStructuralBlock.align,
+                      justify,
+                      gap: selectedStructuralBlock.gap,
+                    })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+        </div>
+      </EditorRibbonPropertyGroup>
+      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.contentActions")}>
+        <div className={styles.panelActionRow}>
+          <Button
+            disabled={!canMoveSelectedBlockUp}
+            onClick={() =>
+              selectedBlockPosition
+                ? store.getState().moveBlock({
+                    sectionId: selection.sectionId!,
+                    blockPath: selection.blockPath!,
+                    toIndex: selectedBlockPosition.index - 1,
+                  })
+                : undefined
+            }
+          >
+            {t("editor.moveBlockUp")}
+          </Button>
+          <Button
+            disabled={!canMoveSelectedBlockDown}
+            onClick={() =>
+              selectedBlockPosition
+                ? store.getState().moveBlock({
+                    sectionId: selection.sectionId!,
+                    blockPath: selection.blockPath!,
+                    toIndex: selectedBlockPosition.index + 1,
+                  })
+                : undefined
+            }
+          >
+            {t("editor.moveBlockDown")}
+          </Button>
+          <Button
+            onClick={() =>
+              store.getState().duplicateBlock({
+                sectionId: selection.sectionId!,
+                blockPath: selection.blockPath!,
+              })
+            }
+          >
+            {t("editor.duplicateBlock")}
+          </Button>
+          <Button
+            danger
+            disabled={!canDeleteSelectedBlock}
+            onClick={() =>
+              store.getState().deleteBlock({
+                sectionId: selection.sectionId!,
+                blockPath: selection.blockPath!,
+              })
+            }
+          >
+            {t("editor.deleteBlock")}
+          </Button>
+        </div>
+      </EditorRibbonPropertyGroup>
+    </>
   ) : selectedSection ? (
     <>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionLayout")}>
@@ -1689,8 +1973,49 @@ export function ResumeEditorShell({
         </div>
         </div>
       </EditorRibbonPropertyGroup>
+      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionBehavior")}>
+        <div className={styles.inspectorControlGrid}>
+          <div className={styles.inspectorControlRow} data-field-size="auto">
+            <span className={styles.inspectorControlLabel}>{t("editor.keepSectionTogether")}</span>
+            <Switch
+              aria-label={t("editor.keepSectionTogether")}
+              checked={selectedSection.pagination?.keepTogether ?? false}
+              onChange={(keepTogether) =>
+                store.getState().updateSectionPagination({
+                  sectionId: selectedSection.id,
+                  pagination: { keepTogether },
+                })
+              }
+            />
+          </div>
+        </div>
+      </EditorRibbonPropertyGroup>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionActions")}>
         <div className={styles.panelActionRow}>
+        {!selectedSection.title ? (
+          <Button
+            onClick={() => {
+              store.getState().setSectionTitle({
+                sectionId: selectedSection.id,
+                title: createRichTextFromPlainText(t("editor.sectionTitle")),
+              });
+              store.getState().setSelection({
+                sectionId: selectedSection.id,
+                richTextField: "title",
+              });
+            }}
+          >
+            {t("editor.addSectionTitle")}
+          </Button>
+        ) : (
+          <Button
+            onClick={() =>
+              store.getState().setSectionTitle({ sectionId: selectedSection.id })
+            }
+          >
+            {t("editor.removeSectionTitle")}
+          </Button>
+        )}
         <Button
           disabled={!canMoveSelectedSectionUp}
           onClick={() =>

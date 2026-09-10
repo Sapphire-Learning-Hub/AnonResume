@@ -30,18 +30,18 @@ describe("ResumeTemplatePicker", () => {
 
     const dialog = screen.getByRole("dialog", { name: "选择简历模板" });
     const blank = within(dialog).getByRole("radio", { name: /空白简历/ });
-    const frontend = within(dialog).getByRole("radio", { name: /前端版/ });
+    const modular = within(dialog).getByRole("radio", { name: /等宽模块/ });
 
     expect(blank).toHaveAttribute("aria-checked", "true");
     expect(blank).toHaveAttribute("data-selected", "true");
-    expect(frontend).toHaveAttribute("aria-checked", "false");
-    expect(frontend).toHaveAttribute("data-selected", "false");
+    expect(modular).toHaveAttribute("aria-checked", "false");
+    expect(modular).toHaveAttribute("data-selected", "false");
 
-    fireEvent.keyDown(frontend, { key: " " });
+    fireEvent.keyDown(modular, { key: " " });
 
-    expect(frontend).toHaveAttribute("aria-checked", "true");
-    expect(frontend).toHaveAttribute("data-selected", "true");
-    expect(frontend.querySelector('[data-selection-mark="true"]')).toHaveAttribute(
+    expect(modular).toHaveAttribute("aria-checked", "true");
+    expect(modular).toHaveAttribute("data-selected", "true");
+    expect(modular.querySelector('[data-selection-mark="true"]')).toHaveAttribute(
       "data-selected",
       "true",
     );
@@ -49,7 +49,7 @@ describe("ResumeTemplatePicker", () => {
       within(dialog)
         .getByTestId("create-resume-template-form")
         .querySelector('input[name="templateId"]'),
-    ).toHaveValue("frontend");
+    ).toHaveValue("modular");
   });
 
   it("closes without submitting", () => {

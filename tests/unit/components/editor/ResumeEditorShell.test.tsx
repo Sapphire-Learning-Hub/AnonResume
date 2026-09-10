@@ -1383,6 +1383,86 @@ describe("ResumeEditorShell", () => {
     });
   });
 
+  it("adds and removes an optional section title from section properties", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.title = undefined;
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={document}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "未命名区块" }));
+    const sectionPanel = getInspectorPanel();
+    fireEvent.click(
+      within(sectionPanel).getByRole("button", { name: spacedLabel("添加区块标题") }),
+    );
+
+    expect(
+      within(screen.getByRole("article")).getAllByText("区块标题").length,
+    ).toBeGreaterThan(0);
+    fireEvent.click(
+      within(getInspectorPanel()).getByRole("button", {
+        name: spacedLabel("移除区块标题"),
+      }),
+    );
+    expect(within(screen.getByRole("article")).queryByText("区块标题")).not.toBeInTheDocument();
+  });
+
+  it("exposes pagination behavior and structural row settings", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(
+      within(getInspectorPanel()).getByRole("switch", { name: "尽量保持区块完整" }),
+    ).toBeChecked();
+
+    openRibbonTab("开始");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
+    fireEvent.click(screen.getByRole("button", { name: "拖动 行 Block" }));
+
+    const rowPanel = getInspectorPanel();
+    expect(within(rowPanel).getByRole("group", { name: "行布局" })).toBeInTheDocument();
+    expect(within(rowPanel).getByLabelText("内容间距")).toHaveValue(16);
+    expect(within(rowPanel).getByText("起始")).toBeInTheDocument();
+    expect(within(rowPanel).getByText("两端对齐")).toBeInTheDocument();
+  });
+
+  it("exposes list, badge, and group settings from layout handles", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 列表 Block" })[0]!);
+    let panel = getInspectorPanel();
+    expect(within(panel).getByRole("group", { name: "列表布局" })).toBeInTheDocument();
+    expect(within(panel).getByRole("switch", { name: "有序列表" })).not.toBeChecked();
+    expect(within(panel).getByText("圆点")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 徽章 Block" })[0]!);
+    panel = getInspectorPanel();
+    expect(within(panel).getByRole("group", { name: "标签布局" })).toBeInTheDocument();
+    expect(within(panel).getByRole("switch", { name: "标签自动换行" })).toBeChecked();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "选择 分组 Block" })[0]!);
+    panel = getInspectorPanel();
+    expect(within(panel).getByRole("group", { name: "分组布局" })).toBeInTheDocument();
+    expect(within(panel).getByText("纵向布局")).toBeInTheDocument();
+    expect(within(panel).getByText("拉伸")).toBeInTheDocument();
+  });
+
   it("updates section columns from the inspector and reflects them on the canvas", () => {
     render(
       <ResumeEditorShell

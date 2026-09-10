@@ -53,17 +53,17 @@ describe("Dashboard workbench view", () => {
     });
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "fullstack",
+      templateId: "classic",
       createId: () => "resume-fullstack",
     });
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "frontend",
+      templateId: "modular",
       createId: () => "resume-frontend",
     });
     await publishResumeRecord("user-demo", "resume-foundation");
@@ -107,7 +107,7 @@ describe("Dashboard workbench view", () => {
       "post",
     );
     fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
-    const resumeTitleLink = screen.getByRole("link", { name: "基础版简历" });
+    const resumeTitleLink = screen.getByRole("link", { name: "居中叙事简历" });
     expect(resumeTitleLink).toHaveAttribute(
       "href",
       "/app/resumes/resume-foundation",
@@ -132,7 +132,7 @@ describe("Dashboard workbench view", () => {
     expect(screen.queryByRole("button", { name: "search" })).not.toBeInTheDocument();
 
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("button", { name: "更多操作：基础版简历" }));
+    fireEvent.click(screen.getByRole("button", { name: "更多操作：居中叙事简历" }));
     expect(screen.getByRole("link", { name: "打开公开页" })).toHaveAttribute(
       "href",
       "/resume/resume-foundation",
@@ -162,12 +162,12 @@ describe("Dashboard workbench view", () => {
     vi.useRealTimers();
 
     fireEvent.change(screen.getByRole("searchbox", { name: "搜索简历" }), {
-      target: { value: "全栈" },
+      target: { value: "经典" },
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("link", { name: "全栈版简历" })).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "基础版简历" })).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "经典留白简历" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "居中叙事简历" })).not.toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByRole("searchbox", { name: "搜索简历" }), {

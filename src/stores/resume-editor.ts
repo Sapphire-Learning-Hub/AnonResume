@@ -28,8 +28,11 @@ import {
   removeSectionFromDocument,
   setSectionTitleColorInDocument,
   setSectionTitleFontSizeInDocument,
+  setSectionTitleInDocument,
   setTextBlockColorInDocument,
   setSectionVisibilityInDocument,
+  updateBlockSettingsInDocument,
+  updateSectionPaginationInDocument,
   updateSectionLayoutInDocument,
   updateSectionSemanticInDocument,
   updateSectionTitleInDocument,
@@ -37,6 +40,7 @@ import {
   updateTextBlockContentInDocument,
   updateTextBlockStyleInDocument,
   updateTextBlockInDocument,
+  type ResumeBlockSettings,
 } from "@/domain/resume/operations";
 import type {
   BadgeBlock,
@@ -104,6 +108,10 @@ export interface ResumeEditorActions {
     sectionId: string;
     content: RichTextContent;
   }) => void;
+  setSectionTitle: (params: {
+    sectionId: string;
+    title?: RichTextContent;
+  }) => void;
   setSectionTitleColor: (params: {
     sectionId: string;
     color?: string;
@@ -115,6 +123,12 @@ export interface ResumeEditorActions {
   updateSectionLayout: (params: {
     sectionId: string;
     layout: Partial<NonNullable<ResumeDocument["sections"][number]["layout"]>>;
+  }) => void;
+  updateSectionPagination: (params: {
+    sectionId: string;
+    pagination: Partial<
+      NonNullable<ResumeDocument["sections"][number]["pagination"]>
+    >;
   }) => void;
   updateSectionSemantic: (params: {
     sectionId: string;
@@ -134,6 +148,11 @@ export interface ResumeEditorActions {
     sectionId: string;
     blockPath: string[];
     items: BadgeBlock["items"];
+  }) => void;
+  updateBlockSettings: (params: {
+    sectionId: string;
+    blockPath: string[];
+    settings: ResumeBlockSettings;
   }) => void;
   moveBlock: (params: {
     sectionId: string;
@@ -293,6 +312,11 @@ export function createResumeEditorStore({
         }),
       );
     },
+    setSectionTitle: ({ sectionId, title }) => {
+      get().updateDocument((document) =>
+        setSectionTitleInDocument({ document, sectionId, title }),
+      );
+    },
     setSectionTitleColor: ({ sectionId, color }) => {
       get().updateDocument((document) =>
         setSectionTitleColorInDocument({ document, sectionId, color }),
@@ -309,6 +333,15 @@ export function createResumeEditorStore({
           document,
           sectionId,
           layout,
+        }),
+      );
+    },
+    updateSectionPagination: ({ sectionId, pagination }) => {
+      get().updateDocument((document) =>
+        updateSectionPaginationInDocument({
+          document,
+          sectionId,
+          pagination,
         }),
       );
     },
@@ -348,6 +381,16 @@ export function createResumeEditorStore({
           sectionId,
           blockPath,
           items,
+        }),
+      );
+    },
+    updateBlockSettings: ({ sectionId, blockPath, settings }) => {
+      get().updateDocument((document) =>
+        updateBlockSettingsInDocument({
+          document,
+          sectionId,
+          blockPath,
+          settings,
         }),
       );
     },

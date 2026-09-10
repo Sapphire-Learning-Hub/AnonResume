@@ -14,7 +14,7 @@ describe("PublicResumePrintPage", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     await publishResumeRecord("user-demo", "resume-foundation");
@@ -33,8 +33,8 @@ describe("PublicResumePrintPage", () => {
     render(page);
 
     expect(screen.getByText("打印简历")).toBeInTheDocument();
-    expect(screen.getByText("基础版简历")).toBeInTheDocument();
-    expect(screen.getByText("个人简介")).toBeInTheDocument();
+    expect(screen.getByText("居中叙事简历")).toBeInTheDocument();
+    expect(screen.getByText("林知夏")).toBeInTheDocument();
     expect(screen.queryByText("resume-foundation")).not.toBeInTheDocument();
   });
 });

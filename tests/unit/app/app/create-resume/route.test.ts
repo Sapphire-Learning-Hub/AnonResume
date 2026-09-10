@@ -90,7 +90,7 @@ describe("create resume route", () => {
     await resetResumeRepository();
   });
 
-  it.each(["blank", "foundation", "frontend", "fullstack"] as const)(
+  it.each(["blank", "centered", "classic", "modular", "compact"] as const)(
     "creates the %s template and redirects to the editor",
     async (templateId) => {
       const response = await POST(createRequest(templateId));

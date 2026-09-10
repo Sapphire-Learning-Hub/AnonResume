@@ -231,6 +231,35 @@ describe("createResumeEditorStore", () => {
     expect(state.saveStatus).toBe("dirty");
   });
 
+  it("adds and removes an optional section title", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.title = undefined;
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+    const title = {
+      type: "doc" as const,
+      content: [
+        {
+          type: "paragraph" as const,
+          content: [{ type: "text" as const, text: "自定义标题" }],
+        },
+      ],
+    };
+
+    store.getState().setSectionTitle({
+      sectionId: "section-profile",
+      title,
+    });
+    expect(store.getState().document.sections[0]?.title).toEqual(title);
+
+    store.getState().setSectionTitle({ sectionId: "section-profile" });
+    expect(store.getState().document.sections[0]?.title).toBeUndefined();
+  });
+
   it("sets and clears a per-section title color", () => {
     const store = createResumeEditorStore({
       resumeId: "resume-demo",
@@ -552,6 +581,44 @@ describe("createResumeEditorStore", () => {
     expect(state.history.past).toHaveLength(1);
     expect(state.dirty).toBe(true);
     expect(state.saveStatus).toBe("dirty");
+  });
+
+  it("updates section pagination and structural block settings", () => {
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document: createDefaultResumeDocument(),
+      version: 1,
+      updatedAt: 100,
+    });
+
+    store.getState().updateSectionPagination({
+      sectionId: "section-profile",
+      pagination: { keepTogether: false },
+    });
+    store.getState().updateBlockSettings({
+      sectionId: "section-profile",
+      blockPath: ["block-profile-highlights"],
+      settings: {
+        type: "list",
+        ordered: true,
+        marker: "square",
+        gap: 4,
+      },
+    });
+
+    const state = store.getState();
+    const list = findBlockByPath(state.document.sections[0]!.blocks, [
+      "block-profile-highlights",
+    ]);
+
+    expect(state.document.sections[0]?.pagination?.keepTogether).toBe(false);
+    expect(list).toMatchObject({
+      type: "list",
+      ordered: true,
+      marker: "square",
+      gap: 4,
+    });
+    expect(state.history.past).toHaveLength(2);
   });
 
   it("updates section padding metadata by section id", () => {

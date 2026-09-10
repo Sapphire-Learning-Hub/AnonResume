@@ -39,7 +39,7 @@ describe("apply resume font route", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(requireSession).mockResolvedValue({
@@ -102,7 +102,11 @@ describe("apply resume font route", () => {
     await expect(getResumeRecord("user-demo", "resume-foundation")).resolves.toMatchObject({
       version: 1,
       document: {
-        settings: { typography: { fontFamily: '"IBM Plex Sans", "Segoe UI", sans-serif' } },
+        settings: {
+          typography: {
+            fontFamily: '"Noto Serif SC", "Source Han Serif SC", serif',
+          },
+        },
       },
     });
   });

@@ -50,7 +50,7 @@ describe("ResumeEditorPage", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-foundation",
     });
     vi.mocked(requireSession).mockResolvedValue({
@@ -81,7 +81,7 @@ describe("ResumeEditorPage", () => {
 
     expect(screen.getByTestId("editor-viewport-guard")).toBeInTheDocument();
     expect(screen.getByText("画布")).toBeInTheDocument();
-    expect(within(screen.getByRole("article")).getByText("个人简介")).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByText("林知夏")).toBeInTheDocument();
   });
 
   it("loads published resume metadata into the editor shell", async () => {
@@ -93,7 +93,7 @@ describe("ResumeEditorPage", () => {
 
     render(page);
 
-    expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue("基础版简历");
+    expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue("居中叙事简历");
     fireEvent.click(screen.getByRole("tab", { name: "文档" }));
     expect(screen.getByRole("link", { name: /打\s*开\s*公\s*开\s*页/ })).toHaveAttribute(
       "href",

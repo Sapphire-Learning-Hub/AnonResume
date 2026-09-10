@@ -24,10 +24,14 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
   templateGrid: css`
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 14px;
 
-    @media (max-width: 960px) {
+    @media (max-width: 1200px) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    @media (max-width: 760px) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 

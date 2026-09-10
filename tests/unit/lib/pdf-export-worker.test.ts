@@ -20,7 +20,7 @@ describe("PDF export worker", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "foundation",
+      templateId: "centered",
       createId: () => "resume-demo",
     });
   });

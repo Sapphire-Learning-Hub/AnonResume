@@ -11,11 +11,14 @@ import {
 } from "./block-tree";
 import type {
   BadgeBlock,
+  GroupBlock,
+  ListBlock,
   ResumeListItem,
   ResumeBlock,
   ResumeDocument,
   ResumeSection,
   RichTextContent,
+  RowBlock,
   TextBlock,
 } from "./schema";
 import { createSectionFromPreset } from "./presets";
@@ -624,6 +627,60 @@ function updateBadgeItemsAtPath(
   });
 }
 
+export type ResumeBlockSettings =
+  | ({ type: "list" } & Pick<ListBlock, "ordered" | "marker" | "gap">)
+  | ({ type: "badges" } & Pick<BadgeBlock, "wrap" | "gap">)
+  | ({ type: "group" } & Pick<
+      GroupBlock,
+      "direction" | "align" | "gap"
+    >)
+  | ({ type: "row" } & Pick<RowBlock, "align" | "justify" | "gap">);
+
+function updateBlockSettingsAtPath(
+  blocks: ResumeBlock[],
+  blockPath: string[],
+  settings: ResumeBlockSettings,
+): ResumeBlock[] {
+  const [currentId, ...rest] = blockPath;
+
+  return blocks.map((block) => {
+    if (block.id !== currentId) return block;
+
+    if (rest.length === 0) {
+      switch (block.type) {
+        case "list":
+          return settings.type === "list" ? { ...block, ...settings } : block;
+        case "badges":
+          return settings.type === "badges" ? { ...block, ...settings } : block;
+        case "group":
+          return settings.type === "group" ? { ...block, ...settings } : block;
+        case "row":
+          return settings.type === "row" ? { ...block, ...settings } : block;
+        case "text":
+          return block;
+      }
+    }
+
+    if (isContainerBlock(block)) {
+      return {
+        ...block,
+        children: updateBlockSettingsAtPath(block.children, rest, settings),
+      };
+    }
+
+    if (block.type === "list") {
+      return updateListItemChildren(
+        block,
+        rest,
+        (children, nestedPath) =>
+          updateBlockSettingsAtPath(children, nestedPath, settings),
+      );
+    }
+
+    return block;
+  });
+}
+
 export function updateTextBlockContentInDocument({
   document,
   sectionId,
@@ -727,6 +784,30 @@ export function updateBadgeItemsInDocument({
   };
 }
 
+export function updateBlockSettingsInDocument({
+  document,
+  sectionId,
+  blockPath,
+  settings,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  blockPath: string[];
+  settings: ResumeBlockSettings;
+}): ResumeDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+
+      return {
+        ...section,
+        blocks: updateBlockSettingsAtPath(section.blocks, blockPath, settings),
+      };
+    }),
+  };
+}
+
 export function updateSectionTitleInDocument({
   document,
   sectionId,
@@ -746,6 +827,29 @@ export function updateSectionTitleInDocument({
       return {
         ...section,
         title: content,
+      };
+    }),
+  };
+}
+
+export function setSectionTitleInDocument({
+  document,
+  sectionId,
+  title,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  title?: RichTextContent;
+}): ResumeDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+
+      return {
+        ...section,
+        title,
+        titleStyle: title ? section.titleStyle : undefined,
       };
     }),
   };
@@ -832,6 +936,31 @@ export function updateSectionLayoutInDocument({
         layout: {
           ...section.layout,
           ...layout,
+        },
+      };
+    }),
+  };
+}
+
+export function updateSectionPaginationInDocument({
+  document,
+  sectionId,
+  pagination,
+}: {
+  document: ResumeDocument;
+  sectionId: string;
+  pagination: Partial<NonNullable<ResumeSection["pagination"]>>;
+}): ResumeDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => {
+      if (section.id !== sectionId) return section;
+
+      return {
+        ...section,
+        pagination: {
+          ...section.pagination,
+          ...pagination,
         },
       };
     }),

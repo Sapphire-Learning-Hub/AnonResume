@@ -19,7 +19,7 @@ describe("publish route", () => {
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
-      templateId: "fullstack",
+      templateId: "classic",
       createId: () => "resume-fullstack",
     });
     vi.mocked(getOptionalSession).mockResolvedValue({
