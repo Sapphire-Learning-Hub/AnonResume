@@ -5,7 +5,7 @@ import { createStyles } from "antd-style";
 export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   shell: css`
     min-height: 100vh;
-    overflow: hidden;
+    overflow: clip;
     background: ${token.colorBgContainer};
     color: ${token.colorText};
 
@@ -47,22 +47,65 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     }
   `,
   header: css`
-    position: sticky;
+    position: fixed;
     top: 0;
+    right: 0;
+    left: 0;
     z-index: 100;
-    border-bottom: 1px solid
-      color-mix(in srgb, ${token.colorBorderSecondary} 74%, transparent);
-    background: color-mix(in srgb, ${token.colorBgContainer} 90%, transparent);
-    backdrop-filter: blur(18px);
+    padding-inline: 20px;
+    pointer-events: none;
+
+    &[data-scrolled="true"] [data-marketing-navigation="true"] {
+      width: min(780px, calc(100vw - 40px));
+      min-height: 56px;
+      gap: 22px;
+      margin-top: 12px;
+      padding: 6px 8px 6px 14px;
+      border: 1px solid
+        color-mix(in srgb, ${token.colorBorderSecondary} 80%, transparent);
+      border-radius: 18px;
+      background: color-mix(in srgb, ${token.colorBgElevated} 88%, transparent);
+      box-shadow: 0 16px 44px color-mix(in srgb, ${token.colorText} 14%, transparent);
+      backdrop-filter: blur(20px) saturate(1.35);
+    }
+
+    &[data-scrolled="true"] [data-marketing-brand="true"] img {
+      width: 132px;
+    }
+
+    &[data-scrolled="true"] [data-marketing-links="true"] {
+      gap: 18px;
+    }
+
+    @media (max-width: 640px) {
+      padding-inline: 12px;
+
+      &[data-scrolled="true"] [data-marketing-navigation="true"] {
+        width: 100%;
+      }
+    }
   `,
   nav: css`
+    box-sizing: border-box;
     display: grid;
-    width: min(1180px, calc(100% - 40px));
-    min-height: 72px;
+    width: min(1320px, 100%);
+    min-height: 80px;
     grid-template-columns: auto 1fr auto;
     gap: 36px;
     align-items: center;
     margin: 0 auto;
+    border: 1px solid transparent;
+    pointer-events: auto;
+    transition:
+      width 320ms ${token.motionEaseOut},
+      min-height 320ms ${token.motionEaseOut},
+      gap 320ms ${token.motionEaseOut},
+      margin 320ms ${token.motionEaseOut},
+      padding 320ms ${token.motionEaseOut},
+      border-color 320ms ${token.motionEaseOut},
+      border-radius 320ms ${token.motionEaseOut},
+      background 320ms ${token.motionEaseOut},
+      box-shadow 320ms ${token.motionEaseOut};
 
     @media (max-width: 980px) {
       grid-template-columns: auto 1fr;
@@ -70,7 +113,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     }
 
     @media (max-width: 640px) {
-      width: min(100% - 28px, 1180px);
+      width: 100%;
       min-height: 64px;
     }
   `,
@@ -82,6 +125,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     display: block;
     width: 172px;
     height: auto;
+    transition: width 320ms ${token.motionEaseOut};
   `,
   navLinks: css`
     display: flex;
@@ -115,30 +159,34 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       justify-self: end;
     }
   `,
-  desktopOnly: css`
-    display: inline-flex;
-
-    @media (max-width: 640px) {
-      display: none;
-    }
-  `,
   main: css`
     display: block;
   `,
   hero: css`
     position: relative;
-    padding: clamp(72px, 9vw, 124px) 20px 84px;
-    background: color-mix(in srgb, ${token.colorPrimaryBg} 54%, ${token.colorBgContainer});
+    padding: clamp(128px, 12vw, 174px) 20px 92px;
+    background:
+      radial-gradient(
+        circle at 72% 24%,
+        color-mix(in srgb, ${token.colorInfoBg} 72%, transparent),
+        transparent 36%
+      ),
+      radial-gradient(
+        circle at 18% 12%,
+        color-mix(in srgb, ${token.colorPrimaryBg} 86%, transparent),
+        transparent 34%
+      ),
+      ${token.colorBgContainer};
 
     @media (max-width: 640px) {
-      padding: 60px 16px 70px;
+      padding: 106px 16px 72px;
     }
   `,
   heroInner: css`
     display: grid;
-    width: min(1180px, 100%);
-    grid-template-columns: minmax(0, 0.9fr) minmax(520px, 1.1fr);
-    gap: clamp(44px, 6vw, 86px);
+    width: min(1320px, 100%);
+    grid-template-columns: minmax(0, 0.98fr) minmax(560px, 1.02fr);
+    gap: clamp(42px, 5vw, 72px);
     align-items: center;
     margin: 0 auto;
 
@@ -151,28 +199,14 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     z-index: 2;
     animation: marketing-rise 620ms ${token.motionEaseOut} both;
   `,
-  eyebrow: css`
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 24px;
-    padding: 8px 12px;
-    border: 1px solid ${token.colorPrimaryBorder};
-    border-radius: 999px;
-    background: color-mix(in srgb, ${token.colorBgContainer} 80%, transparent);
-    color: ${token.colorPrimaryText};
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-  `,
   heroTitle: css`
     max-width: 620px;
     margin: 0;
     color: ${token.colorTextHeading};
-    font-size: clamp(48px, 6vw, 78px);
+    font-size: clamp(44px, 4.8vw, 62px);
     font-weight: 820;
-    letter-spacing: -0.065em;
-    line-height: 1.02;
+    letter-spacing: -0.055em;
+    line-height: 1.06;
   `,
   heroAccent: css`
     color: ${token.colorPrimary};
@@ -250,6 +284,8 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       display: block;
       width: 100%;
       height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
     }
   `,
   floatingNote: css`
@@ -289,43 +325,47 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     }
   `,
   section: css`
-    padding: clamp(76px, 9vw, 118px) 20px;
-    scroll-margin-top: 72px;
+    padding: clamp(72px, 8vw, 108px) 20px;
+    scroll-margin-top: 86px;
   `,
   sectionAlt: css`
     background: ${token.colorBgLayout};
   `,
   sectionInner: css`
-    width: min(1180px, 100%);
+    width: min(1320px, 100%);
     margin: 0 auto;
   `,
   sectionIntro: css`
     display: grid;
-    max-width: 760px;
-    gap: 12px;
-    margin-bottom: 44px;
-  `,
-  sectionKicker: css`
-    margin: 0;
-    color: ${token.colorPrimary};
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 12px clamp(40px, 7vw, 100px);
+    align-items: end;
+    margin-bottom: 42px;
+
+    > :first-child {
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 820px) {
+      grid-template-columns: 1fr;
+
+      > * {
+        grid-column: 1;
+      }
+    }
   `,
   sectionTitle: css`
     margin: 0;
     color: ${token.colorTextHeading};
-    font-size: clamp(34px, 4vw, 54px);
-    letter-spacing: -0.045em;
-    line-height: 1.12;
+    font-size: clamp(32px, 3.7vw, 46px);
+    letter-spacing: -0.04em;
+    line-height: 1.16;
   `,
   sectionLead: css`
-    max-width: 700px;
     margin: 0;
     color: ${token.colorTextSecondary};
-    font-size: 17px;
-    line-height: 1.75;
+    font-size: 16px;
+    line-height: 1.8;
   `,
   featureGrid: css`
     display: grid;
@@ -410,7 +450,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   `,
   showcase: css`
     display: grid;
-    grid-template-columns: minmax(0, 0.78fr) minmax(560px, 1.22fr);
+    grid-template-columns: minmax(0, 0.72fr) minmax(600px, 1.28fr);
     gap: clamp(42px, 7vw, 92px);
     align-items: center;
 
@@ -465,58 +505,33 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       display: block;
       width: 100%;
       height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
     }
   `,
-  templateGrid: css`
+  templateLoading: css`
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
-
-    @media (max-width: 760px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  templateCard: css`
-    margin: 0;
-
-    picture {
-      display: block;
-      aspect-ratio: 1.282 / 1;
-      overflow: hidden;
-      border: 1px solid ${token.colorBorderSecondary};
-      border-radius: 18px;
-      background: ${token.colorFillQuaternary};
-      box-shadow: ${token.boxShadowTertiary};
-    }
-
-    img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 420ms ${token.motionEaseOut};
-    }
-
-    &:hover img {
-      transform: scale(1.025);
-    }
-
-    figcaption {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 16px 4px 0;
-    }
-
-    strong {
-      color: ${token.colorTextHeading};
-      font-size: 16px;
-    }
+    min-height: 620px;
+    place-items: center;
+    gap: 14px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 28px;
+    background: ${token.colorBgContainer};
+    color: ${token.colorTextSecondary};
 
     span {
-      color: ${token.colorTextSecondary};
-      font-size: 13px;
+      width: 34px;
+      height: 34px;
+      border: 3px solid ${token.colorPrimaryBg};
+      border-top-color: ${token.colorPrimary};
+      border-radius: 50%;
+      animation: marketing-spin 800ms linear infinite;
+    }
+
+    @keyframes marketing-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
   `,
   typeGrid: css`
@@ -614,7 +629,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   `,
   ctaInner: css`
     display: grid;
-    width: min(1180px, 100%);
+    width: min(1320px, 100%);
     grid-template-columns: 1fr auto;
     gap: 32px;
     align-items: center;
@@ -629,10 +644,10 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     }
 
     h2 {
-      max-width: 720px;
+      max-width: 840px;
       margin: 0;
       color: ${token.colorTextHeading};
-      font-size: clamp(32px, 4vw, 52px);
+      font-size: clamp(29px, 3.25vw, 42px);
       letter-spacing: -0.045em;
       line-height: 1.15;
     }
@@ -651,7 +666,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   `,
   footerInner: css`
     display: flex;
-    width: min(1180px, 100%);
+    width: min(1320px, 100%);
     gap: 28px;
     align-items: center;
     justify-content: space-between;

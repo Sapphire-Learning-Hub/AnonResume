@@ -9,12 +9,18 @@ import {
   HistoryOutlined,
   ImportOutlined,
   LayoutOutlined,
-  SafetyCertificateOutlined,
   SkinOutlined,
 } from "@ant-design/icons";
 import { Button } from "antd";
+import dynamic from "next/dynamic";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -70,36 +76,6 @@ const features: Feature[] = [
   },
 ];
 
-const templateImages = [
-  {
-    alt: "home.template.foundation.alt" as MessageKey,
-    high: "/marketing/template-foundation-1198.webp",
-    low: "/marketing/template-foundation-560.webp",
-    meta: "home.template.foundation.meta" as MessageKey,
-    title: "home.template.foundation.title" as MessageKey,
-    width: 1198,
-    height: 934,
-  },
-  {
-    alt: "home.template.frontend.alt" as MessageKey,
-    high: "/marketing/template-frontend-1209.webp",
-    low: "/marketing/template-frontend-560.webp",
-    meta: "home.template.frontend.meta" as MessageKey,
-    title: "home.template.frontend.title" as MessageKey,
-    width: 1209,
-    height: 945,
-  },
-  {
-    alt: "home.template.fullstack.alt" as MessageKey,
-    high: "/marketing/template-fullstack-1209.webp",
-    low: "/marketing/template-fullstack-560.webp",
-    meta: "home.template.fullstack.meta" as MessageKey,
-    title: "home.template.fullstack.title" as MessageKey,
-    width: 1209,
-    height: 955,
-  },
-] as const;
-
 const fonts = [
   {
     className: "fontSans" as const,
@@ -133,38 +109,165 @@ const steps = [
   ["home.step.deliver.title", "home.step.deliver.description"],
 ] as const satisfies ReadonlyArray<readonly [MessageKey, MessageKey]>;
 
+const MIN_SCROLL_DURATION_MS = 360;
+const MAX_SCROLL_DURATION_MS = 700;
+
+function easeOutCubic(progress: number) {
+  return 1 - (1 - progress) ** 3;
+}
+
+function MarketingTemplateLoading() {
+  const { styles } = useMarketingHomeStyles();
+  const { t } = useI18n();
+
+  return (
+    <div className={styles.templateLoading} role="status">
+      <span />
+      {t("home.templates.loading")}
+    </div>
+  );
+}
+
+const MarketingTemplateShowcase = dynamic(
+  () =>
+    import("./MarketingTemplateShowcase").then(
+      (module) => module.MarketingTemplateShowcase,
+    ),
+  {
+    loading: MarketingTemplateLoading,
+    ssr: false,
+  },
+);
+
 export function MarketingHome() {
   const { styles } = useMarketingHomeStyles();
   const { t } = useI18n();
   const sourceCodeUrl = process.env.NEXT_PUBLIC_SOURCE_CODE_URL?.trim();
+  const [headerScrolled, setHeaderScrolled] = useState(false);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const updateHeaderState = () => {
+      setHeaderScrolled(window.scrollY > 32);
+    };
+
+    updateHeaderState();
+    window.addEventListener("scroll", updateHeaderState, { passive: true });
+
+    return () => {
+      if (scrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+      }
+      window.removeEventListener("scroll", updateHeaderState);
+    };
+  }, []);
+
+  const handleInPageNavigation = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const eventTarget = event.target;
+    if (!(eventTarget instanceof Element)) {
+      return;
+    }
+
+    const anchor = eventTarget.closest<HTMLAnchorElement>(
+      'a[data-marketing-scroll="true"]',
+    );
+    const hash = anchor?.hash;
+    if (!hash) {
+      return;
+    }
+
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (!target) {
+      return;
+    }
+
+    event.preventDefault();
+    window.history.pushState(null, "", hash);
+
+    if (scrollAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+    }
+
+    const startY = window.scrollY;
+    const scrollMarginTop = Number.parseFloat(
+      window.getComputedStyle(target).scrollMarginTop,
+    );
+    const targetY = Math.max(
+      0,
+      startY + target.getBoundingClientRect().top - (scrollMarginTop || 0),
+    );
+    const distance = targetY - startY;
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+    if (prefersReducedMotion || Math.abs(distance) < 1) {
+      window.scrollTo(0, targetY);
+      scrollAnimationFrameRef.current = null;
+      return;
+    }
+
+    const duration = Math.min(
+      MAX_SCROLL_DURATION_MS,
+      Math.max(MIN_SCROLL_DURATION_MS, Math.abs(distance) * 0.35),
+    );
+    const startedAt = window.performance.now();
+    const animateScroll = (timestamp: number) => {
+      const progress = Math.min((timestamp - startedAt) / duration, 1);
+      window.scrollTo(0, startY + distance * easeOutCubic(progress));
+
+      if (progress < 1) {
+        scrollAnimationFrameRef.current = window.requestAnimationFrame(animateScroll);
+      } else {
+        scrollAnimationFrameRef.current = null;
+      }
+    };
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(animateScroll);
+  };
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} onClick={handleInPageNavigation}>
       <a className={styles.skipLink} href="#main-content">
         {t("home.skipToContent")}
       </a>
 
-      <header className={styles.header}>
-        <div className={styles.nav}>
-          <a aria-label={t("common.appName")} className={styles.brandLink} href="#top">
+      <header
+        className={styles.header}
+        data-scrolled={headerScrolled ? "true" : "false"}
+      >
+        <div className={styles.nav} data-marketing-navigation="true">
+          <a
+            aria-label={t("common.appName")}
+            className={styles.brandLink}
+            data-marketing-brand="true"
+            data-marketing-scroll="true"
+            href="#top"
+          >
             <AnonResumeLogo
               className={styles.navLogo}
               loading="eager"
               variant="lockup"
             />
           </a>
-          <nav aria-label={t("home.navigation")} className={styles.navLinks}>
-            <a href="#features">{t("home.navigation.features")}</a>
-            <a href="#editor">{t("home.navigation.editor")}</a>
-            <a href="#templates">{t("home.navigation.templates")}</a>
-            <a href="#typography">{t("home.navigation.fonts")}</a>
+          <nav
+            aria-label={t("home.navigation")}
+            className={styles.navLinks}
+            data-marketing-links="true"
+          >
+            <a data-marketing-scroll="true" href="#features">
+              {t("home.navigation.features")}
+            </a>
+            <a data-marketing-scroll="true" href="#editor">
+              {t("home.navigation.editor")}
+            </a>
+            <a data-marketing-scroll="true" href="#templates">
+              {t("home.navigation.templates")}
+            </a>
+            <a data-marketing-scroll="true" href="#typography">
+              {t("home.navigation.fonts")}
+            </a>
           </nav>
           <div className={styles.navActions}>
-            <span className={styles.desktopOnly}>
-              <Button href="/sign-in" type="text">
-                {t("common.signIn")}
-              </Button>
-            </span>
             <Button href="/sign-in" type="primary">
               {t("home.start")}
             </Button>
@@ -176,10 +279,6 @@ export function MarketingHome() {
         <section className={styles.hero} id="top">
           <div className={styles.heroInner}>
             <div className={styles.heroCopy}>
-              <p className={styles.eyebrow}>
-                <SafetyCertificateOutlined />
-                {t("home.eyebrow")}
-              </p>
               <h1 className={styles.heroTitle}>
                 {t("home.hero.lineOne")}
                 <br />
@@ -197,7 +296,12 @@ export function MarketingHome() {
                 >
                   {t("home.start")}
                 </Button>
-                <Button className={styles.secondaryAction} href="#features" size="large">
+                <Button
+                  className={styles.secondaryAction}
+                  data-marketing-scroll="true"
+                  href="#features"
+                  size="large"
+                >
                   {t("home.viewFeatures")}
                 </Button>
               </div>
@@ -220,13 +324,16 @@ export function MarketingHome() {
             <div className={styles.heroVisual}>
               <div className={styles.screenshotFrame}>
                 <picture>
-                  <source media="(max-width: 768px)" srcSet="/marketing/editor-960.webp" />
+                  <source
+                    media="(max-width: 768px)"
+                    srcSet="/marketing/editor-modular-16x9-v2-960.webp"
+                  />
                   <Image
                     alt={t("home.editorImageAlt")}
-                    height={1012}
+                    height={1152}
                     loading="eager"
                     sizes="(max-width: 768px) 94vw, (max-width: 1200px) 88vw, 1120px"
-                    src="/marketing/editor-2048.webp"
+                    src="/marketing/editor-modular-16x9-v2-2048.webp"
                     width={2048}
                   />
                 </picture>
@@ -245,7 +352,6 @@ export function MarketingHome() {
         <section className={`${styles.section} ${styles.sectionAlt}`} id="features">
           <div className={styles.sectionInner}>
             <div className={styles.sectionIntro}>
-              <p className={styles.sectionKicker}>{t("home.features.kicker")}</p>
               <h2 className={styles.sectionTitle}>{t("home.features.title")}</h2>
               <p className={styles.sectionLead}>{t("home.features.description")}</p>
             </div>
@@ -275,7 +381,6 @@ export function MarketingHome() {
         <section className={styles.section} id="editor">
           <div className={`${styles.sectionInner} ${styles.showcase}`}>
             <div>
-              <p className={styles.sectionKicker}>{t("home.editor.kicker")}</p>
               <h2 className={styles.sectionTitle}>{t("home.editor.title")}</h2>
               <p className={styles.sectionLead}>{t("home.editor.description")}</p>
               <ul className={styles.showcaseList}>
@@ -304,13 +409,16 @@ export function MarketingHome() {
             </div>
             <div className={styles.showcaseImage}>
               <picture>
-                <source media="(max-width: 768px)" srcSet="/marketing/editor-960.webp" />
+                <source
+                  media="(max-width: 768px)"
+                  srcSet="/marketing/editor-modular-16x9-v2-960.webp"
+                />
                 <Image
                   alt={t("home.editorShowcaseImageAlt")}
-                  height={1012}
+                  height={1152}
                   loading="lazy"
                   sizes="(max-width: 980px) 94vw, 680px"
-                  src="/marketing/editor-2048.webp"
+                  src="/marketing/editor-modular-16x9-v2-2048.webp"
                   width={2048}
                 />
               </picture>
@@ -320,39 +428,13 @@ export function MarketingHome() {
 
         <section className={`${styles.section} ${styles.sectionAlt}`} id="templates">
           <div className={styles.sectionInner}>
-            <div className={styles.sectionIntro}>
-              <p className={styles.sectionKicker}>{t("home.templates.kicker")}</p>
-              <h2 className={styles.sectionTitle}>{t("home.templates.title")}</h2>
-              <p className={styles.sectionLead}>{t("home.templates.description")}</p>
-            </div>
-            <div className={styles.templateGrid}>
-              {templateImages.map((template) => (
-                <figure className={styles.templateCard} key={template.high}>
-                  <picture>
-                    <source media="(max-width: 760px)" srcSet={template.low} />
-                    <Image
-                      alt={t(template.alt)}
-                      height={template.height}
-                      loading="lazy"
-                      sizes="(max-width: 760px) 94vw, (max-width: 1180px) 31vw, 373px"
-                      src={template.high}
-                      width={template.width}
-                    />
-                  </picture>
-                  <figcaption>
-                    <strong>{t(template.title)}</strong>
-                    <span>{t(template.meta)}</span>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
+            <MarketingTemplateShowcase />
           </div>
         </section>
 
         <section className={styles.section} id="typography">
           <div className={styles.sectionInner}>
             <div className={styles.sectionIntro}>
-              <p className={styles.sectionKicker}>{t("home.fonts.kicker")}</p>
               <h2 className={styles.sectionTitle}>{t("home.fonts.title")}</h2>
               <p className={styles.sectionLead}>{t("home.fonts.description")}</p>
             </div>
@@ -373,7 +455,6 @@ export function MarketingHome() {
         <section className={`${styles.section} ${styles.sectionAlt}`}>
           <div className={styles.sectionInner}>
             <div className={styles.sectionIntro}>
-              <p className={styles.sectionKicker}>{t("home.steps.kicker")}</p>
               <h2 className={styles.sectionTitle}>{t("home.steps.title")}</h2>
             </div>
             <div className={styles.steps}>

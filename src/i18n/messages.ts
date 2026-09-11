@@ -166,7 +166,6 @@ const messages = {
     "home.editorShowcaseImageAlt": "AnonResume 编辑器中的 A4 简历画布",
     "home.floatingNote.title": "边写边看最终效果",
     "home.floatingNote.description": "导出前就知道简历会是什么样子",
-    "home.features.kicker": "为求职准备",
     "home.features.title": "从第一段经历，到可以投递的专业简历",
     "home.features.description":
       "不必学习复杂的设计软件，也不用反复调整格式。专心写好内容，排版和导出自然衔接。",
@@ -191,7 +190,6 @@ const messages = {
     "home.feature.output.tag.publish": "链接分享",
     "home.feature.output.tag.pdf": "PDF 下载",
     "home.feature.output.tag.queue": "进度可见",
-    "home.editor.kicker": "轻松编辑",
     "home.editor.title": "专注写好经历，排版交给顺手的工具",
     "home.editor.description":
       "在电脑上完成细致编辑，在手机上随时预览、发布和下载，准备投递更加从容。",
@@ -204,20 +202,13 @@ const messages = {
     "home.editor.point.output.title": "屏幕看到的，就是导出的效果",
     "home.editor.point.output.description":
       "编辑、预览、公开分享和 PDF 保持一致，减少投递前反复检查格式的麻烦。",
-    "home.templates.kicker": "简历样式",
     "home.templates.title": "换一种风格，不必重新写一遍",
     "home.templates.description":
-      "先选择喜欢的样式，再根据岗位调整字体、颜色和间距，已有内容会继续保留。",
-    "home.template.foundation.title": "清晰基础版",
-    "home.template.foundation.meta": "信息优先",
-    "home.template.foundation.alt": "AnonResume 清晰基础版简历预览",
-    "home.template.frontend.title": "现代技术版",
-    "home.template.frontend.meta": "技术岗位",
-    "home.template.frontend.alt": "AnonResume 现代技术版简历预览",
-    "home.template.fullstack.title": "稳健交付版",
-    "home.template.fullstack.meta": "综合经历",
-    "home.template.fullstack.alt": "AnonResume 稳健交付版简历预览",
-    "home.fonts.kicker": "字体选择",
+      "从居中叙事、经典留白、等宽模块到紧凑单页，直接预览真实排版，再选择适合你的表达方式。",
+    "home.templates.loading": "正在准备真实模板预览…",
+    "home.templates.livePreview": "编辑器真实效果",
+    "home.templates.selectorLabel": "选择要预览的简历样式",
+    "home.templates.previewLabel": "{name}简历样式预览",
     "home.fonts.title": "选对字体，让简历更有气质",
     "home.fonts.description":
       "先看实际效果，再把喜欢的字体应用到简历。清晰、稳重或更有个性，由你决定。",
@@ -225,7 +216,6 @@ const messages = {
     "home.font.sourceSerif.description": "沉稳易读",
     "home.font.notoMono.description": "清晰利落",
     "home.font.playfair.description": "醒目优雅",
-    "home.steps.kicker": "三步完成",
     "home.steps.title": "从开始制作到放心投递，只需三步",
     "home.step.create.title": "创建或导入",
     "home.step.create.description":
@@ -993,7 +983,6 @@ const messages = {
     "home.editorShowcaseImageAlt": "A4 resume canvas in the AnonResume editor",
     "home.floatingNote.title": "See the finished result as you write",
     "home.floatingNote.description": "Know exactly what your resume will look like before export",
-    "home.features.kicker": "Made for job seekers",
     "home.features.title": "From your first experience to a resume ready to send",
     "home.features.description":
       "Skip complicated design software and endless formatting. Focus on your story while the rest stays simple.",
@@ -1018,7 +1007,6 @@ const messages = {
     "home.feature.output.tag.publish": "Shareable link",
     "home.feature.output.tag.pdf": "PDF download",
     "home.feature.output.tag.queue": "Clear progress",
-    "home.editor.kicker": "Effortless editing",
     "home.editor.title": "Focus on your experience. Let the editor handle the layout.",
     "home.editor.description":
       "Fine-tune your resume on desktop, then preview, publish, or download it from your phone whenever you need it.",
@@ -1031,20 +1019,13 @@ const messages = {
     "home.editor.point.output.title": "What you see is what you send",
     "home.editor.point.output.description":
       "Editing, preview, sharing, and PDF export stay visually consistent, so there are no last-minute surprises.",
-    "home.templates.kicker": "Resume styles",
     "home.templates.title": "Try a new look without rewriting your resume",
     "home.templates.description":
-      "Pick a style you like, then adjust fonts, colors, and spacing for the role while keeping all your content.",
-    "home.template.foundation.title": "Clear foundation",
-    "home.template.foundation.meta": "Content first",
-    "home.template.foundation.alt": "AnonResume clear foundation resume preview",
-    "home.template.frontend.title": "Modern technical",
-    "home.template.frontend.meta": "Engineering roles",
-    "home.template.frontend.alt": "AnonResume modern technical resume preview",
-    "home.template.fullstack.title": "Delivery focused",
-    "home.template.fullstack.meta": "Broad experience",
-    "home.template.fullstack.alt": "AnonResume delivery-focused resume preview",
-    "home.fonts.kicker": "Font choice",
+      "Compare centered narrative, classic whitespace, modular grid, and compact single-page layouts using the real editor rendering.",
+    "home.templates.loading": "Preparing the live template preview…",
+    "home.templates.livePreview": "Rendered by the editor",
+    "home.templates.selectorLabel": "Choose a resume style to preview",
+    "home.templates.previewLabel": "Preview of the {name} resume style",
     "home.fonts.title": "The right font gives your resume the right tone",
     "home.fonts.description":
       "Preview fonts on real resume content, then apply the one that feels clear, confident, or uniquely yours.",
@@ -1052,7 +1033,6 @@ const messages = {
     "home.font.sourceSerif.description": "Calm and readable",
     "home.font.notoMono.description": "Clear and focused",
     "home.font.playfair.description": "Distinctive and elegant",
-    "home.steps.kicker": "Three simple steps",
     "home.steps.title": "Go from blank page to ready to apply in three steps",
     "home.step.create.title": "Create or import",
     "home.step.create.description":
