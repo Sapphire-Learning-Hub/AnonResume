@@ -348,6 +348,28 @@ describe("resume operations", () => {
     ]);
   });
 
+  it("moves list items within their list container", () => {
+    const document = createDefaultResumeDocument();
+    const updated = moveBlockInDocument({
+      document,
+      sectionId: "section-profile",
+      blockPath: ["block-profile-highlights", "item-foundation-2"],
+      toIndex: 0,
+    });
+    const updatedListBlock = updated.sections[0]?.blocks[1];
+
+    expect(updatedListBlock?.type).toBe("list");
+
+    if (updatedListBlock?.type !== "list") {
+      throw new Error("Expected the profile highlights block to stay a list.");
+    }
+
+    expect(updatedListBlock.items.map((item) => item.id)).toEqual([
+      "item-foundation-2",
+      "item-foundation-1",
+    ]);
+  });
+
   it("prunes empty structural containers after deleting their final leaf", () => {
     const document = createDefaultResumeDocument();
     const profileSection = document.sections[0]!;

@@ -998,6 +998,41 @@ describe("ResumeRenderer", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders list items as bordered draggable targets in layout sort mode", () => {
+    render(
+      <ResumeRenderer
+        document={createDefaultResumeDocument()}
+        mode="edit"
+        onMoveBlock={vi.fn()}
+        onSelectBlock={vi.fn()}
+        editSurfaceMode="layout"
+      />,
+    );
+
+    const firstListItem = screen.getByTestId(
+      "resume-list-item-block-profile-highlights-item-foundation-1",
+    );
+    const firstListItemChrome = screen.getByTestId(
+      "resume-list-item-sort-chrome-block-profile-highlights-item-foundation-1",
+    );
+
+    expect(firstListItem).toHaveAttribute("data-resume-drag-mode", "handle");
+    expect(firstListItemChrome).toHaveAttribute(
+      "data-resume-handle-placement",
+      "inset",
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "拖动列表项 基于流式布局的结构化简历编辑基础能力",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "拖动 基于流式布局的结构化简历编辑基础能力",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders sort chrome as absolute overlays so layout chrome does not affect block flow", () => {
     render(
       <ResumeRenderer

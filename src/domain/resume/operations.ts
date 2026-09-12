@@ -1118,6 +1118,14 @@ function moveBlocksAtPath(
     }
 
     if (block.type === "list") {
+      if (rest.length === 1) {
+        const itemId = rest[0];
+        const fromIndex = block.items.findIndex((item) => item.id === itemId);
+        const nextItems = moveTreeItem(block.items, fromIndex, toIndex);
+
+        return nextItems === block.items ? block : { ...block, items: nextItems };
+      }
+
       return updateListItemChildren(
         block,
         rest,

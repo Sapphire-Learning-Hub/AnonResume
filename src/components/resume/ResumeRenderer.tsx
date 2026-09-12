@@ -50,6 +50,7 @@ import type {
   RowBlock,
   ResumeBlock,
   ResumeDocument,
+  ResumeListItem,
   RichTextContent,
   TextBlock,
 } from "@/domain/resume/schema";
@@ -698,6 +699,148 @@ function renderTextBlock(
   );
 }
 
+function getListItemDragLabel(item: ResumeListItem, t: Translator) {
+  const firstChild = item.children[0];
+
+  return firstChild ? getBlockDragLabel(firstChild, t) : t("renderer.listItem");
+}
+
+function SortableListItem({
+  item,
+  itemPath,
+  marginBottom,
+  sectionId,
+  styles,
+  t,
+  onSelectBlock,
+  children,
+}: {
+  item: ResumeListItem;
+  itemPath: string[];
+  marginBottom: number;
+  sectionId: string;
+  styles: ResumeRendererStyles;
+  t: Translator;
+  onSelectBlock?: ResumeRendererProps["onSelectBlock"];
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    isDragging,
+    isOver,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: item.id });
+  const over = isOver && !isDragging;
+  const firstChild = item.children[0];
+
+  return (
+    <li
+      ref={setNodeRef}
+      className={`${styles.listItem} ${styles.sortableBlockItem}`}
+      style={{
+        ...getSortableItemStyle({ transform, transition }),
+        marginBottom,
+      }}
+      data-resume-dragging={isDragging}
+      data-resume-drag-mode="handle"
+      data-resume-edit-surface-mode="layout"
+      data-resume-list-item-path={serializeBlockPath(itemPath)}
+      data-resume-over={over}
+      data-testid={`resume-list-item-${itemPath.join("-")}`}
+    >
+      <div
+        aria-hidden="true"
+        className={styles.sortableBlockChrome}
+        data-resume-dragging={isDragging}
+        data-resume-handle-placement="inset"
+        data-resume-over={over}
+        data-resume-sort-chrome="true"
+        data-testid={`resume-list-item-sort-chrome-${itemPath.join("-")}`}
+      />
+      <button
+        ref={setActivatorNodeRef}
+        type="button"
+        aria-label={t("renderer.dragListItem", {
+          label: getListItemDragLabel(item, t),
+        })}
+        className={styles.blockDragHandle}
+        data-resume-handle-placement="inset"
+        {...attributes}
+        {...listeners}
+        onClick={() => {
+          if (!firstChild) return;
+
+          onSelectBlock?.({
+            sectionId,
+            blockPath: [...itemPath, firstChild.id],
+          });
+        }}
+      >
+        ⋮⋮
+      </button>
+      {children}
+    </li>
+  );
+}
+
+function SortableListContext({
+  sectionId,
+  listPath,
+  itemIds,
+  allItemIds,
+  onMoveBlock,
+  children,
+}: {
+  sectionId: string;
+  listPath: string[];
+  itemIds: string[];
+  allItemIds: string[];
+  onMoveBlock: NonNullable<ResumeRendererProps["onMoveBlock"]>;
+  children: ReactNode;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 6,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const move = resolveBlockMoveFromDrag({
+      sectionId,
+      parentPath: listPath,
+      childIds: allItemIds,
+      activeId: String(event.active.id),
+      overId: event.over?.id ? String(event.over.id) : undefined,
+    });
+
+    if (move) {
+      onMoveBlock(move);
+    }
+  }
+
+  return (
+    <DndContext
+      id={`resume-list-item-sort-${sectionId}-${listPath.join("-")}`}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 function renderListBlock(
   block: ListBlock,
   context: Pick<
@@ -741,35 +884,23 @@ function renderListBlock(
         ) + 1,
       )
     : undefined;
-
-  return (
+  const sortableEnabled =
+    !fragment &&
+    context.mode === "edit" &&
+    context.editSurfaceMode === "layout" &&
+    Boolean(context.onMoveBlock) &&
+    block.items.length > 1;
+  const itemIds = renderedItems.map(({ item }) => item.id);
+  const list = (
     <ListTag
-      className={context.styles.list}
+      className={`${context.styles.list} ${context.styles.sortableBlockStack}`}
+      data-resume-sort-layer={sortableEnabled ? "idle" : "none"}
       style={{ listStyleType }}
       start={orderedStart}
     >
-      {renderedItems.map(({ item, fragment: itemFragment }) => (
-        <ResumeDiffTarget
-          key={item.id}
-          nodeType="listItem"
-          nodeId={item.id}
-          fields={["node", "order"]}
-        >
-          <li
-            className={context.styles.listItem}
-            style={{
-              marginBottom: block.gap ?? 8,
-              ...(itemFragment?.continuation ? { listStyleType: "none" } : {}),
-            }}
-            data-resume-list-continuation={
-              itemFragment?.continuation ? "true" : undefined
-            }
-            data-resume-list-item-path={serializeBlockPath([
-              ...context.blockPath,
-              item.id,
-            ])}
-          >
-            {itemFragment?.children?.length && context.section ? (
+      {renderedItems.map(({ item, fragment: itemFragment }) => {
+        const itemPath = [...context.blockPath, item.id];
+        const itemContent = itemFragment?.children?.length && context.section ? (
               <div
                 className={context.styles.group}
                 style={{ gap: DEFAULT_BLOCK_GAP_PX }}
@@ -803,12 +934,64 @@ function renderListBlock(
                 onTextEditorFormattingStateChange={
                   context.onTextEditorFormattingStateChange
                 }
+                allowSelectionHandle={false}
               />
+            );
+
+        return (
+          <ResumeDiffTarget
+            key={item.id}
+            nodeType="listItem"
+            nodeId={item.id}
+            fields={["node", "order"]}
+          >
+            {sortableEnabled ? (
+              <SortableListItem
+                item={item}
+                itemPath={itemPath}
+                marginBottom={block.gap ?? 8}
+                sectionId={context.sectionId}
+                styles={context.styles}
+                t={context.t}
+                onSelectBlock={context.onSelectBlock}
+              >
+                {itemContent}
+              </SortableListItem>
+            ) : (
+              <li
+                className={context.styles.listItem}
+                style={{
+                  marginBottom: block.gap ?? 8,
+                  ...(itemFragment?.continuation ? { listStyleType: "none" } : {}),
+                }}
+                data-resume-list-continuation={
+                  itemFragment?.continuation ? "true" : undefined
+                }
+                data-resume-list-item-path={serializeBlockPath(itemPath)}
+              >
+                {itemContent}
+              </li>
             )}
-          </li>
-        </ResumeDiffTarget>
-      ))}
+          </ResumeDiffTarget>
+        );
+      })}
     </ListTag>
+  );
+
+  if (!sortableEnabled || !context.onMoveBlock) {
+    return list;
+  }
+
+  return (
+    <SortableListContext
+      sectionId={context.sectionId}
+      listPath={context.blockPath}
+      itemIds={itemIds}
+      allItemIds={block.items.map((item) => item.id)}
+      onMoveBlock={context.onMoveBlock}
+    >
+      {list}
+    </SortableListContext>
   );
 }
 
@@ -1128,6 +1311,7 @@ function SortableBlockChildren({
   onTextEditorFormattingStateChange,
   dataResumeBlockStack,
   dataTestId,
+  allowSelectionHandle = true,
 }: {
   blocks: ResumeBlock[];
   sectionId: string;
@@ -1147,6 +1331,7 @@ function SortableBlockChildren({
   onTextEditorFormattingStateChange?: ResumeRendererProps["onTextEditorFormattingStateChange"];
   dataResumeBlockStack?: string;
   dataTestId?: string;
+  allowSelectionHandle?: boolean;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1168,7 +1353,7 @@ function SortableBlockChildren({
   const layoutHandleEnabled =
     mode === "edit" &&
     editSurfaceMode === "layout" &&
-    (Boolean(onSelectBlock) || sortableEnabled);
+    ((allowSelectionHandle && Boolean(onSelectBlock)) || sortableEnabled);
   const content = blocks.map((block) => {
     const blockPath = [...parentPath, block.id];
 
