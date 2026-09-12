@@ -602,6 +602,156 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
   });
 
+  it("temporarily switches to layout sorting while Control is held", () => {
+    vi.useFakeTimers();
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const contentMode = screen.getByRole("button", { name: spacedLabel("内容编辑") });
+    const layoutMode = screen.getByRole("button", { name: spacedLabel("布局排序") });
+
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+    act(() => vi.advanceTimersByTime(199));
+    expect(contentMode).toHaveAttribute("aria-pressed", "true");
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(layoutMode).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: /拖动/ }).length).toBeGreaterThan(0);
+
+    fireEvent.keyUp(window, { key: "Control" });
+    expect(contentMode).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does not leave temporary layout sorting active after a shortcut or window blur", () => {
+    vi.useFakeTimers();
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const contentMode = screen.getByRole("button", { name: spacedLabel("内容编辑") });
+    const layoutMode = screen.getByRole("button", { name: spacedLabel("布局排序") });
+
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    act(() => vi.advanceTimersByTime(200));
+    expect(contentMode).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+    act(() => vi.advanceTimersByTime(200));
+    expect(layoutMode).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.blur(window);
+    expect(contentMode).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens a complete shortcut reference from the toolbar and keyboard", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "查看快捷键" }));
+
+    const dialog = screen.getByRole("dialog", { name: "编辑器快捷键" });
+    expect(within(dialog).getByText("通用")).toBeInTheDocument();
+    expect(within(dialog).getByText("文本编辑")).toBeInTheDocument();
+    expect(within(dialog).getByText("布局与导航")).toBeInTheDocument();
+    expect(within(dialog).getByText("保存")).toBeInTheDocument();
+    expect(within(dialog).getByText("链接")).toBeInTheDocument();
+    expect(within(dialog).getByText("按住 Ctrl 临时排序")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+
+    const dispatched = fireEvent.keyDown(window, {
+      key: "/",
+      ctrlKey: true,
+    });
+
+    expect(dispatched).toBe(false);
+    expect(screen.getByRole("dialog", { name: "编辑器快捷键" })).toBeInTheDocument();
+  });
+
+  it("places the shortcut entry immediately before fullscreen", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    const shortcutButton = screen.getByRole("button", { name: "查看快捷键" });
+    const fullscreenButton = screen.getByRole("button", { name: "进入全屏" });
+    const actionContainer = fullscreenButton.parentElement;
+
+    expect(shortcutButton.parentElement).toBe(actionContainer);
+    expect(Array.from(actionContainer?.children ?? [])).toEqual(
+      expect.arrayContaining([shortcutButton, fullscreenButton]),
+    );
+    expect(shortcutButton.nextElementSibling).toBe(fullscreenButton);
+  });
+
+  it.each([
+    {
+      expected: "⌘ + S",
+      hidden: "Ctrl + S",
+      physicalKey: "Control",
+      physicalLabel: "按住 Control 临时排序",
+      hiddenPhysicalLabel: "按住 Ctrl 临时排序",
+      name: "macOS",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    },
+    {
+      expected: "Ctrl + S",
+      hidden: "⌘ + S",
+      physicalKey: "Ctrl",
+      physicalLabel: "按住 Ctrl 临时排序",
+      hiddenPhysicalLabel: "按住 Control 临时排序",
+      name: "Windows",
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    },
+  ])("shows only $name shortcuts for the detected user agent", async ({
+    expected,
+    hidden,
+    physicalKey,
+    physicalLabel,
+    hiddenPhysicalLabel,
+    userAgent,
+  }) => {
+    const userAgentSpy = vi
+      .spyOn(window.navigator, "userAgent", "get")
+      .mockReturnValue(userAgent);
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "查看快捷键" }));
+    const dialog = screen.getByRole("dialog", { name: "编辑器快捷键" });
+
+    await waitFor(() => expect(within(dialog).getByText(expected)).toBeInTheDocument());
+    expect(within(dialog).queryByText(hidden)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(physicalLabel)).toBeInTheDocument();
+    expect(within(dialog).getByText(physicalKey)).toBeInTheDocument();
+    expect(within(dialog).queryByText(hiddenPhysicalLabel)).not.toBeInTheDocument();
+    userAgentSpy.mockRestore();
+  });
+
   it("creates a restore point from the version history panel", async () => {
     const loadVersionSnapshots = vi
       .fn()

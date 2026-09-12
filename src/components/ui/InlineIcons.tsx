@@ -76,6 +76,16 @@ export function HelpIcon(props: InlineIconProps) {
   );
 }
 
+export function KeyboardIcon(props: InlineIconProps) {
+  return (
+    <InlineIcon {...props}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M7 10h.01M11 10h.01M15 10h.01M18 10h.01" />
+      <path d="M7 14h2M11 14h6" />
+    </InlineIcon>
+  );
+}
+
 export function SearchIcon(props: InlineIconProps) {
   return (
     <InlineIcon {...props}>

@@ -38,6 +38,7 @@ import {
   type EditorRibbonTabItem,
 } from "@/components/editor/EditorRibbon";
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
+import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
 import { ResumeDocumentDiffModal } from "@/components/editor/ResumeDocumentDiffModal";
 import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPrompt";
@@ -52,6 +53,7 @@ import {
   HelpIcon,
   HomeIcon,
   InsertIcon,
+  KeyboardIcon,
   LayoutIcon,
   PropertiesIcon,
   RedoIcon,
@@ -271,6 +273,8 @@ function isNativeEditableTarget(target: EventTarget | null) {
 }
 
 type EditSurfaceMode = "content" | "layout";
+
+const TEMPORARY_LAYOUT_HOLD_DELAY_MS = 200;
 
 export function ResumeEditorShell({
   resumeId,
@@ -562,6 +566,8 @@ export function ResumeEditorShell({
   const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
+  const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
+  const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
   const [activeRibbonTab, setActiveRibbonTab] = useState<EditorRibbonTab>("home");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
@@ -593,7 +599,76 @@ export function ResumeEditorShell({
   const [paginationReady, setPaginationReady] = useState(false);
   const [pageCount, setPageCount] = useState(1);
   const [activePage, setActivePage] = useState(1);
+  const activeEditSurfaceMode: EditSurfaceMode = temporaryLayoutMode
+    ? "layout"
+    : editSurfaceMode;
   const resolvedActivePage = Math.min(Math.max(activePage, 1), pageCount);
+
+  useEffect(() => {
+    let holdTimer: number | undefined;
+
+    function clearHoldTimer() {
+      if (holdTimer === undefined) return;
+
+      window.clearTimeout(holdTimer);
+      holdTimer = undefined;
+    }
+
+    function stopTemporaryLayoutMode() {
+      clearHoldTimer();
+      setTemporaryLayoutMode(false);
+    }
+
+    function handleEditorKeyDown(event: KeyboardEvent) {
+      const key = event.key.toLowerCase();
+
+      if ((event.metaKey || event.ctrlKey) && key === "/") {
+        event.preventDefault();
+        stopTemporaryLayoutMode();
+        setShortcutPanelOpen(true);
+        return;
+      }
+
+      if (event.key === "Control") {
+        if (event.repeat || holdTimer !== undefined) return;
+
+        holdTimer = window.setTimeout(() => {
+          holdTimer = undefined;
+          setTemporaryLayoutMode(true);
+        }, TEMPORARY_LAYOUT_HOLD_DELAY_MS);
+        return;
+      }
+
+      if (event.ctrlKey) {
+        stopTemporaryLayoutMode();
+      }
+    }
+
+    function handleEditorKeyUp(event: KeyboardEvent) {
+      if (event.key === "Control") {
+        stopTemporaryLayoutMode();
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (globalThis.document.visibilityState === "hidden") {
+        stopTemporaryLayoutMode();
+      }
+    }
+
+    window.addEventListener("keydown", handleEditorKeyDown);
+    window.addEventListener("keyup", handleEditorKeyUp);
+    window.addEventListener("blur", stopTemporaryLayoutMode);
+    globalThis.document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearHoldTimer();
+      window.removeEventListener("keydown", handleEditorKeyDown);
+      window.removeEventListener("keyup", handleEditorKeyUp);
+      window.removeEventListener("blur", stopTemporaryLayoutMode);
+      globalThis.document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
   const showSaveValidationNotification = useEffectEvent(() => {
     if (!saveValidation) return;
 
@@ -733,7 +808,7 @@ export function ResumeEditorShell({
         )
       : -1;
   const selectedRichTextContent =
-    editSurfaceMode === "content"
+    activeEditSurfaceMode === "content"
       ? selectedSectionTitle ?? selectedTextBlock?.content
       : undefined;
   const textToolsDisabled = !selectedRichTextContent;
@@ -985,7 +1060,7 @@ export function ResumeEditorShell({
     (preset) => preset.id !== "custom",
   );
   const editSurfaceModeLabel =
-    editSurfaceMode === "layout"
+    activeEditSurfaceMode === "layout"
       ? t("editor.layoutSorting")
       : t("editor.contentEditing");
 
@@ -2370,6 +2445,16 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
+      <Tooltip title={t("editor.shortcuts.open")}>
+        <Button
+          aria-label={t("editor.shortcuts.open")}
+          className={styles.ribbonIconButton}
+          type="text"
+          onClick={() => setShortcutPanelOpen(true)}
+        >
+          <KeyboardIcon size={16} />
+        </Button>
+      </Tooltip>
       <Tooltip
         title={isFullscreen ? t("editor.exitFullscreen") : t("editor.enterFullscreen")}
       >
@@ -2420,15 +2505,15 @@ export function ResumeEditorShell({
             content: (
               <div className={styles.ribbonControlGroup}>
                 <Button
-                  aria-pressed={editSurfaceMode === "content"}
-                  type={editSurfaceMode === "content" ? "primary" : "default"}
+                  aria-pressed={activeEditSurfaceMode === "content"}
+                  type={activeEditSurfaceMode === "content" ? "primary" : "default"}
                   onClick={() => handleEditSurfaceModeChange("content")}
                 >
                   {t("editor.contentEditing")}
                 </Button>
                 <Button
-                  aria-pressed={editSurfaceMode === "layout"}
-                  type={editSurfaceMode === "layout" ? "primary" : "default"}
+                  aria-pressed={activeEditSurfaceMode === "layout"}
+                  type={activeEditSurfaceMode === "layout" ? "primary" : "default"}
                   onClick={() => handleEditSurfaceModeChange("layout")}
                 >
                   {t("editor.layoutSorting")}
@@ -2589,7 +2674,7 @@ export function ResumeEditorShell({
               <div className={styles.ribbonControlGroup}>
                 {listBlockPresets(locale).map((preset) => (
                   <Button
-                    disabled={editSurfaceMode !== "content" || !selectedSection}
+                    disabled={activeEditSurfaceMode !== "content" || !selectedSection}
                     key={preset.id}
                     onClick={() => {
                       if (!selectedSection) return;
@@ -2753,6 +2838,11 @@ export function ResumeEditorShell({
         tablistLabel={t("editor.ribbon.label")}
         onDocumentNameChange={(title) => updateDocumentMeta({ title })}
         onTabChange={setActiveRibbonTab}
+      />
+
+      <EditorShortcutPanel
+        open={shortcutPanelOpen}
+        onCancel={() => setShortcutPanelOpen(false)}
       />
 
       <Modal
@@ -2972,7 +3062,7 @@ export function ResumeEditorShell({
               <ResumeRenderer
                 document={document}
                 mode="edit"
-                editSurfaceMode={editSurfaceMode}
+                editSurfaceMode={activeEditSurfaceMode}
                 paginationRevision={paginationRevision}
                 showPrintSafeArea={showPrintSafeArea}
                 zoom={zoom}
