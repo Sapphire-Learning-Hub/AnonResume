@@ -13,6 +13,17 @@ const feedbackMocks = vi.hoisted(() => ({
   notificationWarning: vi.fn(),
   toastError: vi.fn(),
 }));
+const navigationMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  notFound: vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
+  useRouter: () => navigationMocks,
+}));
 
 vi.mock("@/components/ui/useAppFeedback", () => ({
   useAppFeedback: () => ({
@@ -136,7 +147,9 @@ describe("ResumeEditorShell", () => {
       "/app/resumes/resume-demo/preview",
     );
     expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("保存") })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: spacedLabel("保存") }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "属性" })).toBeInTheDocument();
     expect(screen.getByText("大纲")).toBeInTheDocument();
     expect(screen.getByText("画布")).toBeInTheDocument();
@@ -170,6 +183,18 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("文档");
     expect(screen.getByRole("button", { name: spacedLabel("发布") })).toBeEnabled();
     expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(/发\s*布/);
+    expect(
+      within(document.getElementById("editor-ribbon-command-panel")!).queryByRole(
+        "button",
+        { name: spacedLabel("发布") },
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(document.getElementById("editor-ribbon-command-panel")!).queryByRole(
+        "button",
+        { name: "历史记录" },
+      ),
+    ).not.toBeInTheDocument();
     openRibbonTab("属性");
     expect(
       within(getInspectorPanel()).getByRole("group", { name: "基础信息" }),
@@ -427,11 +452,11 @@ describe("ResumeEditorShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("saves pending changes from the toolbar button and Ctrl+S", async () => {
-    const saveDocument = vi
-      .fn()
-      .mockResolvedValueOnce({ version: 2, updatedAt: 800 })
-      .mockResolvedValueOnce({ version: 3, updatedAt: 900 });
+  it("saves pending changes with Ctrl+S without a toolbar button", async () => {
+    const saveDocument = vi.fn().mockResolvedValue({
+      version: 2,
+      updatedAt: 800,
+    });
 
     render(
       <ResumeEditorShell
@@ -450,20 +475,6 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
 
-    const saveButton = screen.getByRole("button", { name: spacedLabel("保存") });
-
-    expect(saveButton).toBeEnabled();
-
-    await act(async () => {
-      fireEvent.click(saveButton);
-      await Promise.resolve();
-    });
-
-    expect(saveDocument).toHaveBeenCalledTimes(1);
-    expect(saveButton).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
-
     await act(async () => {
       const dispatched = fireEvent.keyDown(window, {
         key: "s",
@@ -474,7 +485,10 @@ describe("ResumeEditorShell", () => {
       await Promise.resolve();
     });
 
-    expect(saveDocument).toHaveBeenCalledTimes(2);
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: spacedLabel("保存") }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("已保存")).toBeInTheDocument();
   });
 
@@ -534,7 +548,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
 
     await act(async () => {
-      fireEvent.click(screen.getByTitle("保存（⌘/Ctrl+S）"));
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
       await Promise.resolve();
     });
 
@@ -682,7 +696,7 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("dialog", { name: "编辑器快捷键" })).toBeInTheDocument();
   });
 
-  it("places the shortcut entry immediately before fullscreen", () => {
+  it("places history, shortcut, fullscreen, and publish in the document bar", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -690,14 +704,24 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
+    const historyButton = screen.getByRole("button", { name: "历史记录" });
     const shortcutButton = screen.getByRole("button", { name: "查看快捷键" });
     const fullscreenButton = screen.getByRole("button", { name: "进入全屏" });
+    const publishButton = screen.getByRole("button", { name: spacedLabel("发布") });
     const actionContainer = fullscreenButton.parentElement;
 
+    expect(historyButton.parentElement).toBe(actionContainer);
     expect(shortcutButton.parentElement).toBe(actionContainer);
+    expect(publishButton.parentElement).toBe(actionContainer);
     expect(Array.from(actionContainer?.children ?? [])).toEqual(
-      expect.arrayContaining([shortcutButton, fullscreenButton]),
+      expect.arrayContaining([
+        historyButton,
+        shortcutButton,
+        fullscreenButton,
+        publishButton,
+      ]),
     );
+    expect(historyButton.nextElementSibling).toBe(shortcutButton);
     expect(shortcutButton.nextElementSibling).toBe(fullscreenButton);
   });
 
@@ -794,8 +818,7 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    openRibbonTab("文档");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("历史记录") }));
+    fireEvent.click(screen.getByRole("button", { name: "历史记录" }));
 
     expect(loadVersionSnapshots).toHaveBeenCalledWith("resume-demo", {
       page: 1,
@@ -841,8 +864,7 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    openRibbonTab("文档");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("历史记录") }));
+    fireEvent.click(screen.getByRole("button", { name: "历史记录" }));
     fireEvent.click(
       await screen.findByRole("button", { name: spacedLabel("查看差异") }),
     );
@@ -1376,6 +1398,81 @@ describe("ResumeEditorShell", () => {
     await waitFor(() =>
       expect(exportPdfDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" }),
     );
+  });
+
+  it("saves pending changes before navigating to preview", async () => {
+    const saveDocument = vi.fn().mockResolvedValue({
+      version: 2,
+      updatedAt: 1000,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={999999}
+        saveDocument={saveDocument}
+      />,
+    );
+
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("link", { name: spacedLabel("预览") }));
+
+    await waitFor(() => expect(saveDocument).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(navigationMocks.push).toHaveBeenCalledWith(
+        "/app/resumes/resume-demo/preview",
+      ),
+    );
+    expect(saveDocument.mock.invocationCallOrder[0]).toBeLessThan(
+      navigationMocks.push.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("offers a retry action when autosave fails", async () => {
+    const saveDocument = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValueOnce({ version: 2, updatedAt: 1000 });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={1}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => undefined,
+        }}
+        saveDocument={saveDocument}
+      />,
+    );
+
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+
+    await waitFor(() => expect(saveDocument).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          duration: false,
+          key: "editor-autosave-error",
+          title: "自动保存失败，请稍后重试。",
+        }),
+      ),
+    );
+
+    const notification = feedbackMocks.notificationError.mock.calls.at(-1)?.[0];
+    const actions = render(notification.actions);
+
+    fireEvent.click(
+      within(actions.container).getByRole("button", { name: "重新保存" }),
+    );
+
+    await waitFor(() => expect(saveDocument).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("已保存")).toBeInTheDocument();
   });
 
   it("shows a conflict banner when autosave hits a stale server version", async () => {

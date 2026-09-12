@@ -22,6 +22,7 @@ import {
   Tag,
   Tooltip,
 } from "antd";
+import { useRouter } from "next/navigation";
 import { useStore } from "zustand";
 
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
@@ -51,6 +52,7 @@ import {
   EnterFullscreenIcon,
   ExitFullscreenIcon,
   HelpIcon,
+  HistoryIcon,
   HomeIcon,
   InsertIcon,
   KeyboardIcon,
@@ -346,6 +348,7 @@ export function ResumeEditorShell({
   const { styles } = useResumeEditorShellStyles();
   const { locale, t } = useI18n();
   const { notification, toast } = useAppFeedback();
+  const router = useRouter();
   const [resolvedDraftRepository] = useState(
     () => draftRepository ?? createResumeDraftRepository(),
   );
@@ -534,7 +537,6 @@ export function ResumeEditorShell({
   const saveValidation = useStore(store, (state) => state.saveValidation);
   const selection = useStore(store, (state) => state.selection);
   const saveStatus = useStore(store, (state) => state.saveStatus);
-  const dirty = useStore(store, (state) => state.dirty);
   const history = useStore(store, (state) => state.history);
   const zoom = useStore(store, (state) => state.zoom);
   const resumeName = useStore(store, (state) => state.document.meta.title);
@@ -564,6 +566,7 @@ export function ResumeEditorShell({
   const [publicLinkCopied, setPublicLinkCopied] = useState(false);
   const [publicationBusy, setPublicationBusy] = useState(false);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
@@ -708,13 +711,18 @@ export function ResumeEditorShell({
     }
 
     notification.error({
+      actions: (
+        <Button size="small" onClick={handleManualSave}>
+          {t("editor.retrySave")}
+        </Button>
+      ),
       duration: false,
       key,
       role: "alert",
       title: t("editor.saveError"),
     });
     return () => notification.destroy(key);
-  }, [notification, saveStatus, t]);
+  }, [handleManualSave, notification, saveStatus, t]);
 
   useEffect(() => {
     function syncFullscreenState() {
@@ -1077,6 +1085,24 @@ export function ResumeEditorShell({
       setPublishedSlug(result.slug);
     } finally {
       setPublicationBusy(false);
+    }
+  }
+
+  async function handlePreview() {
+    if (previewBusy) return;
+
+    setPreviewBusy(true);
+
+    try {
+      if (store.getState().dirty) {
+        await flushSave();
+      }
+
+      router.push(previewHref);
+    } catch {
+      // Save state and retry feedback are handled by the persistence layer.
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -2445,6 +2471,16 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
+      <Tooltip title={t("editor.versionHistory")}>
+        <Button
+          aria-label={t("editor.versionHistory")}
+          className={styles.ribbonIconButton}
+          type="text"
+          onClick={() => void handleOpenVersionHistory()}
+        >
+          <HistoryIcon size={16} />
+        </Button>
+      </Tooltip>
       <Tooltip title={t("editor.shortcuts.open")}>
         <Button
           aria-label={t("editor.shortcuts.open")}
@@ -2474,16 +2510,34 @@ export function ResumeEditorShell({
         </Button>
       </Tooltip>
       <Button
-        disabled={!dirty || saveStatus === "saving"}
-        loading={saveStatus === "saving"}
-        title={t("editor.saveShortcut")}
-        onClick={handleManualSave}
+        disabled={previewBusy}
+        href={previewHref}
+        loading={previewBusy}
+        onClick={(event) => {
+          event.preventDefault();
+          void handlePreview();
+        }}
       >
-        {t("editor.save")}
-      </Button>
-      <Button href={previewHref}>
         {t("common.preview")}
       </Button>
+      {publicHref ? (
+        <Button
+          data-testid="resume-publish-action"
+          disabled={publicationBusy}
+          onClick={() => setUnpublishOpen(true)}
+        >
+          {t("common.unpublish")}
+        </Button>
+      ) : (
+        <Button
+          data-testid="resume-publish-action"
+          disabled={publicationBusy}
+          type="primary"
+          onClick={() => void handlePublish()}
+        >
+          {t("common.publish")}
+        </Button>
+      )}
       <Button
         disabled={pdfBusy}
         loading={pdfBusy}
@@ -2754,50 +2808,29 @@ export function ResumeEditorShell({
                     store.getState().syncMetadataVersion(result);
                   }}
                 />
-                <Button onClick={() => void handleOpenVersionHistory()}>
-                  {t("editor.versionHistory")}
-                </Button>
               </div>
             ),
           },
-          {
-            key: "publish",
-            label: t("editor.ribbon.group.publish"),
-            content: (
-              <div className={styles.ribbonControlGroup}>
-                {publicHref ? (
-                  <Button
-                    data-testid="resume-publish-action"
-                    disabled={publicationBusy}
-                    onClick={() => setUnpublishOpen(true)}
-                  >
-                    {t("common.unpublish")}
-                  </Button>
-                ) : (
-                  <Button
-                    data-testid="resume-publish-action"
-                    disabled={publicationBusy}
-                    type="primary"
-                    onClick={() => void handlePublish()}
-                  >
-                    {t("common.publish")}
-                  </Button>
-                )}
-                {publicHref ? (
-                  <Button data-testid="resume-open-public" href={publicHref}>
-                    {t("common.openPublic")}
-                  </Button>
-                ) : null}
-                {publicHref ? (
-                  <Button onClick={() => void handleCopyPublicLink()}>
-                    {publicLinkCopied
-                      ? t("editor.publicLinkCopied")
-                      : t("editor.copyPublicLink")}
-                  </Button>
-                ) : null}
-              </div>
-            ),
-          },
+          ...(publicHref
+            ? [
+                {
+                  key: "publish",
+                  label: t("editor.ribbon.group.publish"),
+                  content: (
+                    <div className={styles.ribbonControlGroup}>
+                      <Button data-testid="resume-open-public" href={publicHref}>
+                        {t("common.openPublic")}
+                      </Button>
+                      <Button onClick={() => void handleCopyPublicLink()}>
+                        {publicLinkCopied
+                          ? t("editor.publicLinkCopied")
+                          : t("editor.copyPublicLink")}
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ];
       case "properties":
         return [];

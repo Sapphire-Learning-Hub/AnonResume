@@ -42,6 +42,10 @@ vi.mock("next/navigation", async () => {
     notFound: vi.fn(() => {
       throw new Error("NEXT_NOT_FOUND");
     }),
+    useRouter: () => ({
+      push: vi.fn(),
+      refresh: vi.fn(),
+    }),
   };
 });
 
