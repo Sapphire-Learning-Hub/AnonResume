@@ -1,6 +1,5 @@
 "use client";
 
-import { CheckCircleFilled } from "@ant-design/icons";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
@@ -142,37 +141,6 @@ export function MarketingTemplateShowcase() {
     };
   }, [templateOrder]);
 
-  const selectTemplate = (templateId: MarketingTemplateId, index: number) => {
-    setActiveTemplateId(templateId);
-
-    const scrollTrack = scrollTrackRef.current;
-    const stickyFrame = stickyFrameRef.current;
-    if (!scrollTrack || !stickyFrame || !supportsScrollDrivenTemplates()) {
-      return;
-    }
-
-    const scrollDistance = scrollTrack.offsetHeight - stickyFrame.offsetHeight;
-    if (scrollDistance <= 0) {
-      return;
-    }
-
-    const scrollStartTop = getTemplateScrollStartTop(
-      scrollTrack,
-      stickyFrame.offsetHeight,
-    );
-    const effectiveScrollDistance =
-      scrollDistance + scrollStartTop - TEMPLATE_STICKY_TOP_PX;
-    const progress = index / Math.max(1, templates.length - 1);
-    const trackTop = window.scrollY + scrollTrack.getBoundingClientRect().top;
-    window.scrollTo({
-      behavior: "smooth",
-      top: Math.max(
-        0,
-        trackTop - scrollStartTop + effectiveScrollDistance * progress,
-      ),
-    });
-  };
-
   if (!activeTemplate) {
     return null;
   }
@@ -200,31 +168,20 @@ export function MarketingTemplateShowcase() {
         <div className={styles.showcase}>
           <div className={styles.selectorPanel}>
             <div>
-              <span className={styles.liveBadge}>
-                <CheckCircleFilled />
-                {t("home.templates.livePreview")}
-              </span>
               <h3>{t(activeTemplate.nameKey)}</h3>
               <p>{t(activeTemplate.descriptionKey)}</p>
             </div>
 
-            <div
-              aria-label={t("home.templates.selectorLabel")}
-              className={styles.templateSelector}
-              role="group"
-            >
-              {templates.map((template, index) => (
-                <button
-                  aria-label={t(template.nameKey)}
-                  aria-pressed={template.id === activeTemplate.id}
+            <div aria-hidden="true" className={styles.templateSelector}>
+              {templates.map((template) => (
+                <div
                   data-active={template.id === activeTemplate.id ? "true" : "false"}
+                  data-template-indicator={template.id}
                   key={template.id}
-                  type="button"
-                  onClick={() => selectTemplate(template.id, index)}
                 >
                   <span>{t(template.nameKey)}</span>
                   <small>{t(template.descriptionKey)}</small>
-                </button>
+                </div>
               ))}
             </div>
           </div>

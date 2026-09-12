@@ -206,8 +206,6 @@ const messages = {
     "home.templates.description":
       "从居中叙事、经典留白、等宽模块到紧凑单页，直接预览真实排版，再选择适合你的表达方式。",
     "home.templates.loading": "正在准备真实模板预览…",
-    "home.templates.livePreview": "编辑器真实效果",
-    "home.templates.selectorLabel": "选择要预览的简历样式",
     "home.templates.previewLabel": "{name}简历样式预览",
     "home.fonts.title": "选对字体，让简历更有气质",
     "home.fonts.description":
@@ -1023,8 +1021,6 @@ const messages = {
     "home.templates.description":
       "Compare centered narrative, classic whitespace, modular grid, and compact single-page layouts using the real editor rendering.",
     "home.templates.loading": "Preparing the live template preview…",
-    "home.templates.livePreview": "Rendered by the editor",
-    "home.templates.selectorLabel": "Choose a resume style to preview",
     "home.templates.previewLabel": "Preview of the {name} resume style",
     "home.fonts.title": "The right font gives your resume the right tone",
     "home.fonts.description":

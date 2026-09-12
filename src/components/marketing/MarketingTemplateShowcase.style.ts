@@ -93,7 +93,7 @@ export const useMarketingTemplateShowcaseStyles = createStyles(
       );
 
       h3 {
-        margin: 18px 0 10px;
+        margin: 0 0 10px;
         color: ${token.colorTextHeading};
         font-size: clamp(26px, 3vw, 38px);
         letter-spacing: -0.035em;
@@ -111,23 +111,11 @@ export const useMarketingTemplateShowcaseStyles = createStyles(
         border-bottom: 1px solid ${token.colorBorderSecondary};
       }
     `,
-    liveBadge: css`
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: ${token.colorPrimary};
-      font-size: 13px;
-      font-weight: 700;
-
-      svg {
-        font-size: 14px;
-      }
-    `,
     templateSelector: css`
       display: grid;
       gap: 8px;
 
-      button {
+      [data-template-indicator] {
         display: grid;
         width: 100%;
         gap: 3px;
@@ -136,22 +124,11 @@ export const useMarketingTemplateShowcaseStyles = createStyles(
         border-radius: 10px;
         background: transparent;
         color: ${token.colorText};
-        cursor: pointer;
-        font: inherit;
         text-align: left;
         transition:
           background ${token.motionDurationMid},
           border-color ${token.motionDurationMid},
           transform ${token.motionDurationMid};
-
-        &:hover {
-          background: ${token.colorFillQuaternary};
-        }
-
-        &:focus-visible {
-          outline: 2px solid ${token.colorPrimaryBorder};
-          outline-offset: 2px;
-        }
 
         &[data-active="true"] {
           border-color: ${token.colorPrimaryBorder};
@@ -178,7 +155,7 @@ export const useMarketingTemplateShowcaseStyles = createStyles(
         grid-template-columns: repeat(4, minmax(150px, 1fr));
         overflow-x: auto;
 
-        button[data-active="true"] {
+        [data-template-indicator][data-active="true"] {
           transform: none;
         }
       }

@@ -91,23 +91,20 @@ describe("MarketingHome", () => {
     expect(screen.queryByText("三步完成")).not.toBeInTheDocument();
   });
 
-  it("lets visitors compare every non-blank resume template", async () => {
-    render(<MarketingTemplateShowcase />);
+  it("keeps template indicators non-interactive and omits the preview kicker", async () => {
+    const { container } = render(<MarketingTemplateShowcase />);
 
-    const centered = await screen.findByRole("button", { name: "居中叙事" });
-    const classic = screen.getByRole("button", { name: "经典留白" });
-    const modular = screen.getByRole("button", { name: "等宽模块" });
-    const compact = screen.getByRole("button", { name: "紧凑单页" });
-
-    expect(centered).toHaveAttribute("aria-pressed", "true");
-    expect(classic).toHaveAttribute("aria-pressed", "false");
-    expect(modular).toHaveAttribute("aria-pressed", "false");
-    expect(compact).toHaveAttribute("aria-pressed", "false");
-
-    fireEvent.click(modular);
-
-    expect(centered).toHaveAttribute("aria-pressed", "false");
-    expect(modular).toHaveAttribute("aria-pressed", "true");
+    expect((await screen.findAllByText("居中叙事")).length).toBeGreaterThan(0);
+    expect(screen.getByText("经典留白")).toBeInTheDocument();
+    expect(screen.getByText("等宽模块")).toBeInTheDocument();
+    expect(screen.getByText("紧凑单页")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "居中叙事" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("编辑器真实效果")).not.toBeInTheDocument();
+    expect(
+      container.querySelector('[data-template-indicator="centered"]'),
+    ).toHaveAttribute("data-active", "true");
   });
 
   it("advances the template preview as the desktop scroll track progresses", async () => {
@@ -130,8 +127,13 @@ describe("MarketingHome", () => {
         <MarketingTemplateShowcase />
       </section>,
     );
-    const centered = await screen.findByRole("button", { name: "居中叙事" });
-    const classic = screen.getByRole("button", { name: "经典留白" });
+    await screen.findAllByText("居中叙事");
+    const centered = container.querySelector<HTMLElement>(
+      '[data-template-indicator="centered"]',
+    );
+    const classic = container.querySelector<HTMLElement>(
+      '[data-template-indicator="classic"]',
+    );
     const scrollTrack = container.querySelector<HTMLElement>(
       "[data-template-scroll-track]",
     );
@@ -188,8 +190,8 @@ describe("MarketingHome", () => {
 
     fireEvent.scroll(window);
 
-    expect(centered).toHaveAttribute("aria-pressed", "false");
-    expect(classic).toHaveAttribute("aria-pressed", "true");
+    expect(centered).toHaveAttribute("data-active", "false");
+    expect(classic).toHaveAttribute("data-active", "true");
 
     requestAnimationFrame.mockRestore();
   });
