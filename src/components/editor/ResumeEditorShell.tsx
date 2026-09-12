@@ -12,6 +12,7 @@ import {
 
 import {
   Button,
+  Checkbox,
   Input,
   Modal,
   Pagination,
@@ -1977,13 +1978,13 @@ export function ResumeEditorShell({
         <div className={styles.inspectorControlGrid}>
           <div className={styles.inspectorControlRow} data-field-size="auto">
             <span className={styles.inspectorControlLabel}>{t("editor.keepSectionTogether")}</span>
-            <Switch
+            <Checkbox
               aria-label={t("editor.keepSectionTogether")}
               checked={selectedSection.pagination?.keepTogether ?? false}
-              onChange={(keepTogether) =>
+              onChange={(event) =>
                 store.getState().updateSectionPagination({
                   sectionId: selectedSection.id,
-                  pagination: { keepTogether },
+                  pagination: { keepTogether: event.target.checked },
                 })
               }
             />

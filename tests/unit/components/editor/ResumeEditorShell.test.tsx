@@ -1420,9 +1420,13 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
-    expect(
-      within(getInspectorPanel()).getByRole("switch", { name: "尽量保持区块完整" }),
-    ).toBeChecked();
+    const keepSectionTogether = within(getInspectorPanel()).getByRole(
+      "checkbox",
+      { name: "尽量保持区块完整" },
+    );
+    expect(keepSectionTogether).toBeChecked();
+    fireEvent.click(keepSectionTogether);
+    expect(keepSectionTogether).not.toBeChecked();
 
     openRibbonTab("开始");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
