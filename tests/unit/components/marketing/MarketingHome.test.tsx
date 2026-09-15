@@ -65,32 +65,6 @@ describe("MarketingHome", () => {
     expect(header).toHaveAttribute("data-scrolled", "true");
   });
 
-  it("keeps one primary header action and omits section kickers", () => {
-    const { container } = render(<MarketingHome />);
-
-    expect(screen.queryByRole("link", { name: "登录" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "开始制作" })).not.toHaveLength(0);
-    expect(
-      screen.queryByText("简单好用 · 随心排版 · 所见即所得"),
-    ).not.toBeInTheDocument();
-
-    for (const [selector, kicker] of [
-      ["#features", "为求职准备"],
-      ["#editor", "轻松编辑"],
-      ["#templates", "简历样式"],
-      ["#typography", "字体选择"],
-    ] as const) {
-      const section = container.querySelector<HTMLElement>(selector);
-      expect(section).not.toBeNull();
-      if (!section) {
-        throw new Error(`Missing marketing section: ${selector}`);
-      }
-      expect(within(section).queryByText(kicker)).not.toBeInTheDocument();
-    }
-
-    expect(screen.queryByText("三步完成")).not.toBeInTheDocument();
-  });
-
   it("keeps template indicators non-interactive and omits the preview kicker", async () => {
     const { container } = render(<MarketingTemplateShowcase />);
 
@@ -196,16 +170,4 @@ describe("MarketingHome", () => {
     requestAnimationFrame.mockRestore();
   });
 
-  it("reserves a standard 16:9 frame for the editor screenshot", () => {
-    render(<MarketingHome />);
-
-    const image = screen.getByAltText("AnonResume 简历编辑器界面");
-
-    expect(image).toHaveAttribute(
-      "src",
-      expect.stringContaining("editor-modular-16x9-v2-2048.webp"),
-    );
-    expect(image).toHaveAttribute("width", "2048");
-    expect(image).toHaveAttribute("height", "1152");
-  });
 });

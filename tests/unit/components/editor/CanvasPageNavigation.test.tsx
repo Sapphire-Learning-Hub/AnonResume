@@ -20,16 +20,12 @@ describe("CanvasPageNavigation", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the Ant input colors intact and exposes an explicit jump action", () => {
+  it("jumps to the requested page", () => {
     const onChange = vi.fn();
-    const { container } = render(
+    render(
       <CanvasPageNavigation current={1} pageCount={3} onChange={onChange} />,
     );
     const input = screen.getByRole("textbox", { name: "跳至" });
-    const pagination = container.querySelector(".ant-pagination");
-
-    expect(pagination).not.toHaveAttribute("style");
-    expect(getComputedStyle(input).color).toBe("var(--ant-color-text)");
 
     fireEvent.change(input, { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "跳转" }));

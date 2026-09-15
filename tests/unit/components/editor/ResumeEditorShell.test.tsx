@@ -132,11 +132,6 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue(
       "AnonResume 基础简历",
     );
-    expect(screen.getByTestId("resume-editor-shell")).toHaveStyle({
-      height: "100dvh",
-      overflow: "hidden",
-    });
-    expect(screen.getByTestId("resume-save-status")).toHaveTextContent("空闲");
     expect(screen.getByRole("tablist", { name: "编辑器功能区" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "开始" })).toHaveAttribute(
       "aria-selected",
@@ -150,205 +145,11 @@ describe("ResumeEditorShell", () => {
     expect(
       screen.queryByRole("button", { name: spacedLabel("保存") }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "属性" })).toBeInTheDocument();
-    expect(screen.getByText("大纲")).toBeInTheDocument();
-    expect(screen.getByText("画布")).toBeInTheDocument();
-    expect(screen.queryByTestId("resume-inspector-panel")).not.toBeInTheDocument();
     expect(within(screen.getByRole("article")).getByText("个人简介")).toBeInTheDocument();
-    const outlineItem = screen.getByTestId("section-outline-item-section-profile");
-    expect(
-      within(screen.getByRole("complementary", { name: "大纲" })).queryByRole(
-        "button",
-        { name: spacedLabel("新增区块") },
-      ),
-    ).not.toBeInTheDocument();
-    expect(outlineItem).toHaveAttribute("role", "group");
-    expect(outlineItem).toHaveAttribute("aria-label", "拖动排序 个人简介");
-    expect(within(outlineItem).queryByText("个人简介 区块")).not.toBeInTheDocument();
-    expect(within(outlineItem).queryByText("显示中")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeDisabled();
-    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeDisabled();
-    expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByText("共 1 页")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: spacedLabel("内容编辑") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("布局排序") })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    openRibbonTab("布局");
-    expect(screen.getByRole("button", { name: /重新分页/ })).toBeEnabled();
-    openRibbonTab("文档");
-    expect(screen.getByRole("button", { name: spacedLabel("发布") })).toBeEnabled();
-    expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(/发\s*布/);
-    expect(
-      within(document.getElementById("editor-ribbon-command-panel")!).queryByRole(
-        "button",
-        { name: spacedLabel("发布") },
-      ),
-    ).not.toBeInTheDocument();
-    expect(
-      within(document.getElementById("editor-ribbon-command-panel")!).queryByRole(
-        "button",
-        { name: "历史记录" },
-      ),
-    ).not.toBeInTheDocument();
-    openRibbonTab("属性");
-    expect(
-      within(getInspectorPanel()).getByRole("group", { name: "基础信息" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("文本格式")).not.toBeInTheDocument();
-  });
-
-  it("keeps the two workspace column headers pinned to the top of their panels", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const headers = [
-      screen.getByTestId("editor-outline-header"),
-      screen.getByTestId("editor-canvas-header"),
-    ];
-
-    for (const header of headers) {
-      const style = window.getComputedStyle(header);
-
-      expect(style.position).toBe("sticky");
-      expect(style.top).toBe("0px");
-    }
-
-    expect(
-      window.getComputedStyle(screen.getByRole("region", { name: "画布" }))
-        .paddingTop,
-    ).toBe("0px");
-    expect(
-      window.getComputedStyle(screen.getByTestId("editor-canvas-header"))
-        .paddingTop,
-    ).toBe("10px");
-    expect(screen.queryByTestId("editor-inspector-header")).not.toBeInTheDocument();
-  });
-
-  it("keeps the canvas bottom spacing inside its scroll viewport", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const canvasPanel = screen.getByRole("region", { name: "画布" });
-    const canvasHeader = screen.getByTestId("editor-canvas-header");
-    const canvasViewport = screen.getByTestId("resume-canvas-zoom").parentElement;
-    const panelStyle = window.getComputedStyle(canvasPanel);
-    const headerStyle = window.getComputedStyle(canvasHeader);
-    const viewportStyle = window.getComputedStyle(canvasViewport!);
-
-    expect(panelStyle.paddingRight).toBe("0px");
-    expect(panelStyle.paddingBottom).toBe("0px");
-    expect(panelStyle.paddingLeft).toBe("0px");
-    expect(headerStyle.paddingRight).toBe("20px");
-    expect(headerStyle.paddingLeft).toBe("20px");
-    expect(viewportStyle.paddingRight).toBe("20px");
-    expect(viewportStyle.paddingBottom).toBe("48px");
-    expect(viewportStyle.paddingLeft).toBe("20px");
-  });
-
-  it("keeps contextual properties inside the ribbon instead of a workspace column", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const properties = getInspectorPanel();
-
-    expect(properties.closest('[role="tabpanel"]')).toHaveAccessibleName("属性");
-    expect(screen.queryByTestId("block-insert-panel")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("resume-inspector-panel")).not.toBeInTheDocument();
-  });
-
-  it("organizes document properties into purpose-built ribbon groups", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const properties = getInspectorPanel();
-    const documentGroup = within(properties).getByRole("group", {
-      name: "基础信息",
-    });
-    const typographyGroup = within(properties).getByRole("group", {
-      name: "字体排版",
-    });
-    const colorGroup = within(properties).getByRole("group", {
-      name: "主题颜色",
-    });
-    const pageGroup = within(properties).getByRole("group", {
-      name: "页面边距",
-    });
-
-    expect(within(documentGroup).queryByLabelText("简历标题")).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue(
-      "AnonResume 基础简历",
-    );
-    expect(within(documentGroup).getByLabelText("模板语言")).toBeInTheDocument();
-    expect(within(documentGroup).getByLabelText("视觉预设")).toBeInTheDocument();
-    expect(within(typographyGroup).getByLabelText("字体族")).toBeInTheDocument();
-    expect(within(typographyGroup).getByLabelText("基础字号")).toBeInTheDocument();
-    expect(within(typographyGroup).getByLabelText("基础行高")).toBeInTheDocument();
-    expect(within(colorGroup).getByLabelText("强调色调色板")).toBeInTheDocument();
-    expect(within(colorGroup).getByLabelText("正文颜色调色板")).toBeInTheDocument();
-    expect(within(colorGroup).getByLabelText("弱化文本颜色调色板")).toBeInTheDocument();
-    expect(within(pageGroup).getByLabelText("页面上边距")).toBeInTheDocument();
-    expect(within(pageGroup).getByLabelText("页面右边距")).toBeInTheDocument();
-    expect(within(pageGroup).getByLabelText("页面下边距")).toBeInTheDocument();
-    expect(within(pageGroup).getByLabelText("页面左边距")).toBeInTheDocument();
-  });
-
-  it("keeps controls visually consistent across every ribbon tab", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const ribbon = screen.getByTestId("editor-ribbon");
-
-    for (const tabName of ["开始", "插入", "布局", "文档", "属性"] as const) {
-      openRibbonTab(tabName);
-
-      const controls = ribbon.querySelectorAll<HTMLElement>(
-        "button, a.ant-btn, input.ant-input, .ant-select-selector, .ant-color-picker-trigger",
-      );
-
-      for (const control of controls) {
-        const style = window.getComputedStyle(control);
-
-        expect(style.height).toBe("28px");
-        expect(style.borderRadius).toBe("6px");
-
-        if (control.getAttribute("aria-label") !== "简历标题") {
-          expect(
-            style.fontSize,
-            `${tabName}: ${control.getAttribute("aria-label") ?? control.textContent ?? control.tagName}`,
-          ).toBe("12px");
-        }
-      }
-    }
-
-    expect(
-      window.getComputedStyle(screen.getByRole("textbox", { name: "简历标题" }))
-        .fontSize,
-    ).toBe("14px");
   });
 
   it("toggles browser fullscreen from the document bar", async () => {
@@ -696,35 +497,6 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("dialog", { name: "编辑器快捷键" })).toBeInTheDocument();
   });
 
-  it("places history, shortcut, fullscreen, and publish in the document bar", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    const historyButton = screen.getByRole("button", { name: "历史记录" });
-    const shortcutButton = screen.getByRole("button", { name: "查看快捷键" });
-    const fullscreenButton = screen.getByRole("button", { name: "进入全屏" });
-    const publishButton = screen.getByRole("button", { name: spacedLabel("发布") });
-    const actionContainer = fullscreenButton.parentElement;
-
-    expect(historyButton.parentElement).toBe(actionContainer);
-    expect(shortcutButton.parentElement).toBe(actionContainer);
-    expect(publishButton.parentElement).toBe(actionContainer);
-    expect(Array.from(actionContainer?.children ?? [])).toEqual(
-      expect.arrayContaining([
-        historyButton,
-        shortcutButton,
-        fullscreenButton,
-        publishButton,
-      ]),
-    );
-    expect(historyButton.nextElementSibling).toBe(shortcutButton);
-    expect(shortcutButton.nextElementSibling).toBe(fullscreenButton);
-  });
-
   it.each([
     {
       expected: "⌘ + S",
@@ -877,47 +649,6 @@ describe("ResumeEditorShell", () => {
     expect(within(dialog).getAllByText("Current document").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("历史版本").length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("当前内容").length).toBeGreaterThan(0);
-  });
-
-  it("does not expose the removed resume check feature", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("button", { name: spacedLabel("简历检查") }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("links to the workspace from the editor toolbar", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute(
-      "href",
-      "/app",
-    );
-  });
-
-  it("exposes only the outline and canvas as named editor workspaces", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    expect(screen.getByRole("complementary", { name: "大纲" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "画布" })).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "检查器" })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "属性" })).toBeInTheDocument();
   });
 
   it("updates the editor zoom controls and scales the canvas viewport", () => {

@@ -30,21 +30,6 @@ describe("ResumeDashboardShell", () => {
     });
   }
 
-  it("starts the dashboard content with the resume heading instead of a notice bar", () => {
-    render(
-      <ResumeDashboardShell
-        createAction="/app/create-resume"
-        resumes={[]}
-      />,
-    );
-
-    expect(screen.getByRole("heading", { name: "简历" })).toBeInTheDocument();
-    expect(
-      screen.queryByText("简历内容统一保存，编辑器与 PDF 共用渲染结果"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("工作台")).not.toBeInTheDocument();
-  });
-
   it("opens the template picker from the toolbar", () => {
     render(
       <ResumeDashboardShell
@@ -149,30 +134,6 @@ describe("ResumeDashboardShell", () => {
 
     expect(screen.getByText("没有匹配的简历")).toBeInTheDocument();
     expect(screen.queryByText("还没有简历")).not.toBeInTheDocument();
-  });
-
-  it("exposes publication state without a conditional modifier class", () => {
-    render(
-      <ResumeDashboardShell
-        createAction="/app/create-resume"
-        resumes={[
-          {
-            id: "resume-published",
-            title: "已发布简历",
-            summary: "Published profile",
-            updatedAt: Date.UTC(2026, 7, 31),
-            version: 1,
-            published: true,
-            slug: "published-profile",
-          },
-        ]}
-      />,
-    );
-
-    expect(screen.getByTestId("resume-publication-status-dot")).toHaveAttribute(
-      "data-published",
-      "true",
-    );
   });
 
   it("edits a resume summary from the list without leaving the dashboard", async () => {

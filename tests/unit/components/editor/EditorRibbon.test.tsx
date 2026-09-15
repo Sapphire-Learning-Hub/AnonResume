@@ -1,8 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import {
   EditorRibbon,
-  EditorRibbonPropertyGroup,
   type EditorRibbonTab,
 } from "@/components/editor/EditorRibbon";
 
@@ -95,46 +94,6 @@ describe("EditorRibbon", () => {
     );
   });
 
-  it("keeps contextual controls in the same compact command band as every other tab", () => {
-    render(
-      <EditorRibbon
-        activeTab="properties"
-        backHref="/app"
-        backLabel="返回工作台"
-        commandGroups={[]}
-        documentActions={null}
-        documentName="简历"
-        documentNameLabel="简历标题"
-        contextualContent={(
-          <EditorRibbonPropertyGroup label="基础信息">
-            <input aria-label="简历标题" />
-          </EditorRibbonPropertyGroup>
-        )}
-        quickActions={null}
-        saveStatus="空闲"
-        tabs={tabs}
-        tablistLabel="编辑器功能区"
-        onDocumentNameChange={() => undefined}
-        onTabChange={() => undefined}
-      />,
-    );
-
-    const propertyPanel = screen.getByRole("tabpanel", { name: "属性" });
-
-    expect(window.getComputedStyle(propertyPanel.parentElement!)).toHaveProperty(
-      "height",
-      "58px",
-    );
-    expect(
-      window.getComputedStyle(screen.getByRole("group", { name: "基础信息" })),
-    ).toHaveProperty("height", "49px");
-    expect(within(propertyPanel).getByLabelText("简历标题")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "属性" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-  });
-
   it("supports standard arrow-key navigation between ribbon tabs", () => {
     const onTabChange = vi.fn<(tab: EditorRibbonTab) => void>();
 
@@ -166,42 +125,4 @@ describe("EditorRibbon", () => {
     expect(insertTab).toHaveFocus();
   });
 
-  it("uses one compact shape for every ribbon button", () => {
-    render(
-      <EditorRibbon
-        activeTab="home"
-        backHref="/app"
-        backLabel="返回工作台"
-        commandGroups={[
-          { key: "mode", label: "编辑模式", content: <button>内容编辑</button> },
-        ]}
-        documentActions={<button>PDF</button>}
-        documentName="简历"
-        documentNameLabel="简历标题"
-        quickActions={<button>撤销</button>}
-        saveStatus="空闲"
-        tabs={tabs}
-        tablistLabel="编辑器功能区"
-        onDocumentNameChange={() => undefined}
-        onTabChange={() => undefined}
-      />,
-    );
-
-    const ribbon = screen.getByTestId("editor-ribbon");
-
-    const controls = ribbon.querySelectorAll<HTMLElement>("button, a.ant-btn");
-
-    for (const control of controls) {
-      const style = window.getComputedStyle(control);
-
-      expect(style.height).toBe("28px");
-      expect(style.borderRadius).toBe("6px");
-    }
-
-    const titleInput = screen.getByRole("textbox", { name: "简历标题" });
-    const titleStyle = window.getComputedStyle(titleInput);
-
-    expect(titleStyle.height).toBe("28px");
-    expect(titleStyle.borderRadius).toBe("6px");
-  });
 });

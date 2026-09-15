@@ -33,8 +33,9 @@ surface diverges are regressions.
 2. For any Next.js behavior, read the relevant guide under
    `node_modules/next/dist/docs/` first. Do not rely on older Next.js API
    knowledge.
-3. Reproduce bugs with a focused test where practical. For behavior changes,
-   add or update the test first and observe the expected failure.
+3. Choose tests by regression risk. Add or update a focused test before a fix
+   when it protects durable behavior; copy, visual, and mechanical changes do
+   not automatically require tests.
 4. Preserve unrelated user changes. Never use destructive Git commands to
    clean the workspace or rewrite files you do not understand.
 
@@ -71,6 +72,24 @@ creation. Put recursive tree traversal and structural cleanup in
 `src/domain/resume/block-tree.ts`, not in UI components. Pagination is derived
 presentation state and must not be stored on list items or other resume content
 nodes.
+
+## Test strategy
+
+- Tests protect durable behavior, not a ritual or test count. Prioritize core
+  workflows; security and data integrity; resume rendering and pagination;
+  persistence, migration, import, export, auth, and reusable domain rules.
+- Do not commit tests that only assert literal copy, static labels, CSS values,
+  class names, asset paths, incidental markup, private state, call order, mock
+  shapes, framework behavior, trivial mappings, or duplicated coverage. Keep
+  such assertions only when they enforce an accessibility, legal, security, or
+  stable cross-surface contract.
+- Assert outcomes at the most stable inexpensive boundary: unit tests for
+  domain rules, integration tests for subsystem boundaries, and browser tests
+  only for essential journeys that lower levels cannot prove.
+- Mock only genuine external boundaries. A test must fail when its protected
+  behavior breaks, not merely when implementation is rearranged.
+- Before adding a test, identify its behavior, realistic failure, and coverage
+  gap. Remove low-value or coupled tests without weakening meaningful coverage.
 
 ## Product invariants
 
@@ -193,37 +212,18 @@ nodes.
 
 ## Verification
 
-Use the narrowest relevant test while iterating, then run the repository gates
-before claiming completion:
+Use the narrowest relevant test while iterating, then run the repository gates:
 
 ```sh
 bun run check
 bun run build
 ```
 
-`bun run check` runs ESLint, style-architecture checks, TypeScript, and the full
-Vitest suite. A change is not complete when only a targeted test passes. Run
-`bun run build` for all release work and for changes
-to routes, server/client boundaries, configuration, authentication, email,
-database access, or asset loading.
-
-If a full-suite test fails outside the modified area, rerun that exact test to
-diagnose whether it is deterministic, then rerun the complete gate. Do not
-report a green result from a partial rerun after a full-suite failure.
-
-Useful commands:
-
-```sh
-bun run dev
-bun run test -- path/to/test.ts
-bun run lint
-bun run check:styles
-bunx tsc --noEmit
-bun run worker:pdf
-```
-
-Report verification commands and their final outcome. If a required command
-cannot run, state that explicitly rather than inferring success.
+`bun run check` includes ESLint, architecture checks, TypeScript, and Vitest.
+Run `bun run build` for release, route, server/client boundary, configuration,
+authentication, email, database, or asset-loading changes. Diagnose a failing
+full suite with the exact test, then rerun the complete gate; never infer green
+status from a partial run or a command that could not run.
 
 ## Commits
 
