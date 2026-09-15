@@ -76,6 +76,26 @@ describe("AuthPanel email verification", () => {
     );
   });
 
+  it("updates the card introduction when switching authentication modes", () => {
+    render(<AuthPanel githubEnabled={false} />);
+
+    expect(
+      screen.getByRole("heading", { name: "欢迎回来" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("继续整理、发布和导出你的简历。"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("auth-switch-sign-up"));
+
+    expect(
+      screen.getByRole("heading", { name: "创建账号" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("创建账号，开始制作你的第一份简历。"),
+    ).toBeInTheDocument();
+  });
+
   it("shows a verification state after email registration instead of entering the app", async () => {
     authMocks.signUpEmail.mockResolvedValue({
       data: { token: null, user: { email: "user@example.com" } },

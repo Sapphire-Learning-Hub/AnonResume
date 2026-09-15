@@ -22,3 +22,9 @@ src/domain/resume/generated-icon-data.ts contains generated SVG data from:
 
 The upstream packages and repositories remain the authoritative source for
 their complete license texts and attribution requirements.
+
+Illustrations
+-------------
+public/auth/document-review.svg is adapted from the "Document Review"
+illustration by unDraw and distributed under the unDraw license:
+https://undraw.co/license

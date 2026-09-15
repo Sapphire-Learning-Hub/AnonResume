@@ -46,14 +46,23 @@ body {
   display: grid;
   min-height: 100vh;
   place-items: center;
-  padding: 32px;
+  padding: 0;
   background:
-    radial-gradient(circle at top, var(--app-accent-soft), transparent 34%),
+    radial-gradient(circle at 34% 42%, var(--app-accent-soft), transparent 32%),
+    radial-gradient(
+      circle at 78% 28%,
+      color-mix(in srgb, var(--app-text) 5%, transparent),
+      transparent 30%
+    ),
     linear-gradient(
-      180deg,
+      135deg,
       var(--app-page-background-raised) 0%,
       var(--app-page-background) 100%
     );
+}
+
+body:has(.auth-page-shell) [data-floating-action-rail="true"] {
+  display: none;
 }
 
 .resume-view-shell {
