@@ -76,6 +76,15 @@ describe("AuthPanel email verification", () => {
     );
   });
 
+  it("labels the registration name field as username", () => {
+    render(<AuthPanel githubEnabled={false} />);
+
+    fireEvent.click(screen.getByTestId("auth-switch-sign-up"));
+
+    expect(screen.getByPlaceholderText("用户名")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("显示名称")).not.toBeInTheDocument();
+  });
+
   it("shows a verification state after email registration instead of entering the app", async () => {
     authMocks.signUpEmail.mockResolvedValue({
       data: { token: null, user: { email: "user@example.com" } },

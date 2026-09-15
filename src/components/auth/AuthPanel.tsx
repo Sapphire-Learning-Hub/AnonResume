@@ -448,7 +448,7 @@ export function AuthPanel({
         {mode === "sign-up" ? (
           <Input
             data-testid="auth-name-input"
-            placeholder={t("common.displayName")}
+            placeholder={t("common.username")}
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoComplete="name"
