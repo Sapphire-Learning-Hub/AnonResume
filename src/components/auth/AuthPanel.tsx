@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
+import type { MessageKey } from "@/i18n/messages";
 import { authClient } from "@/lib/auth/client";
 
 const useStyles = createStyles(({ token, css }) => ({
@@ -151,6 +152,21 @@ const verificationFailureCodes = new Set([
   "token_expired",
 ]);
 
+const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
+  ACCOUNT_SUSPENDED: "auth.accountSuspended",
+  EMAIL_PASSWORD_DISABLED: "auth.signInUnavailable",
+  EMAIL_PASSWORD_SIGN_UP_DISABLED: "auth.signUpUnavailable",
+  FAILED_TO_CREATE_SESSION: "auth.sessionCreationFailed",
+  FAILED_TO_CREATE_USER: "auth.accountCreationFailed",
+  INVALID_EMAIL: "auth.invalidEmail",
+  INVALID_EMAIL_OR_PASSWORD: "auth.invalidCredentials",
+  INVALID_PASSWORD: "auth.invalidPassword",
+  PASSWORD_TOO_LONG: "auth.passwordTooLong",
+  PASSWORD_TOO_SHORT: "auth.passwordTooShort",
+  PROVIDER_NOT_FOUND: "auth.socialSignInUnavailable",
+  TOO_MANY_REQUESTS: "auth.rateLimited",
+};
+
 function getAuthErrorCode(error: unknown) {
   if (
     typeof error === "object" &&
@@ -166,12 +182,10 @@ function getAuthErrorCode(error: unknown) {
 
 function getAuthFeedbackMessage(
   error: unknown,
-  fallback: string,
-  suspendedMessage: string,
+  t: (key: MessageKey) => string,
 ) {
-  return getAuthErrorCode(error) === "ACCOUNT_SUSPENDED"
-    ? suspendedMessage
-    : fallback;
+  const code = getAuthErrorCode(error);
+  return t((code && authErrorMessageKeys[code]) || "auth.errorFallback");
 }
 
 export function AuthPanel({
@@ -254,11 +268,7 @@ export function AuthPanel({
 
         if (result.error) {
           toast.error(
-            getAuthFeedbackMessage(
-              result.error,
-              t("auth.errorFallback"),
-              t("auth.accountSuspended"),
-            ),
+            getAuthFeedbackMessage(result.error, t),
           );
           return;
         }
@@ -286,11 +296,7 @@ export function AuthPanel({
           }
 
           toast.error(
-            getAuthFeedbackMessage(
-              result.error,
-              t("auth.errorFallback"),
-              t("auth.accountSuspended"),
-            ),
+            getAuthFeedbackMessage(result.error, t),
           );
           return;
         }
@@ -298,8 +304,8 @@ export function AuthPanel({
 
       router.push("/sign-in");
       router.refresh();
-    } catch {
-      toast.error(t("auth.errorFallback"));
+    } catch (error) {
+      toast.error(getAuthFeedbackMessage(error, t));
     } finally {
       setIsPending(false);
     }
@@ -345,10 +351,10 @@ export function AuthPanel({
       });
 
       if (result.error) {
-        toast.error(t("auth.errorFallback"));
+        toast.error(getAuthFeedbackMessage(result.error, t));
       }
-    } catch {
-      toast.error(t("auth.errorFallback"));
+    } catch (error) {
+      toast.error(getAuthFeedbackMessage(error, t));
       setIsPending(false);
     }
   }

@@ -145,6 +145,27 @@ describe("AuthPanel email verification", () => {
     );
   });
 
+  it.each([
+    ["INVALID_EMAIL_OR_PASSWORD", "邮箱或密码不正确。"],
+    ["INVALID_EMAIL", "请输入有效的邮箱地址。"],
+    ["FAILED_TO_CREATE_SESSION", "暂时无法创建登录会话，请稍后重试。"],
+    ["EMAIL_PASSWORD_DISABLED", "邮箱密码登录暂时不可用。"],
+    ["TOO_MANY_REQUESTS", "尝试次数过多，请稍后再试。"],
+  ])("maps the %s sign-in error code to actionable feedback", async (code, message) => {
+    authMocks.signInEmail.mockResolvedValue({
+      data: null,
+      error: { code, message: "Raw authentication service error", status: 400 },
+    });
+
+    render(<AuthPanel githubEnabled={false} />);
+    fillEmailPasswordForm();
+    fireEvent.click(screen.getByTestId("auth-submit"));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith(message);
+    });
+  });
+
   it("does not expose raw authentication service errors", async () => {
     authMocks.signInEmail.mockResolvedValue({
       data: null,
