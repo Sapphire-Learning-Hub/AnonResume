@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
 
+import packageMetadata from "../../../package.json";
+
 const RELEASE_COMMIT_LENGTH = 12;
 
 export interface ReleaseMetadata {
@@ -38,12 +40,17 @@ export function resolveReleaseMetadata(options?: {
   const embeddedCommit = normalize(env.ANONRESUME_BUILD_COMMIT);
   const tag = embeddedTag ?? git(["describe", "--tags", "--abbrev=0", "HEAD"]);
   const commit = embeddedCommit ?? git(["rev-parse", "HEAD"]);
+  const packageVersion = normalize(packageMetadata.version);
 
   return {
     tag:
       tag ??
       normalize(env.ANONRESUME_RELEASE) ??
-      (env.NODE_ENV === "development" ? "development" : "untagged"),
+      (env.NODE_ENV === "development"
+        ? "development"
+        : packageVersion
+          ? `v${packageVersion}`
+          : "untagged"),
     commit,
   };
 }
