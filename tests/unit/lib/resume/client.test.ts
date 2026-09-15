@@ -4,15 +4,16 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import * as resumeClient from "@/lib/resume/client";
 
 import {
+  exportResumePdfDocument,
   fetchCurrentResumeDocument,
   fetchResumeEntriesPage,
   fetchResumeVersionSnapshots,
+  publishResume,
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
   restoreResumeVersion,
   saveResumeDocument,
   updateResumeSummary,
-  exportResumePdfDocument,
 } from "@/lib/resume/client";
 
 describe("fetchResumeEntriesPage", () => {
@@ -233,6 +234,23 @@ describe("saveResumeDocument", () => {
         }),
       }),
     );
+  });
+});
+
+describe("publishResume", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("normalizes an empty error response instead of throwing a JSON parse error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
+    );
+
+    await expect(
+      publishResume({ resumeId: "resume-demo" }),
+    ).rejects.toThrow("request_failed");
   });
 });
 

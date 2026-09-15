@@ -1083,6 +1083,11 @@ export function ResumeEditorShell({
       const result = await resolvedPublishDocument({ resumeId });
 
       setPublishedSlug(result.slug);
+    } catch {
+      toast.error({
+        content: t("editor.publishError"),
+        key: "editor-publish-error",
+      });
     } finally {
       setPublicationBusy(false);
     }

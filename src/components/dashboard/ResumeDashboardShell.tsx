@@ -10,6 +10,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
 import { SearchIcon } from "@/components/ui/InlineIcons";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
@@ -474,6 +475,7 @@ function ResumeRowActions({
 }) {
   const { styles } = useStyles();
   const { t } = useI18n();
+  const { toast } = useAppFeedback();
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -492,6 +494,11 @@ function ResumeRowActions({
 
       onPublicationChange({ published: true, slug: result.slug });
       setOpen(false);
+    } catch {
+      toast.error({
+        content: t("editor.publishError"),
+        key: `dashboard-publish-error-${resume.id}`,
+      });
     } finally {
       setPublicationBusy(false);
     }

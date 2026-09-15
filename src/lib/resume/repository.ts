@@ -325,13 +325,6 @@ async function createResumeVersionSnapshotFromRecord(record: ResumeRecord) {
   });
 }
 
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 export async function resetResumeRepository(options?: {
   preservePersistedData?: boolean;
 }) {
@@ -722,41 +715,19 @@ export async function publishResumeRecord(userIdOrResumeId: string, resumeId?: s
   const scopedResumeId = resumeId || userIdOrResumeId;
   const current = await requireExistingResumeRecord(userId, scopedResumeId);
   await createResumeVersionSnapshotFromRecord(current);
-  const baseSlug =
-    current.slug || slugify(current.title) || slugify(current.id) || "resume";
-  let nextSlug = baseSlug;
-  let suffix = 2;
+  const rows = await db
+    .update(resumes)
+    .set({
+      published: true,
+      slug: current.slug ?? current.id,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)),
+    )
+    .returning();
 
-  for (;;) {
-    try {
-      const rows = await db
-        .update(resumes)
-        .set({
-          published: true,
-          slug: nextSlug,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)),
-        )
-        .returning();
-
-      return mapResumeRow(rows[0]!);
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error &&
-        "code" in error &&
-        error.code === "23505"
-      ) {
-        nextSlug = `${baseSlug}-${suffix}`;
-        suffix += 1;
-        continue;
-      }
-
-      throw error;
-    }
-  }
+  return mapResumeRow(rows[0]!);
 }
 
 export async function unpublishResumeRecord(resumeId: string): Promise<ResumeRecord>;

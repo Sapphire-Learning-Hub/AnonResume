@@ -14,6 +14,7 @@ import {
   paginateResumeVersionSnapshots,
   getPublishedResumeBySlug,
   publishResumeRecord,
+  ResumeIdentifierConflictError,
   resetResumeRepository,
   restoreResumeVersion,
   saveResumeRecord,
@@ -357,60 +358,42 @@ describe("resume repository persistence", () => {
     );
   });
 
-  it("isolates resume records for different users even when ids match", async () => {
-    const getScopedResumeRecord =
-      getOrCreateResumeRecord as unknown as (
-        userId: string,
-        resumeId: string,
-      ) => Promise<Awaited<ReturnType<typeof getOrCreateResumeRecord>>>;
-    const saveScopedResumeRecord = saveResumeRecord as unknown as (params: {
-      userId: string;
-      resumeId: string;
-      version: number;
-      document: unknown;
-    }) => Promise<Awaited<ReturnType<typeof saveResumeRecord>>>;
-    const userADocument = createDefaultResumeDocument();
-    const userBDocument = createDefaultResumeDocument();
-
-    userADocument.meta.title = "User A Resume";
-    userBDocument.meta.title = "User B Resume";
+  it("enforces globally unique resume ids across users", async () => {
     await createResumeRecord("user-a", "resume-shared");
-    await createResumeRecord("user-b", "resume-shared");
-
-    expect(
-      (await saveScopedResumeRecord({
-        userId: "user-a",
-        resumeId: "resume-shared",
-        version: 1,
-        document: userADocument,
-      })).title,
-    ).toBe("User A Resume");
 
     await expect(
-      saveScopedResumeRecord({
-        userId: "user-b",
-        resumeId: "resume-shared",
-        version: 1,
-        document: userBDocument,
-      }),
-    ).resolves.toBeDefined();
+      createResumeRecord("user-b", "resume-shared"),
+    ).rejects.toBeInstanceOf(ResumeIdentifierConflictError);
+    await expect(getResumeRecord("user-b", "resume-shared")).resolves.toBeUndefined();
+  });
 
-    expect((await getScopedResumeRecord("user-a", "resume-shared")).title).toBe(
-      "User A Resume",
-    );
-    expect((await getScopedResumeRecord("user-b", "resume-shared")).title).toBe(
-      "User B Resume",
-    );
-    expect(
-      (await listResumeEntries("user-a")).some(
-        (resume) => resume.id === "resume-shared" && resume.title === "User A Resume",
-      ),
-    ).toBe(true);
-    expect(
-      (await listResumeEntries("user-b")).some(
-        (resume) => resume.id === "resume-shared" && resume.title === "User B Resume",
-      ),
-    ).toBe(true);
+  it("derives first-publication slugs from globally unique resume ids", async () => {
+    const firstDocument = createDefaultResumeDocument();
+    const secondDocument = createDefaultResumeDocument();
+
+    firstDocument.meta.title = "none";
+    secondDocument.meta.title = "none";
+    await createResumeRecord("user-demo", "resume-first");
+    await createResumeRecord("user-demo", "resume-second");
+    await saveResumeRecord({
+      userId: "user-demo",
+      resumeId: "resume-first",
+      version: 1,
+      document: firstDocument,
+    });
+    await saveResumeRecord({
+      userId: "user-demo",
+      resumeId: "resume-second",
+      version: 1,
+      document: secondDocument,
+    });
+
+    await expect(publishResumeRecord("user-demo", "resume-first")).resolves.toMatchObject({
+      slug: "resume-first",
+    });
+    await expect(publishResumeRecord("user-demo", "resume-second")).resolves.toMatchObject({
+      slug: "resume-second",
+    });
   });
 
   it("records a snapshot when a resume is published", async () => {
@@ -485,9 +468,9 @@ describe("resume repository persistence", () => {
       templateId: "centered",
       createId: () => "resume-foundation",
     });
-    await createResumeRecord("user-other", "resume-foundation");
+    await createResumeRecord("user-other", "resume-other-foundation");
     await snapshotResumeVersion("user-demo", "resume-foundation");
-    await snapshotResumeVersion("user-other", "resume-foundation");
+    await snapshotResumeVersion("user-other", "resume-other-foundation");
 
     await deleteResumeRecord("user-demo", "resume-foundation");
 
@@ -495,12 +478,12 @@ describe("resume repository persistence", () => {
     await expect(
       listResumeVersionSnapshots("user-demo", "resume-foundation"),
     ).resolves.toEqual([]);
-    await expect(getResumeRecord("user-other", "resume-foundation")).resolves.toMatchObject({
-      id: "resume-foundation",
+    await expect(getResumeRecord("user-other", "resume-other-foundation")).resolves.toMatchObject({
+      id: "resume-other-foundation",
       userId: "user-other",
     });
     await expect(
-      listResumeVersionSnapshots("user-other", "resume-foundation"),
+      listResumeVersionSnapshots("user-other", "resume-other-foundation"),
     ).resolves.toHaveLength(1);
   });
 

@@ -1033,6 +1033,28 @@ describe("ResumeEditorShell", () => {
     );
   });
 
+  it("reports a publication failure without leaving an unhandled rejection", async () => {
+    const publishDocument = vi.fn().mockRejectedValue(new Error("request_failed"));
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        publishDocument={publishDocument}
+      />,
+    );
+
+    openRibbonTab("文档");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("发布") }));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith({
+        content: "发布失败，请稍后重试。",
+        key: "editor-publish-error",
+      });
+    });
+  });
+
   it("reuses an in-flight autosave before publishing", async () => {
     vi.useFakeTimers();
 

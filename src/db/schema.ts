@@ -63,9 +63,7 @@ export const resumes =
         primaryKey({
           columns: [table.userId, table.id],
         }),
-        uniqueIndex("resumes_generated_id_unique")
-          .on(table.id)
-          .where(sql`${table.id} ~ '^resume-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
+        uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
         index("resumes_user_updated_id_idx").on(
           table.userId,
@@ -77,9 +75,7 @@ export const resumes =
         primaryKey({
           columns: [table.userId, table.id],
         }),
-        uniqueIndex("resumes_generated_id_unique")
-          .on(table.id)
-          .where(sql`${table.id} ~ '^resume-[0-9]{8}-[0-9]{6}-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`),
+        uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
         index("resumes_user_updated_id_idx").on(
           table.userId,

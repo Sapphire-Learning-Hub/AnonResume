@@ -1,5 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+const feedbackMocks = vi.hoisted(() => ({
+  toastError: vi.fn(),
+}));
+
+vi.mock("@/components/ui/useAppFeedback", () => ({
+  useAppFeedback: () => ({
+    toast: { error: feedbackMocks.toastError },
+  }),
+}));
+
 import { ResumeDashboardShell } from "@/components/dashboard/ResumeDashboardShell";
 
 function finishMotion(element: HTMLElement) {
@@ -287,6 +297,38 @@ describe("ResumeDashboardShell", () => {
     await waitFor(() => {
       expect(unpublishDocument).toHaveBeenCalledWith({ resumeId: "resume-one" });
       expect(screen.getByText("草稿")).toBeInTheDocument();
+    });
+  });
+
+  it("reports a publication failure without leaving an unhandled rejection", async () => {
+    installEditorViewport(false);
+    const publishDocument = vi.fn().mockRejectedValue(new Error("request_failed"));
+
+    render(
+      <ResumeDashboardShell
+        createAction="/app/create-resume"
+        publishDocument={publishDocument}
+        resumes={[
+          {
+            id: "resume-one",
+            title: "前端简历",
+            summary: "React",
+            updatedAt: Date.UTC(2026, 7, 31),
+            version: 1,
+            published: false,
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "更多操作：前端简历" }));
+    fireEvent.click(await screen.findByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith({
+        content: "发布失败，请稍后重试。",
+        key: "dashboard-publish-error-resume-one",
+      });
     });
   });
 

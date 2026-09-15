@@ -77,18 +77,28 @@ export async function fetchCurrentResumeDocument(
 }
 
 async function parseJson(response: Response) {
-  const payload = (await response.json()) as Record<string, unknown>;
+  let payload: Record<string, unknown> | undefined;
+
+  try {
+    const value = (await response.json()) as unknown;
+
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      payload = value as Record<string, unknown>;
+    }
+  } catch {
+    // Error responses are not guaranteed to contain a JSON body.
+  }
 
   if (!response.ok) {
     if (
-      payload.error === "version_conflict" &&
+      payload?.error === "version_conflict" &&
       typeof payload.currentVersion === "number"
     ) {
       throw new ResumeVersionConflictClientError(payload.currentVersion);
     }
 
     if (
-      payload.error === "resume_validation_failed" &&
+      payload?.error === "resume_validation_failed" &&
       Array.isArray(payload.issues)
     ) {
       throw new ResumeValidationClientError(
@@ -97,8 +107,12 @@ async function parseJson(response: Response) {
     }
 
     throw new Error(
-      typeof payload.error === "string" ? payload.error : "request_failed",
+      typeof payload?.error === "string" ? payload.error : "request_failed",
     );
+  }
+
+  if (!payload) {
+    throw new Error("invalid_response");
   }
 
   return payload;
