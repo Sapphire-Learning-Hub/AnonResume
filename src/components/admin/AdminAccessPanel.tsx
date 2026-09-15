@@ -98,9 +98,6 @@ export function AdminMfaPanel() {
   return (
     <>
       <h1 className={styles.title}>{t("auth.mfaTitle")}</h1>
-      <p className={styles.description}>
-        {t("auth.mfaDescription")}
-      </p>
       <ManagementMfaChallenge
         onSuccess={({ recoveryRequired }) => {
           router.replace(

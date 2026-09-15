@@ -191,23 +191,20 @@ export function ManagementModeControl({
             </form>
           ) : null
         ) : (
-          <>
-            <p>{adminT("auth.mfaDescription")}</p>
-            <ManagementMfaChallenge
-              onRequestReset={() => {
-                setOpen(false);
-                setResetRequestOpen(true);
-              }}
-              onSuccess={({ recoveryRequired }) => {
-                setOpen(false);
-                router.replace(
-                  recoveryRequired ? "/app/manage/security" : "/app/manage",
-                );
-                router.refresh();
-              }}
-              presentation="modal"
-            />
-          </>
+          <ManagementMfaChallenge
+            onRequestReset={() => {
+              setOpen(false);
+              setResetRequestOpen(true);
+            }}
+            onSuccess={({ recoveryRequired }) => {
+              setOpen(false);
+              router.replace(
+                recoveryRequired ? "/app/manage/security" : "/app/manage",
+              );
+              router.refresh();
+            }}
+            presentation="modal"
+          />
         )}
       </Modal>
       <AdminMfaResetRequestControl

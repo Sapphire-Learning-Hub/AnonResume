@@ -9,7 +9,7 @@ import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
-const useStyles = createStyles(({ css }) => ({
+const useStyles = createStyles(({ css, token }) => ({
   alternatives: css`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -28,6 +28,11 @@ const useStyles = createStyles(({ css }) => ({
   form: css`
     display: grid;
     gap: 12px;
+  `,
+  description: css`
+    margin: 10px 0 12px;
+    color: ${token.colorTextSecondary};
+    line-height: 1.7;
   `,
 }));
 
@@ -82,6 +87,9 @@ export function ManagementMfaChallenge({
 
   return (
     <form className={styles.form} onSubmit={submit}>
+      <p className={styles.description}>
+        {t(recoveryMode ? "auth.recoveryDescription" : "auth.mfaDescription")}
+      </p>
       {recoveryMode ? (
         <Input
           autoFocus

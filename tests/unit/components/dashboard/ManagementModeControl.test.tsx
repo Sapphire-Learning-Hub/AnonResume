@@ -28,6 +28,9 @@ describe("ManagementModeControl", () => {
     fireEvent.click(screen.getByRole("button", { name: "进入管理模式" }));
 
     expect(screen.getByText("验证管理身份")).toBeInTheDocument();
+    expect(
+      screen.getByText("输入您绑定的虚拟 MFA 设备当前显示的 6 位验证码。"),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole("textbox")).toHaveLength(6);
 
     const alternatives = screen.getByTestId("management-auth-alternatives");
@@ -48,6 +51,12 @@ describe("ManagementModeControl", () => {
     expect(
       screen.getByPlaceholderText("XXXX-XXXX-XXXX-XXXX-XXXX"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("输入您保存的一次性恢复码，每个恢复码只能使用一次。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("输入您绑定的虚拟 MFA 设备当前显示的 6 位验证码。"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the MFA reset request dialog mounted after closing the challenge", async () => {
