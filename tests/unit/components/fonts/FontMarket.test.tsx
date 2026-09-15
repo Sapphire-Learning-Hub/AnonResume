@@ -272,4 +272,66 @@ describe("FontMarket", () => {
       });
     });
   });
+
+  it("searches target resumes from the resume selector", async () => {
+    renderFontMarket();
+    const card = screen
+      .getByRole("heading", { name: "LXGW WenKai" })
+      .closest("article");
+
+    fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
+    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    const selector = within(dialog).getByRole("combobox", { name: "目标简历" });
+
+    expect(
+      within(dialog).queryByRole("searchbox", { name: "搜索简历" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(selector, { target: { value: "前端" } });
+
+    await waitFor(() => {
+      expect(fetchResumeEntriesPage).toHaveBeenLastCalledWith({
+        page: 1,
+        pageSize: 10,
+        query: "前端",
+      });
+    });
+  });
+
+  it("keeps the resume selector available when a search has no matches", async () => {
+    vi.mocked(fetchResumeEntriesPage)
+      .mockResolvedValueOnce({
+        items: resumes,
+        page: 1,
+        pageSize: 10,
+        total: 1,
+        totalPages: 1,
+      })
+      .mockResolvedValueOnce({
+        items: [],
+        page: 1,
+        pageSize: 10,
+        total: 0,
+        totalPages: 0,
+      });
+    renderFontMarket();
+    const card = screen
+      .getByRole("heading", { name: "LXGW WenKai" })
+      .closest("article");
+
+    fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
+    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "目标简历" }), {
+      target: { value: "不存在的简历" },
+    });
+
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole("combobox", { name: "目标简历" }),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog).getByRole("button", { name: "确认应用" }),
+      ).toBeDisabled();
+    });
+  });
 });

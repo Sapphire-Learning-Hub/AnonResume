@@ -609,7 +609,7 @@ export function FontMarket() {
         {selectedPreset ? (
           resumeLoading && resumePage.items.length === 0 ? (
             <Spin />
-          ) : resumePage.total > 0 ? (
+          ) : resumePage.total > 0 || resumeQuery ? (
             <form
               action={`/app/resumes/${selectedResumeId}/font`}
               className={styles.modalBody}
@@ -628,24 +628,22 @@ export function FontMarket() {
               />
               <label className={styles.modalField}>
                 <span className={styles.fieldLabel}>{t("fontMarket.targetResume")}</span>
-                <Input.Search
-                  allowClear
-                  aria-label={t("dashboard.searchResume")}
-                  defaultValue={resumeQuery}
-                  placeholder={t("dashboard.searchResumePlaceholder")}
+                <Select
+                  aria-label={t("fontMarket.targetResume")}
+                  filterOption={false}
+                  loading={resumeLoading}
+                  onChange={setSelectedResumeId}
                   onSearch={(value) => {
                     setResumeLoading(true);
                     setResumePageNumber(1);
                     setResumeQuery(value.trim());
                   }}
-                />
-                <Select
-                  aria-label={t("fontMarket.targetResume")}
-                  onChange={setSelectedResumeId}
                   options={resumePage.items.map((resume) => ({
                     label: resume.title,
                     value: resume.id,
                   }))}
+                  placeholder={t("dashboard.searchResumePlaceholder")}
+                  showSearch
                   value={selectedResumeId}
                 />
                 {resumePage.totalPages > 1 ? (
@@ -665,7 +663,7 @@ export function FontMarket() {
                 <Button htmlType="button" onClick={() => setSelectedPreset(undefined)}>
                   {t("common.dismiss")}
                 </Button>
-                <Button htmlType="submit" type="primary">
+                <Button disabled={!selectedResumeId} htmlType="submit" type="primary">
                   {t("fontMarket.confirmApply")}
                 </Button>
               </div>
