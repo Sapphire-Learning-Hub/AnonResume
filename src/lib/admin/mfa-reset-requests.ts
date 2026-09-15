@@ -236,8 +236,15 @@ export async function getAdminMfaResetRequestForUser(
 ) {
   await expirePendingRequests(now, userId);
   const schema = schemaName();
-  const result = await getDatabasePool().query<RequestRow>(
-    `SELECT ${requestSelection}
+  const result = await getDatabasePool().query<
+    RequestRow & { hasVerifiedDevice: boolean }
+  >(
+    `SELECT ${requestSelection},
+        EXISTS (
+          SELECT 1 FROM ${schema}.admin_mfa_devices AS device
+           WHERE device.user_id = request.requester_user_id
+             AND device.verified_at IS NOT NULL
+        ) AS "hasVerifiedDevice"
        FROM ${schema}.admin_mfa_reset_requests AS request
        JOIN "user" AS identity ON identity.id = request.requester_user_id
       WHERE request.requester_user_id = $1
@@ -245,7 +252,11 @@ export async function getAdminMfaResetRequestForUser(
       LIMIT 1`,
     [userId],
   );
-  return result.rows[0] ?? null;
+  const current = result.rows[0];
+  if (!current) return null;
+
+  const { hasVerifiedDevice, ...request } = current;
+  return request.status === "approved" && hasVerifiedDevice ? null : request;
 }
 
 export async function cancelAdminMfaResetRequest({

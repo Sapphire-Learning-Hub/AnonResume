@@ -174,7 +174,7 @@ describe("delegated administrator MFA reset requests", () => {
       .toMatchObject({ id: current!.id, status: "cancelled" });
   });
 
-  it("only lets the super-admin approve and atomically resets MFA access", async () => {
+  it("lets only the super-admin reset MFA and consumes approval after re-enrollment", async () => {
     const request = await submitAdminMfaResetRequest({
       userId: otherDelegatedAdminId,
       reason: "Authenticator and recovery codes are unavailable.",
@@ -233,6 +233,25 @@ describe("delegated administrator MFA reset requests", () => {
       [baseSessionId],
     );
     expect(baseSession.rowCount).toBe(1);
+
+    await expect(getAdminMfaResetRequestForUser(otherDelegatedAdminId)).resolves
+      .toMatchObject({ id: request.id, status: "approved" });
+    await pool.query(
+      `INSERT INTO ${schema}.admin_mfa_devices
+        (user_id, name, encrypted_secret, encryption_iv, encryption_tag, verified_at)
+       VALUES ($1, 'Replacement device', 'ciphertext', 'iv', 'tag', now())`,
+      [otherDelegatedAdminId],
+    );
+
+    await expect(
+      getAdminMfaResetRequestForUser(otherDelegatedAdminId),
+    ).resolves.toBeNull();
+    await expect(
+      submitAdminMfaResetRequest({
+        userId: otherDelegatedAdminId,
+        reason: "The replacement authenticator is no longer available.",
+      }),
+    ).resolves.toMatchObject({ status: "pending" });
   });
 
   it("expires stale requests before allowing a replacement", async () => {
