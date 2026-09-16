@@ -160,15 +160,11 @@ bun run build
 
 ## 参与贡献
 
-欢迎提交错误报告、功能建议和代码改进。
+欢迎提交错误报告、功能建议和代码改进。请阅读[贡献指南](./CONTRIBUTING.md)，
+了解分支、提交、Pull Request、评审、合并和发布流程。
 
-1. 在 [Issues](https://github.com/Sapphire-Learning-Hub/AnonResume/issues) 中说明问题或建议；较大的改动建议先讨论实现方向。
-2. Fork 仓库并从最新的 `main` 创建分支。
-3. 完成改动并运行 `bun run check` 与 `bun run build`。
-4. 使用符合 [Conventional Commits](https://www.conventionalcommits.org/) 的提交信息。
-5. 发起 Pull Request，说明用户可见变化、验证方式和潜在影响。
-
-请勿在 Issue、日志、提交或 Pull Request 中包含数据库地址、SMTP 凭据、令牌、私钥或真实用户数据。
+安全漏洞请通过 [GitHub 私密漏洞报告](https://github.com/Sapphire-Learning-Hub/AnonResume/security/advisories/new)
+提交，不要创建公开 Issue。
 
 ## 许可证与品牌
 

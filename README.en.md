@@ -160,15 +160,13 @@ bun run build
 
 ## Contributing
 
-Bug reports, feature proposals, documentation improvements, and code contributions are welcome.
+Bug reports, feature proposals, and code contributions are welcome. Read the
+[contribution guide](./CONTRIBUTING.en.md) for the branch, commit, Pull Request,
+review, merge, and release workflow.
 
-1. Describe the problem or proposal in [Issues](https://github.com/Sapphire-Learning-Hub/AnonResume/issues). Discuss the direction first when the change is substantial.
-2. Fork the repository and create a branch from the latest `main`.
-3. Implement the change and run `bun run check` and `bun run build`.
-4. Use commit messages that follow [Conventional Commits](https://www.conventionalcommits.org/).
-5. Open a Pull Request describing user-visible behavior, verification, and potential impact.
-
-Never include database URLs, SMTP credentials, tokens, private keys, or real user data in issues, logs, commits, or pull requests.
+Report vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/Sapphire-Learning-Hub/AnonResume/security/advisories/new)
+instead of opening a public Issue.
 
 ## License and Brand
 

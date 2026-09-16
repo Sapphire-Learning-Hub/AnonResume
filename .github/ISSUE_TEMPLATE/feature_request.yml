@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose an improvement based on a concrete user need.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem before proposing an implementation. Larger changes are discussed here before a Pull Request is opened.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing Issues and did not find the same request.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who encounters the problem, in which workflow, and what prevents them from completing their task?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the user-visible result without prescribing internal implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current alternatives
+      description: How do users handle this today, and why is that insufficient?
+  - type: textarea
+    id: impact
+    attributes:
+      label: Scope and impact
+      description: Note affected workflows, compatibility concerns, or supporting examples.

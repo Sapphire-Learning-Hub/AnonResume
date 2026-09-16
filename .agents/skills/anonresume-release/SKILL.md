@@ -21,6 +21,9 @@ and a production deployment are separate operations.
 - Never replace, move, or delete an existing remote tag or Release. Stop on a
   collision, a dirty worktree with unexplained changes, or a local/remote hash
   mismatch.
+- Prepare every release on a one-time `release/vX.Y.Z` branch and merge it
+  through the repository's normal Pull Request, CI, and review process. Never
+  tag the release branch or bypass branch protection.
 
 ## Prepare the candidate
 
@@ -32,10 +35,13 @@ and a production deployment are separate operations.
    release-note entries one-for-one.
 3. Choose the requested SemVer version. If none was supplied and the correct
    increment is ambiguous, ask the user instead of guessing.
-4. Follow the repository's existing version source. Currently the root version
+4. Fetch `origin`, confirm the local `main` matches `origin/main`, and create
+   `release/vX.Y.Z` from that commit. Stop if the branch or version tag already
+   exists locally or remotely.
+5. Follow the repository's existing version source. Currently the root version
    is in `package.json`, while `bun.lock` does not duplicate it. Do not create a
    changelog or release-notes file unless the repository adopts that convention.
-5. Run `bun run check` and `bun run build`. If a full test run fails outside the
+6. Run `bun run check` and `bun run build`. If a full test run fails outside the
    changed area, diagnose and rerun that exact test, then rerun the complete gate.
    Do not publish from partial verification.
 
@@ -92,18 +98,34 @@ Report tests, builds, and release verification separately to the user, never in
 the public notes. Show the complete bilingual draft and stop for approval before
 any external mutation.
 
-## Publish the approved release
+## Submit the approved release
 
 After approval, apply any unambiguous requested wording changes and use that exact
 content for the Release:
 
 1. Confirm the working tree contains only the expected version preparation.
 2. Commit with `chore(release): prepare vX.Y.Z`.
+3. Push `release/vX.Y.Z` and open a Pull Request against `main`. The title must
+   follow Conventional Commits and the body must include the approved bilingual
+   Release text plus the verification results.
+4. Stop until required CI passes, all discussions are resolved, one non-author
+   reviewer approves, and the Pull Request is Squash merged. Do not merge it on
+   the user's behalf unless they explicitly request that operation.
+
+## Publish from merged main
+
+After the release Pull Request is merged:
+
+1. Fetch `origin`, switch to `main`, and update it with `--ff-only`. Confirm the
+   merged commit contains the approved version and that local `main` exactly
+   matches `origin/main`.
+2. Confirm the target tag still does not exist locally or remotely and that the
+   approved Release body has not changed.
 3. Create a signed annotated tag with
    `git tag -s vX.Y.Z -m "AnonResume vX.Y.Z"`, then verify it with
    `git tag -v vX.Y.Z`.
-4. Push the current upstream branch, then the tag. Verify the dereferenced remote
-   tag and upstream branch resolve to the release commit.
+4. Push only the tag. Verify the dereferenced remote tag and `origin/main`
+   resolve to the same release commit.
 5. Publish with `gh release create vX.Y.Z --verify-tag`, the title
    `AnonResume vX.Y.Z`, and the approved notes.
 6. Read the Release back with `gh release view` and verify its title, tag, public
