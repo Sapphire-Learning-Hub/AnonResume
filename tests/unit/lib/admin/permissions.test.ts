@@ -21,6 +21,10 @@ describe("admin permission catalog", () => {
       "exports.retry",
       "announcements.read",
       "announcements.manage",
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+      "ai.audit.sensitive.read",
       "audit.read",
       "system.read",
     ]);
@@ -63,6 +67,9 @@ describe("admin permission catalog", () => {
     expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
       "announcements.read",
     );
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
+      "ai.usage.read",
+    );
     expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).toContain(
       "announcements.read",
     );
@@ -73,7 +80,13 @@ describe("admin permission catalog", () => {
       expect.arrayContaining([
         "announcements.read",
         "announcements.manage",
+        "ai.providers.manage",
+        "ai.quotas.manage",
+        "ai.usage.read",
       ]),
     );
+    for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
+      expect(role.permissions).not.toContain("ai.audit.sensitive.read");
+    }
   });
 });

@@ -12,7 +12,10 @@ function hrefs(access: AppShellAccess) {
 
 describe("app navigation", () => {
   it("shows only product links to product users and dormant administrators", () => {
-    const expected = [{ id: "product", items: ["/app", "/app/fonts"] }];
+    const expected = [{
+      id: "product",
+      items: ["/app", "/app/fonts", "/app/ai"],
+    }];
 
     expect(
       hrefs({
@@ -46,7 +49,7 @@ describe("app navigation", () => {
         productAccess: true,
       }),
     ).toEqual([
-      { id: "product", items: ["/app", "/app/fonts"] },
+      { id: "product", items: ["/app", "/app/fonts", "/app/ai"] },
       {
         id: "management",
         items: [
@@ -78,6 +81,7 @@ describe("app navigation", () => {
           "/app/manage/exports",
           "/app/manage/roles",
           "/app/manage/announcements",
+          "/app/manage/ai",
           "/app/manage/audit",
           "/app/manage/system",
           "/app/manage/mfa-resets",
@@ -95,7 +99,7 @@ describe("app navigation", () => {
         productAccess: true,
       }),
     ).toEqual([
-      { id: "product", items: ["/app", "/app/fonts"] },
+      { id: "product", items: ["/app", "/app/fonts", "/app/ai"] },
       { id: "management", items: ["/app/manage/security"] },
     ]);
   });

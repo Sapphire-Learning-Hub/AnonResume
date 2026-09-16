@@ -35,6 +35,7 @@ interface ManagementNavigationDefinition {
   id: string;
   labelKey: MessageKey;
   permission?: AdminPermission;
+  permissions?: AdminPermission[];
   superOnly?: boolean;
 }
 
@@ -80,6 +81,18 @@ const managementItems: ManagementNavigationDefinition[] = [
     id: "manage-announcements",
     labelKey: "management.navigation.announcements",
     permission: "announcements.read",
+  },
+  {
+    href: "/app/manage/ai",
+    icon: "ai",
+    id: "manage-ai",
+    labelKey: "management.navigation.ai",
+    permissions: [
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+      "ai.audit.sensitive.read",
+    ],
   },
   {
     href: "/app/manage/audit",
@@ -168,9 +181,14 @@ export function buildAppNavigation(
         .filter((item) =>
           item.superOnly
             ? access.kind === "super_admin"
-            : !item.permission ||
-              access.kind === "super_admin" ||
-              access.permissions.includes(item.permission),
+            : access.kind === "super_admin" ||
+              (item.permission
+                ? access.permissions.includes(item.permission)
+                : item.permissions
+                  ? item.permissions.some((permission) =>
+                      access.permissions.includes(permission)
+                    )
+                  : true),
         )
         .map((item) => ({
           href: item.href,

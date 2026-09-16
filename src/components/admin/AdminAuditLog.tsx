@@ -109,6 +109,10 @@ const permissionMessageKeys: Record<string, AdminMessageKey> = {
   "exports.retry": "permission.exports.retry",
   "announcements.read": "permission.announcements.read",
   "announcements.manage": "permission.announcements.manage",
+  "ai.providers.manage": "permission.ai.providers.manage",
+  "ai.quotas.manage": "permission.ai.quotas.manage",
+  "ai.usage.read": "permission.ai.usage.read",
+  "ai.audit.sensitive.read": "permission.ai.audit.sensitive.read",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
 };
