@@ -10,6 +10,8 @@ export const ADMIN_PERMISSION_KEYS = [
   "exports.read",
   "exports.cancel",
   "exports.retry",
+  "announcements.read",
+  "announcements.manage",
   "audit.read",
   "system.read",
 ] as const;
@@ -54,6 +56,7 @@ export const ADMIN_SYSTEM_ROLES = {
       "users.read",
       "resumes.metadata.read",
       "exports.read",
+      "announcements.read",
       "audit.read",
       "system.read",
     ],
@@ -70,6 +73,7 @@ export const ADMIN_SYSTEM_ROLES = {
       "exports.read",
       "exports.cancel",
       "exports.retry",
+      "announcements.read",
     ],
   },
   content_reviewer: {
@@ -92,6 +96,8 @@ export const ADMIN_SYSTEM_ROLES = {
       "exports.read",
       "exports.cancel",
       "exports.retry",
+      "announcements.read",
+      "announcements.manage",
       "audit.read",
       "system.read",
     ],

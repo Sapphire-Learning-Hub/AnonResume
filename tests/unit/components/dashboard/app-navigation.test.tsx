@@ -37,7 +37,12 @@ describe("app navigation", () => {
       hrefs({
         kind: "delegated_admin",
         mode: "management",
-        permissions: ["overview.read", "users.read", "audit.read"],
+        permissions: [
+          "overview.read",
+          "users.read",
+          "announcements.read",
+          "audit.read",
+        ],
         productAccess: true,
       }),
     ).toEqual([
@@ -47,6 +52,7 @@ describe("app navigation", () => {
         items: [
           "/app/manage",
           "/app/manage/users",
+          "/app/manage/announcements",
           "/app/manage/audit",
           "/app/manage/security",
         ],
@@ -71,6 +77,7 @@ describe("app navigation", () => {
           "/app/manage/resumes",
           "/app/manage/exports",
           "/app/manage/roles",
+          "/app/manage/announcements",
           "/app/manage/audit",
           "/app/manage/system",
           "/app/manage/mfa-resets",

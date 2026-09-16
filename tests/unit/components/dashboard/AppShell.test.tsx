@@ -3,6 +3,7 @@ import { afterEach, vi } from "vitest";
 
 import { AppShell } from "@/components/dashboard/AppShell";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
+import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
 const navigationState = vi.hoisted(() => ({ pathname: "/app/fonts" }));
 
@@ -19,9 +20,12 @@ const productAccess: AppShellAccess = {
   productAccess: true,
 };
 
-function renderShell(access: AppShellAccess = productAccess) {
+function renderShell(
+  access: AppShellAccess = productAccess,
+  announcements: readonly LocalizedAnnouncement[] = [],
+) {
   return render(
-    <AppShell access={access} user={user}>
+    <AppShell access={access} announcements={announcements} user={user}>
       <div data-testid="route-child">Route content</div>
     </AppShell>,
   );
@@ -40,6 +44,21 @@ describe("AppShell", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("places announcements in the top bar beside the brand", () => {
+    renderShell(productAccess, [
+      {
+        id: "notice-1",
+        title: "版本提示",
+        body: "当前版本仍在持续完善。",
+        tone: "warning",
+        dismissible: true,
+      },
+    ]);
+
+    const announcement = screen.getByLabelText("系统公告");
+    expect(announcement.closest("header")).not.toBeNull();
   });
 
   it("collapses only the desktop sidebar width", () => {

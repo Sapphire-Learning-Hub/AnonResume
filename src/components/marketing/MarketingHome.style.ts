@@ -164,7 +164,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   `,
   hero: css`
     position: relative;
-    padding: clamp(128px, 12vw, 174px) 20px 92px;
+    padding: clamp(112px, 9.5vw, 144px) 20px 92px;
     background:
       radial-gradient(
         circle at 72% 24%,
@@ -179,7 +179,17 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       ${token.colorBgContainer};
 
     @media (max-width: 640px) {
-      padding: 106px 16px 72px;
+      padding: 88px 16px 72px;
+    }
+  `,
+  announcementSlot: css`
+    position: relative;
+    z-index: 2;
+    width: min(1120px, 100%);
+    margin: 0 auto 32px;
+
+    @media (max-width: 640px) {
+      margin-bottom: 24px;
     }
   `,
   heroInner: css`

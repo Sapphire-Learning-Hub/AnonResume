@@ -26,8 +26,9 @@ describe("application feedback architecture", () => {
     ).toContain("<AntdApp");
   });
 
-  it("only permits inline alerts for contextual Markdown diagnostics", () => {
+  it("only permits inline alerts in explicitly owned contextual surfaces", () => {
     const allowed = new Set([
+      "src/components/announcements/AnnouncementBanner.tsx",
       "src/components/dashboard/ResumeMarkdownImportDialog.tsx",
     ]);
     const offenders = listSourceFiles("src").filter((file) => {

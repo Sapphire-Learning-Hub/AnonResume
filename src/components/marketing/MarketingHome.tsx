@@ -23,8 +23,10 @@ import {
 } from "react";
 
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
+import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
+import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
 import { useMarketingHomeStyles } from "./MarketingHome.style";
 
@@ -139,7 +141,11 @@ const MarketingTemplateShowcase = dynamic(
   },
 );
 
-export function MarketingHome() {
+export function MarketingHome({
+  announcements = [],
+}: {
+  announcements?: readonly LocalizedAnnouncement[];
+}) {
   const { styles } = useMarketingHomeStyles();
   const { t } = useI18n();
   const sourceCodeUrl = process.env.NEXT_PUBLIC_SOURCE_CODE_URL?.trim();
@@ -277,6 +283,11 @@ export function MarketingHome() {
 
       <main className={styles.main} id="main-content">
         <section className={styles.hero} id="top">
+          {announcements.length > 0 ? (
+            <div className={styles.announcementSlot}>
+              <AnnouncementBanner announcements={announcements} />
+            </div>
+          ) : null}
           <div className={styles.heroInner}>
             <div className={styles.heroCopy}>
               <h1 className={styles.heroTitle}>

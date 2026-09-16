@@ -10,6 +10,7 @@ import {
   LockOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  NotificationOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
@@ -20,6 +21,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { ManagementModeControl } from "@/components/dashboard/ManagementModeControl";
 import {
@@ -28,23 +30,24 @@ import {
 } from "@/components/dashboard/app-navigation";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
+import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
 const useStyles = createStyles(({ token, css }) => ({
   shell: css`
     display: grid;
     height: 100vh;
     height: 100dvh;
-    grid-template-rows: 56px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
     background: ${token.colorBgLayout};
 
     @media (max-width: 720px) {
-      grid-template-rows: 52px minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
     }
   `,
   topbar: css`
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto minmax(160px, 900px) minmax(0, 1fr) auto;
     align-items: center;
     min-height: 56px;
     gap: 20px;
@@ -52,9 +55,19 @@ const useStyles = createStyles(({ token, css }) => ({
     background: ${token.colorBgLayout};
 
     @media (max-width: 720px) {
+      grid-template-columns: auto minmax(0, 1fr);
       min-height: 52px;
-      gap: 12px;
-      padding: 0 12px;
+      gap: 8px 12px;
+      padding: 0 12px 8px;
+    }
+  `,
+  announcementSlot: css`
+    grid-column: 2;
+    min-width: 0;
+
+    @media (max-width: 720px) {
+      grid-column: 1 / -1;
+      grid-row: 2;
     }
   `,
   brandGroup: css`
@@ -78,6 +91,7 @@ const useStyles = createStyles(({ token, css }) => ({
     justify-content: flex-end;
     min-width: 0;
     gap: 10px;
+    grid-column: 4;
 
     .ant-btn {
       height: 32px;
@@ -85,6 +99,8 @@ const useStyles = createStyles(({ token, css }) => ({
 
     @media (max-width: 720px) {
       flex: 1;
+      grid-column: 2;
+      grid-row: 1;
     }
   `,
   userSummary: css`
@@ -297,6 +313,7 @@ const useStyles = createStyles(({ token, css }) => ({
 }));
 
 const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
+  announcements: <NotificationOutlined />,
   approvals: <CheckSquareOutlined />,
   audit: <AuditOutlined />,
   dashboard: <DashboardOutlined />,
@@ -316,6 +333,7 @@ function isNavigationItemActive(pathname: string, href: string) {
 
 export interface AppShellProps {
   access: AppShellAccess;
+  announcements?: readonly LocalizedAnnouncement[];
   children: ReactNode;
   user: {
     name?: string | null;
@@ -325,6 +343,7 @@ export interface AppShellProps {
 
 export function AppShell({
   access,
+  announcements = [],
   children,
   user,
 }: AppShellProps) {
@@ -348,6 +367,14 @@ export function AppShell({
             variant="lockup"
           />
         </div>
+        {announcements.length > 0 ? (
+          <div className={styles.announcementSlot}>
+            <AnnouncementBanner
+              announcements={announcements}
+              variant="header"
+            />
+          </div>
+        ) : null}
         <div className={styles.account}>
           <span className={styles.userSummary}>
             {access.mode !== "product" && access.kind === "super_admin"

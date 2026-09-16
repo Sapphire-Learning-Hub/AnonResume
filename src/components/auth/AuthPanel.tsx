@@ -8,23 +8,29 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
+import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { authClient } from "@/lib/auth/client";
+import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
 const useStyles = createStyles(({ token, css }) => ({
   experience: css`
     display: grid;
     width: 100%;
     min-height: 100vh;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     gap: 24px;
     padding: 30px clamp(28px, 4vw, 64px) 24px;
 
     @media (max-width: 520px) {
       padding: 20px 18px 18px;
     }
+  `,
+  announcementSlot: css`
+    width: min(1080px, 100%);
+    margin: 0 auto;
   `,
   topBar: css`
     display: flex;
@@ -331,9 +337,11 @@ function getAuthFeedbackMessage(
 }
 
 export function AuthPanel({
+  announcements = [],
   githubEnabled,
   verificationError,
 }: {
+  announcements?: readonly LocalizedAnnouncement[];
   githubEnabled: boolean;
   verificationError?: string;
 }) {
@@ -515,6 +523,12 @@ export function AuthPanel({
           {locale === "zh-CN" ? "English" : "简体中文"}
         </Button>
       </header>
+
+      {announcements.length > 0 ? (
+        <div className={styles.announcementSlot}>
+          <AnnouncementBanner announcements={announcements} />
+        </div>
+      ) : null}
 
       <div className={styles.content}>
         <div className={styles.showcase} aria-hidden="true">

@@ -22,14 +22,38 @@ describe("database migrations", () => {
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = ${schemaName}
-        AND table_name IN ('resumes', 'resume_versions', 'pdf_export_jobs')
+        AND table_name IN ('announcements', 'resumes', 'resume_versions', 'pdf_export_jobs')
       ORDER BY table_name
     `);
 
     expect(result.rows).toEqual([
+      { table_name: "announcements" },
       { table_name: "pdf_export_jobs" },
       { table_name: "resume_versions" },
       { table_name: "resumes" },
+    ]);
+  });
+
+  it("seeds the early-access notice as a published global announcement", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      audience: string;
+      dismissible: boolean;
+      status: string;
+      tone: string;
+    }>(
+      `SELECT audience, dismissible, status, tone
+         FROM "${schemaName}".announcements
+        WHERE id = '00000000-0000-4000-8000-000000000002'`,
+    );
+
+    expect(result.rows).toEqual([
+      {
+        audience: "all",
+        dismissible: true,
+        status: "published",
+        tone: "warning",
+      },
     ]);
   });
 
@@ -72,6 +96,33 @@ describe("database migrations", () => {
       { createdByUserId: null, systemKey: "support_operator" },
       { createdByUserId: null, systemKey: "system_operator" },
     ]);
+  });
+
+  it("grants announcement permissions to the relevant system roles", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      permissions: string[];
+      systemKey: string;
+    }>(
+      `SELECT system_key AS "systemKey", permissions
+         FROM "${schemaName}".admin_roles
+        WHERE system_key IS NOT NULL`,
+    );
+    const permissionsByRole = Object.fromEntries(
+      result.rows.map((role) => [role.systemKey, role.permissions]),
+    );
+
+    expect(permissionsByRole.read_only_auditor).toContain("announcements.read");
+    expect(permissionsByRole.support_operator).toContain("announcements.read");
+    expect(permissionsByRole.content_reviewer).not.toContain(
+      "announcements.read",
+    );
+    expect(permissionsByRole.system_operator).toEqual(
+      expect.arrayContaining([
+        "announcements.read",
+        "announcements.manage",
+      ]),
+    );
   });
 
   it("adds the Better Auth account issuer required by credential sign-up", async () => {

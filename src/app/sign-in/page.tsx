@@ -15,6 +15,8 @@ import { getAdminRequestContext } from "@/lib/admin/request";
 import { resolveAuthenticatedEntry } from "@/lib/admin/sign-in-flow";
 import { getAdminAccessForUser, isAccountSuspended } from "@/lib/admin/store";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
+import { getVisibleAnnouncements } from "@/lib/announcements/management";
+import { getRequestLocale } from "@/i18n/server";
 
 export const metadata: Metadata = {
   robots: {
@@ -30,12 +32,18 @@ export default async function SignInPage({
 }) {
   const session = await getOptionalIdentitySession();
   const params = await searchParams;
+  const locale = await getRequestLocale();
+  const announcements = await getVisibleAnnouncements({
+    authenticated: Boolean(session),
+    locale,
+  });
 
   if (session) {
     if (await isAccountSuspended(session.user.id)) {
       return (
         <main className="auth-page-shell">
           <AuthPanel
+            announcements={announcements}
             githubEnabled={isGitHubAuthEnabled()}
             verificationError="ACCOUNT_SUSPENDED"
           />
@@ -68,6 +76,7 @@ export default async function SignInPage({
   return (
     <main className="auth-page-shell">
       <AuthPanel
+        announcements={announcements}
         githubEnabled={isGitHubAuthEnabled()}
         verificationError={
           typeof params.error === "string" ? params.error : undefined

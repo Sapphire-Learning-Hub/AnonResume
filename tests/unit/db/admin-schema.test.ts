@@ -13,6 +13,7 @@ import {
   adminRoles,
   adminSecurityStates,
   adminSessions,
+  announcements,
   workerHeartbeats,
 } from "@/db/schema";
 
@@ -121,5 +122,38 @@ describe("admin database schema", () => {
       "actorUserId",
       "updatedAt",
     ]);
+  });
+
+  it("stores bounded global announcements with constrained presentation fields", () => {
+    expect(Object.keys(getTableColumns(announcements))).toEqual([
+      "id",
+      "titleZh",
+      "bodyZh",
+      "titleEn",
+      "bodyEn",
+      "tone",
+      "audience",
+      "dismissible",
+      "status",
+      "publishedAt",
+      "expiresAt",
+      "createdByUserId",
+      "updatedByUserId",
+      "createdAt",
+      "updatedAt",
+    ]);
+
+    const config = getTableConfig(announcements);
+    expect(config.checks.map((constraint) => constraint.name)).toEqual(
+      expect.arrayContaining([
+        "announcements_tone_check",
+        "announcements_audience_check",
+        "announcements_status_check",
+        "announcements_english_copy_check",
+      ]),
+    );
+    expect(config.indexes.map((index) => index.config.name)).toContain(
+      "announcements_active_idx",
+    );
   });
 });

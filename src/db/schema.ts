@@ -22,6 +22,11 @@ import type {
   AdminPermission,
   AdminSystemRoleKey,
 } from "@/lib/admin/permissions";
+import type {
+  AnnouncementAudience,
+  AnnouncementStatus,
+  AnnouncementTone,
+} from "@/lib/announcements/rules";
 
 export type PdfExportJobStatus =
   | "queued"
@@ -194,6 +199,83 @@ export type AdminPrincipalKind =
   | "super_admin"
   | "delegated_admin"
   | "quarantined_admin";
+
+const announcementColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  titleZh: text("title_zh").notNull(),
+  bodyZh: text("body_zh").notNull(),
+  titleEn: text("title_en"),
+  bodyEn: text("body_en"),
+  tone: text("tone").$type<AnnouncementTone>().notNull().default("info"),
+  audience: text("audience")
+    .$type<AnnouncementAudience>()
+    .notNull()
+    .default("all"),
+  dismissible: boolean("dismissible").notNull().default(true),
+  status: text("status")
+    .$type<AnnouncementStatus>()
+    .notNull()
+    .default("draft"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdByUserId: text("created_by_user_id"),
+  updatedByUserId: text("updated_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const announcements =
+  schemaName === "public"
+    ? pgTable("announcements", announcementColumns, (table) => [
+        check(
+          "announcements_tone_check",
+          sql`${table.tone} IN ('info', 'warning', 'critical')`,
+        ),
+        check(
+          "announcements_audience_check",
+          sql`${table.audience} IN ('all', 'authenticated')`,
+        ),
+        check(
+          "announcements_status_check",
+          sql`${table.status} IN ('draft', 'published', 'withdrawn')`,
+        ),
+        check(
+          "announcements_english_copy_check",
+          sql`(${table.titleEn} IS NULL AND ${table.bodyEn} IS NULL) OR (${table.titleEn} IS NOT NULL AND ${table.bodyEn} IS NOT NULL)`,
+        ),
+        index("announcements_active_idx").on(
+          table.status,
+          table.tone,
+          table.publishedAt.desc(),
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "announcements",
+        announcementColumns,
+        (table) => [
+          check(
+            "announcements_tone_check",
+            sql`${table.tone} IN ('info', 'warning', 'critical')`,
+          ),
+          check(
+            "announcements_audience_check",
+            sql`${table.audience} IN ('all', 'authenticated')`,
+          ),
+          check(
+            "announcements_status_check",
+            sql`${table.status} IN ('draft', 'published', 'withdrawn')`,
+          ),
+          check(
+            "announcements_english_copy_check",
+            sql`(${table.titleEn} IS NULL AND ${table.bodyEn} IS NULL) OR (${table.titleEn} IS NOT NULL AND ${table.bodyEn} IS NOT NULL)`,
+          ),
+          index("announcements_active_idx").on(
+            table.status,
+            table.tone,
+            table.publishedAt.desc(),
+          ),
+        ],
+      );
 
 const adminPrincipalColumns = {
   userId: text("user_id").primaryKey(),

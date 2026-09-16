@@ -3,6 +3,7 @@ import type { AdminPermission } from "@/lib/admin/permissions";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 export type AppNavigationIcon =
+  | "announcements"
   | "approvals"
   | "audit"
   | "dashboard"
@@ -71,6 +72,13 @@ const managementItems: ManagementNavigationDefinition[] = [
     id: "manage-roles",
     labelKey: "management.navigation.roles",
     superOnly: true,
+  },
+  {
+    href: "/app/manage/announcements",
+    icon: "announcements",
+    id: "manage-announcements",
+    labelKey: "management.navigation.announcements",
+    permission: "announcements.read",
   },
   {
     href: "/app/manage/audit",

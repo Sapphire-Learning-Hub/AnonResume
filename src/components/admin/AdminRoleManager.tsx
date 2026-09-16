@@ -163,6 +163,8 @@ const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "exports.read": "permission.exports.read",
   "exports.cancel": "permission.exports.cancel",
   "exports.retry": "permission.exports.retry",
+  "announcements.read": "permission.announcements.read",
+  "announcements.manage": "permission.announcements.manage",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
 };
@@ -195,6 +197,10 @@ const permissionGroups: Array<{
   {
     label: "roles.permissionGroup.exports",
     permissions: ["exports.read", "exports.cancel", "exports.retry"],
+  },
+  {
+    label: "roles.permissionGroup.announcements",
+    permissions: ["announcements.read", "announcements.manage"],
   },
   {
     label: "roles.permissionGroup.audit",

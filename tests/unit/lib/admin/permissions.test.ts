@@ -19,6 +19,8 @@ describe("admin permission catalog", () => {
       "exports.read",
       "exports.cancel",
       "exports.retry",
+      "announcements.read",
+      "announcements.manage",
       "audit.read",
       "system.read",
     ]);
@@ -57,6 +59,21 @@ describe("admin permission catalog", () => {
     );
     expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).not.toContain(
       "users.invite",
+    );
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
+      "announcements.read",
+    );
+    expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).toContain(
+      "announcements.read",
+    );
+    expect(ADMIN_SYSTEM_ROLES.content_reviewer.permissions).not.toContain(
+      "announcements.read",
+    );
+    expect(ADMIN_SYSTEM_ROLES.system_operator.permissions).toEqual(
+      expect.arrayContaining([
+        "announcements.read",
+        "announcements.manage",
+      ]),
     );
   });
 });

@@ -40,6 +40,11 @@ const actionMessageKeys: Record<string, AdminMessageKey> = {
   "resume.unpublish": "audit.action.resume.unpublish",
   "export.cancel": "audit.action.export.cancel",
   "export.retry": "audit.action.export.retry",
+  "announcement.create": "audit.action.announcement.create",
+  "announcement.update": "audit.action.announcement.update",
+  "announcement.publish": "audit.action.announcement.publish",
+  "announcement.withdraw": "audit.action.announcement.withdraw",
+  "announcement.delete": "audit.action.announcement.delete",
   "mfa.device.add": "audit.action.mfa.device.add",
   "mfa.device.remove": "audit.action.mfa.device.remove",
   "administrator.mfa_reset.request": "audit.action.administrator.mfa_reset.request",
@@ -56,6 +61,7 @@ const targetMessageKeys: Record<string, AdminMessageKey> = {
   admin_role: "audit.target.admin_role",
   resume: "audit.target.resume",
   pdf_export: "audit.target.pdf_export",
+  announcement: "audit.target.announcement",
   mfa_device: "audit.target.mfa_device",
   admin_mfa_reset_request: "audit.target.admin_mfa_reset_request",
   admin_session: "audit.target.admin_session",
@@ -65,6 +71,14 @@ const targetMessageKeys: Record<string, AdminMessageKey> = {
 
 const fieldMessageKeys: Record<string, AdminMessageKey> = {
   name: "audit.field.name",
+  titleZh: "audit.field.titleZh",
+  bodyZh: "audit.field.bodyZh",
+  titleEn: "audit.field.titleEn",
+  bodyEn: "audit.field.bodyEn",
+  tone: "audit.field.tone",
+  audience: "audit.field.audience",
+  dismissible: "audit.field.dismissible",
+  expiresAt: "audit.field.expiresAt",
   description: "audit.field.description",
   permissions: "audit.field.permissions",
   roleIds: "audit.field.roleIds",
@@ -93,12 +107,17 @@ const permissionMessageKeys: Record<string, AdminMessageKey> = {
   "exports.read": "permission.exports.read",
   "exports.cancel": "permission.exports.cancel",
   "exports.retry": "permission.exports.retry",
+  "announcements.read": "permission.announcements.read",
+  "announcements.manage": "permission.announcements.manage",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
 };
 
 const statusMessageKeys: Record<string, AdminMessageKey> = {
   active: "audit.value.status.active",
+  draft: "announcements.status.draft",
+  published: "announcements.status.published",
+  withdrawn: "announcements.status.withdrawn",
   suspended: "audit.value.status.suspended",
   invited: "audit.value.status.invited",
   pending: "audit.value.status.pending",
@@ -115,6 +134,17 @@ const statusMessageKeys: Record<string, AdminMessageKey> = {
 const mfaStateMessageKeys: Record<string, AdminMessageKey> = {
   configured: "audit.value.mfa.configured",
   recovery_required: "audit.value.mfa.recoveryRequired",
+};
+
+const announcementToneMessageKeys: Record<string, AdminMessageKey> = {
+  info: "announcements.tone.info",
+  warning: "announcements.tone.warning",
+  critical: "announcements.tone.critical",
+};
+
+const announcementAudienceMessageKeys: Record<string, AdminMessageKey> = {
+  all: "announcements.audience.all",
+  authenticated: "announcements.audience.authenticated",
 };
 
 function outcomeTone(outcome: string) {
@@ -230,10 +260,21 @@ export function AdminAuditLog({
     if (typeof value === "string") {
       const semanticValueKey = field === "status"
         ? statusMessageKeys[value]
+        : field === "tone"
+          ? announcementToneMessageKeys[value]
+          : field === "audience"
+            ? announcementAudienceMessageKeys[value]
         : field === "mfaState"
           ? mfaStateMessageKeys[value]
           : undefined;
-      if (semanticValueKey) return t(semanticValueKey);
+      if (semanticValueKey) {
+        return (
+          <span className="admin-audit-resource-value">
+            <strong>{t(semanticValueKey)}</strong>
+            <code>{value}</code>
+          </span>
+        );
+      }
       const type = referenceType(field);
       const resource = type && selected
         ? selected.resourceLabels[`${type}:${value}`]
