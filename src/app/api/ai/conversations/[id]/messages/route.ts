@@ -23,6 +23,26 @@ const sendMessageSchema = z
   })
   .strict();
 
+type AiStreamDiagnostics = {
+  snapshot: number;
+  requestId: number;
+  reasoningProgress: number;
+  textDelta: number;
+  proposalDelta: number;
+  usage: number;
+  complete: number;
+  error: number;
+  textCharacters: number;
+  proposalCharacters: number;
+};
+
+function logAiStream(
+  phase: string,
+  details: Record<string, string | number | boolean | null>,
+) {
+  console.info("[AnonResume][AI stream]", phase, details);
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -62,16 +82,78 @@ export async function POST(
         byokEnabled: configuration.byokEnabled,
       },
     });
+    const preparedAt = Date.now();
+    logAiStream("prepared", {
+      runId: prepared.runId,
+      conversationId: id,
+      resumeVersion: body.resumeVersion,
+    });
     const adapter = createAiProviderAdapter("openai-compatible");
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const diagnostics: AiStreamDiagnostics = {
+          snapshot: 0,
+          requestId: 0,
+          reasoningProgress: 0,
+          textDelta: 0,
+          proposalDelta: 0,
+          usage: 0,
+          complete: 0,
+          error: 0,
+          textCharacters: 0,
+          proposalCharacters: 0,
+        };
+        const firstEvents = new Set<string>();
+        logAiStream("opened", {
+          runId: prepared.runId,
+          elapsedMs: Date.now() - preparedAt,
+        });
         try {
-          for await (const event of executePreparedAiRun(prepared, { adapter })) {
+          for await (const event of executePreparedAiRun(prepared, {
+            adapter,
+          })) {
+            const eventKey: keyof AiStreamDiagnostics =
+              event.type === "request_id"
+                ? "requestId"
+                : event.type === "reasoning_progress"
+                  ? "reasoningProgress"
+                  : event.type === "text_delta"
+                    ? "textDelta"
+                    : event.type === "proposal_delta"
+                      ? "proposalDelta"
+                      : event.type;
+            diagnostics[eventKey] += 1;
+            if (event.type === "text_delta") {
+              diagnostics.textCharacters += event.delta.length;
+            }
+            if (event.type === "proposal_delta") {
+              diagnostics.proposalCharacters += event.delta.length;
+            }
+            if (!firstEvents.has(event.type)) {
+              firstEvents.add(event.type);
+              logAiStream("first_event", {
+                runId: prepared.runId,
+                type: event.type,
+                sequence: event.sequence,
+                elapsedMs: Date.now() - preparedAt,
+              });
+            }
             controller.enqueue(encoder.encode(encodeAiStreamEvent(event)));
           }
+          logAiStream("closed", {
+            runId: prepared.runId,
+            elapsedMs: Date.now() - preparedAt,
+            ...diagnostics,
+          });
           controller.close();
         } catch (error) {
+          logAiStream("failed", {
+            runId: prepared.runId,
+            elapsedMs: Date.now() - preparedAt,
+            errorName: error instanceof Error ? error.name : typeof error,
+            ...diagnostics,
+          });
           controller.error(error);
         }
       },

@@ -225,6 +225,7 @@ const messageColumns = {
   completionState: text("completion_state")
     .$type<AiMessageCompletionState>()
     .notNull(),
+  retractedAt: timestamp("retracted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };

@@ -90,11 +90,13 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     flex: 1;
+    min-width: 0;
     min-height: 0;
     padding: 14px 16px 12px 18px;
   `,
   toolbar: css`
     display: grid;
+    min-width: 0;
     gap: 10px;
     padding: 0 0 14px;
     border-bottom: 1px solid ${token.colorBorderSecondary};
@@ -102,11 +104,19 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
   toolbarRow: css`
     display: flex;
     align-items: center;
+    min-width: 0;
     gap: 8px;
-
-    .ant-select {
-      flex: 1;
+  `,
+  conversationSelect: css`
+    && {
+      width: 0;
       min-width: 0;
+      flex: 1 1 0;
+    }
+  `,
+  newConversationButton: css`
+    && {
+      flex: 0 0 auto;
     }
   `,
   setup: css`
@@ -159,13 +169,33 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
     color: ${token.colorTextSecondary};
     font-size: 12px;
   `,
+  messageContent: css`
+    &[data-loading="true"] {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+  `,
+  messageAction: css`
+    && {
+      justify-self: end;
+      height: 24px;
+      padding-inline: 4px;
+      color: ${token.colorTextSecondary};
+      font-size: 12px;
+    }
+  `,
   proposal: css`
     display: grid;
     gap: 12px;
     padding: 14px;
     border: 1px solid ${token.colorPrimaryBorder};
     border-radius: ${token.borderRadiusLG}px;
-    background: color-mix(in srgb, ${token.colorPrimaryBg} 55%, ${token.colorBgContainer});
+    background: color-mix(
+      in srgb,
+      ${token.colorPrimaryBg} 55%,
+      ${token.colorBgContainer}
+    );
   `,
   proposalHeader: css`
     display: flex;

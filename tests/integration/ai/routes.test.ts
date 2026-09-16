@@ -21,6 +21,7 @@ import {
 } from "@/app/api/ai/conversations/route";
 import { GET as getConversation } from "@/app/api/ai/conversations/[id]/route";
 import { POST as sendMessage } from "@/app/api/ai/conversations/[id]/messages/route";
+import { POST as stopRun } from "@/app/api/ai/runs/[id]/stop/route";
 
 vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
@@ -56,6 +57,7 @@ describe("AI conversation routes", () => {
   let providerId = "";
   let modelId = "";
   let conversationId = "";
+  let latestRunId = "";
   const originalEnvironment = { ...process.env };
 
   beforeAll(async () => {
@@ -161,6 +163,7 @@ describe("AI conversation routes", () => {
     expect(streamResponse.headers.get("content-type")).toContain(
       "application/x-ndjson",
     );
+    latestRunId = streamResponse.headers.get("x-ai-run-id") ?? "";
     expect(await streamResponse.text()).toContain("建议突出可量化成果");
 
     const detailResponse = await getConversation(
@@ -174,5 +177,28 @@ describe("AI conversation routes", () => {
       text: "建议突出可量化成果。",
       completionState: "complete",
     });
+  });
+
+  it("retracts the latest completed turn for editing", async () => {
+    const response = await stopRun(
+      mutationRequest(`http://localhost/api/ai/runs/${latestRunId}/stop`, {
+        retract: "always",
+      }),
+      { params: Promise.resolve({ id: latestRunId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      hadOutput: true,
+      message: "帮我优化表达",
+      retracted: true,
+      stopped: true,
+    });
+
+    const detailResponse = await getConversation(
+      new Request(`http://localhost/api/ai/conversations/${conversationId}`),
+      { params: Promise.resolve({ id: conversationId }) },
+    );
+    expect((await detailResponse.json()).messages).toHaveLength(0);
   });
 });

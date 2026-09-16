@@ -30,6 +30,7 @@ const messageSchema = z.object({
   text: z.string(),
   sequence: z.number().int().nonnegative(),
   completionState: z.enum(["streaming", "complete", "stopped", "failed"]),
+  runId: z.string().uuid().nullable(),
   createdAt: z.string(),
 });
 
@@ -59,9 +60,25 @@ const conversationDetailsSchema = z.object({
 });
 
 const streamEventSchema = z.discriminatedUnion("type", [
-  z.object({ sequence: z.number().int(), type: z.literal("request_id"), requestId: z.string() }),
-  z.object({ sequence: z.number().int(), type: z.literal("text_delta"), delta: z.string() }),
-  z.object({ sequence: z.number().int(), type: z.literal("proposal_delta"), delta: z.string() }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("request_id"),
+    requestId: z.string(),
+  }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("reasoning_progress"),
+  }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("text_delta"),
+    delta: z.string(),
+  }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("proposal_delta"),
+    delta: z.string(),
+  }),
   z.object({
     sequence: z.number().int(),
     type: z.literal("usage"),
@@ -80,7 +97,11 @@ const streamEventSchema = z.discriminatedUnion("type", [
     text: z.string(),
     proposalText: z.string(),
   }),
-  z.object({ sequence: z.number().int(), type: z.literal("error"), code: z.string() }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("error"),
+    code: z.string(),
+  }),
 ]);
 
 export type AiModelOption = z.infer<typeof modelSchema>;
@@ -100,7 +121,10 @@ export class AiClientError extends Error {
   }
 }
 
-async function parseResponse<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
+async function parseResponse<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+): Promise<T> {
   const payload: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
     const errorPayload = z
@@ -186,7 +210,10 @@ export async function createAiConversation(input: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
-  return parseResponse(response, z.object({ conversation: conversationSchema }));
+  return parseResponse(
+    response,
+    z.object({ conversation: conversationSchema }),
+  );
 }
 
 export async function fetchAiConversation(conversationId: string) {
@@ -205,7 +232,10 @@ export async function updateAiConversation(
     headers: { "content-type": "application/json" },
     body: JSON.stringify(update),
   });
-  return parseResponse(response, z.object({ conversation: conversationSchema }));
+  return parseResponse(
+    response,
+    z.object({ conversation: conversationSchema }),
+  );
 }
 
 export async function deleteAiConversation(conversationId: string) {
@@ -247,11 +277,37 @@ export async function sendAiMessage(input: {
   });
 }
 
-export async function stopAiRun(runId: string) {
+const turnActionSchema = z.object({
+  stopped: z.literal(true),
+  retracted: z.boolean(),
+  hadOutput: z.boolean(),
+  message: z.string(),
+});
+
+type AiTurnAction = z.infer<typeof turnActionSchema>;
+
+export function stopAiRun(runId: string): Promise<{ stopped: true }>;
+export function stopAiRun(
+  runId: string,
+  retract: "if-empty" | "always",
+): Promise<AiTurnAction>;
+export async function stopAiRun(
+  runId: string,
+  retract?: "if-empty" | "always",
+): Promise<{ stopped: true } | AiTurnAction> {
   const response = await fetch(`/api/ai/runs/${runId}/stop`, {
     method: "POST",
+    ...(retract
+      ? {
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ retract }),
+        }
+      : {}),
   });
-  return parseResponse(response, z.object({ stopped: z.literal(true) }));
+  return parseResponse(
+    response,
+    retract ? turnActionSchema : z.object({ stopped: z.literal(true) }),
+  );
 }
 
 export async function markAiProposalApplied(input: {

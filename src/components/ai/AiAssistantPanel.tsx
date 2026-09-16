@@ -81,14 +81,18 @@ export function AiAssistantPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const resizeStateRef = useRef<{
-    pointerId: number;
-    startWidth: number;
-    startX: number;
-  } | undefined>(undefined);
+  const resizeStateRef = useRef<
+    | {
+        pointerId: number;
+        startWidth: number;
+        startX: number;
+      }
+    | undefined
+  >(undefined);
 
   function reportError(error: unknown) {
-    const code = error instanceof AiClientError ? error.code : "ai_request_failed";
+    const code =
+      error instanceof AiClientError ? error.code : "ai_request_failed";
     notification.error({
       key: "ai-assistant-error",
       title: t("ai.error.title"),
@@ -168,6 +172,24 @@ export function AiAssistantPanel({
     }
   }
 
+  async function stopCurrentTurn() {
+    try {
+      const restoredMessage = await assistant.stop();
+      if (restoredMessage) setDraft(restoredMessage);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
+  async function editTurn(runId: string) {
+    try {
+      const restoredMessage = await assistant.edit(runId);
+      setDraft(restoredMessage);
+    } catch (error) {
+      reportError(error);
+    }
+  }
+
   const messages = assistant.details?.messages ?? [];
   const proposals = assistant.details?.proposals ?? [];
   const activeProposalCheckpoint = assistant.details?.activeRun?.proposal;
@@ -176,9 +198,17 @@ export function AiAssistantPanel({
     (typeof activeProposalCheckpoint === "string"
       ? activeProposalCheckpoint
       : "");
-  const proposalStreamProgress = getAiProposalStreamProgress(
-    proposalStreamText,
-  );
+  const proposalStreamProgress =
+    getAiProposalStreamProgress(proposalStreamText);
+  const reasoningProgressSteps =
+    assistant.streamingReasoningSteps ||
+    (!assistant.streamingText &&
+    !proposalStreamText &&
+    (assistant.details?.activeRun?.sequence ?? 0) > 1
+      ? assistant.details!.activeRun!.sequence - 1
+      : 0);
+  const streamingStatus =
+    reasoningProgressSteps > 0 ? t("ai.deepThinking") : t("ai.analyzing");
   const persistedPendingUser = assistant.pendingUserMessage
     ? messages.find(
         (message) =>
@@ -188,11 +218,15 @@ export function AiAssistantPanel({
     : undefined;
   const hasPersistedPendingTurn = Boolean(
     persistedPendingUser &&
-      messages.some(
-        (message) =>
-          message.sequence > persistedPendingUser.sequence &&
-          message.role === "assistant",
-      ),
+    messages.some(
+      (message) =>
+        message.sequence > persistedPendingUser.sequence &&
+        message.role === "assistant",
+    ),
+  );
+  const hasStreamingAssistant = messages.some(
+    (message) =>
+      message.role === "assistant" && message.completionState === "streaming",
   );
   const currentConversation = assistant.conversations.find(
     (conversation) => conversation.id === assistant.selectedConversationId,
@@ -280,6 +314,7 @@ export function AiAssistantPanel({
             <Select
               allowClear
               aria-label={t("ai.conversation.select")}
+              className={styles.conversationSelect}
               options={assistant.conversations.map((conversation) => ({
                 value: conversation.id,
                 label: conversation.title,
@@ -288,7 +323,10 @@ export function AiAssistantPanel({
               value={assistant.selectedConversationId}
               onChange={assistant.setSelectedConversationId}
             />
-            <Button onClick={assistant.startNewConversation}>
+            <Button
+              className={styles.newConversationButton}
+              onClick={assistant.startNewConversation}
+            >
               {t("ai.conversation.new")}
             </Button>
           </div>
@@ -355,10 +393,13 @@ export function AiAssistantPanel({
 
         <div className={styles.messages}>
           {assistant.loading ? (
-            <div className={styles.empty}><Spin /></div>
+            <div className={styles.empty}>
+              <Spin />
+            </div>
           ) : messages.length === 0 &&
             !assistant.pendingUserMessage &&
             !assistant.streamingText &&
+            reasoningProgressSteps === 0 &&
             !proposalStreamText ? (
             <Empty
               description={
@@ -367,36 +408,100 @@ export function AiAssistantPanel({
             />
           ) : (
             <>
-              {messages.map((message) => (
-                <div className={styles.message} data-role={message.role} key={message.id}>
-                  <span className={styles.messageRole}>
-                    {message.role === "user" ? t("ai.you") : t("ai.assistant")}
-                  </span>
-                  <span>
-                    {(message.completionState === "streaming"
-                      ? assistant.streamingText ||
-                        message.text ||
-                        assistant.details?.activeRun?.text
-                      : message.text) ||
-                      t("ai.thinking")}
-                  </span>
-                </div>
-              ))}
+              {messages.map((message, index) => {
+                if (
+                  message.role === "assistant" &&
+                  message.completionState !== "streaming" &&
+                  !message.text
+                ) {
+                  return null;
+                }
+                const liveMessageText =
+                  assistant.streamingText ||
+                  message.text ||
+                  assistant.details?.activeRun?.text;
+                const awaitingStream =
+                  message.completionState === "streaming" && !liveMessageText;
+                return (
+                  <div
+                    className={styles.message}
+                    data-role={message.role}
+                    key={message.id}
+                  >
+                    <span className={styles.messageRole}>
+                      {message.role === "user"
+                        ? t("ai.you")
+                        : t("ai.assistant")}
+                    </span>
+                    <span
+                      className={styles.messageContent}
+                      data-loading={awaitingStream}
+                    >
+                      {awaitingStream ? <Spin size="small" /> : null}
+                      {awaitingStream
+                        ? streamingStatus
+                        : (message.completionState === "streaming"
+                            ? liveMessageText
+                            : message.text) || t("ai.thinking")}
+                    </span>
+                    {message.role === "user" &&
+                    index === messages.length - 2 &&
+                    messages[index + 1]?.role === "assistant" &&
+                    messages[index + 1]?.completionState === "stopped" &&
+                    messages[index + 1]?.runId ? (
+                      <Button
+                        className={styles.messageAction}
+                        disabled={assistant.stopping}
+                        size="small"
+                        type="text"
+                        onClick={() =>
+                          void editTurn(messages[index + 1]!.runId!)
+                        }
+                      >
+                        {t("ai.message.edit")}
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
               {assistant.pendingUserMessage && !hasPersistedPendingTurn ? (
                 <div className={styles.message} data-role="user">
                   <span className={styles.messageRole}>{t("ai.you")}</span>
                   <span>{assistant.pendingUserMessage}</span>
                 </div>
               ) : null}
-              {!hasPersistedPendingTurn && assistant.streamingText ? (
+              {!hasPersistedPendingTurn &&
+              !hasStreamingAssistant &&
+              assistant.streamingText ? (
                 <div className={styles.message} data-role="assistant">
-                  <span className={styles.messageRole}>{t("ai.assistant")}</span>
+                  <span className={styles.messageRole}>
+                    {t("ai.assistant")}
+                  </span>
                   <span>{assistant.streamingText}</span>
                 </div>
-              ) : !hasPersistedPendingTurn && assistant.sending ? (
+              ) : !hasPersistedPendingTurn &&
+                !hasStreamingAssistant &&
+                assistant.sending ? (
                 <div className={styles.message} data-role="assistant">
-                  <span className={styles.messageRole}>{t("ai.assistant")}</span>
-                  <span>{t("ai.thinking")}</span>
+                  <span className={styles.messageRole}>
+                    {t("ai.assistant")}
+                  </span>
+                  <span className={styles.messageContent} data-loading="true">
+                    <Spin size="small" />
+                    {streamingStatus}
+                  </span>
+                </div>
+              ) : !hasPersistedPendingTurn &&
+                !hasStreamingAssistant &&
+                reasoningProgressSteps > 0 ? (
+                <div className={styles.message} data-role="assistant">
+                  <span className={styles.messageRole}>
+                    {t("ai.assistant")}
+                  </span>
+                  <span className={styles.messageContent} data-loading="true">
+                    <Spin size="small" />
+                    {streamingStatus}
+                  </span>
                 </div>
               ) : null}
               {proposalStreamText ? (
@@ -446,8 +551,12 @@ export function AiAssistantPanel({
           <div className={styles.composerActions}>
             <p className={styles.hint}>{t("ai.disclaimer")}</p>
             {assistant.sending || assistant.details?.activeRun ? (
-              <Button onClick={() => void assistant.stop().catch(reportError)}>
-                {t("ai.stop")}
+              <Button
+                disabled={assistant.stopping}
+                loading={assistant.stopping}
+                onClick={() => void stopCurrentTurn()}
+              >
+                {assistant.stopping ? t("ai.stopping") : t("ai.stop")}
               </Button>
             ) : (
               <Button

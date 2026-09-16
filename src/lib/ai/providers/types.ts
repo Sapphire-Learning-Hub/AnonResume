@@ -12,11 +12,13 @@ export interface AiProposalToolDefinition {
 }
 
 export interface AiProviderRequest {
+  diagnosticRunId?: string;
   endpoint: URL;
   apiKey: string;
   model: string;
   messages: AiProviderMessage[];
   maxOutputTokens: number;
+  latencyPreference?: "fast" | "provider_default";
   trustedEndpointHostnames?: readonly string[];
   proposalTool?: AiProposalToolDefinition;
 }

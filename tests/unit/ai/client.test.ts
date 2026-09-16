@@ -8,8 +8,8 @@ describe("AI client stream parser", () => {
   it("parses fragmented NDJSON events without dropping the final frame", async () => {
     const encoder = new TextEncoder();
     const chunks = [
-      '{"sequence":1,"type":"text_',
-      'delta","delta":"你好"}\n{"sequence":2,"type":"complete",',
+      '{"sequence":1,"type":"reasoning_progress"}\n{"sequence":2,"type":"text_',
+      'delta","delta":"你好"}\n{"sequence":3,"type":"complete",',
       '"finishReason":"stop"}',
     ];
     const stream = new ReadableStream<Uint8Array>({
@@ -23,8 +23,9 @@ describe("AI client stream parser", () => {
     await parseAiNdjsonStream(stream, (event) => events.push(event));
 
     expect(events).toEqual([
-      { sequence: 1, type: "text_delta", delta: "你好" },
-      { sequence: 2, type: "complete", finishReason: "stop" },
+      { sequence: 1, type: "reasoning_progress" },
+      { sequence: 2, type: "text_delta", delta: "你好" },
+      { sequence: 3, type: "complete", finishReason: "stop" },
     ]);
   });
 

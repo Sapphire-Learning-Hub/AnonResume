@@ -30,11 +30,37 @@ function providerRequest(
   };
 }
 
-const publicResolver = async () => [
-  { address: "93.184.216.34", family: 4 },
-] as const;
+const publicResolver = async () =>
+  [{ address: "93.184.216.34", family: 4 }] as const;
 
 describe("OpenAI-compatible provider adapter", () => {
+  it("turns private reasoning chunks into content-free progress events", async () => {
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async () =>
+        streamResponse([
+          'data: {"choices":[{"delta":{"role":"assistant","reasoning_content":"internal step one"}}]}\n\n',
+          'data: {"choices":[{"delta":{"reasoning_content":"internal step two"}}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+    });
+    const events = [];
+
+    for await (const event of adapter.start(
+      providerRequest({ latencyPreference: "fast" }),
+      new AbortController().signal,
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      { type: "reasoning_progress" },
+      { type: "reasoning_progress" },
+      { type: "complete", finishReason: null },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("internal step");
+  });
+
   it("maps fragmented text, proposal tool arguments, and usage", async () => {
     const bodies: string[] = [];
     const adapter = createOpenAiCompatibleAdapter({
@@ -106,6 +132,32 @@ describe("OpenAI-compatible provider adapter", () => {
     }
 
     expect(body).not.toHaveProperty("tools");
+    expect(body).not.toHaveProperty("thinking");
+  });
+
+  it("disables deep thinking for fast FireArk requests", async () => {
+    let body: Record<string, unknown> | undefined;
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return streamResponse(["data: [DONE]\n\n"], { status: 200 });
+      },
+    });
+
+    for await (const event of adapter.start(
+      providerRequest({
+        endpoint: new URL("https://ark.cn-beijing.volces.com/api/v3"),
+        latencyPreference: "fast",
+      }),
+      new AbortController().signal,
+    )) {
+      void event;
+    }
+
+    expect(body).toMatchObject({
+      thinking: { type: "disabled" },
+    });
   });
 
   it.each([

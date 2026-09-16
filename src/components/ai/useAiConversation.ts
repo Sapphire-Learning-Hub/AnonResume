@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import type { AiClientStreamEvent } from "@/lib/ai/runs/stream-events";
 import {
+  AiClientError,
   createAiConversation,
   deleteAiConversation,
   fetchAiConversation,
@@ -15,6 +22,28 @@ import {
   type AiConversationSummary,
   type AiModelOption,
 } from "@/lib/ai/client";
+
+type RunIdWaiter = {
+  promise: Promise<string | undefined>;
+  settle: (runId?: string) => void;
+};
+
+function createRunIdWaiter(): RunIdWaiter {
+  let settled = false;
+  let resolvePromise!: (runId?: string) => void;
+  const promise = new Promise<string | undefined>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  return {
+    promise,
+    settle(runId) {
+      if (settled) return;
+      settled = true;
+      resolvePromise(runId);
+    },
+  };
+}
 
 export function useAiConversation({
   open,
@@ -32,9 +61,13 @@ export function useAiConversation({
   const [enabled, setEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-  const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
+  const [stopping, setStopping] = useState(false);
+  const [conversations, setConversations] = useState<AiConversationSummary[]>(
+    [],
+  );
   const [models, setModels] = useState<AiModelOption[]>([]);
-  const [selectedConversationId, setSelectedConversationId] = useState<string>();
+  const [selectedConversationId, setSelectedConversationId] =
+    useState<string>();
   const [selectedModelId, setSelectedModelId] = useState<string>();
   const [contextScope, setContextScope] = useState<"resume" | "section">(
     "resume",
@@ -44,7 +77,11 @@ export function useAiConversation({
   const [pendingAfterSequence, setPendingAfterSequence] = useState(0);
   const [streamingText, setStreamingText] = useState("");
   const [streamingProposalText, setStreamingProposalText] = useState("");
+  const [streamingReasoningSteps, setStreamingReasoningSteps] = useState(0);
   const [liveRunId, setLiveRunId] = useState<string>();
+  const streamPromiseRef = useRef<Promise<void> | undefined>(undefined);
+  const runIdWaiterRef = useRef<RunIdWaiter | undefined>(undefined);
+  const intentionalStopRef = useRef(false);
   const reportError = useEffectEvent(onError);
 
   const loadIndex = useCallback(async () => {
@@ -125,7 +162,8 @@ export function useAiConversation({
         resumeId,
         modelId: selectedModelId,
         title: message.slice(0, 36),
-        contextScope: contextScope === "section" && sectionId ? "section" : "resume",
+        contextScope:
+          contextScope === "section" && sectionId ? "section" : "resume",
         sectionId: contextScope === "section" ? sectionId : undefined,
       });
       conversationId = created.conversation.id;
@@ -133,18 +171,27 @@ export function useAiConversation({
       setSelectedConversationId(conversationId);
     }
 
+    const runIdWaiter = createRunIdWaiter();
+    runIdWaiterRef.current = runIdWaiter;
     setSending(true);
     setPendingUserMessage(message);
     setPendingAfterSequence(details?.messages.at(-1)?.sequence ?? 0);
     setStreamingText("");
     setStreamingProposalText("");
+    setStreamingReasoningSteps(0);
     try {
-      await sendAiMessage({
+      const streamPromise = sendAiMessage({
         conversationId,
         message,
         resumeVersion,
-        onRun: setLiveRunId,
+        onRun(runId) {
+          setLiveRunId(runId);
+          runIdWaiter.settle(runId);
+        },
         onEvent(event: AiClientStreamEvent) {
+          if (event.type === "reasoning_progress") {
+            setStreamingReasoningSteps((current) => current + 1);
+          }
           if (event.type === "text_delta") {
             setStreamingText((current) => current + event.delta);
           }
@@ -153,22 +200,73 @@ export function useAiConversation({
           }
         },
       });
+      streamPromiseRef.current = streamPromise;
+      await streamPromise;
       await Promise.all([loadDetails(conversationId), loadIndex()]);
       setStreamingText("");
       setStreamingProposalText("");
+      setStreamingReasoningSteps(0);
+    } catch (error) {
+      if (
+        intentionalStopRef.current &&
+        error instanceof AiClientError &&
+        error.code === "stopped"
+      ) {
+        return;
+      }
+      throw error;
     } finally {
+      runIdWaiter.settle();
+      if (runIdWaiterRef.current === runIdWaiter) {
+        runIdWaiterRef.current = undefined;
+      }
       setSending(false);
       setPendingUserMessage("");
       setStreamingText("");
       setStreamingProposalText("");
+      setStreamingReasoningSteps(0);
       setLiveRunId(undefined);
+      streamPromiseRef.current = undefined;
     }
   }
 
   async function stop() {
-    const runId = liveRunId ?? details?.activeRun?.id;
-    if (!runId) return;
-    await stopAiRun(runId);
+    setStopping(true);
+    intentionalStopRef.current = true;
+    try {
+      const runId =
+        liveRunId ??
+        details?.activeRun?.id ??
+        (await runIdWaiterRef.current?.promise);
+      if (!runId) return;
+      const streamPromise = streamPromiseRef.current;
+      await stopAiRun(runId);
+      await streamPromise?.catch((error) => {
+        if (error instanceof AiClientError && error.code === "stopped") return;
+        throw error;
+      });
+      const result = await stopAiRun(runId, "if-empty");
+      if (!("retracted" in result)) return;
+      if (selectedConversationId) await loadDetails(selectedConversationId);
+      return result.retracted ? result.message : undefined;
+    } finally {
+      intentionalStopRef.current = false;
+      setStopping(false);
+    }
+  }
+
+  async function edit(runId: string) {
+    setStopping(true);
+    try {
+      const result = await stopAiRun(runId, "always");
+      if (!("retracted" in result) || !result.retracted) {
+        throw new AiClientError("ai_turn_not_editable", 409);
+      }
+      if (selectedConversationId) await loadDetails(selectedConversationId);
+      return result.message;
+    } finally {
+      setStopping(false);
+    }
   }
 
   async function rename(title: string) {
@@ -197,6 +295,7 @@ export function useAiConversation({
     enabled,
     loading,
     sending,
+    stopping,
     conversations,
     models,
     selectedConversationId,
@@ -207,6 +306,7 @@ export function useAiConversation({
     pendingAfterSequence,
     streamingText,
     streamingProposalText,
+    streamingReasoningSteps,
     setSelectedConversationId,
     setSelectedModelId,
     setContextScope,
@@ -217,6 +317,7 @@ export function useAiConversation({
     },
     send,
     stop,
+    edit,
     rename,
     archive,
     remove,

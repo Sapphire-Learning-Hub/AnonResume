@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, desc, eq, gt, isNull, max, or } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, max, or } from "drizzle-orm";
 
 import {
   aiConversations,
@@ -108,6 +108,8 @@ function systemPrompt(context: unknown) {
     "Never change layout, style, order, pagination, templates, or publication state.",
     "Only target IDs present in the supplied structured context.",
     "Never invent facts, metrics, dates, achievements, employers, credentials, or contact details.",
+    "Respond directly without extended deliberation.",
+    "When edits are appropriate, call the proposal tool promptly instead of narrating a long analysis.",
     "When proposing an edit, call propose_resume_changes and copy sectionId, blockPath or listPath, itemId or afterItemId, and beforeHash verbatim from editableTargets.",
     "Use a new unique change id and explain the user-visible reason for each change.",
     `Structured resume context: ${JSON.stringify(context)}`,
@@ -221,10 +223,18 @@ export async function prepareAiRun(input: {
   const previousMessages = await db
     .select({ role: aiMessages.role, content: aiMessages.text })
     .from(aiMessages)
-    .where(eq(aiMessages.conversationId, input.conversationId))
+    .where(
+      and(
+        eq(aiMessages.conversationId, input.conversationId),
+        isNull(aiMessages.retractedAt),
+      ),
+    )
     .orderBy(desc(aiMessages.sequence))
     .limit(30);
   previousMessages.reverse();
+  const runId = randomUUID();
+  const userMessageId = randomUUID();
+  const assistantMessageId = randomUUID();
   const messages: AiProviderRequest["messages"] = [
     { role: "system", content: systemPrompt(context) },
     ...previousMessages.map((message) => ({
@@ -234,6 +244,7 @@ export async function prepareAiRun(input: {
     { role: "user", content: input.message },
   ];
   const request: AiProviderRequest = {
+    diagnosticRunId: runId,
     endpoint: new URL(row.providerBaseUrl),
     apiKey: decryptAiCredential(
       row.encryptedApiKey,
@@ -242,6 +253,7 @@ export async function prepareAiRun(input: {
     model: row.providerModelKey,
     messages,
     maxOutputTokens: row.maxOutputTokens,
+    latencyPreference: "fast",
     trustedEndpointHostnames: input.configuration.trustedEndpointHostnames,
     proposalTool: row.supportsToolCalls
       ? createAiProposalToolDefinition()
@@ -262,10 +274,6 @@ export async function prepareAiRun(input: {
           outputTokens: row.maxOutputTokens,
           rates,
         });
-  const runId = randomUUID();
-  const userMessageId = randomUUID();
-  const assistantMessageId = randomUUID();
-
   try {
     await db.transaction(async (transaction) => {
       const [locked] = await transaction
@@ -671,7 +679,116 @@ export async function* executePreparedAiRun(
   }
 }
 
-export async function stopAiRun(input: { userId: string; runId: string }) {
+export interface AiTurnRetractionResult {
+  stopped: true;
+  retracted: boolean;
+  hadOutput: boolean;
+  message: string;
+}
+
+async function retractAiTurn(input: {
+  userId: string;
+  runId: string;
+  mode: "if-empty" | "always";
+}): Promise<AiTurnRetractionResult | false> {
+  return db.transaction(async (transaction) => {
+    const [run] = await transaction
+      .select({
+        id: aiRuns.id,
+        status: aiRuns.status,
+        conversationId: aiRuns.conversationId,
+        assistantMessageId: aiRuns.assistantMessageId,
+        checkpointText: aiRuns.checkpointText,
+        checkpointProposal: aiRuns.checkpointProposal,
+      })
+      .from(aiRuns)
+      .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.userId, input.userId)))
+      .limit(1);
+    if (
+      !run ||
+      run.status === "preparing" ||
+      run.status === "streaming"
+    ) {
+      return false;
+    }
+
+    const [assistantMessage] = await transaction
+      .select({
+        conversationId: aiMessages.conversationId,
+        sequence: aiMessages.sequence,
+      })
+      .from(aiMessages)
+      .where(eq(aiMessages.id, run.assistantMessageId))
+      .limit(1);
+    if (!assistantMessage) return false;
+
+    const [userMessage] = await transaction
+      .select({ id: aiMessages.id, text: aiMessages.text })
+      .from(aiMessages)
+      .where(
+        and(
+          eq(aiMessages.conversationId, assistantMessage.conversationId),
+          eq(aiMessages.sequence, assistantMessage.sequence - 1),
+          eq(aiMessages.role, "user"),
+          isNull(aiMessages.retractedAt),
+        ),
+      )
+      .limit(1);
+    if (!userMessage) return false;
+
+    const [{ laterMessages }] = await transaction
+      .select({ laterMessages: count() })
+      .from(aiMessages)
+      .where(
+        and(
+          eq(aiMessages.conversationId, assistantMessage.conversationId),
+          gt(aiMessages.sequence, assistantMessage.sequence),
+          isNull(aiMessages.retractedAt),
+        ),
+      );
+    if (laterMessages > 0) return false;
+
+    const hadOutput = Boolean(
+      run.checkpointText ||
+        (typeof run.checkpointProposal === "string" &&
+          run.checkpointProposal.length > 0),
+    );
+    if (input.mode === "if-empty" && hadOutput) {
+      return {
+        stopped: true,
+        retracted: false,
+        hadOutput,
+        message: userMessage.text,
+      };
+    }
+
+    await transaction
+      .update(aiMessages)
+      .set({ retractedAt: new Date(), updatedAt: new Date() })
+      .where(
+        inArray(aiMessages.id, [userMessage.id, run.assistantMessageId]),
+      );
+    return {
+      stopped: true,
+      retracted: true,
+      hadOutput,
+      message: userMessage.text,
+    };
+  });
+}
+
+export async function stopAiRun(input: {
+  userId: string;
+  runId: string;
+  retract?: "if-empty" | "always";
+}): Promise<boolean | AiTurnRetractionResult> {
+  if (input.retract) {
+    return retractAiTurn({
+      userId: input.userId,
+      runId: input.runId,
+      mode: input.retract,
+    });
+  }
   const now = new Date();
   const run = await db.transaction(async (transaction) => {
     const [stoppedRun] = await transaction

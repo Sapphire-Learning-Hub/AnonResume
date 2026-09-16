@@ -15,6 +15,7 @@ function createAssistantState() {
     conversations: [],
     contextScope: "resume",
     details: undefined,
+    edit: vi.fn(),
     enabled: true,
     loading: false,
     models: [],
@@ -32,7 +33,9 @@ function createAssistantState() {
     setSelectedModelId: vi.fn(),
     startNewConversation: vi.fn(),
     stop: vi.fn(),
+    stopping: false,
     streamingProposalText: "",
+    streamingReasoningSteps: 0,
     streamingText: "",
   };
 }
@@ -70,7 +73,9 @@ describe("AiAssistantPanel", () => {
     expect(
       screen.getByRole("separator", { name: "调整 AI 编辑助手宽度" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "AI 编辑助手" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "AI 编辑助手" }),
+    ).not.toBeInTheDocument();
   });
 
   it("adjusts its width from the accessible resize boundary", () => {
@@ -150,13 +155,13 @@ describe("AiAssistantPanel", () => {
         activeRun: {
           id: "62622b5d-ec93-43fb-925d-6b631703799b",
           status: "streaming",
-          sequence: 0,
+          sequence: 3,
           text: "",
           proposal: null,
         },
       },
-      pendingUserMessage: "帮我起草一份简历",
-      sending: true,
+      pendingUserMessage: "",
+      sending: false,
     };
 
     const { container } = render(
@@ -174,7 +179,9 @@ describe("AiAssistantPanel", () => {
     );
 
     expect(container.querySelectorAll('[data-role="user"]')).toHaveLength(1);
-    expect(container.querySelectorAll('[data-role="assistant"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-role="assistant"]')).toHaveLength(
+      1,
+    );
   });
 
   it("restores the submitted message when sending fails", async () => {
@@ -199,7 +206,9 @@ describe("AiAssistantPanel", () => {
       />,
     );
 
-    const composer = screen.getByPlaceholderText("例如：帮我把项目经历写得更具体，并突出可量化成果");
+    const composer = screen.getByPlaceholderText(
+      "例如：帮我把项目经历写得更具体，并突出可量化成果",
+    );
     fireEvent.change(composer, { target: { value: "帮我优化工作经历" } });
     fireEvent.click(screen.getByRole("button", { name: /发\s*送/ }));
 
@@ -268,7 +277,9 @@ describe("AiAssistantPanel", () => {
       />,
     );
 
-    expect(screen.getByText("正在分析简历，并整理工作经历")).toBeInTheDocument();
+    expect(
+      screen.getByText("正在分析简历，并整理工作经历"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("正在分析简历")).not.toBeInTheDocument();
   });
 
@@ -296,6 +307,78 @@ describe("AiAssistantPanel", () => {
 
     expect(screen.getByText("正在重新组织项目经历")).toBeInTheDocument();
     expect(screen.getByText("正在生成修改建议…")).toBeInTheDocument();
+  });
+
+  it("shows a deep-thinking loading state without exposing private reasoning text", () => {
+    assistantMock.current = {
+      ...createAssistantState(),
+      sending: true,
+      streamingReasoningSteps: 3,
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("正在深度思考…")).toBeInTheDocument();
+  });
+
+  it("does not leave a thinking placeholder after a tool-only response completes", () => {
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [
+          {
+            id: "9b958d42-21a0-4187-9ee4-101004080968",
+            role: "assistant",
+            text: "",
+            sequence: 2,
+            completionState: "complete",
+            runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+            createdAt: "2026-09-16T15:00:00.000Z",
+          },
+        ],
+        proposals: [],
+        activeRun: null,
+      },
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("正在思考…")).not.toBeInTheDocument();
   });
 
   it("restores proposal progress from the active run checkpoint", () => {
@@ -343,5 +426,108 @@ describe("AiAssistantPanel", () => {
 
     expect(screen.getByText("正在检查工作经历")).toBeInTheDocument();
     expect(screen.getByText("正在生成修改建议…")).toBeInTheDocument();
+  });
+
+  it("returns an unprocessed stopped message to the composer", async () => {
+    const stop = vi.fn().mockResolvedValue("补充我的项目经历");
+    assistantMock.current = {
+      ...createAssistantState(),
+      pendingUserMessage: "补充我的项目经历",
+      sending: true,
+      stop,
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "停止生成" }));
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText(
+          "例如：帮我把项目经历写得更具体，并突出可量化成果",
+        ),
+      ).toHaveValue("补充我的项目经历"),
+    );
+  });
+
+  it("allows editing the latest stopped turn after output was produced", async () => {
+    const edit = vi.fn().mockResolvedValue("优化我的工作经历");
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [
+          {
+            id: "7bf981f1-646f-4e0e-ac5a-a38e112e101b",
+            role: "user",
+            text: "优化我的工作经历",
+            sequence: 1,
+            completionState: "complete",
+            runId: null,
+            createdAt: "2026-09-16T15:00:00.000Z",
+          },
+          {
+            id: "9b958d42-21a0-4187-9ee4-101004080968",
+            role: "assistant",
+            text: "可以突出项目成果",
+            sequence: 2,
+            completionState: "stopped",
+            runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+            createdAt: "2026-09-16T15:00:00.000Z",
+          },
+        ],
+        proposals: [],
+        activeRun: null,
+      },
+      edit,
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑消息" }));
+
+    expect(edit).toHaveBeenCalledWith("62622b5d-ec93-43fb-925d-6b631703799b");
+    await waitFor(() =>
+      expect(
+        screen.getByPlaceholderText(
+          "例如：帮我把项目经历写得更具体，并突出可量化成果",
+        ),
+      ).toHaveValue("优化我的工作经历"),
+    );
   });
 });

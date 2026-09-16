@@ -42,8 +42,7 @@ const messages = {
     "common.settings.sourceCodeDescription": "查看项目源代码与问题反馈。",
     "common.settings.sourceCodeUnavailable": "供应商未提供源代码访问",
     "common.settings.license": "许可证",
-    "common.settings.licenseDescription":
-      "本项目代码采用 AGPL-3.0-or-later。",
+    "common.settings.licenseDescription": "本项目代码采用 AGPL-3.0-or-later。",
     "common.settings.thirdPartyNotices": "第三方声明",
     "common.settings.thirdPartyNoticesDescription":
       "查看字体、图标与其他第三方资源的授权信息。",
@@ -69,7 +68,8 @@ const messages = {
     "common.publish": "发布",
     "common.unpublish": "取消发布",
     "publication.unpublishTitle": "取消发布简历",
-    "publication.unpublishDescription": "取消发布“{title}”后，公开链接将立即无法访问。",
+    "publication.unpublishDescription":
+      "取消发布“{title}”后，公开链接将立即无法访问。",
     "publication.unpublishConfirm": "确认取消发布",
     "common.pdf": "PDF",
     "common.downloadPdf": "下载 PDF",
@@ -83,7 +83,8 @@ const messages = {
     "pdfExport.cancelled": "已取消",
     "pdfExport.cancel": "取消任务",
     "pdfExport.cancelTitle": "取消 PDF 导出",
-    "pdfExport.cancelDescription": "导出任务“{file}”将被取消；如仍需文件，需要重新提交导出。",
+    "pdfExport.cancelDescription":
+      "导出任务“{file}”将被取消；如仍需文件，需要重新提交导出。",
     "pdfExport.cancelConfirm": "确认取消",
     "pdfExport.openStatus": "查看 PDF 导出状态",
     "pdfExport.collapseStatus": "收起 PDF 导出状态",
@@ -265,8 +266,7 @@ const messages = {
       "验证链接无效或已经过期，请重新发送验证邮件。",
     "auth.backToSignIn": "返回登录",
     "auth.githubEnabled": "当前环境已启用 GitHub OAuth。",
-    "auth.githubDisabled":
-      "当前登录方式未配置。",
+    "auth.githubDisabled": "当前登录方式未配置。",
     "dashboard.eyebrow": "多用户工作区",
     "dashboard.navigation": "工作台导航",
     "dashboard.heading": "简历",
@@ -341,7 +341,8 @@ const messages = {
     "dashboard.templatePicker.collection.compact": "紧凑",
     "dashboard.templatePicker.resultHeading": "{collection}",
     "dashboard.templatePicker.resultCount": "{count} 款模板",
-    "dashboard.templatePicker.noResults": "没有匹配的模板，请调整搜索词或分类。",
+    "dashboard.templatePicker.noResults":
+      "没有匹配的模板，请调整搜索词或分类。",
     "dashboard.templatePicker.previewTitle": "预览：{name}",
     "dashboard.templatePicker.previewBack": "返回模板中心",
     "dashboard.templatePicker.preview": "预览",
@@ -440,9 +441,14 @@ const messages = {
     "ai.you": "你",
     "ai.assistant": "AI 助手",
     "ai.thinking": "正在思考…",
-    "ai.composer.placeholder": "例如：帮我把项目经历写得更具体，并突出可量化成果",
+    "ai.analyzing": "正在分析简历…",
+    "ai.deepThinking": "正在深度思考…",
+    "ai.composer.placeholder":
+      "例如：帮我把项目经历写得更具体，并突出可量化成果",
     "ai.disclaimer": "AI 可能出错，应用前请检查建议内容。",
     "ai.stop": "停止生成",
+    "ai.stopping": "正在停止…",
+    "ai.message.edit": "编辑消息",
     "ai.send": "发送",
     "ai.error.title": "AI 助手暂时无法完成请求",
     "ai.error.quota": "本周期 AI 点数不足，可稍后重试或使用个人模型。",
@@ -456,7 +462,8 @@ const messages = {
     "ai.proposal.description": "选择需要的修改后一次应用。",
     "ai.proposal.invalidTitle": "修改建议不可用",
     "ai.proposal.unavailable": "不可应用",
-    "ai.proposal.invalidDescription": "模型返回的建议不完整或格式无效，请重新生成。",
+    "ai.proposal.invalidDescription":
+      "模型返回的建议不完整或格式无效，请重新生成。",
     "ai.proposal.applied": "已应用",
     "ai.proposal.applySelected": "应用所选 {count} 项",
     "ai.proposal.conflict": "简历内容已经变化，请重新生成建议。",
@@ -490,7 +497,8 @@ const messages = {
     "ai.settings.connectionSuccess": "连接测试成功",
     "ai.settings.saved": "个人模型设置已保存",
     "ai.settings.disable": "停用个人模型",
-    "ai.settings.disableConfirm": "停用后将无法用此模型发起新对话，历史记录会保留。",
+    "ai.settings.disableConfirm":
+      "停用后将无法用此模型发起新对话，历史记录会保留。",
     "ai.settings.disabled": "个人模型已停用",
     "ai.settings.loadError": "无法加载 AI 服务设置",
     "ai.settings.saveError": "操作失败，请检查配置后重试",
@@ -780,7 +788,8 @@ const messages = {
     "editor.diff.nextChange": "下一处变化",
     "editor.diff.changePosition": "第 {current} / {total} 处",
     "editor.diff.pageSettings": "页面设置变化",
-    "editor.diff.pageMarginValue": "上 {top} · 右 {right} · 下 {bottom} · 左 {left}",
+    "editor.diff.pageMarginValue":
+      "上 {top} · 右 {right} · 下 {bottom} · 左 {left}",
     "editor.diff.field.title": "标题",
     "editor.diff.field.text": "文本",
     "editor.diff.field.locale": "语言",
@@ -985,13 +994,15 @@ const messages = {
     "common.publish": "Publish",
     "common.unpublish": "Unpublish",
     "publication.unpublishTitle": "Unpublish resume",
-    "publication.unpublishDescription": "After unpublishing “{title}”, its public link will stop working immediately.",
+    "publication.unpublishDescription":
+      "After unpublishing “{title}”, its public link will stop working immediately.",
     "publication.unpublishConfirm": "Unpublish resume",
     "common.pdf": "PDF",
     "common.downloadPdf": "Download PDF",
     "pdfExport.title": "PDF export",
     "pdfExport.queued": "Position {position} of {count}",
-    "pdfExport.workerUnavailable": "The export service is unavailable. This task will remain queued.",
+    "pdfExport.workerUnavailable":
+      "The export service is unavailable. This task will remain queued.",
     "pdfExport.running": "Generating",
     "pdfExport.cancelling": "Cancelling",
     "pdfExport.completed": "Completed and downloading",
@@ -999,7 +1010,8 @@ const messages = {
     "pdfExport.cancelled": "Cancelled",
     "pdfExport.cancel": "Cancel export",
     "pdfExport.cancelTitle": "Cancel PDF export",
-    "pdfExport.cancelDescription": "The export task “{file}” will be cancelled. Submit a new export if the file is still needed.",
+    "pdfExport.cancelDescription":
+      "The export task “{file}” will be cancelled. Submit a new export if the file is still needed.",
     "pdfExport.cancelConfirm": "Cancel export",
     "pdfExport.openStatus": "View PDF export status",
     "pdfExport.collapseStatus": "Collapse PDF export status",
@@ -1010,7 +1022,8 @@ const messages = {
     "pdfExport.error.queueFull":
       "The export queue is currently full. Try again later.",
     "pdfExport.error.anonymousDisabled": "Sign in to export a PDF.",
-    "pdfExport.error.workerUnavailable": "The PDF export service is temporarily unavailable. Try again later.",
+    "pdfExport.error.workerUnavailable":
+      "The PDF export service is temporarily unavailable. Try again later.",
     "pdfExport.error.generic":
       "The export task could not be created. Try again later.",
     "common.back": "Back to workspace",
@@ -1088,8 +1101,10 @@ const messages = {
     "home.editorImageAlt": "AnonResume resume editor interface",
     "home.editorShowcaseImageAlt": "A4 resume canvas in the AnonResume editor",
     "home.floatingNote.title": "See the finished result as you write",
-    "home.floatingNote.description": "Know exactly what your resume will look like before export",
-    "home.features.title": "From your first experience to a resume ready to send",
+    "home.floatingNote.description":
+      "Know exactly what your resume will look like before export",
+    "home.features.title":
+      "From your first experience to a resume ready to send",
     "home.features.description":
       "Skip complicated design software and endless formatting. Focus on your story while the rest stays simple.",
     "home.feature.editor.title": "Edit your resume like a document",
@@ -1113,7 +1128,8 @@ const messages = {
     "home.feature.output.tag.publish": "Shareable link",
     "home.feature.output.tag.pdf": "PDF download",
     "home.feature.output.tag.queue": "Clear progress",
-    "home.editor.title": "Focus on your experience. Let the editor handle the layout.",
+    "home.editor.title":
+      "Focus on your experience. Let the editor handle the layout.",
     "home.editor.description":
       "Fine-tune your resume on desktop, then preview, publish, or download it from your phone whenever you need it.",
     "home.editor.point.structure.title": "Rearrange content without the mess",
@@ -1167,11 +1183,16 @@ const messages = {
     "auth.invalidPassword": "The password format is invalid.",
     "auth.passwordTooShort": "The password must contain at least 8 characters.",
     "auth.passwordTooLong": "The password cannot exceed 128 characters.",
-    "auth.sessionCreationFailed": "Unable to create a sign-in session. Try again later.",
-    "auth.accountCreationFailed": "Unable to create the account. Try again later.",
-    "auth.signInUnavailable": "Email and password sign-in is temporarily unavailable.",
-    "auth.signUpUnavailable": "Email and password registration is temporarily unavailable.",
-    "auth.socialSignInUnavailable": "GitHub sign-in is temporarily unavailable.",
+    "auth.sessionCreationFailed":
+      "Unable to create a sign-in session. Try again later.",
+    "auth.accountCreationFailed":
+      "Unable to create the account. Try again later.",
+    "auth.signInUnavailable":
+      "Email and password sign-in is temporarily unavailable.",
+    "auth.signUpUnavailable":
+      "Email and password registration is temporarily unavailable.",
+    "auth.socialSignInUnavailable":
+      "GitHub sign-in is temporarily unavailable.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.verificationSent": "Verification email sent",
@@ -1187,8 +1208,7 @@ const messages = {
       "This verification link is invalid or expired. Send a new verification email.",
     "auth.backToSignIn": "Back to sign in",
     "auth.githubEnabled": "GitHub OAuth is enabled for this environment.",
-    "auth.githubDisabled":
-      "This sign-in method is not configured.",
+    "auth.githubDisabled": "This sign-in method is not configured.",
     "dashboard.eyebrow": "Multi-user workspace",
     "dashboard.navigation": "Workspace navigation",
     "dashboard.heading": "Resumes",
@@ -1379,10 +1399,15 @@ const messages = {
     "ai.you": "You",
     "ai.assistant": "AI assistant",
     "ai.thinking": "Thinking…",
+    "ai.analyzing": "Analyzing your resume…",
+    "ai.deepThinking": "Thinking deeply…",
     "ai.composer.placeholder":
       "For example: make this project more specific and emphasize measurable results",
-    "ai.disclaimer": "AI can make mistakes. Review suggestions before applying them.",
+    "ai.disclaimer":
+      "AI can make mistakes. Review suggestions before applying them.",
     "ai.stop": "Stop generating",
+    "ai.stopping": "Stopping…",
+    "ai.message.edit": "Edit message",
     "ai.send": "Send",
     "ai.error.title": "The AI assistant could not complete the request",
     "ai.error.quota":
@@ -1443,14 +1468,16 @@ const messages = {
       "New chats will no longer use this model. Conversation history will remain available.",
     "ai.settings.disabled": "Personal model disabled",
     "ai.settings.loadError": "Could not load AI service settings",
-    "ai.settings.saveError": "The operation failed. Check the settings and try again.",
+    "ai.settings.saveError":
+      "The operation failed. Check the settings and try again.",
     "editor.shortcuts.title": "Editor shortcuts",
     "editor.shortcuts.open": "View shortcuts",
     "editor.shortcuts.group.general": "General",
     "editor.shortcuts.group.text": "Text editing",
     "editor.shortcuts.group.layoutNavigation": "Layout and navigation",
     "editor.shortcuts.temporaryLayout": "Hold Ctrl for temporary sorting",
-    "editor.shortcuts.temporaryLayoutMacos": "Hold Control for temporary sorting",
+    "editor.shortcuts.temporaryLayoutMacos":
+      "Hold Control for temporary sorting",
     "editor.shortcuts.previousNextTab": "Previous/next ribbon tab",
     "editor.shortcuts.firstLastTab": "First/last ribbon tab",
     "editor.shortcuts.or": "or",
@@ -1711,10 +1738,13 @@ const messages = {
     "editor.diff.historyVersion": "Historical version",
     "editor.diff.currentVersion": "Current content",
     "editor.diff.loading": "Loading the cloud version",
-    "editor.diff.loadError": "The latest cloud version could not be loaded. Try again later.",
+    "editor.diff.loadError":
+      "The latest cloud version could not be loaded. Try again later.",
     "editor.diff.historyLoading": "Loading the historical version",
-    "editor.diff.historyLoadError": "This historical version could not be loaded. Try again later.",
-    "editor.diff.noChanges": "There are no visible differences between these versions.",
+    "editor.diff.historyLoadError":
+      "This historical version could not be loaded. Try again later.",
+    "editor.diff.noChanges":
+      "There are no visible differences between these versions.",
     "editor.diff.emptyValue": "No content",
     "editor.diff.missingBefore": "Did not exist before",
     "editor.diff.missingAfter": "Removed in this version",

@@ -16,7 +16,10 @@ import {
 } from "@/db";
 import { hashAiContent } from "@/domain/resume/ai/content-hash";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
-import { createAiConversation } from "@/lib/ai/conversations/repository";
+import {
+  createAiConversation,
+  getAiConversationDetails,
+} from "@/lib/ai/conversations/repository";
 import type { AiProviderAdapter } from "@/lib/ai/providers/types";
 import {
   executePreparedAiRun,
@@ -139,6 +142,7 @@ describe("AI run service", () => {
         runLeaseSeconds: 90,
       },
     });
+    expect(prepared.request.latencyPreference).toBe("fast");
 
     const events = [];
     for await (const event of executePreparedAiRun(prepared, { adapter })) {
@@ -284,5 +288,50 @@ describe("AI run service", () => {
       .from(aiMessages)
       .where(eq(aiMessages.id, prepared.assistantMessageId));
     expect(assistantMessage).toMatchObject({ completionState: "stopped" });
+  });
+
+  it("retracts an unprocessed stopped turn back out of the conversation", async () => {
+    const message = "这条消息还没有被处理";
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message,
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints: 100,
+        requestsPerMinute: 10,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    await stopAiRun({ userId, runId: prepared.runId });
+    const result = await stopAiRun({
+      userId,
+      runId: prepared.runId,
+      retract: "if-empty",
+    } as Parameters<typeof stopAiRun>[0]);
+
+    expect(result).toMatchObject({
+      hadOutput: false,
+      message,
+      retracted: true,
+      stopped: true,
+    });
+    const details = await getAiConversationDetails({ userId, conversationId });
+    expect(
+      details.messages.some(
+        (conversationMessage) =>
+          conversationMessage.id === prepared.assistantMessageId,
+      ),
+    ).toBe(false);
+    expect(
+      await db
+        .select()
+        .from(aiAuditPayloads)
+        .where(eq(aiAuditPayloads.runId, prepared.runId)),
+    ).toHaveLength(1);
   });
 });

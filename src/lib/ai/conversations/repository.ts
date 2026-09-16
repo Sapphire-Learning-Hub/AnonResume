@@ -193,9 +193,24 @@ export async function getAiConversationDetails(input: {
   const conversation = await getAiConversation(input);
   const [messages, proposals, activeRun] = await Promise.all([
     db
-      .select()
+      .select({
+        id: aiMessages.id,
+        role: aiMessages.role,
+        text: aiMessages.text,
+        sequence: aiMessages.sequence,
+        completionState: aiMessages.completionState,
+        runId: aiRuns.id,
+        createdAt: aiMessages.createdAt,
+        updatedAt: aiMessages.updatedAt,
+      })
       .from(aiMessages)
-      .where(eq(aiMessages.conversationId, conversation.id))
+      .leftJoin(aiRuns, eq(aiRuns.assistantMessageId, aiMessages.id))
+      .where(
+        and(
+          eq(aiMessages.conversationId, conversation.id),
+          isNull(aiMessages.retractedAt),
+        ),
+      )
       .orderBy(aiMessages.sequence),
     db
       .select({
@@ -210,10 +225,12 @@ export async function getAiConversationDetails(input: {
       })
       .from(aiProposals)
       .innerJoin(aiRuns, eq(aiRuns.id, aiProposals.runId))
+      .innerJoin(aiMessages, eq(aiMessages.id, aiRuns.assistantMessageId))
       .where(
         and(
           eq(aiRuns.userId, input.userId),
           eq(aiRuns.conversationId, conversation.id),
+          isNull(aiMessages.retractedAt),
         ),
       )
       .orderBy(aiProposals.createdAt),

@@ -1,5 +1,6 @@
 export type AiProviderEvent =
   | { type: "request_id"; requestId: string }
+  | { type: "reasoning_progress" }
   | { type: "text_delta"; delta: string }
   | { type: "proposal_delta"; delta: string }
   | {

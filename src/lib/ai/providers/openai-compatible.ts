@@ -1,4 +1,7 @@
-import { assertSafeAiEndpoint, type AiDnsResolver } from "@/lib/ai/security/endpoint-policy";
+import {
+  assertSafeAiEndpoint,
+  type AiDnsResolver,
+} from "@/lib/ai/security/endpoint-policy";
 
 import {
   AiProviderError,
@@ -12,6 +15,7 @@ interface OpenAiChunk {
   choices?: Array<{
     delta?: {
       content?: unknown;
+      reasoning_content?: unknown;
       tool_calls?: Array<{
         function?: { name?: unknown; arguments?: unknown };
       }>;
@@ -52,6 +56,16 @@ function completionUrl(endpoint: URL) {
   url.search = "";
   url.hash = "";
   return url;
+}
+
+function latencyOptions(request: AiProviderRequest) {
+  if (
+    request.latencyPreference === "fast" &&
+    request.endpoint.hostname.toLowerCase() === "ark.cn-beijing.volces.com"
+  ) {
+    return { thinking: { type: "disabled" } };
+  }
+  return {};
 }
 
 async function* readSseData(response: Response) {
@@ -117,6 +131,7 @@ async function fetchWithValidatedRedirects({
     max_tokens: request.maxOutputTokens,
     stream: true,
     stream_options: { include_usage: true },
+    ...latencyOptions(request),
     ...(request.proposalTool
       ? {
           tools: [
@@ -129,7 +144,11 @@ async function fetchWithValidatedRedirects({
       : {}),
   });
 
-  for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+  for (
+    let redirectCount = 0;
+    redirectCount <= maxRedirects;
+    redirectCount += 1
+  ) {
     let response: Response;
     try {
       response = await fetchImpl(target, {
@@ -178,6 +197,7 @@ export function createOpenAiCompatibleAdapter(
 
   return {
     async *start(request, signal) {
+      const startedAt = Date.now();
       const response = await fetchWithValidatedRedirects({
         fetchImpl,
         resolver: options.resolver,
@@ -197,6 +217,8 @@ export function createOpenAiCompatibleAdapter(
       }
 
       let finishReason: string | null = null;
+      let firstChunkLogged = false;
+      let firstUnhandledDeltaLogged = false;
       for await (const data of readSseData(response)) {
         if (data === "[DONE]") break;
 
@@ -207,12 +229,42 @@ export function createOpenAiCompatibleAdapter(
           throw new AiProviderError("invalid_response");
         }
 
+        const deltaKeys = [
+          ...new Set(
+            (chunk.choices ?? []).flatMap((choice) =>
+              choice.delta ? Object.keys(choice.delta) : [],
+            ),
+          ),
+        ];
+        if (!firstChunkLogged) {
+          firstChunkLogged = true;
+          console.info("[AnonResume][AI provider]", "first_chunk", {
+            runId: request.diagnosticRunId ?? null,
+            elapsedMs: Date.now() - startedAt,
+            choiceCount: chunk.choices?.length ?? 0,
+            deltaKeys,
+            hasUsage: Boolean(chunk.usage),
+          });
+        }
+
         if (!headerRequestId && typeof chunk.id === "string") {
           yield { type: "request_id", requestId: chunk.id };
         }
 
+        let handledDelta = false;
         for (const choice of chunk.choices ?? []) {
-          if (typeof choice.delta?.content === "string" && choice.delta.content) {
+          if (
+            typeof choice.delta?.reasoning_content === "string" &&
+            choice.delta.reasoning_content
+          ) {
+            handledDelta = true;
+            yield { type: "reasoning_progress" };
+          }
+          if (
+            typeof choice.delta?.content === "string" &&
+            choice.delta.content
+          ) {
+            handledDelta = true;
             yield { type: "text_delta", delta: choice.delta.content };
           }
           for (const toolCall of choice.delta?.tool_calls ?? []) {
@@ -222,6 +274,7 @@ export function createOpenAiCompatibleAdapter(
               typeof toolCall.function?.arguments === "string" &&
               toolCall.function.arguments
             ) {
+              handledDelta = true;
               yield {
                 type: "proposal_delta",
                 delta: toolCall.function.arguments,
@@ -231,6 +284,27 @@ export function createOpenAiCompatibleAdapter(
           if (typeof choice.finish_reason === "string") {
             finishReason = choice.finish_reason;
           }
+        }
+
+        if (
+          !handledDelta &&
+          deltaKeys.length > 0 &&
+          !firstUnhandledDeltaLogged
+        ) {
+          firstUnhandledDeltaLogged = true;
+          console.info("[AnonResume][AI provider]", "unhandled_delta", {
+            runId: request.diagnosticRunId ?? null,
+            elapsedMs: Date.now() - startedAt,
+            deltaKeys,
+            reasoningCharacters: (chunk.choices ?? []).reduce(
+              (total, choice) =>
+                total +
+                (typeof choice.delta?.reasoning_content === "string"
+                  ? choice.delta.reasoning_content.length
+                  : 0),
+              0,
+            ),
+          });
         }
 
         if (chunk.usage) {

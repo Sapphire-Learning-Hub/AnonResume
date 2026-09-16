@@ -127,6 +127,13 @@
       "when": 1789563237649,
       "tag": "0017_salty_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789580810077,
+      "tag": "0018_bright_boomer",
+      "breakpoints": true
     }
   ]
 }
