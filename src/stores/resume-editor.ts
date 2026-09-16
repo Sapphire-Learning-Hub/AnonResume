@@ -5,6 +5,10 @@ import {
   type ResumeEditorSelection,
 } from "@/domain/resume/editor-selection";
 import {
+  applySelectedAiChanges,
+  type AiResumeProposal,
+} from "@/domain/resume/ai/proposal-apply";
+import {
   createBlockFromPreset,
   type BlockPresetId,
 } from "@/domain/resume/block-presets";
@@ -94,6 +98,11 @@ export interface ResumeEditorActions {
   updateDocument: (
     updater: (document: ResumeDocument) => ResumeDocument,
   ) => void;
+  applyAiProposal: (params: {
+    proposal: AiResumeProposal;
+    baseResumeVersion: number;
+    selectedChangeIds: string[];
+  }) => ReturnType<typeof applySelectedAiChanges>;
   updateTextBlock: (params: {
     sectionId: string;
     blockPath: string[];
@@ -282,6 +291,26 @@ export function createResumeEditorStore({
           future: [],
         },
       });
+    },
+    applyAiProposal: ({
+      proposal,
+      baseResumeVersion,
+      selectedChangeIds,
+    }) => {
+      const current = get();
+      const result = applySelectedAiChanges({
+        document: current.document,
+        currentVersion: current.version,
+        baseResumeVersion,
+        proposal,
+        selectedChangeIds,
+      });
+
+      if (result.ok && selectedChangeIds.length > 0) {
+        current.updateDocument(() => result.document);
+      }
+
+      return result;
     },
     updateTextBlock: ({ sectionId, blockPath, text }) => {
       get().updateDocument((document) =>

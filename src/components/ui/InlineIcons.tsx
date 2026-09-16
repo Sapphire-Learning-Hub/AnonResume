@@ -76,6 +76,16 @@ export function HelpIcon(props: InlineIconProps) {
   );
 }
 
+export function AiAssistantIcon(props: InlineIconProps) {
+  return (
+    <InlineIcon {...props}>
+      <path d="M12 3.5 13.4 8l4.6 1.4-4.6 1.4L12 15.5l-1.4-4.7L6 9.4 10.6 8z" />
+      <path d="m18.5 14 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7z" />
+      <path d="m5 14 .6 1.8 1.9.6-1.9.6L5 19l-.6-2-1.9-.6 1.9-.6z" />
+    </InlineIcon>
+  );
+}
+
 export function KeyboardIcon(props: InlineIconProps) {
   return (
     <InlineIcon {...props}>

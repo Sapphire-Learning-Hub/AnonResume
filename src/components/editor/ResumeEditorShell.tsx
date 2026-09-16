@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "zustand";
 
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
+import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
 import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
@@ -48,6 +49,7 @@ import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
+  AiAssistantIcon,
   DocumentIcon,
   EnterFullscreenIcon,
   ExitFullscreenIcon,
@@ -537,6 +539,7 @@ export function ResumeEditorShell({
   const saveValidation = useStore(store, (state) => state.saveValidation);
   const selection = useStore(store, (state) => state.selection);
   const saveStatus = useStore(store, (state) => state.saveStatus);
+  const version = useStore(store, (state) => state.version);
   const history = useStore(store, (state) => state.history);
   const zoom = useStore(store, (state) => state.zoom);
   const resumeName = useStore(store, (state) => state.document.meta.title);
@@ -571,6 +574,7 @@ export function ResumeEditorShell({
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
   const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [activeRibbonTab, setActiveRibbonTab] = useState<EditorRibbonTab>("home");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
@@ -2476,6 +2480,16 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
+      <Tooltip title={t("ai.title")}>
+        <Button
+          aria-label={t("ai.title")}
+          className={styles.ribbonIconButton}
+          type="text"
+          onClick={() => setAiAssistantOpen(true)}
+        >
+          <AiAssistantIcon size={16} />
+        </Button>
+      </Tooltip>
       <Tooltip title={t("editor.versionHistory")}>
         <Button
           aria-label={t("editor.versionHistory")}
@@ -2881,6 +2895,15 @@ export function ResumeEditorShell({
       <EditorShortcutPanel
         open={shortcutPanelOpen}
         onCancel={() => setShortcutPanelOpen(false)}
+      />
+
+      <AiAssistantPanel
+        open={aiAssistantOpen}
+        resumeId={resumeId}
+        resumeVersion={version}
+        sectionId={selection.sectionId}
+        onApplyProposal={(input) => store.getState().applyAiProposal(input)}
+        onClose={() => setAiAssistantOpen(false)}
       />
 
       <Modal

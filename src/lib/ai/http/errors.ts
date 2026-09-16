@@ -9,6 +9,7 @@ import {
   AiRunRateLimitedError,
   AiRunVersionConflictError,
 } from "@/lib/ai/runs/service";
+import { AiProposalNotFoundError } from "@/lib/ai/proposals/repository";
 import { AiQuotaExceededError } from "@/lib/ai/usage/ledger";
 import { RequestBodyTooLargeError } from "@/lib/http/request-body";
 
@@ -40,7 +41,8 @@ export function createAiErrorResponse(error: unknown) {
   }
   if (
     error instanceof AiConversationNotFoundError ||
-    error instanceof AiModelUnavailableError
+    error instanceof AiModelUnavailableError ||
+    error instanceof AiProposalNotFoundError
   ) {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
