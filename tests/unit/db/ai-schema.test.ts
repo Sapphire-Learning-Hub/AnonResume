@@ -66,4 +66,19 @@ describe("AI database schema", () => {
       ]),
     );
   });
+
+  it("preserves usage history when runs or models are removed", () => {
+    const config = getTableConfig(database.aiUsageLedger);
+    const foreignKeys = config.foreignKeys.map((foreignKey) => ({
+      table: foreignKey.reference().foreignTable,
+      onDelete: foreignKey.onDelete,
+    }));
+
+    expect(foreignKeys).toEqual(
+      expect.arrayContaining([
+        { table: database.aiRuns, onDelete: "set null" },
+        { table: database.aiModels, onDelete: "set null" },
+      ]),
+    );
+  });
 });

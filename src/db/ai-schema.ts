@@ -383,15 +383,15 @@ const ledgerColumns = {
 export const aiUsageLedger =
   schemaName === "public"
     ? pgTable("ai_usage_ledger", ledgerColumns, (table) => [
-        foreignKey({ columns: [table.runId], foreignColumns: [aiRuns.id], name: "ai_usage_ledger_run_fk" }),
-        foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_usage_ledger_model_fk" }),
+        foreignKey({ columns: [table.runId], foreignColumns: [aiRuns.id], name: "ai_usage_ledger_run_fk" }).onDelete("set null"),
+        foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_usage_ledger_model_fk" }).onDelete("set null"),
         check("ai_usage_ledger_type_check", sql`${table.entryType} IN ('renewal', 'adjustment', 'reserve', 'settlement', 'release')`),
         index("ai_usage_ledger_user_created_idx").on(table.userId, table.createdAt.desc()),
         index("ai_usage_ledger_run_idx").on(table.runId),
       ])
     : pgSchema(schemaName).table("ai_usage_ledger", ledgerColumns, (table) => [
-        foreignKey({ columns: [table.runId], foreignColumns: [aiRuns.id], name: "ai_usage_ledger_run_fk" }),
-        foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_usage_ledger_model_fk" }),
+        foreignKey({ columns: [table.runId], foreignColumns: [aiRuns.id], name: "ai_usage_ledger_run_fk" }).onDelete("set null"),
+        foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_usage_ledger_model_fk" }).onDelete("set null"),
         check("ai_usage_ledger_type_check", sql`${table.entryType} IN ('renewal', 'adjustment', 'reserve', 'settlement', 'release')`),
         index("ai_usage_ledger_user_created_idx").on(table.userId, table.createdAt.desc()),
         index("ai_usage_ledger_run_idx").on(table.runId),
