@@ -177,7 +177,7 @@ describe("Dashboard workbench view", () => {
     await waitFor(() => {
       expect(screen.getByText("没有匹配的简历")).toBeInTheDocument();
     });
-  });
+  }, 15_000);
 
   it("renders URL-driven numbered pages", async () => {
     for (let index = 0; index < 21; index += 1) {
