@@ -3,6 +3,19 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 import {
+  aiAuditPayloads,
+  aiConversations,
+  aiDatabaseTables,
+  aiMessages,
+  aiModels,
+  aiProposals,
+  aiProviderCredentials,
+  aiQuotaAccounts,
+  aiRuns,
+  aiUsageLedger,
+} from "./ai-schema";
+
+import {
   accountRestrictions,
   adminActivationTokens,
   adminAssignments,
@@ -21,6 +34,17 @@ import {
 } from "./schema";
 
 export { getDatabaseSchemaName } from "./schema";
+export {
+  aiAuditPayloads,
+  aiConversations,
+  aiMessages,
+  aiModels,
+  aiProposals,
+  aiProviderCredentials,
+  aiQuotaAccounts,
+  aiRuns,
+  aiUsageLedger,
+} from "./ai-schema";
 export {
   accountRestrictions,
   adminActivationTokens,
@@ -42,6 +66,7 @@ export {
 export const db = drizzle({
   client: getDatabasePool(),
   schema: {
+    ...aiDatabaseTables,
     accountRestrictions,
     resumes,
     resumeVersions,
