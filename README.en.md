@@ -10,6 +10,9 @@
   <a href="./README.md">简体中文</a> · English
 </p>
 
+> [!IMPORTANT]
+> All current releases are early-access builds and are not yet fully stable. You may still encounter significant issues. The first stable release is planned for v2. Stay tuned.
+
 <p align="center">
   <a href="./LICENSE"><img alt="AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-d63b72" /></a>
   <img alt="Bun 1.3+" src="https://img.shields.io/badge/Bun-1.3+-14151a?logo=bun" />

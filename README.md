@@ -10,6 +10,9 @@
   简体中文 · <a href="./README.en.md">English</a>
 </p>
 
+> [!IMPORTANT]
+> 当前所有版本均为尝鲜测试版本，尚未完全稳定，仍可能存在较多问题。正式版本预计随 v2 发布，敬请期待。
+
 <p align="center">
   <a href="./LICENSE"><img alt="AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-d63b72" /></a>
   <img alt="Bun 1.3+" src="https://img.shields.io/badge/Bun-1.3+-14151a?logo=bun" />
