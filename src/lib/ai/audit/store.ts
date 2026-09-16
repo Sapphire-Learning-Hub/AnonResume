@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { eq } from "drizzle-orm";
+
 import { aiAuditPayloads, db } from "@/db";
 import {
   decryptAiCredential,
@@ -75,4 +77,14 @@ export async function storeAiAuditEvidence(input: {
     runId: input.runId,
     ...input.evidence,
   });
+}
+
+export async function replaceAiAuditEvidence(input: {
+  runId: string;
+  evidence: EncryptedAiAuditEvidence;
+}) {
+  await db
+    .update(aiAuditPayloads)
+    .set(input.evidence)
+    .where(eq(aiAuditPayloads.runId, input.runId));
 }

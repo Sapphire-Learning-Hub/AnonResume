@@ -8,12 +8,18 @@ import {
 
 import {
   aiConversations,
+  aiMessages,
   aiModels,
+  aiProposals,
   aiProviderCredentials,
+  aiRuns,
   db,
   resumes,
 } from "@/db";
-import type { AiConversationScope } from "@/db/ai-schema";
+import type {
+  AiConversationScope,
+  AiProviderKind,
+} from "@/db/ai-schema";
 
 export class AiConversationNotFoundError extends Error {
   constructor() {
@@ -38,7 +44,11 @@ async function assertOwnedResume(userId: string, resumeId: string) {
   if (!resume) throw new AiConversationNotFoundError();
 }
 
-async function assertAvailableModel(userId: string, modelId: string) {
+async function assertAvailableModel(
+  userId: string,
+  modelId: string,
+  allowedKeySources: AiProviderKind[],
+) {
   const [model] = await db
     .select({ id: aiModels.id })
     .from(aiModels)
@@ -52,6 +62,11 @@ async function assertAvailableModel(userId: string, modelId: string) {
         eq(aiModels.enabled, true),
         eq(aiProviderCredentials.enabled, true),
         or(
+          ...allowedKeySources.map((kind) =>
+            eq(aiProviderCredentials.kind, kind),
+          ),
+        ),
+        or(
           isNull(aiProviderCredentials.ownerUserId),
           eq(aiProviderCredentials.ownerUserId, userId),
         ),
@@ -61,7 +76,12 @@ async function assertAvailableModel(userId: string, modelId: string) {
   if (!model) throw new AiModelUnavailableError();
 }
 
-export async function listAvailableAiModels(userId: string) {
+export async function listAvailableAiModels(
+  userId: string,
+  allowedKeySources: AiProviderKind[] = ["platform", "user"],
+) {
+  if (allowedKeySources.length === 0) return [];
+
   return db
     .select({
       id: aiModels.id,
@@ -82,6 +102,11 @@ export async function listAvailableAiModels(userId: string) {
         eq(aiModels.enabled, true),
         eq(aiProviderCredentials.enabled, true),
         or(
+          ...allowedKeySources.map((kind) =>
+            eq(aiProviderCredentials.kind, kind),
+          ),
+        ),
+        or(
           isNull(aiProviderCredentials.ownerUserId),
           eq(aiProviderCredentials.ownerUserId, userId),
         ),
@@ -97,10 +122,15 @@ export async function createAiConversation(input: {
   title: string;
   contextScope: AiConversationScope;
   sectionId?: string;
+  allowedKeySources?: AiProviderKind[];
 }) {
   await Promise.all([
     assertOwnedResume(input.userId, input.resumeId),
-    assertAvailableModel(input.userId, input.modelId),
+    assertAvailableModel(
+      input.userId,
+      input.modelId,
+      input.allowedKeySources ?? ["platform", "user"],
+    ),
   ]);
 
   const [conversation] = await db
@@ -154,6 +184,64 @@ export async function getAiConversation(input: {
     .limit(1);
   if (!conversation) throw new AiConversationNotFoundError();
   return conversation;
+}
+
+export async function getAiConversationDetails(input: {
+  userId: string;
+  conversationId: string;
+}) {
+  const conversation = await getAiConversation(input);
+  const [messages, proposals, activeRun] = await Promise.all([
+    db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.conversationId, conversation.id))
+      .orderBy(aiMessages.sequence),
+    db
+      .select({
+        id: aiProposals.id,
+        runId: aiProposals.runId,
+        baseResumeVersion: aiProposals.baseResumeVersion,
+        proposal: aiProposals.proposal,
+        completionState: aiProposals.completionState,
+        appliedChangeIds: aiProposals.appliedChangeIds,
+        appliedAt: aiProposals.appliedAt,
+        createdAt: aiProposals.createdAt,
+      })
+      .from(aiProposals)
+      .innerJoin(aiRuns, eq(aiRuns.id, aiProposals.runId))
+      .where(
+        and(
+          eq(aiRuns.userId, input.userId),
+          eq(aiRuns.conversationId, conversation.id),
+        ),
+      )
+      .orderBy(aiProposals.createdAt),
+    db
+      .select({
+        id: aiRuns.id,
+        status: aiRuns.status,
+        sequence: aiRuns.checkpointSequence,
+        text: aiRuns.checkpointText,
+        proposal: aiRuns.checkpointProposal,
+      })
+      .from(aiRuns)
+      .where(
+        and(
+          eq(aiRuns.userId, input.userId),
+          eq(aiRuns.conversationId, conversation.id),
+          or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
+        ),
+      )
+      .limit(1),
+  ]);
+
+  return {
+    conversation,
+    messages,
+    proposals,
+    activeRun: activeRun[0] ?? null,
+  };
 }
 
 export async function renameAiConversation(input: {
