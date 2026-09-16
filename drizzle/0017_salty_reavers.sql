@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "ai_provider_credentials_user_owner_unique" ON "ai_provider_credentials" USING btree ("owner_user_id") WHERE "ai_provider_credentials"."kind" = 'user';

@@ -3,6 +3,7 @@ import type { AdminPermission } from "@/lib/admin/permissions";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 
 export type AppNavigationIcon =
+  | "ai"
   | "announcements"
   | "approvals"
   | "audit"
@@ -130,6 +131,12 @@ export function buildAppNavigation(
           icon: "fonts",
           id: "fonts",
           label: translate("fontMarket.navigation"),
+        },
+        {
+          href: "/app/ai",
+          icon: "ai",
+          id: "ai-settings",
+          label: translate("ai.settings.navigation"),
         },
       ],
     });

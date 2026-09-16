@@ -11,6 +11,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   NotificationOutlined,
+  RobotOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
@@ -313,6 +314,7 @@ const useStyles = createStyles(({ token, css }) => ({
 }));
 
 const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
+  ai: <RobotOutlined />,
   announcements: <NotificationOutlined />,
   approvals: <CheckSquareOutlined />,
   audit: <AuditOutlined />,

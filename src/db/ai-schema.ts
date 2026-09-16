@@ -72,6 +72,9 @@ export const aiProviderCredentials =
           sql`(${table.kind} = 'platform' AND ${table.ownerUserId} IS NULL) OR (${table.kind} = 'user' AND ${table.ownerUserId} IS NOT NULL)`,
         ),
         index("ai_provider_credentials_owner_idx").on(table.ownerUserId),
+        uniqueIndex("ai_provider_credentials_user_owner_unique")
+          .on(table.ownerUserId)
+          .where(sql`${table.kind} = 'user'`),
       ])
     : pgSchema(schemaName).table(
         "ai_provider_credentials",
@@ -86,6 +89,9 @@ export const aiProviderCredentials =
             sql`(${table.kind} = 'platform' AND ${table.ownerUserId} IS NULL) OR (${table.kind} = 'user' AND ${table.ownerUserId} IS NOT NULL)`,
           ),
           index("ai_provider_credentials_owner_idx").on(table.ownerUserId),
+          uniqueIndex("ai_provider_credentials_user_owner_unique")
+            .on(table.ownerUserId)
+            .where(sql`${table.kind} = 'user'`),
         ],
       );
 
