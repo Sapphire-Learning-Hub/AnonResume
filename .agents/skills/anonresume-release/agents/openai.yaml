@@ -1,4 +1,4 @@
 interface:
   display_name: "AnonResume Release"
-  short_description: "Prepare and publish verified AnonResume releases"
-  default_prompt: "Use $anonresume-release to prepare the next AnonResume release and draft its bilingual GitHub Release notes for approval."
+  short_description: "Prepare user-centered AnonResume releases"
+  default_prompt: "Use $anonresume-release to prepare the next AnonResume release and draft user-centered bilingual GitHub Release notes for approval."

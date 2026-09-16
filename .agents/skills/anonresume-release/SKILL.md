@@ -1,6 +1,6 @@
 ---
 name: anonresume-release
-description: Use when preparing, reviewing, tagging, or publishing an AnonResume version and its bilingual GitHub Release notes. Do not use for production deployment alone.
+description: Use when preparing, reviewing, tagging, or publishing an AnonResume version and its bilingual, user-facing GitHub Release notes. Do not use for production deployment alone.
 ---
 
 # Release AnonResume
@@ -27,8 +27,9 @@ and a production deployment are separate operations.
 1. Inspect the worktree, branch, remotes, package version, local and remote tags,
    and the latest published GitHub Release.
 2. Use the previous release tag as the comparison base. Review every commit and
-   changed file through `HEAD`; identify migrations, environment changes,
-   breaking behavior, dependency changes, and operational requirements.
+   changed file through `HEAD`. Build two inventories: user-perceivable product
+   changes, and operator-only upgrade requirements. Do not treat commits as
+   release-note entries one-for-one.
 3. Choose the requested SemVer version. If none was supplied and the correct
    increment is ambiguous, ask the user instead of guessing.
 4. Follow the repository's existing version source. Currently the root version
@@ -38,22 +39,58 @@ and a production deployment are separate operations.
    changed area, diagnose and rerun that exact test, then rerun the complete gate.
    Do not publish from partial verification.
 
-## Draft the public notes
+## Draft user-centered public notes
 
-Match the latest maintained GitHub Release format, while deriving claims from the
-actual tag-to-HEAD diff. The default body contains:
+Match the latest maintained GitHub Release format and use the tag-to-HEAD diff
+only as evidence. Release notes describe the product experience, not the work
+performed to implement it.
 
-1. A short Chinese summary and grouped, user-facing changes.
-2. An upgrade section that states only real migrations, configuration changes,
-   compatibility constraints, and restart steps.
-3. An English summary in a collapsed `<details>` block, synchronized with the
-   Chinese content.
-4. A repository compare link from the previous tag to the proposed tag.
+### Inclusion gate
 
-Keep public notes focused on product outcomes. Default to omitting test counts,
-internal architecture, debugging incidents, credentials, private infrastructure,
-and an internal verification section. Report verification separately to the
-user. Show the complete draft and stop for approval before external mutations.
+Before keeping an item, answer all three questions:
+
+1. Which user notices it: resume author, public viewer, administrator, or
+   self-hosting operator?
+2. In which visible task or screen do they notice it?
+3. What can they now do, understand, or complete that was previously missing,
+   confusing, slow, or broken?
+
+If the answers are not concrete, omit the item from public notes. Administrator
+workflows count as user experience; invisible server behavior does not.
+
+Include new user capabilities, visible interaction or wording improvements,
+fixed task failures, accessibility improvements, and performance or reliability
+changes users can actually feel. Exclude internal refactors, tests, CI, tooling,
+implementation-only dependency updates, file moves, database or API mechanics,
+runtime metadata, monitoring, debugging history, and verification statistics.
+
+### Writing rules
+
+- Lead with the user outcome and name the scenario. Prefer “修复副本简历发布失败，
+  同名简历现在可以正常发布” over “修复 `resumes_slug_key` 唯一约束冲突”.
+- Describe clearer behavior, not plumbing. Prefer “登录失败时会提示具体原因”
+  over “根据后端错误码映射认证消息”.
+- Describe felt performance. Prefer “字体市场会先展示页面和加载状态，切换更
+  顺畅” over “为字体资源增加客户端懒加载”.
+- Merge commits that produce one experience into one item. Do not expose commit
+  boundaries, filenames, endpoints, schema names, or implementation chronology.
+- Group by user journey such as “简历编辑”“发布与导出”“登录与管理安全”, not
+  by frontend/backend/database. Order groups and bullets by user impact.
+- Keep each bullet to one outcome. Avoid promotional filler and claims not
+  demonstrated by the diff.
+- Write natural Chinese first. The English version must preserve the same scope
+  and meaning, but should read naturally rather than translate word-for-word.
+
+The default body contains a short Chinese summary, grouped Chinese changes, a
+collapsed `<details>` English version with matching items, and a compare link.
+Add an upgrade section only when self-hosting operators must take action, such as
+running a migration, changing configuration, or accepting a compatibility break;
+keep those instructions out of the product-change groups. Omit the section when
+no action is required.
+
+Report tests, builds, and release verification separately to the user, never in
+the public notes. Show the complete bilingual draft and stop for approval before
+any external mutation.
 
 ## Publish the approved release
 
