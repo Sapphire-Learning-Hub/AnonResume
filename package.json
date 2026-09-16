@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "bun run lint && bun run check:styles && bunx tsc --noEmit && bun run test",
+    "check": "bun run lint && bun run check:styles && next typegen && bunx tsc --noEmit && bun run test",
     "check:styles": "bun run scripts/check-style-architecture.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
