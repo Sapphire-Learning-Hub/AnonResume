@@ -2,18 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { getDatabasePool } from "@/lib/runtime/database";
 
-import {
-  aiAuditPayloads,
-  aiConversations,
-  aiDatabaseTables,
-  aiMessages,
-  aiModels,
-  aiProposals,
-  aiProviderCredentials,
-  aiQuotaAccounts,
-  aiRuns,
-  aiUsageLedger,
-} from "./ai-schema";
+import { aiDatabaseTables } from "./ai-schema";
 
 import {
   accountRestrictions,

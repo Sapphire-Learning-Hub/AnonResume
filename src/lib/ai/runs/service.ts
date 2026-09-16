@@ -43,6 +43,7 @@ export interface AiRunConfiguration {
   auditRetentionDays: number;
   defaultMonthlyPoints: number;
   requestsPerMinute: number;
+  streamCheckpointMs: number;
   runLeaseSeconds: number;
   maxConcurrentRuns?: number;
   platformEnabled?: boolean;
@@ -426,6 +427,44 @@ function usageFromEvent(event: AiProviderEvent) {
     : undefined;
 }
 
+function startAiRunStopMonitor(input: {
+  runId: string;
+  controller: AbortController;
+  intervalMs: number;
+}) {
+  let stopped = false;
+  let polling = false;
+  const timer = setInterval(() => {
+    if (stopped || polling || input.controller.signal.aborted) return;
+    polling = true;
+    void db
+      .select({
+        status: aiRuns.status,
+        stopRequestedAt: aiRuns.stopRequestedAt,
+      })
+      .from(aiRuns)
+      .where(eq(aiRuns.id, input.runId))
+      .limit(1)
+      .then(([run]) => {
+        if (
+          run?.stopRequestedAt ||
+          (run && run.status !== "preparing" && run.status !== "streaming")
+        ) {
+          input.controller.abort();
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        polling = false;
+      });
+  }, input.intervalMs);
+
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 export async function* executePreparedAiRun(
   prepared: PreparedAiRun,
   options: { adapter: AiProviderAdapter },
@@ -434,7 +473,9 @@ export async function* executePreparedAiRun(
   activeRunControllers.set(prepared.runId, controller);
   let text = "";
   let proposalText = "";
+  let providerRequestId: string | undefined;
   let sequence = 0;
+  let lastCheckpointAt = Date.now();
   let usage:
     | { inputTokens: number; cachedInputTokens: number; outputTokens: number }
     | undefined;
@@ -449,36 +490,57 @@ export async function* executePreparedAiRun(
     })
     .where(eq(aiRuns.id, prepared.runId));
 
+  const stopMonitoring = startAiRunStopMonitor({
+    runId: prepared.runId,
+    controller,
+    intervalMs: prepared.configuration.streamCheckpointMs,
+  });
+
+  async function persistCheckpoint(now: Date) {
+    await db
+      .update(aiRuns)
+      .set({
+        checkpointSequence: sequence,
+        checkpointText: text,
+        checkpointProposal: proposalText || null,
+        providerRequestId,
+        inputTokens: usage?.inputTokens,
+        cachedInputTokens: usage?.cachedInputTokens,
+        outputTokens: usage?.outputTokens,
+        leaseExpiresAt: runLease(
+          now,
+          prepared.configuration.runLeaseSeconds,
+        ),
+        updatedAt: now,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
+    lastCheckpointAt = now.getTime();
+  }
+
   try {
     for await (const event of options.adapter.start(
       prepared.request,
       controller.signal,
     )) {
+      if (controller.signal.aborted) throw new Error("ai_run_stopped");
       sequence += 1;
       if (event.type === "text_delta") text += event.delta;
       if (event.type === "proposal_delta") proposalText += event.delta;
+      if (event.type === "request_id") providerRequestId = event.requestId;
       usage = usageFromEvent(event) ?? usage;
-
-      await db
-        .update(aiRuns)
-        .set({
-          checkpointSequence: sequence,
-          checkpointText: text,
-          checkpointProposal: proposalText || null,
-          providerRequestId:
-            event.type === "request_id" ? event.requestId : undefined,
-          inputTokens: usage?.inputTokens,
-          cachedInputTokens: usage?.cachedInputTokens,
-          outputTokens: usage?.outputTokens,
-          leaseExpiresAt: runLease(
-            new Date(),
-            prepared.configuration.runLeaseSeconds,
-          ),
-          updatedAt: new Date(),
-        })
-        .where(eq(aiRuns.id, prepared.runId));
+      const now = new Date();
+      if (
+        event.type === "request_id" ||
+        event.type === "usage" ||
+        event.type === "complete" ||
+        now.getTime() - lastCheckpointAt >=
+          prepared.configuration.streamCheckpointMs
+      ) {
+        await persistCheckpoint(now);
+      }
       yield { sequence, ...event };
     }
+    stopMonitoring();
 
     let proposal: unknown;
     let proposalState: "complete" | "invalid" | undefined;
@@ -509,7 +571,16 @@ export async function* executePreparedAiRun(
     if (!usage) {
       await db
         .update(aiRuns)
-        .set({ status: "settlement_pending", completedAt: new Date(), updatedAt: new Date() })
+        .set({
+          status: "settlement_pending",
+          checkpointSequence: sequence,
+          checkpointText: text,
+          checkpointProposal: proposalText || null,
+          providerRequestId,
+          completedAt: new Date(),
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
         .where(eq(aiRuns.id, prepared.runId));
       await db
         .update(aiMessages)
@@ -531,7 +602,15 @@ export async function* executePreparedAiRun(
         .set({
           status: "complete",
           finalPoints,
+          checkpointSequence: sequence,
+          checkpointText: text,
+          checkpointProposal: proposalText || null,
+          providerRequestId,
+          inputTokens: usage.inputTokens,
+          cachedInputTokens: usage.cachedInputTokens,
+          outputTokens: usage.outputTokens,
           completedAt: new Date(),
+          leaseExpiresAt: null,
           updatedAt: new Date(),
         })
         .where(eq(aiRuns.id, prepared.runId));
@@ -574,7 +653,13 @@ export async function* executePreparedAiRun(
             : "provider_failed",
         checkpointText: text,
         checkpointProposal: proposalText || null,
+        checkpointSequence: sequence,
+        providerRequestId,
+        inputTokens: usage?.inputTokens,
+        cachedInputTokens: usage?.cachedInputTokens,
+        outputTokens: usage?.outputTokens,
         completedAt: new Date(),
+        leaseExpiresAt: null,
         updatedAt: new Date(),
       })
       .where(eq(aiRuns.id, prepared.runId));
@@ -597,6 +682,7 @@ export async function* executePreparedAiRun(
           : "provider_failed",
     };
   } finally {
+    stopMonitoring();
     activeRunControllers.delete(prepared.runId);
   }
 }

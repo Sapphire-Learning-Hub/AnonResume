@@ -223,7 +223,13 @@ export function AiAssistantPanel({
                   <span className={styles.messageRole}>
                     {message.role === "user" ? t("ai.you") : t("ai.assistant")}
                   </span>
-                  <span>{message.text || t("ai.thinking")}</span>
+                  <span>
+                    {message.text ||
+                      (message.completionState === "streaming"
+                        ? assistant.details?.activeRun?.text
+                        : "") ||
+                      t("ai.thinking")}
+                  </span>
                 </div>
               ))}
               {assistant.pendingUserMessage ? (

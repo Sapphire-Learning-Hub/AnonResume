@@ -10,7 +10,6 @@ import {
   jsonb,
   pgSchema,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uniqueIndex,

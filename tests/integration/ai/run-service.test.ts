@@ -134,6 +134,7 @@ describe("AI run service", () => {
         auditRetentionDays: 30,
         defaultMonthlyPoints: 100,
         requestsPerMinute: 10,
+        streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
     });
@@ -181,5 +182,69 @@ describe("AI run service", () => {
           ),
         ),
     ).toHaveLength(2);
+  });
+
+  it("observes stop requests written by another process", async () => {
+    let notifyFirstDelta!: () => void;
+    const firstDelta = new Promise<void>((resolve) => {
+      notifyFirstDelta = resolve;
+    });
+    const adapter: AiProviderAdapter = {
+      async *start(_request, signal) {
+        yield { type: "request_id", requestId: "provider-request-stop" };
+        yield { type: "text_delta", delta: "partial" };
+        notifyFirstDelta();
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, 500);
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new Error("aborted"));
+            },
+            { once: true },
+          );
+        });
+        yield { type: "text_delta", delta: " should not arrive" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "停止这次请求",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints: 100,
+        requestsPerMinute: 10,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+    const events: Array<{ type: string; code?: string }> = [];
+    const consuming = (async () => {
+      for await (const event of executePreparedAiRun(prepared, { adapter })) {
+        events.push(event);
+      }
+    })();
+
+    await firstDelta;
+    await db
+      .update(aiRuns)
+      .set({ stopRequestedAt: new Date() })
+      .where(eq(aiRuns.id, prepared.runId));
+    await consuming;
+
+    expect(events.at(-1)).toMatchObject({ type: "error", code: "stopped" });
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({
+      status: "settlement_pending",
+      failureCode: "stopped",
+      checkpointText: "partial",
+    });
   });
 });

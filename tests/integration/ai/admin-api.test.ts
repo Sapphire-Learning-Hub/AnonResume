@@ -81,6 +81,7 @@ describe("AI administration routes", () => {
     const quota = await PATCH_QUOTA(
       new Request("http://localhost/api/manage/ai/quotas", {
         method: "PATCH",
+        headers: { origin: "http://localhost" },
         body: JSON.stringify({ userId: "user-1", monthlyLimit: 2000 }),
       }),
     );
@@ -93,6 +94,7 @@ describe("AI administration routes", () => {
     const settlement = await POST_USAGE(
       new Request("http://localhost/api/manage/ai/usage", {
         method: "POST",
+        headers: { origin: "http://localhost" },
         body: JSON.stringify({
           runId: "00000000-0000-4000-8000-000000000001",
           decision: "release",

@@ -8,6 +8,11 @@ import {
   listAiAdminUsage,
   resolveAiAdminSettlement,
 } from "@/lib/ai/admin/service";
+import {
+  MAX_ACTION_REQUEST_BYTES,
+  parseLimitedJsonRequest,
+} from "@/lib/http/request-body";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import { parsePageRequest } from "@/lib/shared/pagination";
 
 const settlementSchema = z.object({
@@ -38,11 +43,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const forbiddenResponse = requireSameOrigin(request);
+    if (forbiddenResponse) return forbiddenResponse;
     const context = await requireAdminApi({
       permission: "ai.quotas.manage",
       recentMfa: true,
     });
-    const value = settlementSchema.parse(await request.json());
+    const value = settlementSchema.parse(
+      await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
+    );
     await resolveAiAdminSettlement({ actorUserId: context.userId, ...value });
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -54,6 +54,7 @@ export async function POST(
         auditRetentionDays: configuration.auditRetentionDays,
         defaultMonthlyPoints: configuration.defaultMonthlyPoints,
         requestsPerMinute: configuration.requestsPerMinute,
+        streamCheckpointMs: configuration.streamCheckpointMs,
         runLeaseSeconds: configuration.runLeaseSeconds,
         maxConcurrentRuns: configuration.maxConcurrentRuns,
         platformEnabled: configuration.platformEnabled,

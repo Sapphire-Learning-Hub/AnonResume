@@ -7,6 +7,11 @@ import {
 } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
 import { aiAdminProviderSchema } from "@/lib/ai/admin/validation";
+import {
+  MAX_ACTION_REQUEST_BYTES,
+  parseLimitedJsonRequest,
+} from "@/lib/http/request-body";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 
 function requireEncryptionKey() {
   const key = resolveAiConfiguration(process.env).credentialsEncryptionKey;
@@ -19,11 +24,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const forbiddenResponse = requireSameOrigin(request);
+    if (forbiddenResponse) return forbiddenResponse;
     const context = await requireAdminApi({
       permission: "ai.providers.manage",
       recentMfa: true,
     });
-    const value = aiAdminProviderSchema.parse(await request.json());
+    const value = aiAdminProviderSchema.parse(
+      await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
+    );
     if (!value.model.id) throw new SyntaxError("model id is required");
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
@@ -38,10 +47,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const forbiddenResponse = requireSameOrigin(request);
+    if (forbiddenResponse) return forbiddenResponse;
     const context = await requireAdminApi({
       permission: "ai.providers.manage",
       recentMfa: true,

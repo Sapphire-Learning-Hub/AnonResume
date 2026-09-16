@@ -4,6 +4,11 @@ import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import { listAiAdminProviders, saveAiAdminProvider } from "@/lib/ai/admin/service";
 import { aiAdminProviderSchema } from "@/lib/ai/admin/validation";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import {
+  MAX_ACTION_REQUEST_BYTES,
+  parseLimitedJsonRequest,
+} from "@/lib/http/request-body";
+import { requireSameOrigin } from "@/lib/http/request-origin";
 import { parsePageRequest } from "@/lib/shared/pagination";
 
 function requireEncryptionKey() {
@@ -31,11 +36,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const forbiddenResponse = requireSameOrigin(request);
+    if (forbiddenResponse) return forbiddenResponse;
     const context = await requireAdminApi({
       permission: "ai.providers.manage",
       recentMfa: true,
     });
-    const value = aiAdminProviderSchema.parse(await request.json());
+    const value = aiAdminProviderSchema.parse(
+      await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
+    );
     if (!value.apiKey) throw new Error("ai_api_key_required");
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,

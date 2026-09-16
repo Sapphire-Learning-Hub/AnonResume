@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
 import { adminApiErrorResponse } from "@/lib/admin/api";
+import { RequestBodyTooLargeError } from "@/lib/http/request-body";
 
 import { AiAdminNotFoundError, AiAdminStateConflictError } from "./service";
 
@@ -10,6 +11,9 @@ export function aiAdminApiErrorResponse(error: unknown) {
   if (authorization) return authorization;
   if (error instanceof ZodError || error instanceof SyntaxError) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  if (error instanceof RequestBodyTooLargeError) {
+    return NextResponse.json({ error: "request_body_too_large" }, { status: 413 });
   }
   if (error instanceof AiAdminNotFoundError) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
