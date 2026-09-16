@@ -3,6 +3,7 @@ import {
   buildAiResumeContext,
   createAiContextDelta,
 } from "@/lib/ai/context/builder";
+import { hashAiContent } from "@/domain/resume/ai/content-hash";
 
 describe("AI resume context", () => {
   it("includes semantic content and stable IDs without visual settings", () => {
@@ -16,6 +17,23 @@ describe("AI resume context", () => {
     expect(serialized).not.toContain("fontSize");
     expect(serialized).not.toContain("pagination");
     expect(serialized).not.toContain("#0f62fe");
+
+    const profile = context.sections[0]!;
+    expect(profile.editableTargets).toContainEqual({
+      type: "replace_section_title",
+      sectionId: profile.id,
+      beforeHash: hashAiContent(document.sections[0]!.title ?? null),
+    });
+
+    const summary = profile.editableTargets.find(
+      (target) => target.type === "replace_text",
+    );
+    expect(summary).toMatchObject({
+      type: "replace_text",
+      sectionId: profile.id,
+      blockPath: ["block-profile-summary"],
+    });
+    expect(summary?.beforeHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   it("limits section context and reports changed and removed sections", () => {

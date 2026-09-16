@@ -87,6 +87,7 @@ export async function PUT(request: Request) {
     await savePersonalAiSettings({
       userId: session.user.id,
       encryptionKey: configuration.credentialsEncryptionKey,
+      trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       ...body,
     });
     const personal = await getPersonalAiSettings({

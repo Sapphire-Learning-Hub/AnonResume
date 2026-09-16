@@ -13,7 +13,6 @@ import {
 } from "@ant-design/icons";
 import {
   Button,
-  FloatButton,
   Modal,
   Radio,
   Segmented,
@@ -273,14 +272,18 @@ export function LocaleSwitcher() {
   ];
 
   return (
-    <div data-floating-action-item="settings" data-print-chrome="screen">
-      <FloatButton
-        aria-label={t("common.openInterfaceSettings")}
-        tooltip={<span>{t("common.interfaceSettings")}</span>}
-        icon={<SettingOutlined />}
-        type="primary"
-        onClick={() => setOpen(true)}
-      />
+    <div
+      data-interface-settings-trigger="inline"
+      data-print-chrome="screen"
+    >
+      <Tooltip title={t("common.interfaceSettings")}>
+        <Button
+          aria-label={t("common.openInterfaceSettings")}
+          icon={<SettingOutlined />}
+          type="text"
+          onClick={() => setOpen(true)}
+        />
+      </Tooltip>
       <Modal
         centered
         className={styles.settingsModal}

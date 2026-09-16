@@ -512,7 +512,7 @@ export function AdminAiManager({
         okText={t("common.confirm")}
         onCancel={() => setProviderDraft(undefined)}
         onOk={() => void saveProvider()}
-        open={Boolean(providerDraft)}
+        open={Boolean(providerDraft) && !reauthOpen}
         title={providerDraft?.providerId ? t("ai.editProvider") : t("ai.addProvider")}
         width={720}
       >
@@ -540,7 +540,7 @@ export function AdminAiManager({
         okText={t("common.confirm")}
         onCancel={() => setQuotaDraft(undefined)}
         onOk={() => void saveQuota()}
-        open={Boolean(quotaDraft)}
+        open={Boolean(quotaDraft) && !reauthOpen}
         title={t("ai.editQuota")}
       >
         {quotaDraft ? <div className="admin-dialog-form">

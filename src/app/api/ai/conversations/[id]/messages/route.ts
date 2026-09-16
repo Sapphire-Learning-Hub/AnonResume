@@ -56,6 +56,7 @@ export async function POST(
         requestsPerMinute: configuration.requestsPerMinute,
         streamCheckpointMs: configuration.streamCheckpointMs,
         runLeaseSeconds: configuration.runLeaseSeconds,
+        trustedEndpointHostnames: configuration.trustedEndpointHostnames,
         maxConcurrentRuns: configuration.maxConcurrentRuns,
         platformEnabled: configuration.platformEnabled,
         byokEnabled: configuration.byokEnabled,
@@ -80,6 +81,7 @@ export async function POST(
       headers: {
         "cache-control": "no-store",
         "content-type": "application/x-ndjson; charset=utf-8",
+        "x-accel-buffering": "no",
         "x-ai-run-id": prepared.runId,
       },
     });

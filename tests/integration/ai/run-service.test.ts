@@ -21,6 +21,7 @@ import type { AiProviderAdapter } from "@/lib/ai/providers/types";
 import {
   executePreparedAiRun,
   prepareAiRun,
+  stopAiRun,
 } from "@/lib/ai/runs/service";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
 
@@ -246,5 +247,42 @@ describe("AI run service", () => {
       failureCode: "stopped",
       checkpointText: "partial",
     });
+  });
+
+  it("immediately releases the active run when its executor is unavailable", async () => {
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "停止已经失联的请求",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints: 100,
+        requestsPerMinute: 10,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    await expect(stopAiRun({ userId, runId: prepared.runId })).resolves.toBe(true);
+
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({
+      status: "settlement_pending",
+      failureCode: "stopped",
+      leaseExpiresAt: null,
+    });
+    expect(run?.stopRequestedAt).toBeInstanceOf(Date);
+    expect(run?.completedAt).toBeInstanceOf(Date);
+
+    const [assistantMessage] = await db
+      .select()
+      .from(aiMessages)
+      .where(eq(aiMessages.id, prepared.assistantMessageId));
+    expect(assistantMessage).toMatchObject({ completionState: "stopped" });
   });
 });

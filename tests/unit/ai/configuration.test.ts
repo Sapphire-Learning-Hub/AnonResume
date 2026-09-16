@@ -12,6 +12,7 @@ describe("AI runtime configuration", () => {
       requestsPerMinute: 10,
       maxConcurrentRuns: 1,
       defaultMonthlyPoints: 100_000,
+      trustedEndpointHostnames: [],
     });
   });
 
@@ -29,6 +30,8 @@ describe("AI runtime configuration", () => {
         AI_ENABLED: "true",
         AI_PLATFORM_ENABLED: "true",
         AI_BYOK_ENABLED: "true",
+        AI_TRUSTED_ENDPOINT_HOSTNAMES:
+          "ark.cn-beijing.volces.com, models.example.com",
         AI_CREDENTIALS_ENCRYPTION_KEY: key,
       }),
     ).toMatchObject({
@@ -36,6 +39,10 @@ describe("AI runtime configuration", () => {
       platformEnabled: true,
       byokEnabled: true,
       credentialsEncryptionKey: Buffer.alloc(32, 9),
+      trustedEndpointHostnames: [
+        "ark.cn-beijing.volces.com",
+        "models.example.com",
+      ],
     });
   });
 

@@ -103,8 +103,13 @@ async function fetchWithValidatedRedirects({
   signal: AbortSignal;
   maxRedirects: number;
 }) {
+  const trustedProxyHostnames = new Set(request.trustedEndpointHostnames ?? []);
   let target = completionUrl(
-    await assertSafeAiEndpoint(request.endpoint, resolver),
+    await assertSafeAiEndpoint(
+      request.endpoint,
+      resolver,
+      trustedProxyHostnames,
+    ),
   );
   const body = JSON.stringify({
     model: request.model,
@@ -151,7 +156,11 @@ async function fetchWithValidatedRedirects({
       if (!location || redirectCount === maxRedirects) {
         throw new AiProviderError("invalid_response");
       }
-      target = await assertSafeAiEndpoint(new URL(location, target), resolver);
+      target = await assertSafeAiEndpoint(
+        new URL(location, target),
+        resolver,
+        trustedProxyHostnames,
+      );
       continue;
     }
 

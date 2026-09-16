@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     await testPersonalAiSettings({
       userId: session.user.id,
       encryptionKey: configuration.credentialsEncryptionKey,
+      trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       baseUrl: body.baseUrl,
       apiKey: body.apiKey,
       modelKey: body.modelKey,

@@ -38,4 +38,34 @@ describe("AI endpoint policy", () => {
       ]),
     ).rejects.toThrow("unsafe_ai_endpoint");
   });
+
+  it("allows proxy fake IPs only for explicitly trusted hostnames", async () => {
+    const fakeIpResolver = async () => [
+      { address: "198.18.3.253", family: 4 },
+    ];
+
+    await expect(
+      assertSafeAiEndpoint(
+        "https://ark.cn-beijing.volces.com/api/v3",
+        fakeIpResolver,
+      ),
+    ).rejects.toThrow("unsafe_ai_endpoint");
+    await expect(
+      assertSafeAiEndpoint(
+        "https://ark.cn-beijing.volces.com/api/v3",
+        fakeIpResolver,
+        new Set(["ark.cn-beijing.volces.com"]),
+      ),
+    ).resolves.toHaveProperty(
+      "href",
+      "https://ark.cn-beijing.volces.com/api/v3",
+    );
+    await expect(
+      assertSafeAiEndpoint(
+        "https://untrusted.example.com/v1",
+        fakeIpResolver,
+        new Set(["ark.cn-beijing.volces.com"]),
+      ),
+    ).rejects.toThrow("unsafe_ai_endpoint");
+  });
 });

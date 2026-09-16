@@ -150,9 +150,14 @@ export async function saveAiAdminProvider(input: {
   actorUserId: string;
   providerId?: string;
   encryptionKey: Buffer;
+  trustedEndpointHostnames?: readonly string[];
   value: AiAdminProviderInput;
 }) {
-  const endpoint = await assertSafeAiEndpoint(input.value.baseUrl);
+  const endpoint = await assertSafeAiEndpoint(
+    input.value.baseUrl,
+    undefined,
+    new Set(input.trustedEndpointHostnames ?? []),
+  );
   const existing = input.providerId
     ? await db
         .select({

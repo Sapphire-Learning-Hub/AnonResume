@@ -13,10 +13,15 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-function requireEncryptionKey() {
-  const key = resolveAiConfiguration(process.env).credentialsEncryptionKey;
-  if (!key) throw new Error("ai_encryption_key_unavailable");
-  return key;
+function requireProviderConfiguration() {
+  const configuration = resolveAiConfiguration(process.env);
+  if (!configuration.credentialsEncryptionKey) {
+    throw new Error("ai_encryption_key_unavailable");
+  }
+  return {
+    ...configuration,
+    credentialsEncryptionKey: configuration.credentialsEncryptionKey,
+  };
 }
 
 export async function PATCH(
@@ -34,10 +39,12 @@ export async function PATCH(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
     if (!value.model.id) throw new SyntaxError("model id is required");
+    const configuration = requireProviderConfiguration();
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
       providerId: (await params).id,
-      encryptionKey: requireEncryptionKey(),
+      encryptionKey: configuration.credentialsEncryptionKey,
+      trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       value,
     });
     return NextResponse.json(result);

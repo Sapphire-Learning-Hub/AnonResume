@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
   Button,
-  Drawer,
   Empty,
   Input,
   Modal,
@@ -21,12 +26,32 @@ import {
   markAiProposalApplied,
   type AiStoredProposal,
 } from "@/lib/ai/client";
+import { getAiProposalStreamProgress } from "@/lib/ai/proposals/stream-progress";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { CloseIcon } from "@/components/ui/InlineIcons";
 import { useI18n } from "@/i18n/I18nProvider";
 
 import { useAiAssistantPanelStyles } from "./AiAssistantPanel.style";
 import { AiProposalCard } from "./AiProposalCard";
 import { useAiConversation } from "./useAiConversation";
+
+const DEFAULT_PANEL_WIDTH = 480;
+const MIN_PANEL_WIDTH = 360;
+const MAX_PANEL_WIDTH = 720;
+const MIN_EDITOR_WIDTH = 640;
+const KEYBOARD_RESIZE_STEP = 24;
+
+function getMaximumPanelWidth() {
+  if (typeof window === "undefined") return MAX_PANEL_WIDTH;
+  return Math.max(
+    MIN_PANEL_WIDTH,
+    Math.min(MAX_PANEL_WIDTH, window.innerWidth - MIN_EDITOR_WIDTH),
+  );
+}
+
+function clampPanelWidth(width: number) {
+  return Math.min(Math.max(width, MIN_PANEL_WIDTH), getMaximumPanelWidth());
+}
 
 export function AiAssistantPanel({
   open,
@@ -53,8 +78,14 @@ export function AiAssistantPanel({
   const { t } = useI18n();
   const { notification, toast } = useAppFeedback();
   const [draft, setDraft] = useState("");
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const resizeStateRef = useRef<{
+    pointerId: number;
+    startWidth: number;
+    startX: number;
+  } | undefined>(undefined);
 
   function reportError(error: unknown) {
     const code = error instanceof AiClientError ? error.code : "ai_request_failed";
@@ -81,6 +112,18 @@ export function AiAssistantPanel({
     sectionId,
     onError: reportError,
   });
+
+  useEffect(() => {
+    if (!open) return;
+
+    const constrainPanelWidth = () => {
+      setPanelWidth((current) => clampPanelWidth(current));
+    };
+
+    constrainPanelWidth();
+    window.addEventListener("resize", constrainPanelWidth);
+    return () => window.removeEventListener("resize", constrainPanelWidth);
+  }, [open]);
 
   async function handleApply(
     storedProposal: AiStoredProposal,
@@ -113,21 +156,124 @@ export function AiAssistantPanel({
     return true;
   }
 
+  async function submitDraft() {
+    const message = draft.trim();
+    if (!message) return;
+    setDraft("");
+    try {
+      await assistant.send(message);
+    } catch (error) {
+      setDraft(message);
+      reportError(error);
+    }
+  }
+
   const messages = assistant.details?.messages ?? [];
   const proposals = assistant.details?.proposals ?? [];
+  const activeProposalCheckpoint = assistant.details?.activeRun?.proposal;
+  const proposalStreamText =
+    assistant.streamingProposalText ||
+    (typeof activeProposalCheckpoint === "string"
+      ? activeProposalCheckpoint
+      : "");
+  const proposalStreamProgress = getAiProposalStreamProgress(
+    proposalStreamText,
+  );
+  const persistedPendingUser = assistant.pendingUserMessage
+    ? messages.find(
+        (message) =>
+          message.sequence > assistant.pendingAfterSequence &&
+          message.role === "user",
+      )
+    : undefined;
+  const hasPersistedPendingTurn = Boolean(
+    persistedPendingUser &&
+      messages.some(
+        (message) =>
+          message.sequence > persistedPendingUser.sequence &&
+          message.role === "assistant",
+      ),
+  );
   const currentConversation = assistant.conversations.find(
     (conversation) => conversation.id === assistant.selectedConversationId,
   );
 
+  function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
+    resizeStateRef.current = {
+      pointerId: event.pointerId,
+      startWidth: panelWidth,
+      startX: event.clientX,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleResizeMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const resizeState = resizeStateRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
+    setPanelWidth(
+      clampPanelWidth(
+        resizeState.startWidth + resizeState.startX - event.clientX,
+      ),
+    );
+  }
+
+  function handleResizeEnd(event: ReactPointerEvent<HTMLDivElement>) {
+    if (resizeStateRef.current?.pointerId !== event.pointerId) return;
+    resizeStateRef.current = undefined;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }
+
+  function handleResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    setPanelWidth((current) =>
+      clampPanelWidth(
+        current +
+          (event.key === "ArrowLeft"
+            ? KEYBOARD_RESIZE_STEP
+            : -KEYBOARD_RESIZE_STEP),
+      ),
+    );
+  }
+
+  if (!open) return null;
+
   return (
-    <Drawer
-      destroyOnHidden={false}
-      open={open}
-      placement="right"
-      title={t("ai.title")}
-      width={480}
-      onClose={onClose}
+    <aside
+      aria-label={t("ai.title")}
+      className={styles.panel}
+      style={{ width: panelWidth }}
     >
+      <div
+        aria-label={t("ai.resize")}
+        aria-orientation="vertical"
+        aria-valuemax={MAX_PANEL_WIDTH}
+        aria-valuemin={MIN_PANEL_WIDTH}
+        aria-valuenow={panelWidth}
+        className={styles.resizeHandle}
+        role="separator"
+        tabIndex={0}
+        onDoubleClick={() => setPanelWidth(DEFAULT_PANEL_WIDTH)}
+        onKeyDown={handleResizeKeyDown}
+        onPointerCancel={handleResizeEnd}
+        onPointerDown={handleResizeStart}
+        onPointerMove={handleResizeMove}
+        onPointerUp={handleResizeEnd}
+      />
+      <header className={styles.header}>
+        <div className={styles.title}>
+          <span className={styles.titleMark}>AI</span>
+          <strong>{t("ai.title")}</strong>
+        </div>
+        <Button
+          aria-label={t("common.dismiss")}
+          className={styles.closeButton}
+          type="text"
+          onClick={onClose}
+        >
+          <CloseIcon size={17} />
+        </Button>
+      </header>
       <div className={styles.body}>
         <div className={styles.toolbar}>
           <div className={styles.toolbarRow}>
@@ -210,7 +356,10 @@ export function AiAssistantPanel({
         <div className={styles.messages}>
           {assistant.loading ? (
             <div className={styles.empty}><Spin /></div>
-          ) : messages.length === 0 && !assistant.streamingText ? (
+          ) : messages.length === 0 &&
+            !assistant.pendingUserMessage &&
+            !assistant.streamingText &&
+            !proposalStreamText ? (
             <Empty
               description={
                 assistant.enabled ? t("ai.empty") : t("ai.unavailable")
@@ -224,29 +373,49 @@ export function AiAssistantPanel({
                     {message.role === "user" ? t("ai.you") : t("ai.assistant")}
                   </span>
                   <span>
-                    {message.text ||
-                      (message.completionState === "streaming"
-                        ? assistant.details?.activeRun?.text
-                        : "") ||
+                    {(message.completionState === "streaming"
+                      ? assistant.streamingText ||
+                        message.text ||
+                        assistant.details?.activeRun?.text
+                      : message.text) ||
                       t("ai.thinking")}
                   </span>
                 </div>
               ))}
-              {assistant.pendingUserMessage ? (
+              {assistant.pendingUserMessage && !hasPersistedPendingTurn ? (
                 <div className={styles.message} data-role="user">
                   <span className={styles.messageRole}>{t("ai.you")}</span>
                   <span>{assistant.pendingUserMessage}</span>
                 </div>
               ) : null}
-              {assistant.streamingText ? (
+              {!hasPersistedPendingTurn && assistant.streamingText ? (
                 <div className={styles.message} data-role="assistant">
                   <span className={styles.messageRole}>{t("ai.assistant")}</span>
                   <span>{assistant.streamingText}</span>
                 </div>
-              ) : assistant.sending ? (
+              ) : !hasPersistedPendingTurn && assistant.sending ? (
                 <div className={styles.message} data-role="assistant">
                   <span className={styles.messageRole}>{t("ai.assistant")}</span>
                   <span>{t("ai.thinking")}</span>
+                </div>
+              ) : null}
+              {proposalStreamText ? (
+                <div className={styles.proposal} data-streaming="true">
+                  <div className={styles.proposalTitle}>
+                    <strong>{t("ai.proposal.generating")}</strong>
+                    <span>
+                      {proposalStreamProgress.summary ||
+                        t("ai.proposal.generatingDescription")}
+                      <i aria-hidden className={styles.streamCursor} />
+                    </span>
+                  </div>
+                  {proposalStreamProgress.completedChanges > 0 ? (
+                    <span className={styles.proposalProgress}>
+                      {t("ai.proposal.generatingCount", {
+                        count: proposalStreamProgress.completedChanges,
+                      })}
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
               {proposals.map((proposal) => (
@@ -271,10 +440,7 @@ export function AiAssistantPanel({
             onPressEnter={(event) => {
               if (event.shiftKey) return;
               event.preventDefault();
-              if (!draft.trim()) return;
-              const message = draft.trim();
-              setDraft("");
-              void assistant.send(message).catch(reportError);
+              void submitDraft();
             }}
           />
           <div className={styles.composerActions}>
@@ -287,12 +453,7 @@ export function AiAssistantPanel({
               <Button
                 disabled={!draft.trim() || !assistant.selectedModelId}
                 type="primary"
-                onClick={() => {
-                  const message = draft.trim();
-                  if (!message) return;
-                  setDraft("");
-                  void assistant.send(message).catch(reportError);
-                }}
+                onClick={() => void submitDraft()}
               >
                 {t("ai.send")}
               </Button>
@@ -321,6 +482,6 @@ export function AiAssistantPanel({
           onChange={(event) => setRenameValue(event.target.value)}
         />
       </Modal>
-    </Drawer>
+    </aside>
   );
 }

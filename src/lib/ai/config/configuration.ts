@@ -36,6 +36,26 @@ function positiveInteger(
   return value;
 }
 
+function trustedEndpointHostnames(environment: AiEnvironment) {
+  const raw = environment.AI_TRUSTED_ENDPOINT_HOSTNAMES?.trim();
+  if (!raw) return [];
+
+  return [...new Set(raw.split(",").map((value) => value.trim().toLowerCase()))]
+    .filter(Boolean)
+    .map((hostname) => {
+      const parsed = new URL(`https://${hostname}`);
+      if (
+        parsed.hostname !== hostname ||
+        parsed.pathname !== "/" ||
+        parsed.port ||
+        !hostname.includes(".")
+      ) {
+        throw new Error("AI_TRUSTED_ENDPOINT_HOSTNAMES must contain exact hostnames");
+      }
+      return hostname;
+    });
+}
+
 export function decodeAiCredentialsEncryptionKey(value: string | undefined) {
   if (!value?.trim()) return undefined;
 
@@ -69,6 +89,7 @@ export function resolveAiConfiguration(environment: AiEnvironment) {
     platformEnabled: enabled && platformEnabled,
     byokEnabled: enabled && byokEnabled,
     credentialsEncryptionKey,
+    trustedEndpointHostnames: trustedEndpointHostnames(environment),
     auditRetentionDays: positiveInteger(
       environment,
       "AI_AUDIT_RETENTION_DAYS",

@@ -24,6 +24,7 @@ import { buildAiResumeContext } from "@/lib/ai/context/builder";
 import { AiConversationNotFoundError } from "@/lib/ai/conversations/repository";
 import type { AiProviderAdapter, AiProviderRequest } from "@/lib/ai/providers/types";
 import { AiProviderError } from "@/lib/ai/providers/types";
+import { createAiProposalToolDefinition } from "@/lib/ai/proposals/tool";
 import { decryptAiCredential } from "@/lib/ai/security/credentials";
 import {
   getAiQuotaSnapshot,
@@ -45,6 +46,7 @@ export interface AiRunConfiguration {
   requestsPerMinute: number;
   streamCheckpointMs: number;
   runLeaseSeconds: number;
+  trustedEndpointHostnames?: readonly string[];
   maxConcurrentRuns?: number;
   platformEnabled?: boolean;
   byokEnabled?: boolean;
@@ -98,30 +100,6 @@ function isActiveRunConstraintError(error: unknown): boolean {
   );
 }
 
-function proposalToolDefinition() {
-  return {
-    name: "propose_resume_changes" as const,
-    description:
-      "Propose content-only resume changes. Never change layout, style, order, pagination, templates, or publication state.",
-    parameters: {
-      type: "object",
-      additionalProperties: false,
-      required: ["changes"],
-      properties: {
-        summary: { type: "string" },
-        changes: {
-          type: "array",
-          items: {
-            type: "object",
-            description:
-              "A change matching the server-provided proposal contract and existing target IDs.",
-          },
-        },
-      },
-    },
-  };
-}
-
 function systemPrompt(context: unknown) {
   return [
     "You are the AnonResume editing assistant.",
@@ -129,6 +107,9 @@ function systemPrompt(context: unknown) {
     "You may discuss the resume and propose content-only edits.",
     "Never change layout, style, order, pagination, templates, or publication state.",
     "Only target IDs present in the supplied structured context.",
+    "Never invent facts, metrics, dates, achievements, employers, credentials, or contact details.",
+    "When proposing an edit, call propose_resume_changes and copy sectionId, blockPath or listPath, itemId or afterItemId, and beforeHash verbatim from editableTargets.",
+    "Use a new unique change id and explain the user-visible reason for each change.",
     `Structured resume context: ${JSON.stringify(context)}`,
   ].join("\n");
 }
@@ -261,7 +242,10 @@ export async function prepareAiRun(input: {
     model: row.providerModelKey,
     messages,
     maxOutputTokens: row.maxOutputTokens,
-    proposalTool: row.supportsToolCalls ? proposalToolDefinition() : undefined,
+    trustedEndpointHostnames: input.configuration.trustedEndpointHostnames,
+    proposalTool: row.supportsToolCalls
+      ? createAiProposalToolDefinition()
+      : undefined,
   };
   const rates: AiPointRates = {
     inputPointsPerMillion: row.inputPointRate,
@@ -688,17 +672,38 @@ export async function* executePreparedAiRun(
 }
 
 export async function stopAiRun(input: { userId: string; runId: string }) {
-  const [run] = await db
-    .update(aiRuns)
-    .set({ stopRequestedAt: new Date(), updatedAt: new Date() })
-    .where(
-      and(
-        eq(aiRuns.id, input.runId),
-        eq(aiRuns.userId, input.userId),
-        or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
-      ),
-    )
-    .returning({ id: aiRuns.id });
+  const now = new Date();
+  const run = await db.transaction(async (transaction) => {
+    const [stoppedRun] = await transaction
+      .update(aiRuns)
+      .set({
+        status: "settlement_pending",
+        stopRequestedAt: now,
+        failureCode: "stopped",
+        completedAt: now,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(aiRuns.id, input.runId),
+          eq(aiRuns.userId, input.userId),
+          or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
+        ),
+      )
+      .returning({
+        id: aiRuns.id,
+        assistantMessageId: aiRuns.assistantMessageId,
+      });
+    if (!stoppedRun) return undefined;
+
+    await transaction
+      .update(aiMessages)
+      .set({ completionState: "stopped", updatedAt: now })
+      .where(eq(aiMessages.id, stoppedRun.assistantMessageId));
+    return stoppedRun;
+  });
   if (!run) return false;
   activeRunControllers.get(input.runId)?.abort();
   return true;

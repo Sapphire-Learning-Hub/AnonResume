@@ -30,6 +30,7 @@ import {
   type AppNavigationIcon,
 } from "@/components/dashboard/app-navigation";
 import { useI18n } from "@/i18n/I18nProvider";
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
@@ -386,6 +387,7 @@ export function AppShell({
                   email: user.email,
                 })}
           </span>
+          <LocaleSwitcher />
           {access.mode === "product" && access.canEnterManagement ? (
             <ManagementModeControl
               email={user.email}

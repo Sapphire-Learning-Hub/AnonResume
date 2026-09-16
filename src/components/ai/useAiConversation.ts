@@ -41,7 +41,9 @@ export function useAiConversation({
   );
   const [details, setDetails] = useState<AiConversationDetails>();
   const [pendingUserMessage, setPendingUserMessage] = useState("");
+  const [pendingAfterSequence, setPendingAfterSequence] = useState(0);
   const [streamingText, setStreamingText] = useState("");
+  const [streamingProposalText, setStreamingProposalText] = useState("");
   const [liveRunId, setLiveRunId] = useState<string>();
   const reportError = useEffectEvent(onError);
 
@@ -133,7 +135,9 @@ export function useAiConversation({
 
     setSending(true);
     setPendingUserMessage(message);
+    setPendingAfterSequence(details?.messages.at(-1)?.sequence ?? 0);
     setStreamingText("");
+    setStreamingProposalText("");
     try {
       await sendAiMessage({
         conversationId,
@@ -144,13 +148,19 @@ export function useAiConversation({
           if (event.type === "text_delta") {
             setStreamingText((current) => current + event.delta);
           }
+          if (event.type === "proposal_delta") {
+            setStreamingProposalText((current) => current + event.delta);
+          }
         },
       });
       await Promise.all([loadDetails(conversationId), loadIndex()]);
       setStreamingText("");
+      setStreamingProposalText("");
     } finally {
       setSending(false);
       setPendingUserMessage("");
+      setStreamingText("");
+      setStreamingProposalText("");
       setLiveRunId(undefined);
     }
   }
@@ -194,7 +204,9 @@ export function useAiConversation({
     contextScope,
     details,
     pendingUserMessage,
+    pendingAfterSequence,
     streamingText,
+    streamingProposalText,
     setSelectedConversationId,
     setSelectedModelId,
     setContextScope,

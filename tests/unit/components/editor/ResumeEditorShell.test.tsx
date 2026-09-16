@@ -152,6 +152,32 @@ describe("ResumeEditorShell", () => {
     );
   });
 
+  it("labels the AI assistant entry in the document bar", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "AI 编辑助手" })).toHaveTextContent(
+      "AI",
+    );
+  });
+
+  it("places interface settings in the editor document bar", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "打开界面设置" }),
+    ).toBeInTheDocument();
+  });
+
   it("toggles browser fullscreen from the document bar", async () => {
     let fullscreenElement: Element | null = null;
     const fullscreenElementDescriptor = Object.getOwnPropertyDescriptor(

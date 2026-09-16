@@ -17,6 +17,7 @@ export interface AiProviderRequest {
   model: string;
   messages: AiProviderMessage[];
   maxOutputTokens: number;
+  trustedEndpointHostnames?: readonly string[];
   proposalTool?: AiProposalToolDefinition;
 }
 

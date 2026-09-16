@@ -46,6 +46,18 @@ describe("AppShell", () => {
     );
   });
 
+  it("places interface settings beside the signed-in user", () => {
+    renderShell();
+
+    const settingsButton = screen.getByRole("button", {
+      name: "打开界面设置",
+    });
+    expect(settingsButton.closest("header")).not.toBeNull();
+    expect(settingsButton.parentElement?.parentElement).toContainElement(
+      screen.getByText(/测试用户/),
+    );
+  });
+
   it("places announcements in the top bar beside the brand", () => {
     renderShell(productAccess, [
       {

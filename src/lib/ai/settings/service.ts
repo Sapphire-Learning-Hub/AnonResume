@@ -55,6 +55,7 @@ export async function getPersonalAiSettings(input: {
 export async function savePersonalAiSettings(input: {
   userId: string;
   encryptionKey: Buffer;
+  trustedEndpointHostnames?: readonly string[];
   providerName: string;
   baseUrl: string;
   apiKey?: string;
@@ -62,7 +63,11 @@ export async function savePersonalAiSettings(input: {
   modelName: string;
   supportsToolCalls: boolean;
 }) {
-  const endpoint = await assertSafeAiEndpoint(input.baseUrl);
+  const endpoint = await assertSafeAiEndpoint(
+    input.baseUrl,
+    undefined,
+    new Set(input.trustedEndpointHostnames ?? []),
+  );
   const current = await getPersonalAiSettings({
     userId: input.userId,
     encryptionKey: input.encryptionKey,
@@ -148,11 +153,16 @@ export async function disablePersonalAiSettings(userId: string) {
 export async function testPersonalAiSettings(input: {
   userId: string;
   encryptionKey: Buffer;
+  trustedEndpointHostnames?: readonly string[];
   baseUrl: string;
   apiKey?: string;
   modelKey: string;
 }) {
-  const endpoint = await assertSafeAiEndpoint(input.baseUrl);
+  const endpoint = await assertSafeAiEndpoint(
+    input.baseUrl,
+    undefined,
+    new Set(input.trustedEndpointHostnames ?? []),
+  );
   const current = await getPersonalAiSettings({
     userId: input.userId,
     encryptionKey: input.encryptionKey,
@@ -184,6 +194,7 @@ export async function testPersonalAiSettings(input: {
       model: input.modelKey,
       messages: [{ role: "user", content: "Reply with OK." }],
       maxOutputTokens: 8,
+      trustedEndpointHostnames: input.trustedEndpointHostnames,
     },
     signal,
   )) {

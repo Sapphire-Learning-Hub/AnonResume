@@ -43,6 +43,11 @@ function isUnsafeIpv4(value: string) {
   );
 }
 
+function isProxyFakeIpv4(value: string) {
+  const [a, b] = value.split(".").map(Number);
+  return a === 198 && (b === 18 || b === 19);
+}
+
 function mappedIpv4(value: string) {
   const normalized = value.toLowerCase();
   if (!normalized.startsWith("::ffff:")) return undefined;
@@ -81,6 +86,7 @@ async function resolveAll(hostname: string) {
 export async function assertSafeAiEndpoint(
   value: string | URL,
   resolver: AiDnsResolver = resolveAll,
+  trustedProxyHostnames: ReadonlySet<string> = new Set(),
 ) {
   let endpoint: URL;
   try {
@@ -113,10 +119,18 @@ export async function assertSafeAiEndpoint(
     ? [{ address: hostname, family: directFamily }]
     : await resolver(hostname);
 
-  if (
-    addresses.length === 0 ||
-    addresses.some(({ address }) => isUnsafeAddress(address))
-  ) {
+  const unsafeAddresses = addresses.filter(({ address }) =>
+    isUnsafeAddress(address),
+  );
+  const trustedProxyResolution =
+    directFamily === 0 &&
+    trustedProxyHostnames.has(hostname) &&
+    unsafeAddresses.length > 0 &&
+    unsafeAddresses.every(
+      ({ address }) => isIP(address) === 4 && isProxyFakeIpv4(address),
+    );
+
+  if (addresses.length === 0 || (unsafeAddresses.length > 0 && !trustedProxyResolution)) {
     return unsafeEndpoint();
   }
 

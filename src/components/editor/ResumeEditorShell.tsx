@@ -48,6 +48,7 @@ import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
   AiAssistantIcon,
   DocumentIcon,
@@ -2483,11 +2484,12 @@ export function ResumeEditorShell({
       <Tooltip title={t("ai.title")}>
         <Button
           aria-label={t("ai.title")}
-          className={styles.ribbonIconButton}
+          className={styles.ribbonLabelButton}
           type="text"
           onClick={() => setAiAssistantOpen(true)}
         >
           <AiAssistantIcon size={16} />
+          <span>AI</span>
         </Button>
       </Tooltip>
       <Tooltip title={t("editor.versionHistory")}>
@@ -2528,6 +2530,7 @@ export function ResumeEditorShell({
           )}
         </Button>
       </Tooltip>
+      <LocaleSwitcher />
       <Button
         disabled={previewBusy}
         href={previewHref}
@@ -2863,7 +2866,8 @@ export function ResumeEditorShell({
   );
 
   return (
-    <main className={styles.shell} data-testid="resume-editor-shell">
+    <div className={styles.editorWorkspace}>
+      <main className={styles.shell} data-testid="resume-editor-shell">
       <EditorRibbon
         activeTab={activeRibbonTab}
         backHref="/app"
@@ -2895,15 +2899,6 @@ export function ResumeEditorShell({
       <EditorShortcutPanel
         open={shortcutPanelOpen}
         onCancel={() => setShortcutPanelOpen(false)}
-      />
-
-      <AiAssistantPanel
-        open={aiAssistantOpen}
-        resumeId={resumeId}
-        resumeVersion={version}
-        sectionId={selection.sectionId}
-        onApplyProposal={(input) => store.getState().applyAiProposal(input)}
-        onClose={() => setAiAssistantOpen(false)}
       />
 
       <Modal
@@ -3189,6 +3184,15 @@ export function ResumeEditorShell({
             .setZoom(Number((zoom - RESUME_EDITOR_ZOOM_STEP).toFixed(2)))
         }
       />
-    </main>
+      </main>
+      <AiAssistantPanel
+        open={aiAssistantOpen}
+        resumeId={resumeId}
+        resumeVersion={version}
+        sectionId={selection.sectionId}
+        onApplyProposal={(input) => store.getState().applyAiProposal(input)}
+        onClose={() => setAiAssistantOpen(false)}
+      />
+    </div>
   );
 }

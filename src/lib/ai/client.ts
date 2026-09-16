@@ -239,7 +239,12 @@ export async function sendAiMessage(input: {
   if (!response.body) throw new AiClientError("ai_stream_unavailable", 503);
   const runId = response.headers.get("x-ai-run-id");
   if (runId) input.onRun?.(runId);
-  await parseAiNdjsonStream(response.body, input.onEvent);
+  await parseAiNdjsonStream(response.body, (event) => {
+    if (event.type === "error") {
+      throw new AiClientError(event.code, 502);
+    }
+    input.onEvent(event);
+  });
 }
 
 export async function stopAiRun(runId: string) {
