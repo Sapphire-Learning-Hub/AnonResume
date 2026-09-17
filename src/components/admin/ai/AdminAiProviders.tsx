@@ -369,7 +369,6 @@ export function AdminAiProviders({
     >
       <AdminAiSearch basePath="/app/manage/ai/providers" placeholder={t("ai.search")} searchParams={searchParams} />
       <AdminSection>
-        <p className="admin-section-description">{t("ai.providersDescription")}</p>
         {providers.items.length === 0 ? (
           <div className="admin-empty-state">
             <Empty description={t("ai.noProviders")} />
@@ -637,7 +636,6 @@ export function AdminAiProviders({
                   ) : null}
                 </Space>
               </div>
-              <p className="admin-dialog-description">{t("ai.rateDescription")}</p>
               <div className="admin-ai-provider-form__rates">
                 <Form.Item label={t("ai.inputRate")}>
                   <InputNumber disabled={modelDraft.freeModel} min={0} onChange={(value) => setModelDraft({ ...modelDraft, inputPointRate: asNumber(value) })} value={modelDraft.inputPointRate} />

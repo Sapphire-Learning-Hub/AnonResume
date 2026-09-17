@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, DatePicker, Form, InputNumber, Modal } from "antd";
+import { Button, DatePicker, Form, InputNumber, Modal, Tag } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -69,10 +69,16 @@ export function AdminAiQuotas({
   }
 
   return (
-    <AdminPage title={t("ai.quotas")}>
+    <AdminPage
+      actions={(
+        <Tag variant="filled">
+          {t("ai.defaultQuota", { points: formatNumber(defaultMonthlyPoints) })}
+        </Tag>
+      )}
+      title={t("ai.quotas")}
+    >
       <AdminAiSearch basePath="/app/manage/ai/quotas" placeholder={t("ai.search")} searchParams={searchParams} />
       <AdminSection>
-        <p className="admin-section-description">{t("ai.defaultQuota", { points: formatNumber(defaultMonthlyPoints) })}</p>
         <AdminTable
           actionColumn
           headers={[t("ai.user"), t("ai.monthlyLimit"), t("ai.usedPoints"), t("ai.reservedPoints"), t("ai.period"), t("common.actions")]}
