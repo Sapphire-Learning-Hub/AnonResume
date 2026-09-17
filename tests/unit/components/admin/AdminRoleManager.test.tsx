@@ -52,8 +52,55 @@ describe("AdminRoleManager", () => {
     expect(screen.queryByRole("button", { name: "编辑" })).toBeNull();
     expect(screen.queryByRole("button", { name: "删除" })).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: "详情" }));
+    const details = screen.getByRole("dialog", { name: "角色详情" });
+    expect(within(details).getByText("只读审计员")).toBeInTheDocument();
+    expect(within(details).getByText(/查看系统概览、用户、公告/)).toBeInTheDocument();
+    expect(within(details).getByText("权限", { selector: "strong" })).toBeInTheDocument();
+    expect(within(details).getByText("查看用户")).toBeInTheDocument();
+    expect(within(details).getByText("已获得 1/19 项权限")).toBeInTheDocument();
+    fireEvent.click(within(details).getByRole("button", { name: /关\s*闭/ }));
+
     fireEvent.click(screen.getByRole("button", { name: "创建角色" }));
     expect(screen.queryByText("从预设开始")).toBeNull();
+  });
+
+  it("places MFA reauthentication above the open role editor", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input) => new Response(null, {
+        status: String(input) === "/api/manage/roles" ? 428 : 200,
+      }),
+    );
+    render(
+      <AdminRoleManager
+        administrators={{ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }}
+        roles={{ items: [], page: 1, pageSize: 20, total: 0, totalPages: 0 }}
+        searchParams={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "创建角色" }));
+    const roleEditor = screen.getByRole("dialog", { name: "创建管理角色" });
+    const roleForm = roleEditor.querySelector("form");
+    expect(roleForm).toBeInstanceOf(HTMLFormElement);
+    fireEvent.submit(roleForm as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/manage/roles",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    const reauthDialog = (await screen.findByText("再次验证管理身份", {
+      selector: ".ant-modal-title",
+    })).closest<HTMLElement>('[role="dialog"]');
+    expect(reauthDialog).toBeInstanceOf(HTMLElement);
+    expect(roleEditor).toBeInTheDocument();
+    const roleLayer = roleEditor.closest<HTMLElement>(".ant-modal-wrap");
+    const reauthLayer = reauthDialog?.closest<HTMLElement>(".ant-modal-wrap");
+    expect(roleLayer).toBeInstanceOf(HTMLElement);
+    expect(reauthLayer).toBeInstanceOf(HTMLElement);
+    expect(Number((reauthLayer as HTMLElement).style.zIndex)).toBeGreaterThan(1000);
   });
 
   it("moves section operations into headers and previews effective permissions", () => {

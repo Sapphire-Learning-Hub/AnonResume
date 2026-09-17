@@ -486,7 +486,8 @@ export async function listAdminRoles(request: AdminListRequest) {
       WHEN 'support_operator' THEN 1
       WHEN 'content_reviewer' THEN 2
       WHEN 'system_operator' THEN 3
-      ELSE 4 END ASC,
+      WHEN 'ai_service_manager' THEN 4
+      ELSE 5 END ASC,
       lower(role.name) ASC, role.id ASC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,
