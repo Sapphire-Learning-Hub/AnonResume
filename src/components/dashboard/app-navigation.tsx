@@ -1,6 +1,10 @@
 import type { MessageKey } from "@/i18n/messages";
 import type { AdminPermission } from "@/lib/admin/permissions";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
+import {
+  getAccessibleAiAdminRoutes,
+  type AiAdminRoute,
+} from "@/lib/ai/admin/navigation";
 
 export type AppNavigationIcon =
   | "ai"
@@ -17,8 +21,15 @@ export type AppNavigationIcon =
   | "users";
 
 export interface AppNavigationItem {
+  children?: AppNavigationSubItem[];
   href: string;
   icon: AppNavigationIcon;
+  id: string;
+  label: string;
+}
+
+export interface AppNavigationSubItem {
+  href: string;
   id: string;
   label: string;
 }
@@ -123,6 +134,13 @@ const managementItems: ManagementNavigationDefinition[] = [
   },
 ];
 
+const aiNavigationLabelKeys: Record<AiAdminRoute["id"], MessageKey> = {
+  providers: "management.navigation.aiProviders",
+  quotas: "management.navigation.aiQuotas",
+  usage: "management.navigation.aiUsage",
+  ledger: "management.navigation.aiLedger",
+};
+
 export function buildAppNavigation(
   access: AppShellAccess,
   translate: (key: MessageKey) => string,
@@ -191,6 +209,13 @@ export function buildAppNavigation(
                   : true),
         )
         .map((item) => ({
+          children: item.id === "manage-ai"
+            ? getAccessibleAiAdminRoutes(access).map((route) => ({
+                href: route.href,
+                id: `manage-ai-${route.id}`,
+                label: translate(aiNavigationLabelKeys[route.id]),
+              }))
+            : undefined,
           href: item.href,
           icon: item.icon,
           id: item.id,

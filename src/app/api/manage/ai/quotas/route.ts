@@ -15,7 +15,12 @@ import { parsePageRequest } from "@/lib/shared/pagination";
 const quotaSchema = z.object({
   userId: z.string().min(1).max(200),
   monthlyLimit: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-}).strict();
+  periodStartedAt: z.coerce.date(),
+  periodEndsAt: z.coerce.date(),
+}).strict().refine(
+  (value) => value.periodEndsAt > value.periodStartedAt,
+  { message: "invalid_quota_period", path: ["periodEndsAt"] },
+);
 
 export async function GET(request: Request) {
   try {

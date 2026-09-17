@@ -1,0 +1,1 @@
+ALTER TABLE "ai_runs" ADD COLUMN "checkpoint_progress" jsonb DEFAULT '["analyzing_resume"]'::jsonb NOT NULL;

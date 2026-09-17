@@ -91,6 +91,22 @@ describe("app navigation", () => {
     ]);
   });
 
+  it("nests permission-filtered AI pages under AI management", () => {
+    const sections = buildAppNavigation({
+      kind: "delegated_admin",
+      mode: "management",
+      permissions: ["ai.quotas.manage", "ai.audit.sensitive.read"],
+      productAccess: false,
+    }, label);
+    const aiItem = sections[0]?.items.find((item) => item.id === "manage-ai");
+
+    expect(aiItem?.href).toBe("/app/manage/ai");
+    expect(aiItem?.children?.map((item) => item.href)).toEqual([
+      "/app/manage/ai/quotas",
+      "/app/manage/ai/usage",
+    ]);
+  });
+
   it("keeps product links but limits management links during delegated-admin recovery", () => {
     expect(
       hrefs({

@@ -1,32 +1,21 @@
 import { NextResponse } from "next/server";
+
 import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import {
-  disableAiAdminProvider,
-  saveAiAdminProvider,
+  deleteAiAdminModel,
+  updateAiAdminModel,
 } from "@/lib/ai/admin/service";
-import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
-import { aiAdminProviderSchema } from "@/lib/ai/admin/validation";
+import { aiAdminModelSchema } from "@/lib/ai/admin/validation";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedJsonRequest,
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-function requireProviderConfiguration() {
-  const configuration = resolveAiConfiguration(process.env);
-  if (!configuration.credentialsEncryptionKey) {
-    throw new Error("ai_encryption_key_unavailable");
-  }
-  return {
-    ...configuration,
-    credentialsEncryptionKey: configuration.credentialsEncryptionKey,
-  };
-}
-
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string; modelId: string }> },
 ) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
@@ -35,15 +24,14 @@ export async function PATCH(
       permission: "ai.providers.manage",
       recentMfa: true,
     });
-    const value = aiAdminProviderSchema.parse(
+    const value = aiAdminModelSchema.parse(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
-    const configuration = requireProviderConfiguration();
-    const result = await saveAiAdminProvider({
+    const { id, modelId } = await params;
+    const result = await updateAiAdminModel({
       actorUserId: context.userId,
-      providerId: (await params).id,
-      encryptionKey: configuration.credentialsEncryptionKey,
-      trustedEndpointHostnames: configuration.trustedEndpointHostnames,
+      providerId: id,
+      modelId,
       value,
     });
     return NextResponse.json(result);
@@ -54,7 +42,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string; modelId: string }> },
 ) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
@@ -63,9 +51,11 @@ export async function DELETE(
       permission: "ai.providers.manage",
       recentMfa: true,
     });
-    await disableAiAdminProvider({
+    const { id, modelId } = await params;
+    await deleteAiAdminModel({
       actorUserId: context.userId,
-      providerId: (await params).id,
+      providerId: id,
+      modelId,
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -1,7 +1,10 @@
 import { requireAdminApi } from "@/lib/admin/api";
 import {
+  createAiAdminModel,
+  deleteAiAdminModel,
   getAiAdminAuditEvidence,
   listAiAdminUsage,
+  updateAiAdminModel,
   updateAiAdminQuota,
 } from "@/lib/ai/admin/service";
 
@@ -11,6 +14,9 @@ import {
   POST as POST_USAGE,
 } from "@/app/api/manage/ai/usage/route";
 import { PATCH as PATCH_QUOTA } from "@/app/api/manage/ai/quotas/route";
+import { DELETE as DELETE_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
+import { PATCH as PATCH_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
+import { POST as POST_MODEL } from "@/app/api/manage/ai/providers/[id]/models/route";
 
 vi.mock("@/lib/admin/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/admin/api")>();
@@ -18,9 +24,12 @@ vi.mock("@/lib/admin/api", async (importOriginal) => {
 });
 
 vi.mock("@/lib/ai/admin/service", () => ({
+  createAiAdminModel: vi.fn(),
+  deleteAiAdminModel: vi.fn(),
   getAiAdminAuditEvidence: vi.fn(),
   listAiAdminUsage: vi.fn(),
   resolveAiAdminSettlement: vi.fn(),
+  updateAiAdminModel: vi.fn(),
   updateAiAdminQuota: vi.fn(),
 }));
 
@@ -82,13 +91,25 @@ describe("AI administration routes", () => {
       new Request("http://localhost/api/manage/ai/quotas", {
         method: "PATCH",
         headers: { origin: "http://localhost" },
-        body: JSON.stringify({ userId: "user-1", monthlyLimit: 2000 }),
+        body: JSON.stringify({
+          userId: "user-1",
+          monthlyLimit: 2000,
+          periodStartedAt: "2026-09-01T00:00:00.000Z",
+          periodEndsAt: "2026-10-01T00:00:00.000Z",
+        }),
       }),
     );
     expect(quota.status).toBe(200);
     expect(requireAdminApi).toHaveBeenNthCalledWith(1, {
       permission: "ai.quotas.manage",
       recentMfa: true,
+    });
+    expect(updateAiAdminQuota).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      userId: "user-1",
+      monthlyLimit: 2000,
+      periodStartedAt: new Date("2026-09-01T00:00:00.000Z"),
+      periodEndsAt: new Date("2026-10-01T00:00:00.000Z"),
     });
 
     const settlement = await POST_USAGE(
@@ -104,6 +125,83 @@ describe("AI administration routes", () => {
     expect(settlement.status).toBe(200);
     expect(requireAdminApi).toHaveBeenNthCalledWith(2, {
       permission: "ai.quotas.manage",
+      recentMfa: true,
+    });
+  });
+
+  it("requires recent MFA and provider ownership when deleting a model", async () => {
+    vi.mocked(deleteAiAdminModel).mockResolvedValue(undefined);
+
+    const response = await DELETE_MODEL(
+      new Request("http://localhost/api/manage/ai/providers/provider-1/models/model-1", {
+        method: "DELETE",
+        headers: { origin: "http://localhost" },
+      }),
+      {
+        params: Promise.resolve({ id: "provider-1", modelId: "model-1" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireAdminApi).toHaveBeenCalledWith({
+      permission: "ai.providers.manage",
+      recentMfa: true,
+    });
+    expect(deleteAiAdminModel).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      providerId: "provider-1",
+      modelId: "model-1",
+    });
+  });
+
+  it("creates and updates models independently from provider settings", async () => {
+    const value = {
+      providerModelKey: "example-model",
+      displayName: "Example model",
+      enabled: true,
+      supportsToolCalls: true,
+      freeModel: false,
+      contextWindow: 128_000,
+      maxOutputTokens: 4_096,
+      inputPointRate: 10,
+      cachedInputPointRate: 5,
+      outputPointRate: 20,
+    };
+    vi.mocked(createAiAdminModel).mockResolvedValue({ modelId: "model-1" } as never);
+    vi.mocked(updateAiAdminModel).mockResolvedValue({ modelId: "model-1" } as never);
+
+    const created = await POST_MODEL(
+      new Request("http://localhost/api/manage/ai/providers/provider-1/models", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost" },
+        body: JSON.stringify(value),
+      }),
+      { params: Promise.resolve({ id: "provider-1" }) },
+    );
+    expect(created.status).toBe(201);
+    expect(createAiAdminModel).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      providerId: "provider-1",
+      value,
+    });
+
+    const updated = await PATCH_MODEL(
+      new Request("http://localhost/api/manage/ai/providers/provider-1/models/model-1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", origin: "http://localhost" },
+        body: JSON.stringify({ ...value, displayName: "Updated model" }),
+      }),
+      { params: Promise.resolve({ id: "provider-1", modelId: "model-1" }) },
+    );
+    expect(updated.status).toBe(200);
+    expect(updateAiAdminModel).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      providerId: "provider-1",
+      modelId: "model-1",
+      value: { ...value, displayName: "Updated model" },
+    });
+    expect(requireAdminApi).toHaveBeenLastCalledWith({
+      permission: "ai.providers.manage",
       recentMfa: true,
     });
   });

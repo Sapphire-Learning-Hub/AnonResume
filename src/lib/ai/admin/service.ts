@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import {
@@ -48,18 +48,19 @@ export interface AiAdminProviderInput {
   baseUrl: string;
   apiKey?: string;
   enabled: boolean;
-  model: {
-    id?: string;
-    providerModelKey: string;
-    displayName: string;
-    enabled: boolean;
-    supportsToolCalls: boolean;
-    contextWindow: number;
-    maxOutputTokens: number;
-    inputPointRate: number;
-    cachedInputPointRate: number;
-    outputPointRate: number;
-  };
+}
+
+export interface AiAdminModelInput {
+  providerModelKey: string;
+  displayName: string;
+  enabled: boolean;
+  supportsToolCalls: boolean;
+  freeModel: boolean;
+  contextWindow: number;
+  maxOutputTokens: number;
+  inputPointRate: number;
+  cachedInputPointRate: number;
+  outputPointRate: number;
 }
 
 function quoteIdentifier(value: string) {
@@ -97,53 +98,84 @@ async function runPagedQuery<T extends QueryResultRow>(
 export async function listAiAdminProviders(request: AiAdminListRequest) {
   const schema = schemaName();
   const query = searchPattern(request.query);
-  const where = query
-    ? "WHERE provider.kind = 'platform' AND (provider.display_name ILIKE $1 OR model.display_name ILIKE $1 OR model.provider_model_key ILIKE $1)"
-    : "WHERE provider.kind = 'platform'";
+  const where = [
+    "provider.kind = 'platform'",
+    "provider.deleted_at IS NULL",
+    query
+      ? `(provider.display_name ILIKE $1 OR provider.base_url ILIKE $1 OR EXISTS (
+          SELECT 1 FROM ${schema}.ai_models AS searched_model
+           WHERE searched_model.provider_id = provider.id
+             AND searched_model.deleted_at IS NULL
+             AND (searched_model.display_name ILIKE $1 OR searched_model.provider_model_key ILIKE $1)
+        ))`
+      : null,
+  ].filter(Boolean).join(" AND ");
   const values = query ? [query] : [];
   const limit = values.length + 1;
   const offset = values.length + 2;
 
-  return runPagedQuery<{
+  const page = await runPagedQuery<{
     providerId: string;
     providerName: string;
     baseUrl: string;
     providerEnabled: boolean;
-    modelId: string;
-    modelKey: string;
-    modelName: string;
-    modelEnabled: boolean;
-    supportsToolCalls: boolean;
-    contextWindow: number;
-    maxOutputTokens: number;
-    inputPointRate: string;
-    cachedInputPointRate: string;
-    outputPointRate: string;
-    rateCardVersion: number;
   }>(
     request,
     `SELECT count(*)::text AS total
        FROM ${schema}.ai_provider_credentials AS provider
-       JOIN ${schema}.ai_models AS model ON model.provider_id = provider.id
-       ${where}`,
+       WHERE ${where}`,
     `SELECT provider.id::text AS "providerId", provider.display_name AS "providerName",
-            provider.base_url AS "baseUrl", provider.enabled AS "providerEnabled",
-            model.id::text AS "modelId", model.provider_model_key AS "modelKey",
-            model.display_name AS "modelName", model.enabled AS "modelEnabled",
-            model.supports_tool_calls AS "supportsToolCalls",
-            model.context_window AS "contextWindow",
-            model.max_output_tokens AS "maxOutputTokens",
-            model.input_point_rate::text AS "inputPointRate",
-            model.cached_input_point_rate::text AS "cachedInputPointRate",
-            model.output_point_rate::text AS "outputPointRate",
-            model.rate_card_version AS "rateCardVersion"
+            provider.base_url AS "baseUrl", provider.enabled AS "providerEnabled"
        FROM ${schema}.ai_provider_credentials AS provider
-       JOIN ${schema}.ai_models AS model ON model.provider_id = provider.id
-       ${where}
-      ORDER BY lower(provider.display_name), lower(model.display_name), model.id
+       WHERE ${where}
+      ORDER BY lower(provider.display_name), provider.id
       LIMIT $${limit} OFFSET $${offset}`,
     values,
   );
+
+  const providerIds = page.items.map((provider) => provider.providerId);
+  if (providerIds.length === 0) {
+    return { ...page, items: [] };
+  }
+  const modelRows = await db
+    .select({
+      modelId: aiModels.id,
+      providerId: aiModels.providerId,
+      modelKey: aiModels.providerModelKey,
+      modelName: aiModels.displayName,
+      modelEnabled: aiModels.enabled,
+      supportsToolCalls: aiModels.supportsToolCalls,
+      contextWindow: aiModels.contextWindow,
+      maxOutputTokens: aiModels.maxOutputTokens,
+      inputPointRate: aiModels.inputPointRate,
+      cachedInputPointRate: aiModels.cachedInputPointRate,
+      outputPointRate: aiModels.outputPointRate,
+      rateCardVersion: aiModels.rateCardVersion,
+    })
+    .from(aiModels)
+    .where(and(
+      inArray(aiModels.providerId, providerIds),
+      isNull(aiModels.deletedAt),
+    ))
+    .orderBy(asc(aiModels.displayName), asc(aiModels.id));
+  const modelsByProvider = new Map<string, typeof modelRows>();
+  for (const model of modelRows) {
+    const models = modelsByProvider.get(model.providerId) ?? [];
+    models.push(model);
+    modelsByProvider.set(model.providerId, models);
+  }
+  return {
+    ...page,
+    items: page.items.map((provider) => ({
+      ...provider,
+      models: (modelsByProvider.get(provider.providerId) ?? []).map((model) => ({
+        ...model,
+        inputPointRate: String(model.inputPointRate),
+        cachedInputPointRate: String(model.cachedInputPointRate),
+        outputPointRate: String(model.outputPointRate),
+      })),
+    })),
+  };
 }
 
 export async function saveAiAdminProvider(input: {
@@ -168,6 +200,7 @@ export async function saveAiAdminProvider(input: {
           and(
             eq(aiProviderCredentials.id, input.providerId),
             eq(aiProviderCredentials.kind, "platform"),
+            isNull(aiProviderCredentials.deletedAt),
           ),
         )
         .limit(1)
@@ -190,6 +223,15 @@ export async function saveAiAdminProvider(input: {
           updatedAt: new Date(),
         })
         .where(eq(aiProviderCredentials.id, providerId));
+      if (!input.value.enabled) {
+        await transaction
+          .update(aiModels)
+          .set({ enabled: false, updatedAt: new Date() })
+          .where(and(
+            eq(aiModels.providerId, providerId),
+            isNull(aiModels.deletedAt),
+          ));
+      }
     } else {
       const [provider] = await transaction
         .insert(aiProviderCredentials)
@@ -204,38 +246,7 @@ export async function saveAiAdminProvider(input: {
       providerId = provider!.id;
     }
 
-    const modelValues = {
-      providerId,
-      providerModelKey: input.value.model.providerModelKey,
-      displayName: input.value.model.displayName,
-      enabled: input.value.model.enabled,
-      supportsToolCalls: input.value.model.supportsToolCalls,
-      contextWindow: input.value.model.contextWindow,
-      maxOutputTokens: input.value.model.maxOutputTokens,
-      inputPointRate: input.value.model.inputPointRate,
-      cachedInputPointRate: input.value.model.cachedInputPointRate,
-      outputPointRate: input.value.model.outputPointRate,
-      updatedAt: new Date(),
-    };
-    let modelId = input.value.model.id;
-    if (modelId) {
-      const [updated] = await transaction
-        .update(aiModels)
-        .set({
-          ...modelValues,
-          rateCardVersion: sql`${aiModels.rateCardVersion} + 1`,
-        })
-        .where(and(eq(aiModels.id, modelId), eq(aiModels.providerId, providerId)))
-        .returning({ id: aiModels.id });
-      if (!updated) throw new AiAdminNotFoundError();
-    } else {
-      const [created] = await transaction
-        .insert(aiModels)
-        .values(modelValues)
-        .returning({ id: aiModels.id });
-      modelId = created!.id;
-    }
-    return { providerId, modelId };
+    return { providerId };
   });
 
   await writeAdminAuditEvent({
@@ -245,19 +256,131 @@ export async function saveAiAdminProvider(input: {
     targetId: result.providerId,
     outcome: "success",
     metadata: {
-      modelId: result.modelId,
       providerName: input.value.displayName,
-      modelName: input.value.model.displayName,
       enabled: input.value.enabled,
-      modelEnabled: input.value.model.enabled,
-      rates: {
-        input: input.value.model.inputPointRate,
-        cachedInput: input.value.model.cachedInputPointRate,
-        output: input.value.model.outputPointRate,
-      },
     },
   });
   return result;
+}
+
+async function requirePlatformProvider(providerId: string) {
+  const [provider] = await db
+    .select({
+      id: aiProviderCredentials.id,
+      enabled: aiProviderCredentials.enabled,
+      name: aiProviderCredentials.displayName,
+    })
+    .from(aiProviderCredentials)
+    .where(and(
+      eq(aiProviderCredentials.id, providerId),
+      eq(aiProviderCredentials.kind, "platform"),
+      isNull(aiProviderCredentials.deletedAt),
+    ))
+    .limit(1);
+  if (!provider) throw new AiAdminNotFoundError();
+  return provider;
+}
+
+function adminModelValues(providerId: string, value: AiAdminModelInput) {
+  return {
+    providerId,
+    providerModelKey: value.providerModelKey,
+    displayName: value.displayName,
+    enabled: value.enabled,
+    supportsToolCalls: value.supportsToolCalls,
+    contextWindow: value.contextWindow,
+    maxOutputTokens: value.maxOutputTokens,
+    inputPointRate: value.inputPointRate,
+    cachedInputPointRate: value.cachedInputPointRate,
+    outputPointRate: value.outputPointRate,
+    updatedAt: new Date(),
+  };
+}
+
+function adminModelResult(model: typeof aiModels.$inferSelect) {
+  return {
+    providerId: model.providerId,
+    modelId: model.id,
+    modelKey: model.providerModelKey,
+    modelName: model.displayName,
+    modelEnabled: model.enabled,
+    supportsToolCalls: model.supportsToolCalls,
+    contextWindow: model.contextWindow,
+    maxOutputTokens: model.maxOutputTokens,
+    inputPointRate: String(model.inputPointRate),
+    cachedInputPointRate: String(model.cachedInputPointRate),
+    outputPointRate: String(model.outputPointRate),
+    rateCardVersion: model.rateCardVersion,
+  };
+}
+
+export async function createAiAdminModel(input: {
+  actorUserId: string;
+  providerId: string;
+  value: AiAdminModelInput;
+}) {
+  const provider = await requirePlatformProvider(input.providerId);
+  if (input.value.enabled && !provider.enabled) {
+    throw new AiAdminStateConflictError();
+  }
+  const [model] = await db
+    .insert(aiModels)
+    .values(adminModelValues(input.providerId, input.value))
+    .returning();
+  await writeAdminAuditEvent({
+    actorUserId: input.actorUserId,
+    action: "ai.model.create",
+    targetType: "ai_model",
+    targetId: model!.id,
+    outcome: "success",
+    metadata: {
+      providerId: provider.id,
+      providerName: provider.name,
+      modelName: input.value.displayName,
+      enabled: input.value.enabled,
+    },
+  });
+  return adminModelResult(model!);
+}
+
+export async function updateAiAdminModel(input: {
+  actorUserId: string;
+  providerId: string;
+  modelId: string;
+  value: AiAdminModelInput;
+}) {
+  const provider = await requirePlatformProvider(input.providerId);
+  if (input.value.enabled && !provider.enabled) {
+    throw new AiAdminStateConflictError();
+  }
+  const [model] = await db
+    .update(aiModels)
+    .set({
+      ...adminModelValues(input.providerId, input.value),
+      rateCardVersion: sql`${aiModels.rateCardVersion} + 1`,
+    })
+    .where(and(
+      eq(aiModels.id, input.modelId),
+      eq(aiModels.providerId, input.providerId),
+      isNull(aiModels.deletedAt),
+    ))
+    .returning();
+  if (!model) throw new AiAdminNotFoundError();
+  await writeAdminAuditEvent({
+    actorUserId: input.actorUserId,
+    action: "ai.model.update",
+    targetType: "ai_model",
+    targetId: model.id,
+    outcome: "success",
+    metadata: {
+      providerId: provider.id,
+      providerName: provider.name,
+      modelName: input.value.displayName,
+      enabled: input.value.enabled,
+      rateCardVersion: model.rateCardVersion,
+    },
+  });
+  return adminModelResult(model);
 }
 
 export async function disableAiAdminProvider(input: {
@@ -271,6 +394,7 @@ export async function disableAiAdminProvider(input: {
       and(
         eq(aiProviderCredentials.id, input.providerId),
         eq(aiProviderCredentials.kind, "platform"),
+        isNull(aiProviderCredentials.deletedAt),
       ),
     )
     .returning({ id: aiProviderCredentials.id });
@@ -285,6 +409,55 @@ export async function disableAiAdminProvider(input: {
     targetType: "ai_provider",
     targetId: provider.id,
     outcome: "success",
+  });
+}
+
+export async function deleteAiAdminModel(input: {
+  actorUserId: string;
+  providerId: string;
+  modelId: string;
+}) {
+  return withTransaction(async (client) => {
+    const current = await client.query<{
+      modelEnabled: boolean;
+      modelName: string;
+      providerName: string;
+    }>(
+      `SELECT model.enabled AS "modelEnabled", model.display_name AS "modelName",
+              provider.display_name AS "providerName"
+         FROM ${schemaName()}.ai_models AS model
+         JOIN ${schemaName()}.ai_provider_credentials AS provider
+           ON provider.id = model.provider_id
+        WHERE provider.id = $1 AND model.id = $2
+          AND provider.kind = 'platform' AND model.deleted_at IS NULL
+        FOR UPDATE OF model, provider`,
+      [input.providerId, input.modelId],
+    );
+    const target = current.rows[0];
+    if (!target) throw new AiAdminNotFoundError();
+    if (target.modelEnabled) {
+      throw new AiAdminStateConflictError();
+    }
+
+    await client.query(
+      `UPDATE ${schemaName()}.ai_models
+          SET deleted_at = now(), updated_at = now()
+        WHERE id = $1 AND provider_id = $2 AND enabled = false
+          AND deleted_at IS NULL`,
+      [input.modelId, input.providerId],
+    );
+    await writeAdminAuditEventWithClient(client, {
+      actorUserId: input.actorUserId,
+      action: "ai.model.delete",
+      targetType: "ai_model",
+      targetId: input.modelId,
+      outcome: "success",
+      metadata: {
+        providerId: input.providerId,
+        providerName: target.providerName,
+        modelName: target.modelName,
+      },
+    });
   });
 }
 
@@ -314,7 +487,7 @@ export async function listAiAdminQuotas(
     `SELECT count(*)::text AS total FROM "user" AS identity ${where}`,
     `SELECT identity.id AS "userId", identity.name AS "userName", identity.email,
             coalesce(quota.monthly_limit, $${defaultParam})::text AS "monthlyLimit",
-            (quota.user_id IS NOT NULL) AS "customLimit",
+            (quota.monthly_limit IS NOT NULL AND quota.monthly_limit <> $${defaultParam}) AS "customLimit",
             coalesce(quota.used_points, 0)::text AS "usedPoints",
             coalesce(quota.reserved_points, 0)::text AS "reservedPoints",
             quota.period_started_at AS "periodStartedAt",
@@ -348,15 +521,26 @@ export async function updateAiAdminQuota(input: {
   actorUserId: string;
   userId: string;
   monthlyLimit: number;
+  periodStartedAt: Date;
+  periodEndsAt: Date;
 }) {
+  if (input.periodEndsAt <= input.periodStartedAt) {
+    throw new Error("invalid_quota_period");
+  }
   return withTransaction(async (client) => {
     const identity = await client.query<{ id: string; name: string; email: string }>(
       `SELECT id, name, email FROM "user" WHERE id = $1`,
       [input.userId],
     );
     if (!identity.rows[0]) throw new AiAdminNotFoundError();
-    const current = await client.query<{ monthlyLimit: string }>(
-      `SELECT monthly_limit::text AS "monthlyLimit"
+    const current = await client.query<{
+      monthlyLimit: string;
+      periodStartedAt: Date;
+      periodEndsAt: Date;
+    }>(
+      `SELECT monthly_limit::text AS "monthlyLimit",
+              period_started_at AS "periodStartedAt",
+              period_ends_at AS "periodEndsAt"
          FROM ${schemaName()}.ai_quota_accounts WHERE user_id = $1 FOR UPDATE`,
       [input.userId],
     );
@@ -364,10 +548,18 @@ export async function updateAiAdminQuota(input: {
     await client.query(
       `INSERT INTO ${schemaName()}.ai_quota_accounts
          (user_id, monthly_limit, period_started_at, period_ends_at)
-       VALUES ($1, $2, now(), now() + interval '1 month')
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (user_id) DO UPDATE
-         SET monthly_limit = EXCLUDED.monthly_limit, updated_at = now()`,
-      [input.userId, input.monthlyLimit],
+         SET monthly_limit = EXCLUDED.monthly_limit,
+             period_started_at = EXCLUDED.period_started_at,
+             period_ends_at = EXCLUDED.period_ends_at,
+             updated_at = now()`,
+      [
+        input.userId,
+        input.monthlyLimit,
+        input.periodStartedAt,
+        input.periodEndsAt,
+      ],
     );
     await client.query(
       `INSERT INTO ${schemaName()}.ai_usage_ledger
@@ -379,6 +571,10 @@ export async function updateAiAdminQuota(input: {
           actorUserId: input.actorUserId,
           previousMonthlyLimit: previousLimit,
           monthlyLimit: input.monthlyLimit,
+          previousPeriodStartedAt: current.rows[0]?.periodStartedAt ?? null,
+          previousPeriodEndsAt: current.rows[0]?.periodEndsAt ?? null,
+          periodStartedAt: input.periodStartedAt,
+          periodEndsAt: input.periodEndsAt,
         }),
       ],
     );
@@ -391,6 +587,10 @@ export async function updateAiAdminQuota(input: {
       metadata: {
         previousMonthlyLimit: previousLimit,
         monthlyLimit: input.monthlyLimit,
+        previousPeriodStartedAt: current.rows[0]?.periodStartedAt ?? null,
+        previousPeriodEndsAt: current.rows[0]?.periodEndsAt ?? null,
+        periodStartedAt: input.periodStartedAt,
+        periodEndsAt: input.periodEndsAt,
         resources: [{
           type: "user",
           id: input.userId,
@@ -399,7 +599,12 @@ export async function updateAiAdminQuota(input: {
         }],
       },
     });
-    return { userId: input.userId, monthlyLimit: input.monthlyLimit };
+    return {
+      userId: input.userId,
+      monthlyLimit: input.monthlyLimit,
+      periodStartedAt: input.periodStartedAt,
+      periodEndsAt: input.periodEndsAt,
+    };
   });
 }
 

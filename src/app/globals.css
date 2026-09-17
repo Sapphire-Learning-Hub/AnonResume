@@ -820,6 +820,119 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
   line-height: 1.65;
 }
 
+.admin-quota-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-page-background);
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.admin-dialog-form .ant-input-number,
+.admin-dialog-form .ant-picker {
+  width: 100%;
+}
+
+.admin-ai-provider-form {
+  gap: 0;
+}
+
+.admin-ai-model-list {
+  display: grid;
+  min-width: 460px;
+  gap: 0;
+  padding-block: 8px;
+}
+
+.admin-ai-model-list__header,
+.admin-ai-model-list__item {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-ai-model-list__header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 6px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+}
+
+.admin-ai-model-list__item {
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  padding-block: 9px;
+  border-top: 1px solid var(--app-border);
+}
+
+.admin-ai-model-list__identity {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.admin-ai-model-list__rates,
+.admin-ai-model-list__empty {
+  color: var(--app-text-secondary);
+  font-size: 11px;
+}
+
+.admin-ai-model-list__empty {
+  margin: 0;
+  padding-block: 12px 6px;
+  border-top: 1px solid var(--app-border);
+}
+
+.admin-ai-model-list .admin-table-actions {
+  flex-wrap: nowrap;
+}
+
+.admin-ai-provider-form .ant-form-item {
+  margin-bottom: 14px;
+}
+
+.admin-ai-provider-form__grid,
+.admin-ai-provider-form__rates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.admin-ai-provider-form__billing {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 0;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-page-background);
+}
+
+.admin-ai-provider-form__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+}
+
+.admin-ai-provider-form__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-ai-provider-form__rates {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 680px) {
+  .admin-ai-provider-form__grid,
+  .admin-ai-provider-form__rates {
+    grid-template-columns: 1fr;
+  }
+}
+
 .admin-empty-state {
   display: grid;
   min-height: 260px;

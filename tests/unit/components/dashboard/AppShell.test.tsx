@@ -94,6 +94,28 @@ describe("AppShell", () => {
     expect(getComputedStyle(frame).overflowY).toBe("hidden");
   });
 
+  it("expands permission-filtered AI pages in the management sidebar", () => {
+    navigationState.pathname = "/app/manage/ai/usage";
+    renderShell({
+      kind: "delegated_admin",
+      mode: "management",
+      permissions: ["ai.quotas.manage", "ai.audit.sensitive.read"],
+      productAccess: false,
+    });
+
+    expect(screen.getByRole("link", { name: "AI 管理" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByRole("link", { name: "用户额度" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "用量与结算" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.queryByRole("link", { name: "模型服务" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "积分流水" })).toBeNull();
+  });
+
   it("retains product navigation for a delegated administrator in recovery", () => {
     navigationState.pathname = "/app/manage/security";
     renderShell({

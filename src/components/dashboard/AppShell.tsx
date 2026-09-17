@@ -218,6 +218,15 @@ const useStyles = createStyles(({ token, css }) => ({
       display: none;
     }
   `,
+  navigationEntry: css`
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+
+    @media (max-width: 720px) {
+      display: contents;
+    }
+  `,
   navigationItem: css`
     display: flex;
     align-items: center;
@@ -235,7 +244,8 @@ const useStyles = createStyles(({ token, css }) => ({
       color: ${token.colorText};
     }
 
-    &[aria-current="page"] {
+    &[aria-current="page"],
+    &[data-active="true"] {
       background: ${token.colorPrimaryBg};
       color: ${token.colorPrimaryText};
     }
@@ -256,6 +266,49 @@ const useStyles = createStyles(({ token, css }) => ({
         margin-inline: 0;
         padding-inline: 12px;
       }
+    }
+  `,
+  subnavigation: css`
+    display: grid;
+    gap: 2px;
+    margin-left: 21px;
+    padding: 2px 0 4px 17px;
+    border-left: 1px solid ${token.colorBorderSecondary};
+
+    @media (max-width: 720px) {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 0;
+      padding: 0;
+      border-left: 0;
+    }
+  `,
+  subnavigationItem: css`
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 7px;
+    color: ${token.colorTextSecondary};
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      color: ${token.colorText};
+      background: ${token.colorFillTertiary};
+    }
+
+    &[aria-current="page"] {
+      color: ${token.colorPrimaryText};
+      background: ${token.colorPrimaryBg};
+    }
+
+    @media (max-width: 720px) {
+      flex: 0 0 auto;
+      padding-inline: 8px;
     }
   `,
   navigationIcon: css`
@@ -454,33 +507,50 @@ export function AppShell({
                   const active = isNavigationItemActive(pathname, item.href);
 
                   return (
-                    <Tooltip
-                      key={item.id}
-                      placement="right"
-                      title={isSidebarCollapsed ? item.label : undefined}
-                    >
-                      <Link
-                        aria-current={active ? "page" : undefined}
-                        aria-label={item.label}
-                        className={styles.navigationItem}
-                        data-collapsed={isSidebarCollapsed}
-                        href={item.href}
+                    <div className={styles.navigationEntry} key={item.id}>
+                      <Tooltip
+                        placement="right"
+                        title={isSidebarCollapsed ? item.label : undefined}
                       >
-                        <span
-                          aria-hidden="true"
-                          className={styles.navigationIcon}
-                          data-testid={`workbench-nav-icon-${item.id}`}
-                        >
-                          {navigationIcons[item.icon]}
-                        </span>
-                        <span
-                          className={styles.navigationItemText}
+                        <Link
+                          aria-current={pathname === item.href ? "page" : undefined}
+                          aria-expanded={item.children ? active : undefined}
+                          aria-label={item.label}
+                          className={styles.navigationItem}
+                          data-active={active}
                           data-collapsed={isSidebarCollapsed}
+                          href={item.href}
                         >
-                          {item.label}
-                        </span>
-                      </Link>
-                    </Tooltip>
+                          <span
+                            aria-hidden="true"
+                            className={styles.navigationIcon}
+                            data-testid={`workbench-nav-icon-${item.id}`}
+                          >
+                            {navigationIcons[item.icon]}
+                          </span>
+                          <span
+                            className={styles.navigationItemText}
+                            data-collapsed={isSidebarCollapsed}
+                          >
+                            {item.label}
+                          </span>
+                        </Link>
+                      </Tooltip>
+                      {active && !isSidebarCollapsed && item.children?.length ? (
+                        <div className={styles.subnavigation}>
+                          {item.children.map((child) => (
+                            <Link
+                              aria-current={pathname === child.href ? "page" : undefined}
+                              className={styles.subnavigationItem}
+                              href={child.href}
+                              key={child.id}
+                            >
+                              {child.label}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   );
                 })}
               </section>

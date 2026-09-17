@@ -59,6 +59,7 @@ describe("admin security architecture", () => {
     const sensitiveRoutes = [
       "src/app/api/manage/ai/providers/route.ts",
       "src/app/api/manage/ai/providers/[id]/route.ts",
+      "src/app/api/manage/ai/providers/[id]/models/[modelId]/route.ts",
       "src/app/api/manage/ai/quotas/route.ts",
       "src/app/api/manage/ai/usage/route.ts",
       "src/app/api/manage/ai/audit/[runId]/route.ts",

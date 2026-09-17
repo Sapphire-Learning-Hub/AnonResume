@@ -16,6 +16,8 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
+
 import { getDatabaseSchemaName, resumes } from "./schema";
 
 export type AiProviderKind = "platform" | "user";
@@ -55,6 +57,7 @@ const providerCredentialColumns = {
   encryptedApiKey: bytea("encrypted_api_key").notNull(),
   encryptionKeyVersion: integer("encryption_key_version").notNull().default(1),
   enabled: boolean("enabled").notNull().default(true),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -71,9 +74,6 @@ export const aiProviderCredentials =
           sql`(${table.kind} = 'platform' AND ${table.ownerUserId} IS NULL) OR (${table.kind} = 'user' AND ${table.ownerUserId} IS NOT NULL)`,
         ),
         index("ai_provider_credentials_owner_idx").on(table.ownerUserId),
-        uniqueIndex("ai_provider_credentials_user_owner_unique")
-          .on(table.ownerUserId)
-          .where(sql`${table.kind} = 'user'`),
       ])
     : pgSchema(schemaName).table(
         "ai_provider_credentials",
@@ -88,9 +88,6 @@ export const aiProviderCredentials =
             sql`(${table.kind} = 'platform' AND ${table.ownerUserId} IS NULL) OR (${table.kind} = 'user' AND ${table.ownerUserId} IS NOT NULL)`,
           ),
           index("ai_provider_credentials_owner_idx").on(table.ownerUserId),
-          uniqueIndex("ai_provider_credentials_user_owner_unique")
-            .on(table.ownerUserId)
-            .where(sql`${table.kind} = 'user'`),
         ],
       );
 
@@ -108,6 +105,7 @@ const modelColumns = {
   cachedInputPointRate: bigint("cached_input_point_rate", { mode: "number" }).notNull(),
   outputPointRate: bigint("output_point_rate", { mode: "number" }).notNull(),
   rateCardVersion: integer("rate_card_version").notNull().default(1),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -123,7 +121,7 @@ export const aiModels =
         uniqueIndex("ai_models_provider_key_unique").on(
           table.providerId,
           table.providerModelKey,
-        ),
+        ).where(sql`${table.deletedAt} IS NULL`),
         check(
           "ai_models_limits_check",
           sql`${table.contextWindow} > 0 AND ${table.maxOutputTokens} > 0`,
@@ -142,7 +140,7 @@ export const aiModels =
         uniqueIndex("ai_models_provider_key_unique").on(
           table.providerId,
           table.providerModelKey,
-        ),
+        ).where(sql`${table.deletedAt} IS NULL`),
         check(
           "ai_models_limits_check",
           sql`${table.contextWindow} > 0 AND ${table.maxOutputTokens} > 0`,
@@ -287,6 +285,10 @@ const runColumns = {
   checkpointSequence: integer("checkpoint_sequence").notNull().default(0),
   checkpointText: text("checkpoint_text").notNull().default(""),
   checkpointProposal: jsonb("checkpoint_proposal").$type<unknown>(),
+  checkpointProgress: jsonb("checkpoint_progress")
+    .$type<AiRunProgressStage[]>()
+    .notNull()
+    .default(sql`'["analyzing_resume"]'::jsonb`),
   inputTokens: integer("input_tokens"),
   cachedInputTokens: integer("cached_input_tokens"),
   outputTokens: integer("output_tokens"),
