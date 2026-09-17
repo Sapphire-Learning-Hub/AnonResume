@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { AiServiceSettings } from "@/components/ai/AiServiceSettings";
+import { AiModelEditorModal } from "@/components/ai/AiServiceSettingsDialogs";
 
 const clientMock = vi.hoisted(() => ({
   createModel: vi.fn(),
@@ -115,5 +116,37 @@ describe("AiServiceSettings", () => {
       screen.getByRole("button", { name: /添加模型服务/ }),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /添加模型$/ })).toHaveLength(2);
+    expect(screen.getByText("仅限聊天")).toBeInTheDocument();
+  });
+
+  it("shows a tooltip when a personal model cannot call tools", async () => {
+    render(
+      <AiModelEditorModal
+        busy={false}
+        model={{
+          id: "65dd9f6e-bbcb-4cdf-997f-731b09bc98d1",
+          providerId: "149e70e4-7ee1-4dac-b167-16e760de9dc0",
+          modelKey: "model-two",
+          modelName: "Model Two",
+          enabled: false,
+          supportsStreaming: true,
+          supportsToolCalls: false,
+          contextWindow: 64_000,
+          maxOutputTokens: 2_048,
+        }}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+        open
+      />,
+    );
+
+    const warning = screen.getByLabelText(
+      "该模型不能用于修改简历，仅支持基本聊天功能。",
+    );
+    fireEvent.mouseEnter(warning);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "该模型不能用于修改简历，仅支持基本聊天功能。",
+    );
   });
 });

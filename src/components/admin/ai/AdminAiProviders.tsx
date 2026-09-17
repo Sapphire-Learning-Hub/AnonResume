@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusOutlined } from "@ant-design/icons";
+import { ExclamationCircleFilled, PlusOutlined } from "@ant-design/icons";
 import {
   Button,
   Checkbox,
@@ -9,8 +9,9 @@ import {
   Input,
   InputNumber,
   Modal,
-  Switch,
+  Space,
   Tag,
+  theme,
   Tooltip,
 } from "antd";
 import { useRouter } from "next/navigation";
@@ -129,6 +130,7 @@ export function AdminAiProviders({
 }) {
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
+  const { token } = theme.useToken();
   const router = useRouter();
   const { toast } = useAppFeedback();
   const { pending, reauthModal, reauthOpen, runSensitive } = useAdminAiSensitiveAction();
@@ -419,7 +421,11 @@ export function AdminAiProviders({
                           <>
                             {model.supportsToolCalls ? (
                               <Tag color="processing">{t("ai.toolCallsShort")}</Tag>
-                            ) : null}
+                            ) : (
+                              <Tooltip title={t("ai.toolCallsRequiredWarning")}>
+                                <Tag color="warning">{t("ai.chatOnly")}</Tag>
+                              </Tooltip>
+                            )}
                             <Tooltip
                               title={t("ai.modelLimits", {
                                 context: model.contextWindow.toLocaleString(),
@@ -487,10 +493,6 @@ export function AdminAiProviders({
             <Form.Item label={t("ai.apiKey")}>
               <Input.Password onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={providerDraft.providerId ? t("ai.apiKeyPlaceholder") : undefined} value={providerDraft.apiKey} />
             </Form.Item>
-            <label className="admin-ai-provider-form__switch">
-              {t("ai.enabled")}
-              <Switch checked={providerDraft.providerEnabled} onChange={(checked) => setProviderDraft({ ...providerDraft, providerEnabled: checked })} />
-            </label>
           </Form>
         ) : null}
       </Modal>
@@ -535,21 +537,21 @@ export function AdminAiProviders({
                     outputPointRate: 0,
                   } : {}),
                 })}>{t("ai.freeModel")}</Checkbox>
-                <Checkbox checked={modelDraft.supportsToolCalls} onChange={(event) => setModelDraft({ ...modelDraft, supportsToolCalls: event.target.checked })}>
-                  {t("ai.supportsToolCalls")}
-                </Checkbox>
-                <label className="admin-ai-provider-form__switch">
-                  {t("ai.enabled")}
-                  <Switch
-                    checked={modelDraft.modelEnabled}
-                    disabled={!modelDraft.providerEnabled}
-                    onChange={(checked) => setModelDraft({ ...modelDraft, modelEnabled: checked })}
-                  />
-                </label>
+                <Space size={6}>
+                  <Checkbox checked={modelDraft.supportsToolCalls} onChange={(event) => setModelDraft({ ...modelDraft, supportsToolCalls: event.target.checked })}>
+                    {t("ai.supportsToolCalls")}
+                  </Checkbox>
+                  {!modelDraft.supportsToolCalls ? (
+                    <Tooltip title={t("ai.toolCallsRequiredWarning")}>
+                      <ExclamationCircleFilled
+                        aria-label={t("ai.toolCallsRequiredWarning")}
+                        style={{ color: token.colorWarning }}
+                        tabIndex={0}
+                      />
+                    </Tooltip>
+                  ) : null}
+                </Space>
               </div>
-              {!modelDraft.providerEnabled ? (
-                <p className="admin-dialog-description">{t("ai.enableProviderBeforeModel")}</p>
-              ) : null}
               <p className="admin-dialog-description">{t("ai.rateDescription")}</p>
               <div className="admin-ai-provider-form__rates">
                 <Form.Item label={t("ai.inputRate")}>

@@ -529,8 +529,11 @@ const messages = {
     "ai.settings.contextWindow": "上下文窗口",
     "ai.settings.maxOutputTokens": "最大输出 Token",
     "ai.settings.streaming": "流式输出",
-    "ai.settings.toolCalls": "支持结构化修改建议",
-    "ai.settings.toolCallsShort": "结构化修改",
+    "ai.settings.toolCalls": "支持工具调用",
+    "ai.settings.toolCallsShort": "工具调用",
+    "ai.settings.chatOnly": "仅限聊天",
+    "ai.settings.toolCallsRequiredWarning":
+      "该模型不能用于修改简历，仅支持基本聊天功能。",
     "ai.settings.modelLimits": "上下文 {context}，最大输出 {output} Token",
     "ai.settings.testConnection": "测试连接",
     "ai.settings.connectionSuccess": "连接测试成功",
@@ -1544,8 +1547,11 @@ const messages = {
     "ai.settings.contextWindow": "Context window",
     "ai.settings.maxOutputTokens": "Maximum output tokens",
     "ai.settings.streaming": "Streaming",
-    "ai.settings.toolCalls": "Supports structured editing suggestions",
-    "ai.settings.toolCallsShort": "Structured edits",
+    "ai.settings.toolCalls": "Supports tool calling",
+    "ai.settings.toolCallsShort": "Tool calling",
+    "ai.settings.chatOnly": "Chat only",
+    "ai.settings.toolCallsRequiredWarning":
+      "This model cannot modify resumes and only supports basic chat.",
     "ai.settings.modelLimits":
       "Context {context}; maximum output {output} tokens",
     "ai.settings.testConnection": "Test connection",

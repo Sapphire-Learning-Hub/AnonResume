@@ -260,4 +260,49 @@ describe("AI billing administration forms", () => {
       name: "停用模型",
     })).toBeInTheDocument();
   });
+
+  it("shows a tooltip when an administrative model cannot call tools", async () => {
+    render(
+      <AdminAiProviders
+        providers={{
+          items: [{
+            providerId: "00000000-0000-4000-8000-000000000001",
+            providerName: "模型服务",
+            baseUrl: "https://example.com/v1",
+            providerEnabled: true,
+            models: [{
+              providerId: "00000000-0000-4000-8000-000000000001",
+              modelId: "00000000-0000-4000-8000-000000000002",
+              modelKey: "chat-only-model",
+              modelName: "聊天模型",
+              modelEnabled: true,
+              supportsToolCalls: false,
+              contextWindow: 128_000,
+              maxOutputTokens: 4_096,
+              inputPointRate: "100",
+              cachedInputPointRate: "50",
+              outputPointRate: "200",
+              rateCardVersion: 1,
+            }],
+          }],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1,
+        }}
+        searchParams={{}}
+      />,
+    );
+
+    expect(screen.getByText("仅限聊天")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "编辑模型" }));
+    const warning = screen.getByLabelText(
+      "该模型不能用于修改简历，仅支持基本聊天功能。",
+    );
+    fireEvent.mouseEnter(warning);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "该模型不能用于修改简历，仅支持基本聊天功能。",
+    );
+  });
 });

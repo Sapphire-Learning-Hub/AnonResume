@@ -867,12 +867,6 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
   gap: 8px 18px;
 }
 
-.admin-ai-provider-form__switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .admin-ai-provider-form__rates {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

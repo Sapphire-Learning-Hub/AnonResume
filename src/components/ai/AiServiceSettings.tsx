@@ -413,7 +413,17 @@ export function AiServiceSettings() {
                             <Tag color="processing">
                               {t("ai.settings.toolCallsShort")}
                             </Tag>
-                          ) : null}
+                          ) : (
+                            <Tooltip
+                              title={t(
+                                "ai.settings.toolCallsRequiredWarning",
+                              )}
+                            >
+                              <Tag color="warning">
+                                {t("ai.settings.chatOnly")}
+                              </Tag>
+                            </Tooltip>
+                          )}
                           <Tooltip
                             title={t("ai.settings.modelLimits", {
                               context: model.contextWindow.toLocaleString(),

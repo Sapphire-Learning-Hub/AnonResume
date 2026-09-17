@@ -1,6 +1,17 @@
 "use client";
 
-import { Button, Form, Input, InputNumber, Modal, Switch } from "antd";
+import { ExclamationCircleFilled } from "@ant-design/icons";
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Space,
+  Switch,
+  theme,
+  Tooltip,
+} from "antd";
 
 import { useI18n } from "@/i18n/I18nProvider";
 import type {
@@ -103,6 +114,8 @@ export function AiModelEditorModal({
   open: boolean;
 }) {
   const { t } = useI18n();
+  const { token } = theme.useToken();
+
   return (
     <Modal
       centered
@@ -169,11 +182,41 @@ export function AiModelEditorModal({
           <Switch />
         </Form.Item>
         <Form.Item
-          label={t("ai.settings.toolCalls")}
-          name="supportsToolCalls"
-          valuePropName="checked"
+          noStyle
+          shouldUpdate={(previous, current) =>
+            previous.supportsToolCalls !== current.supportsToolCalls
+          }
         >
-          <Switch />
+          {({ getFieldValue }) => {
+            const supportsToolCalls = getFieldValue("supportsToolCalls") !== false;
+
+            return (
+              <Form.Item
+                label={(
+                  <Space size={6}>
+                    {t("ai.settings.toolCalls")}
+                    {!supportsToolCalls ? (
+                      <Tooltip
+                        title={t("ai.settings.toolCallsRequiredWarning")}
+                      >
+                        <ExclamationCircleFilled
+                          aria-label={t(
+                            "ai.settings.toolCallsRequiredWarning",
+                          )}
+                          style={{ color: token.colorWarning }}
+                          tabIndex={0}
+                        />
+                      </Tooltip>
+                    ) : null}
+                  </Space>
+                )}
+                name="supportsToolCalls"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            );
+          }}
         </Form.Item>
         <Form.Item noStyle>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
