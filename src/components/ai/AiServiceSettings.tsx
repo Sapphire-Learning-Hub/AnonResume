@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  ApiOutlined,
   PlusOutlined,
-  RobotOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -22,6 +20,13 @@ import {
 
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
+import {
+  AiModelEmpty,
+  AiModelRow,
+  AiModelTable,
+  AiProviderCard,
+  AiProviderList,
+} from "@/components/ai/model-management/AiProviderCatalog";
 import {
   createPersonalAiModel,
   createPersonalAiProvider,
@@ -235,28 +240,11 @@ export function AiServiceSettings() {
             </Empty>
           </div>
         ) : (
-          <div className={styles.providerList}>
+          <AiProviderList>
             {snapshot.providers.map((provider) => (
-              <article className={styles.providerCard} key={provider.id}>
-                <div className={styles.providerHeader}>
-                  <div className={styles.providerIdentity}>
-                    <span className={styles.providerIcon} aria-hidden="true">
-                      <ApiOutlined />
-                    </span>
-                    <div>
-                      <div className={styles.providerTitleRow}>
-                        <h3>{provider.providerName}</h3>
-                        <Tag color={provider.enabled ? "success" : "default"}>
-                          {provider.enabled
-                            ? t("ai.settings.enabled")
-                            : t("ai.settings.disabled")}
-                        </Tag>
-                      </div>
-                      <p>{provider.baseUrl}</p>
-                      <span>{provider.maskedApiKey}</span>
-                    </div>
-                  </div>
-                  <div className={styles.providerActions}>
+              <AiProviderCard
+                actions={
+                  <>
                     <Button
                       disabled={!provider.enabled}
                       icon={<PlusOutlined />}
@@ -308,29 +296,116 @@ export function AiServiceSettings() {
                         </Button>
                       </Popconfirm>
                     ) : null}
-                  </div>
-                </div>
+                  </>
+                }
+                detail={provider.maskedApiKey}
+                disabledLabel={t("ai.settings.disabled")}
+                enabled={provider.enabled}
+                enabledLabel={t("ai.settings.enabled")}
+                endpoint={provider.baseUrl}
+                key={provider.id}
+                name={provider.providerName}
+              >
 
                 {provider.models.length === 0 ? (
-                  <div className={styles.modelEmpty}>
-                    <RobotOutlined />
-                    <span>{t("ai.settings.noModels")}</span>
-                  </div>
+                  <AiModelEmpty>{t("ai.settings.noModels")}</AiModelEmpty>
                 ) : (
-                  <div className={styles.modelTable}>
-                    <div className={styles.modelTableHeader}>
-                      <span>{t("ai.settings.model")}</span>
-                      <span>{t("ai.settings.capabilities")}</span>
-                      <span>{t("ai.settings.status")}</span>
-                      <span>{t("ai.settings.actions")}</span>
-                    </div>
+                  <AiModelTable
+                    actionsLabel={t("ai.settings.actions")}
+                    detailsLabel={t("ai.settings.capabilities")}
+                    modelLabel={t("ai.settings.model")}
+                    statusLabel={t("ai.settings.status")}
+                  >
                     {provider.models.map((model) => (
-                      <div className={styles.modelRow} key={model.id}>
-                        <div className={styles.modelIdentity}>
-                          <strong>{model.modelName}</strong>
-                          <span>{model.modelKey}</span>
-                        </div>
-                        <div className={styles.capabilities}>
+                      <AiModelRow
+                        actions={
+                          <>
+                            <Button
+                              disabled={busy || !provider.enabled}
+                              onClick={() =>
+                                void runOperation(
+                                  () =>
+                                    testPersonalAiModel(
+                                      provider.id,
+                                      model.modelKey,
+                                    ),
+                                  t("ai.settings.connectionSuccess"),
+                                )
+                              }
+                              type="link"
+                            >
+                              {t("ai.settings.testConnection")}
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                setModelEditor({ provider, model })
+                              }
+                              type="link"
+                            >
+                              {t("common.edit")}
+                            </Button>
+                            <Button
+                              disabled={busy || (!provider.enabled && !model.enabled)}
+                              onClick={() =>
+                                void runOperation(
+                                  async () => {
+                                    await updatePersonalAiModel(
+                                      provider.id,
+                                      model.id,
+                                      {
+                                        contextWindow: model.contextWindow,
+                                        enabled: !model.enabled,
+                                        maxOutputTokens: model.maxOutputTokens,
+                                        modelKey: model.modelKey,
+                                        modelName: model.modelName,
+                                        supportsStreaming:
+                                          model.supportsStreaming,
+                                        supportsToolCalls:
+                                          model.supportsToolCalls,
+                                      },
+                                    );
+                                  },
+                                  t(
+                                    model.enabled
+                                      ? "ai.settings.disabled"
+                                      : "ai.settings.enabled",
+                                  ),
+                                )
+                              }
+                              type="link"
+                            >
+                              {t(
+                                model.enabled
+                                  ? "ai.settings.disable"
+                                  : "ai.settings.enable",
+                              )}
+                            </Button>
+                            {!model.enabled ? (
+                              <Popconfirm
+                                description={t(
+                                  "ai.settings.deleteModelDescription",
+                                )}
+                                onConfirm={() =>
+                                  void runOperation(
+                                    () =>
+                                      deletePersonalAiModel(
+                                        provider.id,
+                                        model.id,
+                                      ),
+                                    t("ai.settings.deleted"),
+                                  )
+                                }
+                                title={t("ai.settings.deleteModel")}
+                              >
+                                <Button danger disabled={busy} type="link">
+                                  {t("common.delete")}
+                                </Button>
+                              </Popconfirm>
+                            ) : null}
+                          </>
+                        }
+                        details={
+                          <>
                           {model.supportsStreaming ? (
                             <Tag>{t("ai.settings.streaming")}</Tag>
                           ) : null}
@@ -347,105 +422,25 @@ export function AiServiceSettings() {
                           >
                             <Tag>{model.contextWindow.toLocaleString()}</Tag>
                           </Tooltip>
-                        </div>
-                        <div>
+                          </>
+                        }
+                        key={model.id}
+                        modelKey={model.modelKey}
+                        name={model.modelName}
+                        status={
                           <Tag color={model.enabled ? "success" : "default"}>
                             {model.enabled
                               ? t("ai.settings.enabled")
                               : t("ai.settings.disabled")}
                           </Tag>
-                        </div>
-                        <div className={styles.modelActions}>
-                          <Button
-                            disabled={busy || !provider.enabled}
-                            onClick={() =>
-                              void runOperation(
-                                () =>
-                                  testPersonalAiModel(
-                                    provider.id,
-                                    model.modelKey,
-                                  ),
-                                t("ai.settings.connectionSuccess"),
-                              )
-                            }
-                            type="link"
-                          >
-                            {t("ai.settings.testConnection")}
-                          </Button>
-                          <Button
-                            onClick={() =>
-                              setModelEditor({ provider, model })
-                            }
-                            type="link"
-                          >
-                            {t("common.edit")}
-                          </Button>
-                          <Button
-                            disabled={busy || (!provider.enabled && !model.enabled)}
-                            onClick={() =>
-                              void runOperation(
-                                async () => {
-                                  await updatePersonalAiModel(
-                                    provider.id,
-                                    model.id,
-                                    {
-                                      contextWindow: model.contextWindow,
-                                      enabled: !model.enabled,
-                                      maxOutputTokens: model.maxOutputTokens,
-                                      modelKey: model.modelKey,
-                                      modelName: model.modelName,
-                                      supportsStreaming:
-                                        model.supportsStreaming,
-                                      supportsToolCalls:
-                                        model.supportsToolCalls,
-                                    },
-                                  );
-                                },
-                                t(
-                                  model.enabled
-                                    ? "ai.settings.disabled"
-                                    : "ai.settings.enabled",
-                                ),
-                              )
-                            }
-                            type="link"
-                          >
-                            {t(
-                              model.enabled
-                                ? "ai.settings.disable"
-                                : "ai.settings.enable",
-                            )}
-                          </Button>
-                          {!model.enabled ? (
-                            <Popconfirm
-                              description={t(
-                                "ai.settings.deleteModelDescription",
-                              )}
-                              onConfirm={() =>
-                                void runOperation(
-                                  () =>
-                                    deletePersonalAiModel(
-                                      provider.id,
-                                      model.id,
-                                    ),
-                                  t("ai.settings.deleted"),
-                                )
-                              }
-                              title={t("ai.settings.deleteModel")}
-                            >
-                              <Button danger disabled={busy} type="link">
-                                {t("common.delete")}
-                              </Button>
-                            </Popconfirm>
-                          ) : null}
-                        </div>
-                      </div>
+                        }
+                      />
                     ))}
-                  </div>
+                  </AiModelTable>
                 )}
-              </article>
+              </AiProviderCard>
             ))}
-          </div>
+          </AiProviderList>
         )}
       </section>
 

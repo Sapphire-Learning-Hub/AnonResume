@@ -840,55 +840,6 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
   gap: 0;
 }
 
-.admin-ai-model-list {
-  display: grid;
-  min-width: 460px;
-  gap: 0;
-  padding-block: 8px;
-}
-
-.admin-ai-model-list__header,
-.admin-ai-model-list__item {
-  display: grid;
-  align-items: center;
-  gap: 12px;
-}
-
-.admin-ai-model-list__header {
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding-bottom: 6px;
-  color: var(--app-text-secondary);
-  font-size: 12px;
-}
-
-.admin-ai-model-list__item {
-  grid-template-columns: minmax(220px, 1fr) auto auto;
-  padding-block: 9px;
-  border-top: 1px solid var(--app-border);
-}
-
-.admin-ai-model-list__identity {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.admin-ai-model-list__rates,
-.admin-ai-model-list__empty {
-  color: var(--app-text-secondary);
-  font-size: 11px;
-}
-
-.admin-ai-model-list__empty {
-  margin: 0;
-  padding-block: 12px 6px;
-  border-top: 1px solid var(--app-border);
-}
-
-.admin-ai-model-list .admin-table-actions {
-  flex-wrap: nowrap;
-}
-
 .admin-ai-provider-form .ant-form-item {
   margin-bottom: 14px;
 }

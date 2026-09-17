@@ -4,6 +4,7 @@ import { getDatabaseSchemaName } from "@/db";
 import {
   AiAdminStateConflictError,
   createAiAdminModel,
+  deleteAiAdminProvider,
   deleteAiAdminModel,
   listAiAdminLedger,
   listAiAdminProviders,
@@ -23,7 +24,10 @@ describe("AI administration service", () => {
   const actorUserId = `${marker}-actor`;
   const providerId = randomUUID();
   const multiProviderId = randomUUID();
+  const activeDeleteProviderId = randomUUID();
+  const disabledDeleteProviderId = randomUUID();
   const modelId = randomUUID();
+  const disabledDeleteModelId = randomUUID();
   const schema = quoteIdentifier(getDatabaseSchemaName());
 
   beforeAll(async () => {
@@ -39,13 +43,19 @@ describe("AI administration service", () => {
       `INSERT INTO ${schema}.ai_provider_credentials
          (id, kind, display_name, base_url, encrypted_api_key, enabled)
        VALUES ($1, 'platform', $2, 'https://example.com/v1', $3, true),
-              ($4, 'platform', $5, 'https://example.com/v1', $3, true)`,
+              ($4, 'platform', $5, 'https://example.com/v1', $3, true),
+              ($6, 'platform', $7, 'https://example.com/v1', $3, true),
+              ($8, 'platform', $9, 'https://example.com/v1', $3, false)`,
       [
         providerId,
         `${marker} provider`,
         Buffer.from("encrypted"),
         multiProviderId,
         `${marker} multi provider`,
+        activeDeleteProviderId,
+        `${marker} active delete provider`,
+        disabledDeleteProviderId,
+        `${marker} disabled delete provider`,
       ],
     );
     await pool.query(
@@ -56,6 +66,20 @@ describe("AI administration service", () => {
           output_point_rate)
        VALUES ($1, $2, $3, $4, true, true, true, 128000, 4096, 1, 1, 1)`,
       [modelId, providerId, `${marker}-model`, `${marker} model`],
+    );
+    await pool.query(
+      `INSERT INTO ${schema}.ai_models
+         (id, provider_id, provider_model_key, display_name, enabled,
+          supports_streaming, supports_tool_calls, context_window,
+          max_output_tokens, input_point_rate, cached_input_point_rate,
+          output_point_rate)
+       VALUES ($1, $2, $3, $4, false, true, true, 128000, 4096, 1, 1, 1)`,
+      [
+        disabledDeleteModelId,
+        disabledDeleteProviderId,
+        `${marker}-delete-model`,
+        `${marker} delete model`,
+      ],
     );
   });
 
@@ -69,13 +93,57 @@ describe("AI administration service", () => {
     await pool.query(`DELETE FROM ${schema}.ai_quota_accounts WHERE user_id = $1`, [userId]);
     await pool.query(
       `DELETE FROM ${schema}.ai_models WHERE provider_id = ANY($1::uuid[])`,
-      [[providerId, multiProviderId]],
+      [[
+        providerId,
+        multiProviderId,
+        activeDeleteProviderId,
+        disabledDeleteProviderId,
+      ]],
     );
     await pool.query(
       `DELETE FROM ${schema}.ai_provider_credentials WHERE id = ANY($1::uuid[])`,
-      [[providerId, multiProviderId]],
+      [[
+        providerId,
+        multiProviderId,
+        activeDeleteProviderId,
+        disabledDeleteProviderId,
+      ]],
     );
     await pool.query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [[userId, actorUserId]]);
+  });
+
+  it("soft-deletes only disabled providers and their models", async () => {
+    await expect(deleteAiAdminProvider({
+      actorUserId,
+      providerId: activeDeleteProviderId,
+    })).rejects.toBeInstanceOf(AiAdminStateConflictError);
+
+    await deleteAiAdminProvider({
+      actorUserId,
+      providerId: disabledDeleteProviderId,
+    });
+
+    const pool = getDatabasePool();
+    const stored = await pool.query<{
+      modelDeletedAt: Date | null;
+      providerDeletedAt: Date | null;
+    }>(
+      `SELECT provider.deleted_at AS "providerDeletedAt",
+              model.deleted_at AS "modelDeletedAt"
+         FROM ${schema}.ai_provider_credentials AS provider
+         JOIN ${schema}.ai_models AS model ON model.provider_id = provider.id
+        WHERE provider.id = $1 AND model.id = $2`,
+      [disabledDeleteProviderId, disabledDeleteModelId],
+    );
+    expect(stored.rows[0]?.providerDeletedAt).toBeInstanceOf(Date);
+    expect(stored.rows[0]?.modelDeletedAt).toBeInstanceOf(Date);
+
+    const listed = await listAiAdminProviders({
+      page: 1,
+      pageSize: 10,
+      query: `${marker} disabled delete provider`,
+    });
+    expect(listed.items).toEqual([]);
   });
 
   it("soft-deletes only disabled models and permits the model key to be reused", async () => {

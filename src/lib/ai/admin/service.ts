@@ -383,32 +383,58 @@ export async function updateAiAdminModel(input: {
   return adminModelResult(model);
 }
 
-export async function disableAiAdminProvider(input: {
+export async function deleteAiAdminProvider(input: {
   actorUserId: string;
   providerId: string;
 }) {
-  const [provider] = await db
-    .update(aiProviderCredentials)
-    .set({ enabled: false, updatedAt: new Date() })
-    .where(
-      and(
-        eq(aiProviderCredentials.id, input.providerId),
-        eq(aiProviderCredentials.kind, "platform"),
-        isNull(aiProviderCredentials.deletedAt),
-      ),
-    )
-    .returning({ id: aiProviderCredentials.id });
-  if (!provider) throw new AiAdminNotFoundError();
-  await db
-    .update(aiModels)
-    .set({ enabled: false, updatedAt: new Date() })
-    .where(eq(aiModels.providerId, provider.id));
-  await writeAdminAuditEvent({
-    actorUserId: input.actorUserId,
-    action: "ai.provider.disable",
-    targetType: "ai_provider",
-    targetId: provider.id,
-    outcome: "success",
+  return withTransaction(async (client) => {
+    const current = await client.query<{
+      providerEnabled: boolean;
+      providerName: string;
+    }>(
+      `SELECT enabled AS "providerEnabled", display_name AS "providerName"
+         FROM ${schemaName()}.ai_provider_credentials
+        WHERE id = $1 AND kind = 'platform' AND deleted_at IS NULL
+        FOR UPDATE`,
+      [input.providerId],
+    );
+    const provider = current.rows[0];
+    if (!provider) throw new AiAdminNotFoundError();
+    if (provider.providerEnabled) throw new AiAdminStateConflictError();
+
+    const enabledModel = await client.query<{ id: string }>(
+      `SELECT id::text
+         FROM ${schemaName()}.ai_models
+        WHERE provider_id = $1 AND enabled = true AND deleted_at IS NULL
+        LIMIT 1
+        FOR UPDATE`,
+      [input.providerId],
+    );
+    if (enabledModel.rows[0]) throw new AiAdminStateConflictError();
+
+    await client.query(
+      `UPDATE ${schemaName()}.ai_models
+          SET deleted_at = now(), updated_at = now()
+        WHERE provider_id = $1 AND deleted_at IS NULL`,
+      [input.providerId],
+    );
+    await client.query(
+      `UPDATE ${schemaName()}.ai_provider_credentials
+          SET deleted_at = now(), updated_at = now()
+        WHERE id = $1 AND kind = 'platform' AND enabled = false
+          AND deleted_at IS NULL`,
+      [input.providerId],
+    );
+    await writeAdminAuditEventWithClient(client, {
+      actorUserId: input.actorUserId,
+      action: "ai.provider.delete",
+      targetType: "ai_provider",
+      targetId: input.providerId,
+      outcome: "success",
+      metadata: {
+        providerName: provider.providerName,
+      },
+    });
   });
 }
 

@@ -1,6 +1,7 @@
 import { requireAdminApi } from "@/lib/admin/api";
 import {
   createAiAdminModel,
+  deleteAiAdminProvider,
   deleteAiAdminModel,
   getAiAdminAuditEvidence,
   listAiAdminUsage,
@@ -14,6 +15,7 @@ import {
   POST as POST_USAGE,
 } from "@/app/api/manage/ai/usage/route";
 import { PATCH as PATCH_QUOTA } from "@/app/api/manage/ai/quotas/route";
+import { DELETE as DELETE_PROVIDER } from "@/app/api/manage/ai/providers/[id]/route";
 import { DELETE as DELETE_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
 import { PATCH as PATCH_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
 import { POST as POST_MODEL } from "@/app/api/manage/ai/providers/[id]/models/route";
@@ -25,6 +27,7 @@ vi.mock("@/lib/admin/api", async (importOriginal) => {
 
 vi.mock("@/lib/ai/admin/service", () => ({
   createAiAdminModel: vi.fn(),
+  deleteAiAdminProvider: vi.fn(),
   deleteAiAdminModel: vi.fn(),
   getAiAdminAuditEvidence: vi.fn(),
   listAiAdminUsage: vi.fn(),
@@ -151,6 +154,24 @@ describe("AI administration routes", () => {
       actorUserId: "admin-1",
       providerId: "provider-1",
       modelId: "model-1",
+    });
+  });
+
+  it("deletes a disabled provider instead of treating deletion as disable", async () => {
+    vi.mocked(deleteAiAdminProvider).mockResolvedValue(undefined);
+
+    const response = await DELETE_PROVIDER(
+      new Request("http://localhost/api/manage/ai/providers/provider-1", {
+        method: "DELETE",
+        headers: { origin: "http://localhost" },
+      }),
+      { params: Promise.resolve({ id: "provider-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(deleteAiAdminProvider).toHaveBeenCalledWith({
+      actorUserId: "admin-1",
+      providerId: "provider-1",
     });
   });
 

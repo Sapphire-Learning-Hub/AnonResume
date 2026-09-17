@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import {
-  disableAiAdminProvider,
+  deleteAiAdminProvider,
   saveAiAdminProvider,
 } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
@@ -63,7 +63,7 @@ export async function DELETE(
       permission: "ai.providers.manage",
       recentMfa: true,
     });
-    await disableAiAdminProvider({
+    await deleteAiAdminProvider({
       actorUserId: context.userId,
       providerId: (await params).id,
     });

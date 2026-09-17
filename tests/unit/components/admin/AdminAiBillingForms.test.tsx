@@ -106,6 +106,51 @@ describe("AI billing administration forms", () => {
     expect(within(dialog).getByText("输入费率（积分/百万 Token）")).toBeInTheDocument();
   });
 
+  it("groups each provider and its models in an accessible catalog card", () => {
+    render(
+      <AdminAiProviders
+        providers={{
+          items: [{
+            providerId: "00000000-0000-4000-8000-000000000001",
+            providerName: "模型服务",
+            baseUrl: "https://example.com/v1",
+            providerEnabled: true,
+            models: [{
+              providerId: "00000000-0000-4000-8000-000000000001",
+              modelId: "00000000-0000-4000-8000-000000000002",
+              modelKey: "example-model",
+              modelName: "示例模型",
+              modelEnabled: true,
+              supportsToolCalls: true,
+              contextWindow: 128_000,
+              maxOutputTokens: 4_096,
+              inputPointRate: "0",
+              cachedInputPointRate: "0",
+              outputPointRate: "0",
+              rateCardVersion: 1,
+            }],
+          }],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1,
+        }}
+        searchParams={{}}
+      />,
+    );
+
+    const providerCard = screen.getByRole("article", { name: "模型服务" });
+    expect(within(providerCard).getByRole("heading", {
+      level: 3,
+      name: "模型服务",
+    })).toBeInTheDocument();
+    expect(within(providerCard).getByRole("heading", {
+      level: 4,
+      name: "示例模型",
+    })).toBeInTheDocument();
+    expect(within(providerCard).getByText("免费模型")).toBeInTheDocument();
+  });
+
   it("offers deletion for a disabled model without disabling its provider", () => {
     render(
       <AdminAiProviders
@@ -143,5 +188,76 @@ describe("AI billing administration forms", () => {
 
     expect(screen.getByRole("dialog", { name: "删除模型" })).toBeInTheDocument();
     expect(screen.getByText("删除后不能恢复，但历史调用和计费记录仍会保留。")).toBeInTheDocument();
+  });
+
+  it("exposes direct state actions for providers and models", () => {
+    render(
+      <AdminAiProviders
+        providers={{
+          items: [{
+            providerId: "00000000-0000-4000-8000-000000000001",
+            providerName: "已停用服务",
+            baseUrl: "https://example.com/v1",
+            providerEnabled: false,
+            models: [{
+              providerId: "00000000-0000-4000-8000-000000000001",
+              modelId: "00000000-0000-4000-8000-000000000002",
+              modelKey: "disabled-model",
+              modelName: "已停用模型",
+              modelEnabled: false,
+              supportsToolCalls: true,
+              contextWindow: 128_000,
+              maxOutputTokens: 4_096,
+              inputPointRate: "100",
+              cachedInputPointRate: "50",
+              outputPointRate: "200",
+              rateCardVersion: 1,
+            }],
+          }, {
+            providerId: "00000000-0000-4000-8000-000000000003",
+            providerName: "启用服务",
+            baseUrl: "https://example.com/v1",
+            providerEnabled: true,
+            models: [{
+              providerId: "00000000-0000-4000-8000-000000000003",
+              modelId: "00000000-0000-4000-8000-000000000004",
+              modelKey: "enabled-model",
+              modelName: "启用模型",
+              modelEnabled: true,
+              supportsToolCalls: true,
+              contextWindow: 128_000,
+              maxOutputTokens: 4_096,
+              inputPointRate: "100",
+              cachedInputPointRate: "50",
+              outputPointRate: "200",
+              rateCardVersion: 1,
+            }],
+          }],
+          page: 1,
+          pageSize: 20,
+          total: 2,
+          totalPages: 1,
+        }}
+        searchParams={{}}
+      />,
+    );
+
+    const disabledProvider = screen.getByRole("article", {
+      name: "已停用服务",
+    });
+    expect(within(disabledProvider).getByRole("button", {
+      name: "启用服务",
+    })).toBeInTheDocument();
+    expect(within(disabledProvider).getByRole("button", {
+      name: "删除模型服务",
+    })).toBeInTheDocument();
+    expect(within(disabledProvider).getByRole("button", {
+      name: "启用模型",
+    })).toBeDisabled();
+
+    const enabledProvider = screen.getByRole("article", { name: "启用服务" });
+    expect(within(enabledProvider).getByRole("button", {
+      name: "停用模型",
+    })).toBeInTheDocument();
   });
 });

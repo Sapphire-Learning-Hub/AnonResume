@@ -1,6 +1,18 @@
 "use client";
 
-import { Button, Checkbox, Form, Input, InputNumber, Modal, Switch } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import {
+  Button,
+  Checkbox,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Switch,
+  Tag,
+  Tooltip,
+} from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -11,13 +23,17 @@ import type {
 } from "@/components/admin/ai/types";
 import { useAdminAiSensitiveAction } from "@/components/admin/ai/useAdminAiSensitiveAction";
 import {
-  AdminIdentity,
   AdminPage,
   AdminSection,
-  AdminStatus,
-  AdminTable,
-  AdminTableActions,
 } from "@/components/admin/AdminPage";
+import {
+  AiModelEmpty,
+  AiModelRow,
+  AiModelTable,
+  AiProviderCard,
+  AiProviderList,
+} from "@/components/ai/model-management/AiProviderCatalog";
+import { NumberedPagination } from "@/components/common/NumberedPagination";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
@@ -197,10 +213,57 @@ export function AdminAiProviders({
     router.refresh();
   }
 
-  async function disableProvider(item: ProviderItem) {
+  async function updateProviderEnabled(item: ProviderItem, enabled: boolean) {
+    const response = await runSensitive(() => fetch(
+      `/api/manage/ai/providers/${encodeURIComponent(item.providerId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          displayName: item.providerName,
+          baseUrl: item.baseUrl,
+          enabled,
+        }),
+      },
+    ));
+    if (!response) return;
+    toast.success(t("ai.saved"));
+    router.refresh();
+  }
+
+  async function deleteProvider(item: ProviderItem) {
     const response = await runSensitive(() => fetch(
       `/api/manage/ai/providers/${encodeURIComponent(item.providerId)}`,
       { method: "DELETE" },
+    ));
+    if (!response) return;
+    toast.success(t("ai.providerDeleted"));
+    router.refresh();
+  }
+
+  async function updateModelEnabled(
+    provider: ProviderItem,
+    model: ProviderModelItem,
+    enabled: boolean,
+  ) {
+    const response = await runSensitive(() => fetch(
+      `/api/manage/ai/providers/${encodeURIComponent(provider.providerId)}/models/${encodeURIComponent(model.modelId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerModelKey: model.modelKey,
+          displayName: model.modelName,
+          enabled,
+          supportsToolCalls: model.supportsToolCalls,
+          freeModel: isFreeModel(model),
+          contextWindow: model.contextWindow,
+          maxOutputTokens: model.maxOutputTokens,
+          inputPointRate: Number(model.inputPointRate),
+          cachedInputPointRate: Number(model.cachedInputPointRate),
+          outputPointRate: Number(model.outputPointRate),
+        }),
+      },
     ));
     if (!response) return;
     toast.success(t("ai.saved"));
@@ -225,81 +288,181 @@ export function AdminAiProviders({
       <AdminAiSearch basePath="/app/manage/ai/providers" placeholder={t("ai.search")} searchParams={searchParams} />
       <AdminSection>
         <p className="admin-section-description">{t("ai.providersDescription")}</p>
-        <AdminTable
-          actionColumn
-          headers={[t("ai.provider"), t("ai.models"), t("ai.status"), t("common.actions")]}
-          pagination={{
-            basePath: "/app/manage/ai/providers",
-            page: providers.page,
-            pageSize: providers.pageSize,
-            searchParams,
-            total: providers.total,
-            totalPages: providers.totalPages,
-          }}
-          rows={providers.items.map((provider) => [
-            <AdminIdentity
-              key="provider"
-              title={provider.providerName}
-              description={`${provider.baseUrl} · ${provider.providerId}`}
-            />,
-            <div className="admin-ai-model-list" key="models">
-              <div className="admin-ai-model-list__header">
-                <span>{t("ai.modelCount", { count: provider.models.length })}</span>
-                <Button onClick={() => setModelDraft(createModelDraft(provider))} size="small" type="link">
-                  {t("ai.addModel")}
-                </Button>
-              </div>
-              {provider.models.length ? provider.models.map((model) => (
-                <div className="admin-ai-model-list__item" key={model.modelId}>
-                  <div className="admin-ai-model-list__identity">
-                    <AdminIdentity
-                      title={model.modelName}
-                      description={`${model.modelKey} · ${model.modelId}`}
-                    />
-                    <span className="admin-ai-model-list__rates">
-                      {isFreeModel(model)
-                        ? t("ai.freeModelShort")
-                        : `${model.inputPointRate} / ${model.cachedInputPointRate} / ${model.outputPointRate} · v${model.rateCardVersion}`}
-                    </span>
-                  </div>
-                  <AdminStatus tone={model.modelEnabled ? "success" : "default"}>
-                    {model.modelEnabled ? t("ai.enabled") : t("ai.disabled")}
-                  </AdminStatus>
-                  <AdminTableActions>
-                    <Button aria-label={t("ai.editModel")} onClick={() => setModelDraft(createModelDraft(provider, model))} size="small" type="link">
+        {providers.items.length === 0 ? (
+          <div className="admin-empty-state">
+            <Empty description={t("ai.noProviders")} />
+          </div>
+        ) : (
+          <AiProviderList>
+            {providers.items.map((provider) => (
+              <AiProviderCard
+                actions={
+                  <>
+                    <Button
+                      disabled={!provider.providerEnabled}
+                      icon={<PlusOutlined />}
+                      onClick={() => setModelDraft(createModelDraft(provider))}
+                    >
+                      {t("ai.addModel")}
+                    </Button>
+                    <Button
+                      aria-label={t("ai.editProvider")}
+                      onClick={() => editProvider(provider)}
+                    >
                       {t("common.edit")}
                     </Button>
-                    {!model.modelEnabled ? (
-                      <Button danger onClick={() => setConfirmation({
-                        title: t("ai.confirmDeleteModelTitle"),
-                        description: t("ai.confirmDeleteModelDescription"),
-                        confirmText: t("common.delete"),
-                        action: () => deleteModel(model),
-                      })} size="small" type="link">
-                        {t("common.delete")}
+                    {provider.providerEnabled ? (
+                      <Button
+                        danger
+                        onClick={() => setConfirmation({
+                          title: t("ai.confirmDisableTitle"),
+                          description: t("ai.confirmDisableDescription"),
+                          confirmText: t("ai.confirmDisable"),
+                          action: () => updateProviderEnabled(provider, false),
+                        })}
+                      >
+                        {t("ai.disableProvider")}
                       </Button>
-                    ) : null}
-                  </AdminTableActions>
-                </div>
-              )) : <p className="admin-ai-model-list__empty">{t("ai.noModels")}</p>}
-            </div>,
-            <AdminStatus key="status" tone={provider.providerEnabled ? "success" : "default"}>
-              {provider.providerEnabled ? t("ai.enabled") : t("ai.disabled")}
-            </AdminStatus>,
-            <AdminTableActions key="actions">
-              <Button aria-label={t("ai.editProvider")} onClick={() => editProvider(provider)} type="link">{t("common.edit")}</Button>
-              {provider.providerEnabled ? (
-                <Button danger onClick={() => setConfirmation({
-                  title: t("ai.confirmDisableTitle"),
-                  description: t("ai.confirmDisableDescription"),
-                  confirmText: t("ai.confirmDisable"),
-                  action: () => disableProvider(provider),
-                })} type="link">
-                  {t("ai.disableProvider")}
-                </Button>
-              ) : null}
-            </AdminTableActions>,
-          ])}
+                    ) : (
+                      <>
+                        <Button
+                          disabled={pending}
+                          onClick={() => void updateProviderEnabled(provider, true)}
+                        >
+                          {t("ai.enableProvider")}
+                        </Button>
+                        <Button
+                          danger
+                          disabled={pending}
+                          onClick={() => setConfirmation({
+                            title: t("ai.confirmDeleteTitle"),
+                            description: t("ai.confirmDeleteDescription"),
+                            confirmText: t("common.delete"),
+                            action: () => deleteProvider(provider),
+                          })}
+                        >
+                          {t("ai.deleteProvider")}
+                        </Button>
+                      </>
+                    )}
+                  </>
+                }
+                detail={provider.providerId}
+                disabledLabel={t("ai.disabled")}
+                enabled={provider.providerEnabled}
+                enabledLabel={t("ai.enabled")}
+                endpoint={provider.baseUrl}
+                key={provider.providerId}
+                name={provider.providerName}
+              >
+                {provider.models.length === 0 ? (
+                  <AiModelEmpty>{t("ai.noModels")}</AiModelEmpty>
+                ) : (
+                  <AiModelTable
+                    actionsLabel={t("common.actions")}
+                    detailsLabel={t("ai.capabilitiesAndBilling")}
+                    modelLabel={t("ai.model")}
+                    statusLabel={t("ai.status")}
+                  >
+                    {provider.models.map((model) => (
+                      <AiModelRow
+                        actions={
+                          <>
+                            <Button
+                              aria-label={t("ai.editModel")}
+                              onClick={() => setModelDraft(createModelDraft(provider, model))}
+                              type="link"
+                            >
+                              {t("common.edit")}
+                            </Button>
+                            {model.modelEnabled ? (
+                              <Button
+                                danger
+                                disabled={pending}
+                                onClick={() => setConfirmation({
+                                  title: t("ai.confirmDisableModelTitle"),
+                                  description: t("ai.confirmDisableModelDescription"),
+                                  confirmText: t("ai.disableModel"),
+                                  action: () => updateModelEnabled(provider, model, false),
+                                })}
+                                type="link"
+                              >
+                                {t("ai.disableModel")}
+                              </Button>
+                            ) : (
+                              <Button
+                                disabled={pending || !provider.providerEnabled}
+                                onClick={() => void updateModelEnabled(provider, model, true)}
+                                type="link"
+                              >
+                                {t("ai.enableModel")}
+                              </Button>
+                            )}
+                            {!model.modelEnabled ? (
+                              <Button
+                                danger
+                                disabled={pending}
+                                onClick={() => setConfirmation({
+                                  title: t("ai.confirmDeleteModelTitle"),
+                                  description: t("ai.confirmDeleteModelDescription"),
+                                  confirmText: t("common.delete"),
+                                  action: () => deleteModel(model),
+                                })}
+                                type="link"
+                              >
+                                {t("common.delete")}
+                              </Button>
+                            ) : null}
+                          </>
+                        }
+                        details={
+                          <>
+                            {model.supportsToolCalls ? (
+                              <Tag color="processing">{t("ai.toolCallsShort")}</Tag>
+                            ) : null}
+                            <Tooltip
+                              title={t("ai.modelLimits", {
+                                context: model.contextWindow.toLocaleString(),
+                                output: model.maxOutputTokens.toLocaleString(),
+                              })}
+                            >
+                              <Tag>{model.contextWindow.toLocaleString()}</Tag>
+                            </Tooltip>
+                            <Tag color={isFreeModel(model) ? "success" : "default"}>
+                              {isFreeModel(model)
+                                ? t("ai.freeModelShort")
+                                : t("ai.rateSummary", {
+                                  cached: model.cachedInputPointRate,
+                                  input: model.inputPointRate,
+                                  output: model.outputPointRate,
+                                  version: model.rateCardVersion,
+                                })}
+                            </Tag>
+                          </>
+                        }
+                        key={model.modelId}
+                        modelKey={`${model.modelKey} · ${model.modelId}`}
+                        name={model.modelName}
+                        status={
+                          <Tag color={model.modelEnabled ? "success" : "default"}>
+                            {model.modelEnabled ? t("ai.enabled") : t("ai.disabled")}
+                          </Tag>
+                        }
+                      />
+                    ))}
+                  </AiModelTable>
+                )}
+              </AiProviderCard>
+            ))}
+          </AiProviderList>
+        )}
+        <NumberedPagination
+          basePath="/app/manage/ai/providers"
+          page={providers.page}
+          pageSize={providers.pageSize}
+          searchParams={searchParams}
+          total={providers.total}
+          totalPages={providers.totalPages}
         />
       </AdminSection>
 
