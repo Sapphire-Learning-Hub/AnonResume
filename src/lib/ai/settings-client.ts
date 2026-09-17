@@ -1,16 +1,25 @@
 import { z } from "zod";
 
-const personalSchema = z
-  .object({
-    providerName: z.string(),
-    baseUrl: z.string(),
-    maskedApiKey: z.string(),
-    modelKey: z.string(),
-    modelName: z.string(),
-    supportsToolCalls: z.boolean(),
-    enabled: z.boolean(),
-  })
-  .nullable();
+const personalModelSchema = z.object({
+  id: z.string().uuid(),
+  providerId: z.string().uuid(),
+  modelKey: z.string(),
+  modelName: z.string(),
+  enabled: z.boolean(),
+  supportsStreaming: z.boolean(),
+  supportsToolCalls: z.boolean(),
+  contextWindow: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive(),
+});
+
+const personalProviderSchema = z.object({
+  id: z.string().uuid(),
+  providerName: z.string(),
+  baseUrl: z.string(),
+  maskedApiKey: z.string(),
+  enabled: z.boolean(),
+  models: z.array(personalModelSchema),
+});
 
 const settingsSchema = z.object({
   platformEnabled: z.boolean(),
@@ -26,18 +35,28 @@ const settingsSchema = z.object({
       periodEndsAt: z.string(),
     })
     .nullable(),
-  personal: personalSchema,
+  providers: z.array(personalProviderSchema),
 });
 
 export type AiSettingsSnapshot = z.infer<typeof settingsSchema>;
+export type PersonalAiProvider = z.infer<typeof personalProviderSchema>;
+export type PersonalAiModel = z.infer<typeof personalModelSchema>;
 
-export interface PersonalAiSettingsInput {
+export interface PersonalAiProviderInput {
   providerName: string;
   baseUrl: string;
   apiKey?: string;
+  enabled?: boolean;
+}
+
+export interface PersonalAiModelInput {
   modelKey: string;
   modelName: string;
+  enabled?: boolean;
+  supportsStreaming: boolean;
   supportsToolCalls: boolean;
+  contextWindow: number;
+  maxOutputTokens: number;
 }
 
 async function responseJson(response: Response) {
@@ -49,6 +68,25 @@ async function responseJson(response: Response) {
   return payload;
 }
 
+async function request(
+  url: string,
+  method: "POST" | "PATCH",
+  body: unknown,
+) {
+  return responseJson(
+    await fetch(url, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+async function remove(url: string) {
+  const response = await fetch(url, { method: "DELETE" });
+  if (!response.ok) await responseJson(response);
+}
+
 export async function fetchAiSettings() {
   return settingsSchema.parse(
     await responseJson(
@@ -57,29 +95,72 @@ export async function fetchAiSettings() {
   );
 }
 
-export async function saveAiSettings(input: PersonalAiSettingsInput) {
-  const payload = await responseJson(
-    await fetch("/api/ai/settings", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    }),
-  );
-  return z.object({ personal: personalSchema }).parse(payload);
+export async function createPersonalAiProvider(
+  input: PersonalAiProviderInput & { apiKey: string },
+) {
+  const payload = await request("/api/ai/settings/providers", "POST", input);
+  return z.object({ provider: personalProviderSchema }).parse(payload).provider;
 }
 
-export async function disableAiSettings() {
-  const response = await fetch("/api/ai/settings", { method: "DELETE" });
-  if (!response.ok) await responseJson(response);
+export async function updatePersonalAiProvider(
+  providerId: string,
+  input: PersonalAiProviderInput & { enabled: boolean },
+) {
+  const payload = await request(
+    `/api/ai/settings/providers/${encodeURIComponent(providerId)}`,
+    "PATCH",
+    input,
+  );
+  return z.object({ provider: personalProviderSchema }).parse(payload).provider;
 }
 
-export async function testAiSettings(input: PersonalAiSettingsInput) {
-  const payload = await responseJson(
-    await fetch("/api/ai/settings/test", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-    }),
+export async function deletePersonalAiProvider(providerId: string) {
+  await remove(
+    `/api/ai/settings/providers/${encodeURIComponent(providerId)}`,
   );
+}
+
+export async function createPersonalAiModel(
+  providerId: string,
+  input: PersonalAiModelInput,
+) {
+  const payload = await request(
+    `/api/ai/settings/providers/${encodeURIComponent(providerId)}/models`,
+    "POST",
+    input,
+  );
+  return z.object({ model: personalModelSchema }).parse(payload).model;
+}
+
+export async function updatePersonalAiModel(
+  providerId: string,
+  modelId: string,
+  input: PersonalAiModelInput & { enabled: boolean },
+) {
+  const payload = await request(
+    `/api/ai/settings/providers/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`,
+    "PATCH",
+    input,
+  );
+  return z.object({ model: personalModelSchema }).parse(payload).model;
+}
+
+export async function deletePersonalAiModel(
+  providerId: string,
+  modelId: string,
+) {
+  await remove(
+    `/api/ai/settings/providers/${encodeURIComponent(providerId)}/models/${encodeURIComponent(modelId)}`,
+  );
+}
+
+export async function testPersonalAiModel(
+  providerId: string,
+  modelKey: string,
+) {
+  const payload = await request("/api/ai/settings/test", "POST", {
+    providerId,
+    modelKey,
+  });
   return z.object({ connected: z.literal(true) }).parse(payload);
 }

@@ -2,15 +2,18 @@ import {
   personalAiApiErrorResponse,
   requirePersonalAiApi,
 } from "@/lib/ai/settings/api";
-import { testPersonalAiProvider } from "@/lib/ai/settings/service";
-import { testPersonalAiProviderSchema } from "@/lib/ai/settings/validation";
+import { createPersonalAiModel } from "@/lib/ai/settings/service";
+import { createPersonalAiModelSchema } from "@/lib/ai/settings/validation";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedJsonRequest,
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ providerId: string }> },
+) {
   const forbiddenResponse = requireSameOrigin(request);
   if (forbiddenResponse) return forbiddenResponse;
   try {
@@ -18,14 +21,19 @@ export async function POST(request: Request) {
     if (!context) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
-    const body = testPersonalAiProviderSchema.parse(
+    const { providerId } = await params;
+    const value = createPersonalAiModelSchema.parse(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
-    await testPersonalAiProvider({ ...context, ...body });
-    return Response.json({ connected: true });
+    const model = await createPersonalAiModel({
+      userId: context.userId,
+      providerId,
+      value,
+    });
+    return Response.json({ model }, { status: 201 });
   } catch (error) {
     const response = personalAiApiErrorResponse(error);
     if (response) return response;
-    return Response.json({ error: "ai_connection_failed" }, { status: 502 });
+    throw error;
   }
 }
