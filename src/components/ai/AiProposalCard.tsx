@@ -22,6 +22,18 @@ function changeLabel(type: string, t: ReturnType<typeof useI18n>["t"]) {
       return t("ai.change.insertItem");
     case "delete_list_item":
       return t("ai.change.deleteItem");
+    case "create_section":
+      return t("ai.change.createSection");
+    case "delete_section":
+      return t("ai.change.deleteSection");
+    case "move_section":
+      return t("ai.change.moveSection");
+    case "insert_block":
+      return t("ai.change.insertBlock");
+    case "delete_block":
+      return t("ai.change.deleteBlock");
+    case "move_block":
+      return t("ai.change.moveBlock");
     default:
       return t("ai.change.unknown");
   }
@@ -43,9 +55,11 @@ function proposedText(change: { type: string; content?: unknown }) {
 export function AiProposalCard({
   storedProposal,
   onApply,
+  onPreview,
 }: {
   storedProposal: AiStoredProposal;
   onApply: (selectedChangeIds: string[]) => Promise<boolean>;
+  onPreview?: (selectedChangeIds: string[]) => void;
 }) {
   const { styles } = useAiAssistantPanelStyles();
   const { t } = useI18n();
@@ -113,18 +127,27 @@ export function AiProposalCard({
           );
         })}
       </div>
-      <Button
-        block
-        disabled={selected.length === 0}
-        loading={applying}
-        type="primary"
-        onClick={() => {
-          setApplying(true);
-          void onApply(selected).finally(() => setApplying(false));
-        }}
-      >
-        {t("ai.proposal.applySelected", { count: selected.length })}
-      </Button>
+      <div className={styles.proposalActions}>
+        {onPreview ? (
+          <Button
+            disabled={selected.length === 0}
+            onClick={() => onPreview(selected)}
+          >
+            {t("ai.proposal.previewSelected")}
+          </Button>
+        ) : null}
+        <Button
+          disabled={selected.length === 0}
+          loading={applying}
+          type="primary"
+          onClick={() => {
+            setApplying(true);
+            void onApply(selected).finally(() => setApplying(false));
+          }}
+        >
+          {t("ai.proposal.applySelected", { count: selected.length })}
+        </Button>
+      </div>
     </div>
   );
 }

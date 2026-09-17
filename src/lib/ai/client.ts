@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import type { AiClientStreamEvent } from "@/lib/ai/runs/stream-events";
+import {
+  aiRunProgressStages,
+  type AiClientStreamEvent,
+} from "@/lib/ai/runs/stream-events";
 
 const modelSchema = z.object({
   id: z.string().uuid(),
@@ -10,6 +13,7 @@ const modelSchema = z.object({
   supportsToolCalls: z.boolean(),
   maxOutputTokens: z.number().int().positive(),
   keySource: z.enum(["platform", "user"]),
+  providerName: z.string(),
 });
 
 const conversationSchema = z.object({
@@ -55,6 +59,7 @@ const conversationDetailsSchema = z.object({
       sequence: z.number().int().nonnegative(),
       text: z.string(),
       proposal: z.unknown(),
+      progress: z.array(z.enum(aiRunProgressStages)),
     })
     .nullable(),
 });
@@ -71,6 +76,11 @@ const streamEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     sequence: z.number().int(),
+    type: z.literal("progress"),
+    stage: z.enum(aiRunProgressStages),
+  }),
+  z.object({
+    sequence: z.number().int(),
     type: z.literal("text_delta"),
     delta: z.string(),
   }),
@@ -78,6 +88,10 @@ const streamEventSchema = z.discriminatedUnion("type", [
     sequence: z.number().int(),
     type: z.literal("proposal_delta"),
     delta: z.string(),
+  }),
+  z.object({
+    sequence: z.number().int(),
+    type: z.literal("proposal_reset"),
   }),
   z.object({
     sequence: z.number().int(),

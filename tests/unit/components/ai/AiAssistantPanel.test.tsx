@@ -35,7 +35,7 @@ function createAssistantState() {
     stop: vi.fn(),
     stopping: false,
     streamingProposalText: "",
-    streamingReasoningSteps: 0,
+    streamingProgressStages: [],
     streamingText: "",
   };
 }
@@ -158,6 +158,7 @@ describe("AiAssistantPanel", () => {
           sequence: 3,
           text: "",
           proposal: null,
+          progress: ["analyzing_resume"],
         },
       },
       pendingUserMessage: "",
@@ -256,6 +257,7 @@ describe("AiAssistantPanel", () => {
           sequence: 12,
           text: "正在分析简历",
           proposal: null,
+          progress: ["analyzing_resume", "drafting_response"],
         },
       },
       pendingUserMessage: "帮我优化简历",
@@ -309,11 +311,11 @@ describe("AiAssistantPanel", () => {
     expect(screen.getByText("正在生成修改建议…")).toBeInTheDocument();
   });
 
-  it("shows a deep-thinking loading state without exposing private reasoning text", () => {
+  it("shows a safe execution trace without exposing private reasoning text", () => {
     assistantMock.current = {
       ...createAssistantState(),
       sending: true,
-      streamingReasoningSteps: 3,
+      streamingProgressStages: ["analyzing_resume", "thinking"],
     };
 
     render(
@@ -331,6 +333,7 @@ describe("AiAssistantPanel", () => {
     );
 
     expect(screen.getByText("正在深度思考…")).toBeInTheDocument();
+    expect(screen.getByText("正在分析简历…")).toBeInTheDocument();
   });
 
   it("does not leave a thinking placeholder after a tool-only response completes", () => {
@@ -404,6 +407,7 @@ describe("AiAssistantPanel", () => {
           sequence: 8,
           text: "",
           proposal: '{"summary":"正在检查工作经历',
+          progress: ["analyzing_resume", "generating_changes"],
         },
       },
       sending: false,
@@ -425,7 +429,7 @@ describe("AiAssistantPanel", () => {
     );
 
     expect(screen.getByText("正在检查工作经历")).toBeInTheDocument();
-    expect(screen.getByText("正在生成修改建议…")).toBeInTheDocument();
+    expect(screen.getAllByText("正在生成修改建议…")).toHaveLength(2);
   });
 
   it("returns an unprocessed stopped message to the composer", async () => {
@@ -529,5 +533,74 @@ describe("AiAssistantPanel", () => {
         ),
       ).toHaveValue("优化我的工作经历"),
     );
+  });
+
+  it("previews the currently selected proposal changes before applying them", () => {
+    const onPreviewProposal = vi.fn(() => true);
+    const document = createDefaultResumeDocument();
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [],
+        proposals: [
+          {
+            id: "7accc68d-d40d-418a-99d3-20c63f80d283",
+            runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+            baseResumeVersion: 1,
+            proposal: {
+              summary: "调整个人简介",
+              changes: [
+                {
+                  id: "change-summary",
+                  type: "replace_section_title",
+                  sectionId: document.sections[0]!.id,
+                  beforeHash: "a".repeat(64),
+                  content: document.sections[0]!.title,
+                  reason: "让标题更清晰",
+                },
+              ],
+            },
+            completionState: "complete",
+            appliedChangeIds: [],
+            appliedAt: null,
+          },
+        ],
+        activeRun: null,
+      },
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document,
+        })}
+        onClose={vi.fn()}
+        onPreviewProposal={onPreviewProposal}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "预览所选修改" }));
+
+    expect(onPreviewProposal).toHaveBeenCalledWith({
+      proposal: expect.objectContaining({ summary: "调整个人简介" }),
+      baseResumeVersion: 1,
+      selectedChangeIds: ["change-summary"],
+    });
   });
 });

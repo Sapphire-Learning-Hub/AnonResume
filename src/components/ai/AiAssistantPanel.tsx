@@ -30,6 +30,7 @@ import { getAiProposalStreamProgress } from "@/lib/ai/proposals/stream-progress"
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { CloseIcon } from "@/components/ui/InlineIcons";
 import { useI18n } from "@/i18n/I18nProvider";
+import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
 
 import { useAiAssistantPanelStyles } from "./AiAssistantPanel.style";
 import { AiProposalCard } from "./AiProposalCard";
@@ -60,6 +61,7 @@ export function AiAssistantPanel({
   sectionId,
   onClose,
   onApplyProposal,
+  onPreviewProposal,
 }: {
   open: boolean;
   resumeId: string;
@@ -73,6 +75,11 @@ export function AiAssistantPanel({
   }) => ReturnType<
     typeof import("@/domain/resume/ai/proposal-apply").applySelectedAiChanges
   >;
+  onPreviewProposal?: (input: {
+    proposal: AiResumeProposal;
+    baseResumeVersion: number;
+    selectedChangeIds: string[];
+  }) => boolean;
 }) {
   const { styles } = useAiAssistantPanelStyles();
   const { t } = useI18n();
@@ -200,15 +207,35 @@ export function AiAssistantPanel({
       : "");
   const proposalStreamProgress =
     getAiProposalStreamProgress(proposalStreamText);
-  const reasoningProgressSteps =
-    assistant.streamingReasoningSteps ||
-    (!assistant.streamingText &&
-    !proposalStreamText &&
-    (assistant.details?.activeRun?.sequence ?? 0) > 1
-      ? assistant.details!.activeRun!.sequence - 1
-      : 0);
-  const streamingStatus =
-    reasoningProgressSteps > 0 ? t("ai.deepThinking") : t("ai.analyzing");
+  const progressStages = assistant.streamingProgressStages.length
+    ? assistant.streamingProgressStages
+    : (assistant.details?.activeRun?.progress ??
+      (assistant.sending ? (["analyzing_resume"] as const) : []));
+  const progressLabels: Record<AiRunProgressStage, string> = {
+    analyzing_resume: t("ai.analyzing"),
+    thinking: t("ai.deepThinking"),
+    drafting_response: t("ai.progress.drafting"),
+    generating_changes: t("ai.proposal.generating"),
+    validating_result: t("ai.progress.validating"),
+    repairing_changes: t("ai.progress.repairing"),
+    revalidating_result: t("ai.progress.revalidating"),
+    saving_result: t("ai.progress.saving"),
+  };
+  const currentProgressStage = progressStages.at(-1);
+
+  function renderProgressTrace() {
+    if (progressStages.length === 0) return null;
+    return (
+      <ol aria-live="polite" className={styles.executionTrace}>
+        {progressStages.map((stage) => (
+          <li data-current={stage === currentProgressStage} key={stage}>
+            {stage === currentProgressStage ? <Spin size="small" /> : <i />}
+            <span>{progressLabels[stage]}</span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
   const persistedPendingUser = assistant.pendingUserMessage
     ? messages.find(
         (message) =>
@@ -365,7 +392,7 @@ export function AiAssistantPanel({
                 aria-label={t("ai.model")}
                 options={assistant.models.map((model) => ({
                   value: model.id,
-                  label: `${model.displayName} · ${
+                  label: `${model.displayName} · ${model.providerName} · ${
                     model.keySource === "platform"
                       ? t("ai.model.platform")
                       : t("ai.model.personal")
@@ -399,7 +426,8 @@ export function AiAssistantPanel({
           ) : messages.length === 0 &&
             !assistant.pendingUserMessage &&
             !assistant.streamingText &&
-            reasoningProgressSteps === 0 &&
+            progressStages.length === 0 &&
+            proposals.length === 0 &&
             !proposalStreamText ? (
             <Empty
               description={
@@ -420,8 +448,9 @@ export function AiAssistantPanel({
                   assistant.streamingText ||
                   message.text ||
                   assistant.details?.activeRun?.text;
-                const awaitingStream =
-                  message.completionState === "streaming" && !liveMessageText;
+                const isStreamingAssistant =
+                  message.role === "assistant" &&
+                  message.completionState === "streaming";
                 return (
                   <div
                     className={styles.message}
@@ -433,17 +462,13 @@ export function AiAssistantPanel({
                         ? t("ai.you")
                         : t("ai.assistant")}
                     </span>
-                    <span
-                      className={styles.messageContent}
-                      data-loading={awaitingStream}
-                    >
-                      {awaitingStream ? <Spin size="small" /> : null}
-                      {awaitingStream
-                        ? streamingStatus
-                        : (message.completionState === "streaming"
-                            ? liveMessageText
-                            : message.text) || t("ai.thinking")}
-                    </span>
+                    {isStreamingAssistant ? renderProgressTrace() : null}
+                    {liveMessageText || !isStreamingAssistant ? (
+                      <span className={styles.messageContent}>
+                        {(isStreamingAssistant ? liveMessageText : message.text) ||
+                          t("ai.thinking")}
+                      </span>
+                    ) : null}
                     {message.role === "user" &&
                     index === messages.length - 2 &&
                     messages[index + 1]?.role === "assistant" &&
@@ -477,6 +502,7 @@ export function AiAssistantPanel({
                   <span className={styles.messageRole}>
                     {t("ai.assistant")}
                   </span>
+                  {renderProgressTrace()}
                   <span>{assistant.streamingText}</span>
                 </div>
               ) : !hasPersistedPendingTurn &&
@@ -486,22 +512,16 @@ export function AiAssistantPanel({
                   <span className={styles.messageRole}>
                     {t("ai.assistant")}
                   </span>
-                  <span className={styles.messageContent} data-loading="true">
-                    <Spin size="small" />
-                    {streamingStatus}
-                  </span>
+                  {renderProgressTrace()}
                 </div>
               ) : !hasPersistedPendingTurn &&
                 !hasStreamingAssistant &&
-                reasoningProgressSteps > 0 ? (
+                progressStages.length > 0 ? (
                 <div className={styles.message} data-role="assistant">
                   <span className={styles.messageRole}>
                     {t("ai.assistant")}
                   </span>
-                  <span className={styles.messageContent} data-loading="true">
-                    <Spin size="small" />
-                    {streamingStatus}
-                  </span>
+                  {renderProgressTrace()}
                 </div>
               ) : null}
               {proposalStreamText ? (
@@ -528,6 +548,25 @@ export function AiAssistantPanel({
                   key={proposal.id}
                   storedProposal={proposal}
                   onApply={(selected) => handleApply(proposal, selected)}
+                  onPreview={onPreviewProposal
+                    ? (selectedChangeIds) => {
+                        const parsed = aiResumeProposalSchema.safeParse(
+                          proposal.proposal,
+                        );
+                        if (!parsed.success) return;
+                        const previewed = onPreviewProposal({
+                          proposal: parsed.data,
+                          baseResumeVersion: proposal.baseResumeVersion,
+                          selectedChangeIds,
+                        });
+                        if (!previewed) {
+                          toast.error({
+                            key: "ai-proposal-conflict",
+                            content: t("ai.proposal.conflict"),
+                          });
+                        }
+                      }
+                    : undefined}
                 />
               ))}
             </>

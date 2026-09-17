@@ -21,7 +21,6 @@ describe("AI proposal tool", () => {
             "reason",
             "sectionId",
             "blockPath",
-            "beforeHash",
             "content",
           ]),
         }),
@@ -33,11 +32,11 @@ describe("AI proposal tool", () => {
             "sectionId",
             "listPath",
             "itemId",
-            "beforeHash",
             "content",
           ]),
         }),
       ]),
     );
+    expect(JSON.stringify(definition.parameters)).not.toContain("beforeHash");
   });
 });

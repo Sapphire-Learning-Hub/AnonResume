@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { richTextContentSchema } from "@/domain/resume/schema";
 
+import {
+  aiProposedBlockSchema,
+  aiProposedSectionSchema,
+} from "./proposal-structure";
+
 const changeBase = {
   id: z.string().min(1).max(100),
   beforeHash: z.string().regex(/^[a-f0-9]{64}$/),
@@ -23,6 +28,41 @@ const listTarget = {
 };
 
 export const aiResumeChangeSchema = z.discriminatedUnion("type", [
+  z.object({
+    ...changeBase,
+    type: z.literal("create_section"),
+    afterSectionId: z.string().min(1).max(200).optional(),
+    section: aiProposedSectionSchema,
+  }).strict(),
+  z.object({
+    ...changeBase,
+    ...sectionTarget,
+    type: z.literal("delete_section"),
+  }).strict(),
+  z.object({
+    ...changeBase,
+    ...sectionTarget,
+    type: z.literal("move_section"),
+    toIndex: z.number().int().nonnegative(),
+  }).strict(),
+  z.object({
+    ...changeBase,
+    ...sectionTarget,
+    type: z.literal("insert_block"),
+    afterBlockPath: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
+    block: aiProposedBlockSchema,
+  }).strict(),
+  z.object({
+    ...changeBase,
+    ...blockTarget,
+    type: z.literal("delete_block"),
+  }).strict(),
+  z.object({
+    ...changeBase,
+    ...blockTarget,
+    type: z.literal("move_block"),
+    toIndex: z.number().int().nonnegative(),
+  }).strict(),
   z.object({
     ...changeBase,
     ...sectionTarget,

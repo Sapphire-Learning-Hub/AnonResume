@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import type { AiClientStreamEvent } from "@/lib/ai/runs/stream-events";
+import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
 import {
   AiClientError,
   createAiConversation,
@@ -77,7 +78,9 @@ export function useAiConversation({
   const [pendingAfterSequence, setPendingAfterSequence] = useState(0);
   const [streamingText, setStreamingText] = useState("");
   const [streamingProposalText, setStreamingProposalText] = useState("");
-  const [streamingReasoningSteps, setStreamingReasoningSteps] = useState(0);
+  const [streamingProgressStages, setStreamingProgressStages] = useState<
+    AiRunProgressStage[]
+  >([]);
   const [liveRunId, setLiveRunId] = useState<string>();
   const streamPromiseRef = useRef<Promise<void> | undefined>(undefined);
   const runIdWaiterRef = useRef<RunIdWaiter | undefined>(undefined);
@@ -178,7 +181,7 @@ export function useAiConversation({
     setPendingAfterSequence(details?.messages.at(-1)?.sequence ?? 0);
     setStreamingText("");
     setStreamingProposalText("");
-    setStreamingReasoningSteps(0);
+    setStreamingProgressStages([]);
     try {
       const streamPromise = sendAiMessage({
         conversationId,
@@ -189,14 +192,21 @@ export function useAiConversation({
           runIdWaiter.settle(runId);
         },
         onEvent(event: AiClientStreamEvent) {
-          if (event.type === "reasoning_progress") {
-            setStreamingReasoningSteps((current) => current + 1);
+          if (event.type === "progress") {
+            setStreamingProgressStages((current) =>
+              current.includes(event.stage)
+                ? current
+                : [...current, event.stage],
+            );
           }
           if (event.type === "text_delta") {
             setStreamingText((current) => current + event.delta);
           }
           if (event.type === "proposal_delta") {
             setStreamingProposalText((current) => current + event.delta);
+          }
+          if (event.type === "proposal_reset") {
+            setStreamingProposalText("");
           }
         },
       });
@@ -205,7 +215,7 @@ export function useAiConversation({
       await Promise.all([loadDetails(conversationId), loadIndex()]);
       setStreamingText("");
       setStreamingProposalText("");
-      setStreamingReasoningSteps(0);
+      setStreamingProgressStages([]);
     } catch (error) {
       if (
         intentionalStopRef.current &&
@@ -224,7 +234,7 @@ export function useAiConversation({
       setPendingUserMessage("");
       setStreamingText("");
       setStreamingProposalText("");
-      setStreamingReasoningSteps(0);
+      setStreamingProgressStages([]);
       setLiveRunId(undefined);
       streamPromiseRef.current = undefined;
     }
@@ -306,7 +316,7 @@ export function useAiConversation({
     pendingAfterSequence,
     streamingText,
     streamingProposalText,
-    streamingReasoningSteps,
+    streamingProgressStages,
     setSelectedConversationId,
     setSelectedModelId,
     setContextScope,

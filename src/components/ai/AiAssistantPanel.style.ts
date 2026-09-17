@@ -176,6 +176,35 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
       gap: 8px;
     }
   `,
+  executionTrace: css`
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: ${token.colorTextSecondary};
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    li[data-current="true"] {
+      color: ${token.colorText};
+    }
+
+    li > i {
+      width: 12px;
+      height: 12px;
+      border: 2px solid ${token.colorSuccess};
+      border-radius: 50%;
+      background: ${token.colorSuccessBg};
+    }
+
+  `,
   messageAction: css`
     && {
       justify-self: end;
@@ -238,6 +267,15 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
   changes: css`
     display: grid;
     gap: 8px;
+  `,
+  proposalActions: css`
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+
+    > button:last-child {
+      flex: 1;
+    }
   `,
   change: css`
     display: grid;

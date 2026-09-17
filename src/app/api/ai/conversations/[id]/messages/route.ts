@@ -25,10 +25,12 @@ const sendMessageSchema = z
 
 type AiStreamDiagnostics = {
   snapshot: number;
+  progress: number;
   requestId: number;
   reasoningProgress: number;
   textDelta: number;
   proposalDelta: number;
+  proposalReset: number;
   usage: number;
   complete: number;
   error: number;
@@ -94,10 +96,12 @@ export async function POST(
       async start(controller) {
         const diagnostics: AiStreamDiagnostics = {
           snapshot: 0,
+          progress: 0,
           requestId: 0,
           reasoningProgress: 0,
           textDelta: 0,
           proposalDelta: 0,
+          proposalReset: 0,
           usage: 0,
           complete: 0,
           error: 0,
@@ -122,7 +126,9 @@ export async function POST(
                     ? "textDelta"
                     : event.type === "proposal_delta"
                       ? "proposalDelta"
-                      : event.type;
+                      : event.type === "proposal_reset"
+                        ? "proposalReset"
+                        : event.type;
             diagnostics[eventKey] += 1;
             if (event.type === "text_delta") {
               diagnostics.textCharacters += event.delta.length;

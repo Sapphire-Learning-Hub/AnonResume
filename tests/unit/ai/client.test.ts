@@ -29,6 +29,31 @@ describe("AI client stream parser", () => {
     ]);
   });
 
+  it("parses server-controlled run progress without exposing reasoning", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            '{"sequence":1,"type":"progress","stage":"analyzing_resume"}\n' +
+              '{"sequence":2,"type":"progress","stage":"validating_result"}\n' +
+              '{"sequence":3,"type":"proposal_reset"}\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    const events: unknown[] = [];
+
+    await parseAiNdjsonStream(stream, (event) => events.push(event));
+
+    expect(events).toEqual([
+      { sequence: 1, type: "progress", stage: "analyzing_resume" },
+      { sequence: 2, type: "progress", stage: "validating_result" },
+      { sequence: 3, type: "proposal_reset" },
+    ]);
+  });
+
   it("rejects the send operation when the stream reports a provider failure", async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({

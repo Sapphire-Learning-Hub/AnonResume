@@ -1,5 +1,6 @@
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
+  buildAiProviderContext,
   buildAiResumeContext,
   createAiContextDelta,
 } from "@/lib/ai/context/builder";
@@ -34,6 +35,17 @@ describe("AI resume context", () => {
       blockPath: ["block-profile-summary"],
     });
     expect(summary?.beforeHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("removes server-only hashes from the provider context", () => {
+    const document = createDefaultResumeDocument("zh-CN");
+    const context = buildAiResumeContext({ document, scope: "resume" });
+    const providerContext = buildAiProviderContext(context);
+    const serialized = JSON.stringify(providerContext);
+
+    expect(serialized).not.toContain("beforeHash");
+    expect(serialized).not.toContain("contentHash");
+    expect(serialized).toContain("block-profile-summary");
   });
 
   it("limits section context and reports changed and removed sections", () => {

@@ -46,6 +46,7 @@ describe("useAiConversation", () => {
           supportsToolCalls: true,
           maxOutputTokens: 1_000,
           keySource: "platform",
+          providerName: "Platform Provider",
         },
       ],
     });
@@ -112,17 +113,23 @@ describe("useAiConversation", () => {
     );
   });
 
-  it("reports private reasoning chunks as visible progress without exposing content", async () => {
+  it("reports server-controlled execution stages as visible progress", async () => {
     let finishStream!: () => void;
+    let emitEvent!: (event:
+      | {
+          type: "progress";
+          stage: "analyzing_resume" | "thinking";
+        }
+      | { type: "proposal_delta"; delta: string }
+      | { type: "proposal_reset" }) => void;
     clientMock.sendAiMessage.mockImplementation(
       ({
         onEvent,
       }: {
-        onEvent: (event: { type: "reasoning_progress" }) => void;
+        onEvent: typeof emitEvent;
       }) =>
         new Promise<void>((resolve) => {
-          onEvent({ type: "reasoning_progress" });
-          onEvent({ type: "reasoning_progress" });
+          emitEvent = onEvent;
           finishStream = resolve;
         }),
     );
@@ -143,8 +150,22 @@ describe("useAiConversation", () => {
     act(() => {
       sendPromise = result.current.send("分析这份简历");
     });
+    await waitFor(() => expect(result.current.sending).toBe(true));
+    act(() => {
+      emitEvent({ type: "progress", stage: "analyzing_resume" });
+      emitEvent({ type: "progress", stage: "thinking" });
+      emitEvent({ type: "proposal_delta", delta: "invalid draft" });
+    });
 
-    await waitFor(() => expect(result.current.streamingReasoningSteps).toBe(2));
+    await waitFor(() =>
+      expect(result.current.streamingProgressStages).toEqual([
+        "analyzing_resume",
+        "thinking",
+      ]),
+    );
+    expect(result.current.streamingProposalText).toBe("invalid draft");
+    act(() => emitEvent({ type: "proposal_reset" }));
+    expect(result.current.streamingProposalText).toBe("");
     act(() => finishStream());
     await sendPromise;
   });

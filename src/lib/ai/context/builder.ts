@@ -56,6 +56,24 @@ export interface AiResumeContext {
   sections: AiContextSection[];
 }
 
+export function buildAiProviderContext(context: AiResumeContext) {
+  return {
+    schemaVersion: context.schemaVersion,
+    locale: context.locale,
+    documentTitle: context.documentTitle,
+    sections: context.sections.map((section) => {
+      const providerSection: Record<string, unknown> = { ...section };
+      delete providerSection.contentHash;
+      providerSection.editableTargets = section.editableTargets.map((target) => {
+        const providerTarget: Record<string, unknown> = { ...target };
+        delete providerTarget.beforeHash;
+        return providerTarget;
+      });
+      return providerSection;
+    }),
+  };
+}
+
 function contextBlock(block: ResumeBlock): AiContextBlock {
   switch (block.type) {
     case "text":

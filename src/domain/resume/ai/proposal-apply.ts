@@ -1,10 +1,18 @@
 import { findBlockByPath } from "@/domain/resume/block-tree";
 import {
+  appendBlockToSectionDocument,
+  insertBlockAfterDocument,
   insertListItemAfterDocument,
+  insertSectionAfterDocument,
+  moveBlockInDocument,
+  moveSectionInDocument,
+  removeBlockFromDocument,
   removeListItemFromDocument,
+  removeSectionFromDocument,
   setSectionTitleInDocument,
   updateTextBlockContentInDocument,
 } from "@/domain/resume/operations";
+import { resumeDocumentSchema } from "@/domain/resume/schema";
 import type {
   ListBlock,
   ResumeDocument,
@@ -22,7 +30,8 @@ export type AiProposalConflictReason =
   | "target_missing"
   | "target_type_changed"
   | "target_content_changed"
-  | "duplicate_target";
+  | "duplicate_target"
+  | "invalid_structure";
 
 export interface AiProposalConflict {
   changeId: string;
@@ -53,6 +62,16 @@ function primaryTextBlock(item: ResumeListItem) {
 
 function targetKey(change: AiResumeChange) {
   switch (change.type) {
+    case "create_section":
+      return `create-section:${change.section.id}`;
+    case "delete_section":
+    case "move_section":
+      return `section:${change.sectionId}:structure`;
+    case "insert_block":
+      return `insert-block:${change.sectionId}:${change.afterBlockPath?.join("/") ?? "end"}`;
+    case "delete_block":
+    case "move_block":
+      return `block:${change.sectionId}:${change.blockPath.join("/")}:structure`;
     case "replace_section_title":
       return `section:${change.sectionId}:title`;
     case "replace_text":
@@ -69,15 +88,72 @@ function validateChange(
   document: ResumeDocument,
   change: AiResumeChange,
 ): AiProposalConflictReason | null {
-  const section = sectionFor(document, change.sectionId);
-  if (!section) return "target_missing";
-
   switch (change.type) {
-    case "replace_section_title":
+    case "create_section":
+      if (
+        change.afterSectionId &&
+        !sectionFor(document, change.afterSectionId)
+      ) {
+        return "target_missing";
+      }
+      return hashAiContent(document.sections) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    case "delete_section": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
+      return hashAiContent(section) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    }
+    case "move_section": {
+      if (!sectionFor(document, change.sectionId)) return "target_missing";
+      return hashAiContent(document.sections) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    }
+    case "insert_block": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
+      if (
+        change.afterBlockPath &&
+        !findBlockByPath(section.blocks, change.afterBlockPath)
+      ) {
+        return "target_missing";
+      }
+      return hashAiContent(section.blocks) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    }
+    case "delete_block": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
+      const block = findBlockByPath(section.blocks, change.blockPath);
+      if (!block) return "target_missing";
+      return hashAiContent(block) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    }
+    case "move_block": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
+      if (!findBlockByPath(section.blocks, change.blockPath)) {
+        return "target_missing";
+      }
+      return hashAiContent(section.blocks) === change.beforeHash
+        ? null
+        : "target_content_changed";
+    }
+    case "replace_section_title": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
       return hashAiContent(section.title ?? null) === change.beforeHash
         ? null
         : "target_content_changed";
+    }
     case "replace_text": {
+      const section = sectionFor(document, change.sectionId);
+      if (!section) return "target_missing";
       const block = findBlockByPath(section.blocks, change.blockPath);
       if (!block) return "target_missing";
       if (block.type !== "text") return "target_type_changed";
@@ -87,6 +163,7 @@ function validateChange(
     }
     case "replace_list_item":
     case "delete_list_item": {
+      if (!sectionFor(document, change.sectionId)) return "target_missing";
       const list = listFor(document, change.sectionId, change.listPath);
       if (!list) return "target_type_changed";
       const item = listItemFor(list, change.itemId);
@@ -99,6 +176,7 @@ function validateChange(
         : "target_content_changed";
     }
     case "insert_list_item": {
+      if (!sectionFor(document, change.sectionId)) return "target_missing";
       const list = listFor(document, change.sectionId, change.listPath);
       if (!list) return "target_type_changed";
       if (!listItemFor(list, change.afterItemId)) return "target_missing";
@@ -111,6 +189,51 @@ function validateChange(
 
 function applyChange(document: ResumeDocument, change: AiResumeChange) {
   switch (change.type) {
+    case "create_section":
+      return change.afterSectionId
+        ? insertSectionAfterDocument({
+            document,
+            sectionId: change.afterSectionId,
+            section: change.section,
+          })
+        : { ...document, sections: [...document.sections, change.section] };
+    case "delete_section":
+      return removeSectionFromDocument({
+        document,
+        sectionId: change.sectionId,
+      });
+    case "move_section":
+      return moveSectionInDocument({
+        document,
+        sectionId: change.sectionId,
+        toIndex: change.toIndex,
+      });
+    case "insert_block":
+      return change.afterBlockPath
+        ? insertBlockAfterDocument({
+            document,
+            sectionId: change.sectionId,
+            blockPath: change.afterBlockPath,
+            block: change.block,
+          })
+        : appendBlockToSectionDocument({
+            document,
+            sectionId: change.sectionId,
+            block: change.block,
+          });
+    case "delete_block":
+      return removeBlockFromDocument({
+        document,
+        sectionId: change.sectionId,
+        blockPath: change.blockPath,
+      });
+    case "move_block":
+      return moveBlockInDocument({
+        document,
+        sectionId: change.sectionId,
+        blockPath: change.blockPath,
+        toIndex: change.toIndex,
+      });
     case "replace_section_title":
       return setSectionTitleInDocument({
         document,
@@ -202,8 +325,17 @@ export function applySelectedAiChanges({
   });
   if (conflicts.length > 0) return { ok: false, conflicts };
 
-  return {
-    ok: true,
-    document: changes.reduce(applyChange, document),
-  };
+  const nextDocument = changes.reduce(applyChange, document);
+  const parsedDocument = resumeDocumentSchema.safeParse(nextDocument);
+  if (!parsedDocument.success) {
+    return {
+      ok: false,
+      conflicts: changes.map((change) => ({
+        changeId: change.id,
+        reason: "invalid_structure" as const,
+      })),
+    };
+  }
+
+  return { ok: true, document: parsedDocument.data };
 }

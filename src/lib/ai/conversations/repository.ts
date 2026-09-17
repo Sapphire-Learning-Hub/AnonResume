@@ -60,7 +60,9 @@ async function assertAvailableModel(
       and(
         eq(aiModels.id, modelId),
         eq(aiModels.enabled, true),
+        isNull(aiModels.deletedAt),
         eq(aiProviderCredentials.enabled, true),
+        isNull(aiProviderCredentials.deletedAt),
         or(
           ...allowedKeySources.map((kind) =>
             eq(aiProviderCredentials.kind, kind),
@@ -91,6 +93,7 @@ export async function listAvailableAiModels(
       supportsToolCalls: aiModels.supportsToolCalls,
       maxOutputTokens: aiModels.maxOutputTokens,
       keySource: aiProviderCredentials.kind,
+      providerName: aiProviderCredentials.displayName,
     })
     .from(aiModels)
     .innerJoin(
@@ -100,7 +103,9 @@ export async function listAvailableAiModels(
     .where(
       and(
         eq(aiModels.enabled, true),
+        isNull(aiModels.deletedAt),
         eq(aiProviderCredentials.enabled, true),
+        isNull(aiProviderCredentials.deletedAt),
         or(
           ...allowedKeySources.map((kind) =>
             eq(aiProviderCredentials.kind, kind),
@@ -241,6 +246,7 @@ export async function getAiConversationDetails(input: {
         sequence: aiRuns.checkpointSequence,
         text: aiRuns.checkpointText,
         proposal: aiRuns.checkpointProposal,
+        progress: aiRuns.checkpointProgress,
       })
       .from(aiRuns)
       .where(

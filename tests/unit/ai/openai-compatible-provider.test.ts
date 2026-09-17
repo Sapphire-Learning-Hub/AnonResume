@@ -109,8 +109,111 @@ describe("OpenAI-compatible provider adapter", () => {
     ]);
     expect(JSON.parse(bodies[0]!)).toMatchObject({
       model: "example-model",
+      parallel_tool_calls: false,
       stream: true,
+      tool_choice: "auto",
       tools: [{ function: { name: "propose_resume_changes" } }],
+    });
+  });
+
+  it("assembles a generic serial tool call for the agent loop", async () => {
+    let body: Record<string, unknown> | undefined;
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return streamResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"stage_section_changes","arguments":"{\\"operations\\":["}}]}}]}\n\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"type\\":\\"create\\"}]}"}}]},"finish_reason":"tool_calls"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]);
+      },
+    });
+    const events = [];
+
+    for await (const event of adapter.start(
+      providerRequest({
+        tools: [
+          {
+            name: "stage_section_changes",
+            description: "Stage section changes.",
+            parameters: { type: "object" },
+          },
+        ],
+      }),
+      new AbortController().signal,
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toContainEqual({
+      type: "tool_call",
+      callId: "call-1",
+      name: "stage_section_changes",
+      arguments: '{"operations":[{"type":"create"}]}',
+    });
+    expect(body).toMatchObject({
+      parallel_tool_calls: false,
+      tools: [{ function: { name: "stage_section_changes" } }],
+    });
+  });
+
+  it("sends tool results back with OpenAI-compatible tool message roles", async () => {
+    let body: Record<string, unknown> | undefined;
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return streamResponse(["data: [DONE]\n\n"], { status: 200 });
+      },
+    });
+
+    for await (const event of adapter.start(
+      providerRequest({
+        messages: [
+          { role: "user", content: "Create a section." },
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [
+              {
+                id: "call-1",
+                name: "stage_section_changes",
+                arguments: '{"operations":[]}',
+              },
+            ],
+          },
+          {
+            role: "tool",
+            toolCallId: "call-1",
+            content: '{"ok":true}',
+          },
+        ],
+      }),
+      new AbortController().signal,
+    )) {
+      void event;
+    }
+
+    expect(body).toMatchObject({
+      messages: [
+        { role: "user", content: "Create a section." },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: {
+                name: "stage_section_changes",
+                arguments: '{"operations":[]}',
+              },
+            },
+          ],
+        },
+        { role: "tool", tool_call_id: "call-1", content: '{"ok":true}' },
+      ],
     });
   });
 
@@ -133,6 +236,36 @@ describe("OpenAI-compatible provider adapter", () => {
 
     expect(body).not.toHaveProperty("tools");
     expect(body).not.toHaveProperty("thinking");
+  });
+
+  it("rejects multiple proposal tool calls instead of joining their arguments", async () => {
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async () =>
+        streamResponse([
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"propose_resume_changes","arguments":"{\\"changes\\":[]}"}},{"index":1,"id":"call-2","function":{"name":"propose_resume_changes","arguments":"{\\"changes\\":[]}"}}]}}]}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest({
+          proposalTool: {
+            name: "propose_resume_changes",
+            description: "Return validated resume changes.",
+            parameters: { type: "object" },
+          },
+        }),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({
+      code: "invalid_response",
+    });
   });
 
   it("disables deep thinking for fast FireArk requests", async () => {
@@ -158,6 +291,33 @@ describe("OpenAI-compatible provider adapter", () => {
     expect(body).toMatchObject({
       thinking: { type: "disabled" },
     });
+  });
+
+  it("can require the proposal tool for a repair round", async () => {
+    let body: Record<string, unknown> | undefined;
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return streamResponse(["data: [DONE]\n\n"], { status: 200 });
+      },
+    });
+
+    for await (const event of adapter.start(
+      providerRequest({
+        toolChoice: "required",
+        proposalTool: {
+          name: "propose_resume_changes",
+          description: "Return validated resume changes.",
+          parameters: { type: "object" },
+        },
+      }),
+      new AbortController().signal,
+    )) {
+      void event;
+    }
+
+    expect(body).toMatchObject({ tool_choice: "required" });
   });
 
   it.each([

@@ -7,10 +7,6 @@ const path = {
   maxItems: 20,
   items: identifier,
 };
-const beforeHash = {
-  type: "string",
-  pattern: "^[a-f0-9]{64}$",
-};
 const reason = { type: "string", minLength: 1, maxLength: 500 };
 const richTextMark = {
   oneOf: [
@@ -127,13 +123,12 @@ function changeSchema(
   return {
     type: "object",
     additionalProperties: false,
-    required: ["type", "id", "reason", "sectionId", "beforeHash", ...required],
+    required: ["type", "id", "reason", "sectionId", ...required],
     properties: {
       type: { const: type },
       id: { type: "string", minLength: 1, maxLength: 100 },
       reason,
       sectionId: identifier,
-      beforeHash,
       ...properties,
     },
   };
@@ -143,7 +138,7 @@ export function createAiProposalToolDefinition(): AiProposalToolDefinition {
   return {
     name: "propose_resume_changes",
     description:
-      "Return optional, content-only resume edits using target metadata copied verbatim from editableTargets. Never invent facts, metrics, dates, or achievements.",
+      "Return optional, content-only resume edits using target paths copied verbatim from editableTargets. Never invent facts, metrics, dates, or achievements.",
     parameters: {
       type: "object",
       additionalProperties: false,

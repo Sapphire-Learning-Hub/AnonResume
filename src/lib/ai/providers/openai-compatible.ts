@@ -17,6 +17,8 @@ interface OpenAiChunk {
       content?: unknown;
       reasoning_content?: unknown;
       tool_calls?: Array<{
+        id?: unknown;
+        index?: unknown;
         function?: { name?: unknown; arguments?: unknown };
       }>;
     };
@@ -66,6 +68,33 @@ function latencyOptions(request: AiProviderRequest) {
     return { thinking: { type: "disabled" } };
   }
   return {};
+}
+
+function serializeMessages(request: AiProviderRequest) {
+  return request.messages.map((message) => {
+    if (message.role === "tool") {
+      return {
+        role: message.role,
+        content: message.content,
+        tool_call_id: message.toolCallId,
+      };
+    }
+    if (message.toolCalls) {
+      return {
+        role: message.role,
+        content: message.content,
+        tool_calls: message.toolCalls.map((toolCall) => ({
+          id: toolCall.id,
+          type: "function",
+          function: {
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+          },
+        })),
+      };
+    }
+    return message;
+  });
 }
 
 async function* readSseData(response: Response) {
@@ -118,6 +147,7 @@ async function fetchWithValidatedRedirects({
   maxRedirects: number;
 }) {
   const trustedProxyHostnames = new Set(request.trustedEndpointHostnames ?? []);
+  const tools = request.tools ?? (request.proposalTool ? [request.proposalTool] : []);
   let target = completionUrl(
     await assertSafeAiEndpoint(
       request.endpoint,
@@ -127,19 +157,16 @@ async function fetchWithValidatedRedirects({
   );
   const body = JSON.stringify({
     model: request.model,
-    messages: request.messages,
+    messages: serializeMessages(request),
     max_tokens: request.maxOutputTokens,
     stream: true,
     stream_options: { include_usage: true },
     ...latencyOptions(request),
-    ...(request.proposalTool
+    ...(tools.length > 0
       ? {
-          tools: [
-            {
-              type: "function",
-              function: request.proposalTool,
-            },
-          ],
+          parallel_tool_calls: false,
+          tool_choice: request.toolChoice ?? "auto",
+          tools: tools.map((tool) => ({ type: "function", function: tool })),
         }
       : {}),
   });
@@ -217,6 +244,10 @@ export function createOpenAiCompatibleAdapter(
       }
 
       let finishReason: string | null = null;
+      let proposalToolCallIndex: number | undefined;
+      let proposalToolCallId: string | undefined;
+      let toolCallName: string | undefined;
+      let toolCallArguments = "";
       let firstChunkLogged = false;
       let firstUnhandledDeltaLogged = false;
       for await (const data of readSseData(response)) {
@@ -268,9 +299,25 @@ export function createOpenAiCompatibleAdapter(
             yield { type: "text_delta", delta: choice.delta.content };
           }
           for (const toolCall of choice.delta?.tool_calls ?? []) {
+            const toolCallIndex = Number.isSafeInteger(toolCall.index)
+              ? Number(toolCall.index)
+              : 0;
+            const toolCallId =
+              typeof toolCall.id === "string" ? toolCall.id : undefined;
             if (
-              (toolCall.function?.name === undefined ||
-                toolCall.function.name === "propose_resume_changes") &&
+              (proposalToolCallIndex !== undefined &&
+                proposalToolCallIndex !== toolCallIndex) ||
+              (proposalToolCallId && toolCallId && proposalToolCallId !== toolCallId)
+            ) {
+              throw new AiProviderError("invalid_response");
+            }
+            proposalToolCallIndex ??= toolCallIndex;
+            proposalToolCallId ??= toolCallId;
+            if (typeof toolCall.function?.name === "string") {
+              toolCallName = toolCall.function.name;
+            }
+            if (
+              toolCallName === "propose_resume_changes" &&
               typeof toolCall.function?.arguments === "string" &&
               toolCall.function.arguments
             ) {
@@ -279,6 +326,13 @@ export function createOpenAiCompatibleAdapter(
                 type: "proposal_delta",
                 delta: toolCall.function.arguments,
               };
+            } else if (
+              toolCallName &&
+              typeof toolCall.function?.arguments === "string" &&
+              toolCall.function.arguments
+            ) {
+              handledDelta = true;
+              toolCallArguments += toolCall.function.arguments;
             }
           }
           if (typeof choice.finish_reason === "string") {
@@ -317,6 +371,15 @@ export function createOpenAiCompatibleAdapter(
             outputTokens: numberValue(chunk.usage.completion_tokens),
           };
         }
+      }
+
+      if (toolCallName && toolCallName !== "propose_resume_changes") {
+        yield {
+          type: "tool_call",
+          callId: proposalToolCallId ?? `tool-${proposalToolCallIndex ?? 0}`,
+          name: toolCallName,
+          arguments: toolCallArguments,
+        };
       }
 
       yield { type: "complete", finishReason };

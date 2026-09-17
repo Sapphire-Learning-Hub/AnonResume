@@ -146,6 +146,155 @@ describe("AI resume proposals", () => {
     );
   });
 
+  it("creates a complete section tree as one atomic suggestion", () => {
+    const document = createDefaultResumeDocument("zh-CN");
+    const proposal = aiResumeProposalSchema.parse({
+      changes: [
+        {
+          id: "create-experience",
+          type: "create_section",
+          beforeHash: hashAiContent(document.sections),
+          afterSectionId: document.sections.at(-1)!.id,
+          section: {
+            id: "ai-section-create-experience",
+            title: richText("工作经历"),
+            semantic: "experience",
+            visible: true,
+            blocks: [
+              {
+                id: "ai-block-create-experience-row",
+                type: "row",
+                gap: 16,
+                align: "start",
+                justify: "between",
+                children: [
+                  {
+                    id: "ai-block-create-experience-role",
+                    type: "text",
+                    content: richText("[公司名称] · [职位]"),
+                  },
+                  {
+                    id: "ai-block-create-experience-date",
+                    type: "text",
+                    content: richText("[起止时间]"),
+                  },
+                ],
+              },
+              {
+                id: "ai-block-create-experience-list",
+                type: "list",
+                marker: "disc",
+                items: [
+                  {
+                    id: "ai-item-create-experience-1",
+                    children: [
+                      {
+                        id: "ai-block-create-experience-1-text",
+                        type: "text",
+                        content: richText("[填写核心职责与成果]"),
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          reason: "补充可填写的工作经历骨架",
+        },
+      ],
+    });
+
+    const result = applySelectedAiChanges({
+      document,
+      currentVersion: 1,
+      baseResumeVersion: 1,
+      proposal,
+      selectedChangeIds: ["create-experience"],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.sections.at(-1)).toMatchObject({
+      id: "ai-section-create-experience",
+      semantic: "experience",
+      blocks: [{ type: "row" }, { type: "list" }],
+    });
+    expect(result.document.settings).toEqual(document.settings);
+  });
+
+  it("inserts a complete block subtree into an existing section", () => {
+    const document = createDefaultResumeDocument("zh-CN");
+    const section = document.sections[0]!;
+    const proposal = aiResumeProposalSchema.parse({
+      changes: [
+        {
+          id: "insert-skills",
+          type: "insert_block",
+          sectionId: section.id,
+          beforeHash: hashAiContent(section.blocks),
+          block: {
+            id: "ai-block-insert-skills",
+            type: "badges",
+            wrap: true,
+            gap: 8,
+            items: [
+              { id: "ai-badge-insert-skills-1", text: "[核心技能]" },
+              { id: "ai-badge-insert-skills-2", text: "[工具或领域]" },
+            ],
+          },
+          reason: "补充技能区块",
+        },
+      ],
+    });
+
+    const result = applySelectedAiChanges({
+      document,
+      currentVersion: 1,
+      baseResumeVersion: 1,
+      proposal,
+      selectedChangeIds: ["insert-skills"],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.sections[0]!.blocks.at(-1)).toMatchObject({
+      id: "ai-block-insert-skills",
+      type: "badges",
+    });
+  });
+
+  it("rejects a structural selection that would make the document invalid", () => {
+    const source = createDefaultResumeDocument("zh-CN");
+    const document = { ...source, sections: [source.sections[0]!] };
+    const section = document.sections[0]!;
+    const proposal = aiResumeProposalSchema.parse({
+      changes: [
+        {
+          id: "delete-only-section",
+          type: "delete_section",
+          sectionId: section.id,
+          beforeHash: hashAiContent(section),
+          reason: "删除唯一章节",
+        },
+      ],
+    });
+
+    expect(
+      applySelectedAiChanges({
+        document,
+        currentVersion: 1,
+        baseResumeVersion: 1,
+        proposal,
+        selectedChangeIds: ["delete-only-section"],
+      }),
+    ).toEqual({
+      ok: false,
+      conflicts: [
+        { changeId: "delete-only-section", reason: "invalid_structure" },
+      ],
+    });
+  });
+
   it("rejects fields and operations outside the content contract", () => {
     expect(() =>
       aiResumeProposalSchema.parse({

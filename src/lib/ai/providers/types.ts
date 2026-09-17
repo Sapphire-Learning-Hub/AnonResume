@@ -1,14 +1,37 @@
 import type { AiProviderEvent } from "@/lib/ai/runs/stream-events";
 
-export interface AiProviderMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
+export type AiProviderMessage =
+  | {
+      role: "system" | "user" | "assistant";
+      content: string;
+      toolCalls?: never;
+      toolCallId?: never;
+    }
+  | {
+      role: "assistant";
+      content: string;
+      toolCalls: Array<{
+        id: string;
+        name: string;
+        arguments: string;
+      }>;
+      toolCallId?: never;
+    }
+  | {
+      role: "tool";
+      content: string;
+      toolCallId: string;
+      toolCalls?: never;
+    };
 
-export interface AiProposalToolDefinition {
-  name: "propose_resume_changes";
+export interface AiToolDefinition {
+  name: string;
   description: string;
   parameters: Record<string, unknown>;
+}
+
+export interface AiProposalToolDefinition extends AiToolDefinition {
+  name: "propose_resume_changes";
 }
 
 export interface AiProviderRequest {
@@ -21,6 +44,8 @@ export interface AiProviderRequest {
   latencyPreference?: "fast" | "provider_default";
   trustedEndpointHostnames?: readonly string[];
   proposalTool?: AiProposalToolDefinition;
+  tools?: AiToolDefinition[];
+  toolChoice?: "auto" | "required";
 }
 
 export interface AiProviderAdapter {
