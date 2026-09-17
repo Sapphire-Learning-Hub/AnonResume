@@ -7,6 +7,7 @@ import {
   deleteAiAdminProvider,
   deleteAiAdminModel,
   listAiAdminLedger,
+  listAiAdminModelRateVersions,
   listAiAdminProviders,
   listAiAdminQuotas,
   updateAiAdminModel,
@@ -245,6 +246,54 @@ describe("AI administration service", () => {
     expect(updated).toMatchObject({
       modelId: second.modelId,
       providerId: multiProviderId,
+      rateCardVersion: 2,
+    });
+
+    const renamed = await updateAiAdminModel({
+      actorUserId,
+      providerId: multiProviderId,
+      modelId: second.modelId,
+      value: {
+        providerModelKey: `${marker}-second-model-v2`,
+        displayName: `${marker} renamed model`,
+        enabled: false,
+        supportsToolCalls: true,
+        contextWindow: 96_000,
+        maxOutputTokens: 4_096,
+        inputPointRate: 12,
+        cachedInputPointRate: 6,
+        outputPointRate: 24,
+        freeModel: false,
+      },
+    });
+    expect(renamed).toMatchObject({
+      modelId: second.modelId,
+      rateCardVersion: 2,
+    });
+
+    const rateHistory = await listAiAdminModelRateVersions({
+      providerId: multiProviderId,
+      modelId: second.modelId,
+    });
+    expect(rateHistory).toMatchObject({
+      modelId: second.modelId,
+      currentVersion: 2,
+      versions: [
+        {
+          version: 2,
+          inputPointRate: "12",
+          cachedInputPointRate: "6",
+          outputPointRate: "24",
+          current: true,
+        },
+        {
+          version: 1,
+          inputPointRate: "10",
+          cachedInputPointRate: "5",
+          outputPointRate: "20",
+          current: false,
+        },
+      ],
     });
 
     const listed = await listAiAdminProviders({
@@ -257,7 +306,7 @@ describe("AI administration service", () => {
       expect.objectContaining({ modelId: first.modelId }),
       expect.objectContaining({
         modelId: second.modelId,
-        modelName: `${marker} second model v2`,
+        modelName: `${marker} renamed model`,
         modelEnabled: false,
       }),
     ]));

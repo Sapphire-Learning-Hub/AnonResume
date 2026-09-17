@@ -29,6 +29,10 @@ describe("AI billing administration forms", () => {
     });
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("labels quota fields and exposes period and default controls", () => {
     render(
       <AdminAiQuotas
@@ -259,6 +263,80 @@ describe("AI billing administration forms", () => {
     expect(within(enabledProvider).getByRole("button", {
       name: "停用模型",
     })).toBeInTheDocument();
+    expect(within(enabledProvider).getByRole("button", {
+      name: "计费历史",
+    })).toBeInTheDocument();
+  });
+
+  it("shows the current and previous rate versions on demand", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      modelId: "00000000-0000-4000-8000-000000000002",
+      currentVersion: 2,
+      versions: [{
+        version: 2,
+        inputPointRate: "120",
+        cachedInputPointRate: "60",
+        outputPointRate: "240",
+        createdAt: "2026-09-18T00:00:00.000Z",
+        current: true,
+      }, {
+        version: 1,
+        inputPointRate: "100",
+        cachedInputPointRate: "50",
+        outputPointRate: "200",
+        createdAt: "2026-09-17T00:00:00.000Z",
+        current: false,
+      }],
+    }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AdminAiProviders
+        providers={{
+          items: [{
+            providerId: "00000000-0000-4000-8000-000000000001",
+            providerName: "模型服务",
+            baseUrl: "https://example.com/v1",
+            providerEnabled: true,
+            models: [{
+              providerId: "00000000-0000-4000-8000-000000000001",
+              modelId: "00000000-0000-4000-8000-000000000002",
+              modelKey: "example-model",
+              modelName: "示例模型",
+              modelEnabled: true,
+              supportsToolCalls: true,
+              contextWindow: 128_000,
+              maxOutputTokens: 4_096,
+              inputPointRate: "120",
+              cachedInputPointRate: "60",
+              outputPointRate: "240",
+              rateCardVersion: 2,
+            }],
+          }],
+          page: 1,
+          pageSize: 20,
+          total: 1,
+          totalPages: 1,
+        }}
+        searchParams={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "计费历史" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "示例模型 · 计费历史",
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/manage/ai/providers/00000000-0000-4000-8000-000000000001/models/00000000-0000-4000-8000-000000000002/rate-versions",
+      { cache: "no-store" },
+    );
+    expect(await within(dialog).findByText("v2")).toBeInTheDocument();
+    expect(within(dialog).getByText("当前")).toBeInTheDocument();
+    expect(within(dialog).getByText("v1")).toBeInTheDocument();
   });
 
   it("shows a tooltip when an administrative model cannot call tools", async () => {

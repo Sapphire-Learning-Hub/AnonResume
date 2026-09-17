@@ -10,6 +10,8 @@ import {
   InputNumber,
   Modal,
   Space,
+  Spin,
+  Table,
   Tag,
   theme,
   Tooltip,
@@ -39,6 +41,11 @@ import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
+import {
+  fetchAiAdminModelRateVersions,
+  type AiAdminModelRateHistory,
+  type AiAdminModelRateVersion,
+} from "@/lib/ai/admin/client";
 import type { PageResult, PaginationSearchParams } from "@/lib/shared/pagination";
 
 interface ProviderDraft {
@@ -64,6 +71,13 @@ interface ModelDraft {
   inputPointRate: number;
   cachedInputPointRate: number;
   outputPointRate: number;
+}
+
+interface RateHistoryState {
+  modelId: string;
+  modelName: string;
+  loading: boolean;
+  data?: AiAdminModelRateHistory;
 }
 
 const EMPTY_PROVIDER: ProviderDraft = {
@@ -136,6 +150,7 @@ export function AdminAiProviders({
   const { pending, reauthModal, reauthOpen, runSensitive } = useAdminAiSensitiveAction();
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>();
   const [modelDraft, setModelDraft] = useState<ModelDraft>();
+  const [rateHistory, setRateHistory] = useState<RateHistoryState>();
   const [confirmation, setConfirmation] = useState<{
     title: string;
     description: string;
@@ -282,6 +297,71 @@ export function AdminAiProviders({
     router.refresh();
   }
 
+  async function openRateHistory(
+    provider: ProviderItem,
+    model: ProviderModelItem,
+  ) {
+    setRateHistory({
+      modelId: model.modelId,
+      modelName: model.modelName,
+      loading: true,
+    });
+    try {
+      const data = await fetchAiAdminModelRateVersions(
+        provider.providerId,
+        model.modelId,
+      );
+      setRateHistory((current) => current?.modelId === model.modelId
+        ? { ...current, loading: false, data }
+        : current);
+    } catch {
+      setRateHistory((current) => current?.modelId === model.modelId
+        ? { ...current, loading: false }
+        : current);
+      toast.error(t("ai.rateHistoryLoadError"));
+    }
+  }
+
+  const rateHistoryColumns = [
+    {
+      title: t("ai.rateVersion"),
+      dataIndex: "version",
+      key: "version",
+      render: (version: number, record: AiAdminModelRateVersion) => (
+        <Space size={6}>
+          <span>{`v${version}`}</span>
+          {record.current ? (
+            <Tag color="success">{t("ai.currentRateVersion")}</Tag>
+          ) : null}
+        </Space>
+      ),
+    },
+    {
+      title: t("ai.inputRateShort"),
+      dataIndex: "inputPointRate",
+      key: "inputPointRate",
+      render: (value: string) => BigInt(value).toLocaleString(locale),
+    },
+    {
+      title: t("ai.cachedInputRateShort"),
+      dataIndex: "cachedInputPointRate",
+      key: "cachedInputPointRate",
+      render: (value: string) => BigInt(value).toLocaleString(locale),
+    },
+    {
+      title: t("ai.outputRateShort"),
+      dataIndex: "outputPointRate",
+      key: "outputPointRate",
+      render: (value: string) => BigInt(value).toLocaleString(locale),
+    },
+    {
+      title: t("ai.recordedAt"),
+      dataIndex: "createdAt",
+      key: "createdAt",
+      render: (value: string) => new Date(value).toLocaleString(locale),
+    },
+  ];
+
   return (
     <AdminPage
       actions={<Button onClick={() => editProvider()} type="primary">{t("ai.addProvider")}</Button>}
@@ -377,6 +457,12 @@ export function AdminAiProviders({
                             >
                               {t("common.edit")}
                             </Button>
+                            <Button
+                              onClick={() => void openRateHistory(provider, model)}
+                              type="link"
+                            >
+                              {t("ai.rateHistory")}
+                            </Button>
                             {model.modelEnabled ? (
                               <Button
                                 danger
@@ -441,7 +527,6 @@ export function AdminAiProviders({
                                   cached: model.cachedInputPointRate,
                                   input: model.inputPointRate,
                                   output: model.outputPointRate,
-                                  version: model.rateCardVersion,
                                 })}
                             </Tag>
                           </>
@@ -567,6 +652,27 @@ export function AdminAiProviders({
             </div>
           </Form>
         ) : null}
+      </Modal>
+
+      <Modal
+        footer={null}
+        onCancel={() => setRateHistory(undefined)}
+        open={Boolean(rateHistory)}
+        title={rateHistory
+          ? t("ai.rateHistoryTitle", { model: rateHistory.modelName })
+          : ""}
+        width={780}
+      >
+        <Spin spinning={rateHistory?.loading ?? false}>
+          <Table<AiAdminModelRateVersion>
+            columns={rateHistoryColumns}
+            dataSource={rateHistory?.data?.versions ?? []}
+            locale={{ emptyText: t("ai.noRateHistory") }}
+            pagination={false}
+            rowKey="version"
+            size="small"
+          />
+        </Spin>
       </Modal>
 
       <ActionConfirmationModal

@@ -151,6 +151,55 @@ export const aiModels =
         ),
       ]);
 
+const modelRateVersionColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  modelId: uuid("model_id").notNull(),
+  version: integer("version").notNull(),
+  inputPointRate: bigint("input_point_rate", { mode: "number" }).notNull(),
+  cachedInputPointRate: bigint("cached_input_point_rate", { mode: "number" }).notNull(),
+  outputPointRate: bigint("output_point_rate", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const aiModelRateVersions =
+  schemaName === "public"
+    ? pgTable("ai_model_rate_versions", modelRateVersionColumns, (table) => [
+        foreignKey({
+          columns: [table.modelId],
+          foreignColumns: [aiModels.id],
+          name: "ai_model_rate_versions_model_fk",
+        }).onDelete("cascade"),
+        uniqueIndex("ai_model_rate_versions_model_version_unique").on(
+          table.modelId,
+          table.version,
+        ),
+        index("ai_model_rate_versions_model_idx").on(table.modelId),
+        check(
+          "ai_model_rate_versions_values_check",
+          sql`${table.version} > 0 AND ${table.inputPointRate} >= 0 AND ${table.cachedInputPointRate} >= 0 AND ${table.outputPointRate} >= 0`,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "ai_model_rate_versions",
+        modelRateVersionColumns,
+        (table) => [
+          foreignKey({
+            columns: [table.modelId],
+            foreignColumns: [aiModels.id],
+            name: "ai_model_rate_versions_model_fk",
+          }).onDelete("cascade"),
+          uniqueIndex("ai_model_rate_versions_model_version_unique").on(
+            table.modelId,
+            table.version,
+          ),
+          index("ai_model_rate_versions_model_idx").on(table.modelId),
+          check(
+            "ai_model_rate_versions_values_check",
+            sql`${table.version} > 0 AND ${table.inputPointRate} >= 0 AND ${table.cachedInputPointRate} >= 0 AND ${table.outputPointRate} >= 0`,
+          ),
+        ],
+      );
+
 const conversationColumns = {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),
@@ -432,6 +481,7 @@ export const aiAuditPayloads =
 export const aiDatabaseTables = {
   aiProviderCredentials,
   aiModels,
+  aiModelRateVersions,
   aiConversations,
   aiMessages,
   aiRuns,

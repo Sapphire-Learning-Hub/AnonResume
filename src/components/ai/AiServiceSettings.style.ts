@@ -34,11 +34,6 @@ export const useAiServiceSettingsStyles = createStyles(({ token, css }) => ({
     font-weight: 600;
     line-height: 1.4;
   `,
-  description: css`
-    margin: 3px 0 0;
-    color: ${token.colorTextSecondary};
-    font-size: 13px;
-  `,
   overview: css`
     display: flex;
     align-items: center;

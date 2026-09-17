@@ -6,6 +6,7 @@ import * as database from "@/db";
 const expectedTables = [
   "aiProviderCredentials",
   "aiModels",
+  "aiModelRateVersions",
   "aiConversations",
   "aiMessages",
   "aiRuns",
@@ -79,6 +80,23 @@ describe("AI database schema", () => {
         { table: database.aiRuns, onDelete: "set null" },
         { table: database.aiModels, onDelete: "set null" },
       ]),
+    );
+  });
+
+  it("stores immutable model rate versions separately from model settings", () => {
+    const columns = getTableColumns(database.aiModelRateVersions);
+    const config = getTableConfig(database.aiModelRateVersions);
+
+    expect(Object.keys(columns)).toEqual(expect.arrayContaining([
+      "modelId",
+      "version",
+      "inputPointRate",
+      "cachedInputPointRate",
+      "outputPointRate",
+      "createdAt",
+    ]));
+    expect(config.foreignKeys[0]?.reference().foreignTable).toBe(
+      database.aiModels,
     );
   });
 });

@@ -175,7 +175,6 @@ export function AiServiceSettings() {
       <header className={styles.pageHeader}>
         <div>
           <h1 className={styles.heading}>{t("ai.settings.title")}</h1>
-          <p className={styles.description}>{t("ai.settings.description")}</p>
         </div>
         {snapshot.byokEnabled ? (
           <Button

@@ -27,6 +27,7 @@ export {
   aiAuditPayloads,
   aiConversations,
   aiMessages,
+  aiModelRateVersions,
   aiModels,
   aiProposals,
   aiProviderCredentials,

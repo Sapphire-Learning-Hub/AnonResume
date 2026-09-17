@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import {
   aiAuditPayloads,
+  aiModelRateVersions,
   aiModels,
   aiProviderCredentials,
   aiRuns,
@@ -314,6 +315,34 @@ function adminModelResult(model: typeof aiModels.$inferSelect) {
   };
 }
 
+function modelRateVersionValues(input: {
+  modelId: string;
+  version: number;
+  inputPointRate: number;
+  cachedInputPointRate: number;
+  outputPointRate: number;
+}) {
+  return {
+    modelId: input.modelId,
+    version: input.version,
+    inputPointRate: input.inputPointRate,
+    cachedInputPointRate: input.cachedInputPointRate,
+    outputPointRate: input.outputPointRate,
+  };
+}
+
+function ratesChanged(
+  model: Pick<
+    typeof aiModels.$inferSelect,
+    "inputPointRate" | "cachedInputPointRate" | "outputPointRate"
+  >,
+  value: AiAdminModelInput,
+) {
+  return model.inputPointRate !== value.inputPointRate
+    || model.cachedInputPointRate !== value.cachedInputPointRate
+    || model.outputPointRate !== value.outputPointRate;
+}
+
 export async function createAiAdminModel(input: {
   actorUserId: string;
   providerId: string;
@@ -323,15 +352,27 @@ export async function createAiAdminModel(input: {
   if (input.value.enabled && !provider.enabled) {
     throw new AiAdminStateConflictError();
   }
-  const [model] = await db
-    .insert(aiModels)
-    .values(adminModelValues(input.providerId, input.value))
-    .returning();
+  const model = await db.transaction(async (transaction) => {
+    const [created] = await transaction
+      .insert(aiModels)
+      .values(adminModelValues(input.providerId, input.value))
+      .returning();
+    await transaction.insert(aiModelRateVersions).values(
+      modelRateVersionValues({
+        modelId: created!.id,
+        version: created!.rateCardVersion,
+        inputPointRate: created!.inputPointRate,
+        cachedInputPointRate: created!.cachedInputPointRate,
+        outputPointRate: created!.outputPointRate,
+      }),
+    );
+    return created!;
+  });
   await writeAdminAuditEvent({
     actorUserId: input.actorUserId,
     action: "ai.model.create",
     targetType: "ai_model",
-    targetId: model!.id,
+    targetId: model.id,
     outcome: "success",
     metadata: {
       providerId: provider.id,
@@ -340,7 +381,7 @@ export async function createAiAdminModel(input: {
       enabled: input.value.enabled,
     },
   });
-  return adminModelResult(model!);
+  return adminModelResult(model);
 }
 
 export async function updateAiAdminModel(input: {
@@ -353,19 +394,43 @@ export async function updateAiAdminModel(input: {
   if (input.value.enabled && !provider.enabled) {
     throw new AiAdminStateConflictError();
   }
-  const [model] = await db
-    .update(aiModels)
-    .set({
-      ...adminModelValues(input.providerId, input.value),
-      rateCardVersion: sql`${aiModels.rateCardVersion} + 1`,
-    })
-    .where(and(
-      eq(aiModels.id, input.modelId),
-      eq(aiModels.providerId, input.providerId),
-      isNull(aiModels.deletedAt),
-    ))
-    .returning();
-  if (!model) throw new AiAdminNotFoundError();
+  const model = await db.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select()
+      .from(aiModels)
+      .where(and(
+        eq(aiModels.id, input.modelId),
+        eq(aiModels.providerId, input.providerId),
+        isNull(aiModels.deletedAt),
+      ))
+      .limit(1)
+      .for("update");
+    if (!current) throw new AiAdminNotFoundError();
+
+    const changed = ratesChanged(current, input.value);
+    const rateCardVersion = current.rateCardVersion + (changed ? 1 : 0);
+    const [updated] = await transaction
+      .update(aiModels)
+      .set({
+        ...adminModelValues(input.providerId, input.value),
+        rateCardVersion,
+      })
+      .where(eq(aiModels.id, current.id))
+      .returning();
+
+    if (changed) {
+      await transaction.insert(aiModelRateVersions).values(
+        modelRateVersionValues({
+          modelId: current.id,
+          version: rateCardVersion,
+          inputPointRate: input.value.inputPointRate,
+          cachedInputPointRate: input.value.cachedInputPointRate,
+          outputPointRate: input.value.outputPointRate,
+        }),
+      );
+    }
+    return updated!;
+  });
   await writeAdminAuditEvent({
     actorUserId: input.actorUserId,
     action: "ai.model.update",
@@ -381,6 +446,51 @@ export async function updateAiAdminModel(input: {
     },
   });
   return adminModelResult(model);
+}
+
+export async function listAiAdminModelRateVersions(input: {
+  providerId: string;
+  modelId: string;
+}) {
+  await requirePlatformProvider(input.providerId);
+  const [model] = await db
+    .select({
+      modelId: aiModels.id,
+      currentVersion: aiModels.rateCardVersion,
+    })
+    .from(aiModels)
+    .where(and(
+      eq(aiModels.id, input.modelId),
+      eq(aiModels.providerId, input.providerId),
+      isNull(aiModels.deletedAt),
+    ))
+    .limit(1);
+  if (!model) throw new AiAdminNotFoundError();
+
+  const versions = await db
+    .select({
+      version: aiModelRateVersions.version,
+      inputPointRate: aiModelRateVersions.inputPointRate,
+      cachedInputPointRate: aiModelRateVersions.cachedInputPointRate,
+      outputPointRate: aiModelRateVersions.outputPointRate,
+      createdAt: aiModelRateVersions.createdAt,
+    })
+    .from(aiModelRateVersions)
+    .where(eq(aiModelRateVersions.modelId, input.modelId))
+    .orderBy(desc(aiModelRateVersions.version));
+
+  return {
+    modelId: model.modelId,
+    currentVersion: model.currentVersion,
+    versions: versions.map((version) => ({
+      version: version.version,
+      inputPointRate: String(version.inputPointRate),
+      cachedInputPointRate: String(version.cachedInputPointRate),
+      outputPointRate: String(version.outputPointRate),
+      createdAt: version.createdAt,
+      current: version.version === model.currentVersion,
+    })),
+  };
 }
 
 export async function deleteAiAdminProvider(input: {

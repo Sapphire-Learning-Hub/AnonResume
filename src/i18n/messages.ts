@@ -500,7 +500,6 @@ const messages = {
     "ai.change.richText": "包含富文本格式的修改",
     "ai.settings.navigation": "AI 服务",
     "ai.settings.title": "AI 服务",
-    "ai.settings.description": "查看平台额度，并管理你自己的模型服务与模型。",
     "ai.settings.overview": "AI 服务概览",
     "ai.settings.platformStatus": "平台模型",
     "ai.settings.available": "可用",
@@ -1516,8 +1515,6 @@ const messages = {
     "ai.change.richText": "Rich-text content change",
     "ai.settings.navigation": "AI service",
     "ai.settings.title": "AI service",
-    "ai.settings.description":
-      "Review platform points and manage your own model services and models.",
     "ai.settings.overview": "AI service overview",
     "ai.settings.platformStatus": "Platform models",
     "ai.settings.available": "Available",

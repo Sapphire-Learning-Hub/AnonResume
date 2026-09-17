@@ -4,6 +4,7 @@ import {
   deleteAiAdminProvider,
   deleteAiAdminModel,
   getAiAdminAuditEvidence,
+  listAiAdminModelRateVersions,
   listAiAdminUsage,
   updateAiAdminModel,
   updateAiAdminQuota,
@@ -18,6 +19,7 @@ import { PATCH as PATCH_QUOTA } from "@/app/api/manage/ai/quotas/route";
 import { DELETE as DELETE_PROVIDER } from "@/app/api/manage/ai/providers/[id]/route";
 import { DELETE as DELETE_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
 import { PATCH as PATCH_MODEL } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/route";
+import { GET as GET_MODEL_RATE_VERSIONS } from "@/app/api/manage/ai/providers/[id]/models/[modelId]/rate-versions/route";
 import { POST as POST_MODEL } from "@/app/api/manage/ai/providers/[id]/models/route";
 
 vi.mock("@/lib/admin/api", async (importOriginal) => {
@@ -30,6 +32,7 @@ vi.mock("@/lib/ai/admin/service", () => ({
   deleteAiAdminProvider: vi.fn(),
   deleteAiAdminModel: vi.fn(),
   getAiAdminAuditEvidence: vi.fn(),
+  listAiAdminModelRateVersions: vi.fn(),
   listAiAdminUsage: vi.fn(),
   resolveAiAdminSettlement: vi.fn(),
   updateAiAdminModel: vi.fn(),
@@ -224,6 +227,32 @@ describe("AI administration routes", () => {
     expect(requireAdminApi).toHaveBeenLastCalledWith({
       permission: "ai.providers.manage",
       recentMfa: true,
+    });
+  });
+
+  it("reads model rate history without requiring recent MFA", async () => {
+    vi.mocked(listAiAdminModelRateVersions).mockResolvedValue({
+      modelId: "model-1",
+      currentVersion: 2,
+      versions: [],
+    });
+
+    const response = await GET_MODEL_RATE_VERSIONS(
+      new Request(
+        "http://localhost/api/manage/ai/providers/provider-1/models/model-1/rate-versions",
+      ),
+      {
+        params: Promise.resolve({ id: "provider-1", modelId: "model-1" }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(requireAdminApi).toHaveBeenCalledWith({
+      permission: "ai.providers.manage",
+    });
+    expect(listAiAdminModelRateVersions).toHaveBeenCalledWith({
+      providerId: "provider-1",
+      modelId: "model-1",
     });
   });
 });
