@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
-import { Button, Checkbox, Input, Modal, Tag } from "antd";
+import { Button, Checkbox, Input, Modal, Tag, theme } from "antd";
 import { createStyles } from "antd-style";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -165,6 +165,10 @@ const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "exports.retry": "permission.exports.retry",
   "announcements.read": "permission.announcements.read",
   "announcements.manage": "permission.announcements.manage",
+  "ai.providers.manage": "permission.ai.providers.manage",
+  "ai.quotas.manage": "permission.ai.quotas.manage",
+  "ai.usage.read": "permission.ai.usage.read",
+  "ai.audit.sensitive.read": "permission.ai.audit.sensitive.read",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
 };
@@ -203,6 +207,15 @@ const permissionGroups: Array<{
     permissions: ["announcements.read", "announcements.manage"],
   },
   {
+    label: "roles.permissionGroup.ai",
+    permissions: [
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+      "ai.audit.sensitive.read",
+    ],
+  },
+  {
     label: "roles.permissionGroup.audit",
     permissions: ["audit.read"],
   },
@@ -222,6 +235,7 @@ export function AdminRoleManager({
   searchParams: PaginationSearchParams;
 }) {
   const { styles } = useStyles();
+  const { token } = theme.useToken();
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
@@ -237,6 +251,7 @@ export function AdminRoleManager({
   const [loadedRoleOptions, setLoadedRoleOptions] = useState<AdminSelectOption[]>([]);
   const [roleEditorUser, setRoleEditorUser] = useState<UserSummary>();
   const [roleEditorIds, setRoleEditorIds] = useState<string[]>([]);
+  const [viewingRole, setViewingRole] = useState<RoleSummary>();
   const [pending, setPending] = useState(false);
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthCode, setReauthCode] = useState("");
@@ -317,14 +332,16 @@ export function AdminRoleManager({
     );
   }
 
-  function permissionPreview(roleIds: string[]) {
-    const effective = effectivePermissions(roleIds);
+  function permissionPreview(
+    effective: AdminPermission[],
+    title = t("roles.effectivePermissions"),
+  ) {
     const effectiveSet = new Set(effective);
 
     return (
       <div className={styles.permissionPreview}>
         <div className={styles.permissionPreviewHeader}>
-          <strong>{t("roles.effectivePermissions")}</strong>
+          <strong>{title}</strong>
           <span>{t("roles.permissionSummary", {
             selected: effective.length,
             total: ADMIN_PERMISSION_KEYS.length,
@@ -500,7 +517,16 @@ export function AdminRoleManager({
               />,
               t("roles.permissionCount", { count: role.permissions.length }),
               role.members,
-              role.systemKey ? "-" : (
+              role.systemKey ? (
+                <AdminTableActions key="actions">
+                  <Button
+                    onClick={() => setViewingRole(role)}
+                    type="link"
+                  >
+                    {t("common.details")}
+                  </Button>
+                </AdminTableActions>
+              ) : (
                 <AdminTableActions key="actions">
                   <Button
                     onClick={() => openRoleForm(role)}
@@ -630,7 +656,7 @@ export function AdminRoleManager({
             placeholder={t("roles.selectRole")}
             value={selectedRoles}
           />
-          {permissionPreview(selectedRoles)}
+          {permissionPreview(effectivePermissions(selectedRoles))}
         </div>
       </Modal>
 
@@ -664,7 +690,7 @@ export function AdminRoleManager({
               placeholder={t("roles.selectRole")}
               value={roleEditorIds}
             />
-            {permissionPreview(roleEditorIds)}
+            {permissionPreview(effectivePermissions(roleEditorIds))}
           </div>
         ) : null}
       </Modal>
@@ -701,6 +727,32 @@ export function AdminRoleManager({
         </form>
       </Modal>
 
+      <Modal
+        footer={(
+          <Button onClick={() => setViewingRole(undefined)}>
+            {t("common.close")}
+          </Button>
+        )}
+        onCancel={() => setViewingRole(undefined)}
+        open={Boolean(viewingRole)}
+        title={t("roles.detailsTitle")}
+        width={720}
+      >
+        {viewingRole ? (
+          <div className="admin-dialog-form">
+            <AdminIdentity
+              description={viewingRole.systemKey
+                ? getAdminSystemRolePresentation(t, viewingRole.systemKey).description
+                : viewingRole.description}
+              title={viewingRole.systemKey
+                ? getAdminSystemRolePresentation(t, viewingRole.systemKey).name
+                : viewingRole.name}
+            />
+            {permissionPreview(viewingRole.permissions, t("roles.permissions"))}
+          </div>
+        ) : null}
+      </Modal>
+
       <ActionConfirmationModal
         cancelText={t("common.cancel")}
         confirmText={confirmation?.confirmText ?? t("common.confirm")}
@@ -720,6 +772,7 @@ export function AdminRoleManager({
         onOk={reauthenticate}
         open={reauthOpen}
         title={t("common.reauthTitle")}
+        zIndex={token.zIndexPopupBase + 100}
       >
         <div className="admin-dialog-form">
           <p className="admin-dialog-description">

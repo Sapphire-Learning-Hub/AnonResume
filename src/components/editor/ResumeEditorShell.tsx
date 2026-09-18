@@ -17,6 +17,7 @@ import {
   Modal,
   Pagination,
   Popconfirm,
+  Segmented,
   Select,
   Switch,
   Tag,
@@ -26,6 +27,11 @@ import { useRouter } from "next/navigation";
 import { useStore } from "zustand";
 
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
+import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
+import {
+  applySelectedAiChanges,
+  type AiResumeProposal,
+} from "@/domain/resume/ai/proposal-apply";
 import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
@@ -47,7 +53,9 @@ import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
+  AiAssistantIcon,
   DocumentIcon,
   EnterFullscreenIcon,
   ExitFullscreenIcon,
@@ -86,6 +94,7 @@ import {
 } from "@/domain/resume/font-presets";
 import type {
   BadgeBlock,
+  ResumeDocument,
   RichTextContent,
 } from "@/domain/resume/schema";
 import {
@@ -537,6 +546,7 @@ export function ResumeEditorShell({
   const saveValidation = useStore(store, (state) => state.saveValidation);
   const selection = useStore(store, (state) => state.selection);
   const saveStatus = useStore(store, (state) => state.saveStatus);
+  const version = useStore(store, (state) => state.version);
   const history = useStore(store, (state) => state.history);
   const zoom = useStore(store, (state) => state.zoom);
   const resumeName = useStore(store, (state) => state.document.meta.title);
@@ -571,6 +581,16 @@ export function ResumeEditorShell({
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
   const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const [aiProposalPreview, setAiProposalPreview] = useState<{
+    document: ResumeDocument;
+    proposal: AiResumeProposal;
+    baseResumeVersion: number;
+    selectedChangeIds: string[];
+  }>();
+  const [aiPreviewMode, setAiPreviewMode] = useState<"original" | "effect">(
+    "effect",
+  );
   const [activeRibbonTab, setActiveRibbonTab] = useState<EditorRibbonTab>("home");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
@@ -606,6 +626,26 @@ export function ResumeEditorShell({
     ? "layout"
     : editSurfaceMode;
   const resolvedActivePage = Math.min(Math.max(activePage, 1), pageCount);
+  const canvasDocument =
+    aiProposalPreview && aiPreviewMode === "effect"
+      ? aiProposalPreview.document
+      : document;
+
+  function previewAiProposal(input: {
+    proposal: AiResumeProposal;
+    baseResumeVersion: number;
+    selectedChangeIds: string[];
+  }) {
+    const result = applySelectedAiChanges({
+      document,
+      currentVersion: version,
+      ...input,
+    });
+    if (!result.ok) return false;
+    setAiProposalPreview({ ...input, document: result.document });
+    setAiPreviewMode("effect");
+    return true;
+  }
 
   useEffect(() => {
     let holdTimer: number | undefined;
@@ -2476,6 +2516,17 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
+      <Tooltip title={t("ai.title")}>
+        <Button
+          aria-label={t("ai.title")}
+          className={styles.ribbonLabelButton}
+          type="text"
+          onClick={() => setAiAssistantOpen(true)}
+        >
+          <AiAssistantIcon size={16} />
+          <span>AI</span>
+        </Button>
+      </Tooltip>
       <Tooltip title={t("editor.versionHistory")}>
         <Button
           aria-label={t("editor.versionHistory")}
@@ -2514,6 +2565,7 @@ export function ResumeEditorShell({
           )}
         </Button>
       </Tooltip>
+      <LocaleSwitcher />
       <Button
         disabled={previewBusy}
         href={previewHref}
@@ -2849,7 +2901,8 @@ export function ResumeEditorShell({
   );
 
   return (
-    <main className={styles.shell} data-testid="resume-editor-shell">
+    <div className={styles.editorWorkspace}>
+      <main className={styles.shell} data-testid="resume-editor-shell">
       <EditorRibbon
         activeTab={activeRibbonTab}
         backHref="/app"
@@ -3082,9 +3135,49 @@ export function ResumeEditorShell({
               <h2 className={styles.panelHeading}>{t("editor.canvas")}</h2>
             </div>
             <div className={styles.canvasHeaderActions}>
-              <Tag className={styles.canvasModeTag} color="geekblue" variant="filled">
-                {editSurfaceModeLabel}
-              </Tag>
+              {aiProposalPreview ? (
+                <>
+                  <Tag
+                    className={styles.canvasModeTag}
+                    color="processing"
+                    variant="filled"
+                  >
+                    {t("ai.proposal.previewMode")}
+                  </Tag>
+                  <Segmented
+                    aria-label={t("ai.proposal.previewMode")}
+                    options={[
+                      {
+                        label: t("ai.proposal.previewOriginal"),
+                        value: "original",
+                      },
+                      {
+                        label: t("ai.proposal.previewEffect"),
+                        value: "effect",
+                      },
+                    ]}
+                    size="small"
+                    value={aiPreviewMode}
+                    onChange={(value) =>
+                      setAiPreviewMode(value as "original" | "effect")
+                    }
+                  />
+                  <Button
+                    size="small"
+                    onClick={() => setAiProposalPreview(undefined)}
+                  >
+                    {t("ai.proposal.exitPreview")}
+                  </Button>
+                </>
+              ) : (
+                <Tag
+                  className={styles.canvasModeTag}
+                  color="geekblue"
+                  variant="filled"
+                >
+                  {editSurfaceModeLabel}
+                </Tag>
+              )}
             </div>
           </div>
           <div
@@ -3097,47 +3190,61 @@ export function ResumeEditorShell({
               data-testid="resume-canvas-zoom"
               style={{ transform: `scale(${zoom})` }}
             >
-              <ResumeRenderer
-                document={document}
-                mode="edit"
-                editSurfaceMode={activeEditSurfaceMode}
-                paginationRevision={paginationRevision}
-                showPrintSafeArea={showPrintSafeArea}
-                zoom={zoom}
-                selection={selection}
-                onSelectBlock={(nextSelection) => store.getState().setSelection(nextSelection)}
-                onChangeSectionTitle={(params) =>
-                  store.getState().updateSectionTitle(params)
-                }
-                onChangeTextBlock={(params) =>
-                  store.getState().updateTextBlockContent(params)
-                }
-                onMoveBlock={(params) => store.getState().moveBlock(params)}
-                textEditorRef={textEditorRef}
-                onTextEditorFormattingStateChange={(state) =>
-                  setTextEditorFormattingState((current) => {
-                    if (
-                      current.selectionKey === selectionKey &&
-                      current.value.bold === state.bold &&
-                      current.value.italic === state.italic &&
-                      current.value.underline === state.underline &&
-                      current.value.strike === state.strike &&
-                      current.value.tag === state.tag &&
-                      current.value.textColor === state.textColor &&
-                      current.value.linkHref === state.linkHref
-                    ) {
-                      return current;
-                    }
+              {aiProposalPreview ? (
+                <ResumeRenderer
+                  document={canvasDocument}
+                  mode="view"
+                  paginationRevision={paginationRevision}
+                  showPrintSafeArea={showPrintSafeArea}
+                  zoom={zoom}
+                  onPageCountChange={handlePageCountChange}
+                  onPaginationReadyChange={setPaginationReady}
+                />
+              ) : (
+                <ResumeRenderer
+                  document={canvasDocument}
+                  mode="edit"
+                  editSurfaceMode={activeEditSurfaceMode}
+                  paginationRevision={paginationRevision}
+                  showPrintSafeArea={showPrintSafeArea}
+                  zoom={zoom}
+                  selection={selection}
+                  onSelectBlock={(nextSelection) =>
+                    store.getState().setSelection(nextSelection)
+                  }
+                  onChangeSectionTitle={(params) =>
+                    store.getState().updateSectionTitle(params)
+                  }
+                  onChangeTextBlock={(params) =>
+                    store.getState().updateTextBlockContent(params)
+                  }
+                  onMoveBlock={(params) => store.getState().moveBlock(params)}
+                  textEditorRef={textEditorRef}
+                  onTextEditorFormattingStateChange={(state) =>
+                    setTextEditorFormattingState((current) => {
+                      if (
+                        current.selectionKey === selectionKey &&
+                        current.value.bold === state.bold &&
+                        current.value.italic === state.italic &&
+                        current.value.underline === state.underline &&
+                        current.value.strike === state.strike &&
+                        current.value.tag === state.tag &&
+                        current.value.textColor === state.textColor &&
+                        current.value.linkHref === state.linkHref
+                      ) {
+                        return current;
+                      }
 
-                    return {
-                      selectionKey,
-                      value: state,
-                    };
-                  })
-                }
-                onPageCountChange={handlePageCountChange}
-                onPaginationReadyChange={setPaginationReady}
-              />
+                      return {
+                        selectionKey,
+                        value: state,
+                      };
+                    })
+                  }
+                  onPageCountChange={handlePageCountChange}
+                  onPaginationReadyChange={setPaginationReady}
+                />
+              )}
             </div>
           </div>
         </section>
@@ -3166,6 +3273,38 @@ export function ResumeEditorShell({
             .setZoom(Number((zoom - RESUME_EDITOR_ZOOM_STEP).toFixed(2)))
         }
       />
-    </main>
+      </main>
+      <AiAssistantPanel
+        open={aiAssistantOpen}
+        resumeId={resumeId}
+        resumeVersion={version}
+        sectionId={selection.sectionId}
+        onApplyProposal={async (input) => {
+          const current = store.getState();
+          const result = applySelectedAiChanges({
+            document: current.document,
+            currentVersion: current.version,
+            ...input,
+          });
+          if (result.ok) {
+            await flushSave();
+          }
+          return result;
+        }}
+        onProposalPersisted={(persisted) => {
+          store.getState().updateDocument(() => persisted.document);
+          store.getState().markSaved({
+            ...persisted,
+            document: persisted.document,
+          });
+          setAiProposalPreview(undefined);
+        }}
+        onClose={() => {
+          setAiAssistantOpen(false);
+          setAiProposalPreview(undefined);
+        }}
+        onPreviewProposal={previewAiProposal}
+      />
+    </div>
   );
 }

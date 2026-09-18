@@ -77,7 +77,7 @@ describe("database migrations", () => {
     ]);
   });
 
-  it("seeds the four immutable system roles", async () => {
+  it("seeds the five immutable system roles", async () => {
     const schemaName = getDatabaseSchemaName();
     const result = await getDatabasePool().query<{
       createdByUserId: string | null;
@@ -91,11 +91,53 @@ describe("database migrations", () => {
     );
 
     expect(result.rows).toEqual([
+      { createdByUserId: null, systemKey: "ai_service_manager" },
       { createdByUserId: null, systemKey: "content_reviewer" },
       { createdByUserId: null, systemKey: "read_only_auditor" },
       { createdByUserId: null, systemKey: "support_operator" },
       { createdByUserId: null, systemKey: "system_operator" },
     ]);
+  });
+
+  it("grants least-privilege AI permissions to system roles", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      permissions: string[];
+      systemKey: string;
+    }>(
+      `SELECT system_key AS "systemKey", permissions
+         FROM "${schemaName}".admin_roles
+        WHERE system_key IS NOT NULL`,
+    );
+    const permissionsByRole = Object.fromEntries(
+      result.rows.map((role) => [role.systemKey, role.permissions]),
+    );
+
+    expect(permissionsByRole.read_only_auditor).toContain("ai.usage.read");
+    expect(permissionsByRole.support_operator).toContain("ai.usage.read");
+    expect(permissionsByRole.content_reviewer).not.toEqual(
+      expect.arrayContaining([
+        "ai.providers.manage",
+        "ai.quotas.manage",
+        "ai.usage.read",
+        "ai.audit.sensitive.read",
+      ]),
+    );
+    expect(permissionsByRole.system_operator).toEqual(
+      expect.arrayContaining(["ai.providers.manage", "ai.usage.read"]),
+    );
+    expect(permissionsByRole.system_operator).not.toContain(
+      "ai.quotas.manage",
+    );
+    expect(permissionsByRole.ai_service_manager).toEqual([
+      "overview.read",
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+    ]);
+    for (const permissions of Object.values(permissionsByRole)) {
+      expect(permissions).not.toContain("ai.audit.sensitive.read");
+    }
   });
 
   it("grants announcement permissions to the relevant system roles", async () => {

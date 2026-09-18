@@ -12,6 +12,10 @@ export const ADMIN_PERMISSION_KEYS = [
   "exports.retry",
   "announcements.read",
   "announcements.manage",
+  "ai.providers.manage",
+  "ai.quotas.manage",
+  "ai.usage.read",
+  "ai.audit.sensitive.read",
   "audit.read",
   "system.read",
 ] as const;
@@ -37,6 +41,7 @@ export const ADMIN_SYSTEM_ROLE_KEYS = [
   "support_operator",
   "content_reviewer",
   "system_operator",
+  "ai_service_manager",
 ] as const;
 
 export type AdminSystemRoleKey = (typeof ADMIN_SYSTEM_ROLE_KEYS)[number];
@@ -50,20 +55,21 @@ export interface AdminSystemRoleDefinition {
 export const ADMIN_SYSTEM_ROLES = {
   read_only_auditor: {
     name: "只读审计员",
-    description: "查看系统概览、用户与审计记录，不读取简历正文。",
+    description: "查看系统概览、用户、公告、AI 用量与审计记录，不读取简历正文。",
     permissions: [
       "overview.read",
       "users.read",
       "resumes.metadata.read",
       "exports.read",
       "announcements.read",
+      "ai.usage.read",
       "audit.read",
       "system.read",
     ],
   },
   support_operator: {
     name: "支持专员",
-    description: "处理用户状态、会话与导出队列，不读取简历正文。",
+    description: "处理用户状态、会话与导出队列，并查看公告和 AI 用量，不读取简历正文。",
     permissions: [
       "overview.read",
       "users.read",
@@ -74,6 +80,7 @@ export const ADMIN_SYSTEM_ROLES = {
       "exports.cancel",
       "exports.retry",
       "announcements.read",
+      "ai.usage.read",
     ],
   },
   content_reviewer: {
@@ -90,7 +97,7 @@ export const ADMIN_SYSTEM_ROLES = {
   },
   system_operator: {
     name: "系统运维员",
-    description: "查看系统与导出队列状态，并处理失败或积压任务。",
+    description: "管理公告与 AI 模型服务，查看系统、AI 用量与导出队列状态。",
     permissions: [
       "overview.read",
       "exports.read",
@@ -98,8 +105,20 @@ export const ADMIN_SYSTEM_ROLES = {
       "exports.retry",
       "announcements.read",
       "announcements.manage",
+      "ai.providers.manage",
+      "ai.usage.read",
       "audit.read",
       "system.read",
+    ],
+  },
+  ai_service_manager: {
+    name: "AI 服务管理员",
+    description: "管理 AI 模型服务、用户额度与结算，并查看 AI 用量，不读取敏感请求内容。",
+    permissions: [
+      "overview.read",
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
     ],
   },
 } as const satisfies Record<AdminSystemRoleKey, AdminSystemRoleDefinition>;

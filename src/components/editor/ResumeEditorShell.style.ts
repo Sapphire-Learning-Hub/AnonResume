@@ -3,8 +3,18 @@
 import { createStyles } from "antd-style";
 
 export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
+  editorWorkspace: css`
+    display: flex;
+    width: 100%;
+    height: 100dvh;
+    min-width: 0;
+    overflow: hidden;
+    background: ${token.colorBgLayout};
+  `,
   shell: css`
     display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
     flex-direction: column;
     height: 100dvh;
     min-height: 0;
@@ -22,6 +32,27 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       padding: 0;
       border-radius: 6px;
       color: ${token.colorTextSecondary};
+
+      &:hover,
+      &:focus-visible {
+        color: ${token.colorText};
+        background: ${token.colorFillTertiary};
+      }
+    }
+  `,
+  ribbonLabelButton: css`
+    && {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 48px;
+      height: 28px;
+      gap: 5px;
+      padding: 0 8px;
+      border-radius: 6px;
+      color: ${token.colorTextSecondary};
+      font-size: 12px;
+      font-weight: 700;
 
       &:hover,
       &:focus-visible {
@@ -314,7 +345,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   `,
   canvasViewport: css`
     display: flex;
-    justify-content: center;
+    justify-content: safe center;
     align-items: flex-start;
     flex: 1;
     min-height: 0;

@@ -26,7 +26,7 @@ import {
 } from "@/lib/resume/catalog";
 
 const LEGACY_USER_ID = "__legacy_single_user__";
-const RESUME_SCHEMA_VERSION = 1;
+export const RESUME_SCHEMA_VERSION = 1;
 const CATALOG_SUMMARY_MAX_LENGTH = 160;
 const GENERATED_RESUME_ID_MAX_ATTEMPTS = 3;
 const DEFAULT_RESUME_VERSION_HISTORY_LIMIT = 5;
@@ -137,7 +137,9 @@ function getFirstBlockSummary(blocks: ResumeBlock[]): string | undefined {
   return undefined;
 }
 
-function buildSummary(record: Pick<ResumeRecord, "document" | "summary">) {
+export function buildResumeSummary(
+  record: Pick<ResumeRecord, "document" | "summary">,
+) {
   const visibleSections = record.document.sections.filter((section) => section.visible);
 
   for (const section of visibleSections) {
@@ -168,7 +170,7 @@ function resolveSummary(record: {
 }) {
   return record.customSummary
     ? formatCatalogSummary(record.customSummary)
-    : buildSummary(record);
+    : buildResumeSummary(record);
 }
 
 function mapResumeRow(row: ResumeRow): ResumeRecord {
@@ -510,7 +512,7 @@ async function createStrictResumeRecord(
 
   if (document) {
     record.title = document.meta.title;
-    record.summary = buildSummary({ document, summary: record.summary });
+    record.summary = buildResumeSummary({ document, summary: record.summary });
     record.document = document;
   }
 
@@ -667,7 +669,7 @@ export async function saveResumeRecord(params: {
     params.document === undefined
       ? current.document
       : validateResumeDocument(params.document);
-  const summary = buildSummary({
+  const summary = buildResumeSummary({
     document,
     summary: current.summary,
   });

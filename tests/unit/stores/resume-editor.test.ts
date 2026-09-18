@@ -1,4 +1,6 @@
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { hashAiContent } from "@/domain/resume/ai/content-hash";
+import type { AiResumeProposal } from "@/domain/resume/ai/proposal-apply";
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
 import { findBlockByPath } from "@/domain/resume/operations";
 import { validateResumeDocument } from "@/domain/resume/validation";
@@ -6,6 +8,95 @@ import { validateResumeDocument } from "@/domain/resume/validation";
 import { createResumeEditorStore } from "@/stores/resume-editor";
 
 describe("createResumeEditorStore", () => {
+  it("applies selected AI changes as one undoable document transaction", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0]!;
+    const block = section.blocks[0]!;
+    if (block.type !== "text") throw new Error("Expected profile text block");
+    const proposedContent = {
+      type: "doc" as const,
+      content: [
+        {
+          type: "paragraph" as const,
+          content: [{ type: "text" as const, text: "聚焦成果的新简介" }],
+        },
+      ],
+    };
+    const proposal: AiResumeProposal = {
+      changes: [
+        {
+          id: "rewrite-profile",
+          type: "replace_text",
+          sectionId: section.id,
+          blockPath: [block.id],
+          beforeHash: hashAiContent(block.content),
+          content: proposedContent,
+          reason: "突出成果",
+        },
+      ],
+    };
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+
+    const result = store.getState().applyAiProposal({
+      proposal,
+      baseResumeVersion: 1,
+      selectedChangeIds: ["rewrite-profile"],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(store.getState().history.past).toHaveLength(1);
+    const changedBlock = store.getState().document.sections[0]?.blocks[0];
+    expect(changedBlock?.type === "text" ? changedBlock.content : null).toEqual(
+      proposedContent,
+    );
+
+    store.getState().undo();
+    expect(store.getState().document).toEqual(document);
+  });
+
+  it("does not create history when an AI proposal targets a stale version", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0]!;
+    const block = section.blocks[0]!;
+    if (block.type !== "text") throw new Error("Expected profile text block");
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 2,
+      updatedAt: 100,
+    });
+
+    const result = store.getState().applyAiProposal({
+      baseResumeVersion: 1,
+      selectedChangeIds: ["rewrite-profile"],
+      proposal: {
+        changes: [
+          {
+            id: "rewrite-profile",
+            type: "replace_text",
+            sectionId: section.id,
+            blockPath: [block.id],
+            beforeHash: hashAiContent(block.content),
+            content: block.content,
+            reason: "优化表达",
+          },
+        ],
+      },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      conflicts: [{ reason: "resume_version_changed" }],
+    });
+    expect(store.getState().history.past).toHaveLength(0);
+    expect(store.getState().dirty).toBe(false);
+  });
+
   it("adds a selected component after a nested block and selects its editable leaf", () => {
     const store = createResumeEditorStore({
       resumeId: "resume-demo",

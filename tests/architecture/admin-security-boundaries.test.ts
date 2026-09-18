@@ -55,6 +55,22 @@ describe("admin security architecture", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("requires recent management MFA for sensitive AI administration", () => {
+    const sensitiveRoutes = [
+      "src/app/api/manage/ai/providers/route.ts",
+      "src/app/api/manage/ai/providers/[id]/route.ts",
+      "src/app/api/manage/ai/providers/[id]/models/[modelId]/route.ts",
+      "src/app/api/manage/ai/quotas/route.ts",
+      "src/app/api/manage/ai/usage/route.ts",
+      "src/app/api/manage/ai/audit/[runId]/route.ts",
+    ];
+
+    for (const file of sensitiveRoutes) {
+      const source = readFileSync(resolve(root, file), "utf8");
+      expect(source, file).toContain("recentMfa: true");
+    }
+  });
+
   it("keeps management cookies secure across shared pages and APIs", () => {
     const requestBoundary = readFileSync(
       resolve(root, "src/lib/admin/request.ts"),

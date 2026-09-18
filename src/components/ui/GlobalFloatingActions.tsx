@@ -4,14 +4,13 @@ import { createStyles } from "antd-style";
 
 import { PdfExportTaskOverlay } from "@/components/pdf/PdfExportTaskOverlay";
 import { useI18n } from "@/i18n/I18nProvider";
-import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 
 const useStyles = createStyles(({ css, token }) => ({
   rail: css`
     position: fixed;
     right: 24px;
     bottom: 24px;
-    z-index: ${token.zIndexPopupBase + 20};
+    z-index: ${token.zIndexPopupBase - 1};
     display: flex;
     width: 40px;
     flex-direction: column;
@@ -51,7 +50,6 @@ export function GlobalFloatingActions() {
       role="group"
     >
       <PdfExportTaskOverlay />
-      <LocaleSwitcher />
     </div>
   );
 }

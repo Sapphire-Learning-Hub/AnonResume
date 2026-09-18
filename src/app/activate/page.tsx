@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 
 import {
   AdminAccessShell,
@@ -11,26 +12,43 @@ import {
   inspectAdminActivation,
 } from "@/lib/admin/activation";
 
-export async function generateMetadata(): Promise<Metadata> {
+interface ActivationPageProps {
+  searchParams: Promise<{ token?: string | string[] }>;
+}
+
+function resolveActivationToken(tokenValue?: string | string[]) {
+  return typeof tokenValue === "string" ? tokenValue : "";
+}
+
+const loadActivation = cache(async (token: string) => {
+  try {
+    return await inspectAdminActivation(token);
+  } catch (error) {
+    if (error instanceof AdminActivationError) return null;
+    throw error;
+  }
+});
+
+export async function generateMetadata({
+  searchParams,
+}: ActivationPageProps): Promise<Metadata> {
+  const token = resolveActivationToken((await searchParams).token);
+  const activation = await loadActivation(token);
   const t = createAdminTranslator(await getRequestLocale());
-  return { title: t("activation.superAdmin") };
+  if (!activation) return { title: t("activation.unavailableTitle") };
+  return {
+    title: activation.purpose === "super_admin"
+      ? t("activation.superAdmin")
+      : t("activation.invited"),
+  };
 }
 
 export default async function ActivatePage({
   searchParams,
-}: {
-  searchParams: Promise<{ token?: string | string[] }>;
-}) {
-  const tokenValue = (await searchParams).token;
-  const token = typeof tokenValue === "string" ? tokenValue : "";
+}: ActivationPageProps) {
+  const token = resolveActivationToken((await searchParams).token);
   const t = createAdminTranslator(await getRequestLocale());
-
-  let activation: Awaited<ReturnType<typeof inspectAdminActivation>> | null = null;
-  try {
-    activation = await inspectAdminActivation(token);
-  } catch (error) {
-    if (!(error instanceof AdminActivationError)) throw error;
-  }
+  const activation = await loadActivation(token);
 
   if (activation) {
     return (

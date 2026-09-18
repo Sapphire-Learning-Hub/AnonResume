@@ -21,6 +21,10 @@ describe("admin permission catalog", () => {
       "exports.retry",
       "announcements.read",
       "announcements.manage",
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+      "ai.audit.sensitive.read",
       "audit.read",
       "system.read",
     ]);
@@ -41,12 +45,13 @@ describe("admin permission catalog", () => {
     expect(normalizeAdminPermissions(null)).toEqual([]);
   });
 
-  it("defines the four immutable system roles", () => {
+  it("defines five immutable system roles with least-privilege AI access", () => {
     expect(Object.keys(ADMIN_SYSTEM_ROLES)).toEqual([
       "read_only_auditor",
       "support_operator",
       "content_reviewer",
       "system_operator",
+      "ai_service_manager",
     ]);
 
     for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
@@ -63,8 +68,14 @@ describe("admin permission catalog", () => {
     expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
       "announcements.read",
     );
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
+      "ai.usage.read",
+    );
     expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).toContain(
       "announcements.read",
+    );
+    expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).toContain(
+      "ai.usage.read",
     );
     expect(ADMIN_SYSTEM_ROLES.content_reviewer.permissions).not.toContain(
       "announcements.read",
@@ -73,7 +84,21 @@ describe("admin permission catalog", () => {
       expect.arrayContaining([
         "announcements.read",
         "announcements.manage",
+        "ai.providers.manage",
+        "ai.usage.read",
       ]),
     );
+    expect(ADMIN_SYSTEM_ROLES.system_operator.permissions).not.toContain(
+      "ai.quotas.manage",
+    );
+    expect(ADMIN_SYSTEM_ROLES.ai_service_manager.permissions).toEqual([
+      "overview.read",
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+    ]);
+    for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
+      expect(role.permissions).not.toContain("ai.audit.sensitive.read");
+    }
   });
 });

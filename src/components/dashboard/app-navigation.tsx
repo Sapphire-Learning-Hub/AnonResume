@@ -1,8 +1,13 @@
 import type { MessageKey } from "@/i18n/messages";
 import type { AdminPermission } from "@/lib/admin/permissions";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
+import {
+  getAccessibleAiAdminRoutes,
+  type AiAdminRoute,
+} from "@/lib/ai/admin/navigation";
 
 export type AppNavigationIcon =
+  | "ai"
   | "announcements"
   | "approvals"
   | "audit"
@@ -16,8 +21,15 @@ export type AppNavigationIcon =
   | "users";
 
 export interface AppNavigationItem {
+  children?: AppNavigationSubItem[];
   href: string;
   icon: AppNavigationIcon;
+  id: string;
+  label: string;
+}
+
+export interface AppNavigationSubItem {
+  href: string;
   id: string;
   label: string;
 }
@@ -34,6 +46,7 @@ interface ManagementNavigationDefinition {
   id: string;
   labelKey: MessageKey;
   permission?: AdminPermission;
+  permissions?: AdminPermission[];
   superOnly?: boolean;
 }
 
@@ -81,6 +94,18 @@ const managementItems: ManagementNavigationDefinition[] = [
     permission: "announcements.read",
   },
   {
+    href: "/app/manage/ai",
+    icon: "ai",
+    id: "manage-ai",
+    labelKey: "management.navigation.ai",
+    permissions: [
+      "ai.providers.manage",
+      "ai.quotas.manage",
+      "ai.usage.read",
+      "ai.audit.sensitive.read",
+    ],
+  },
+  {
     href: "/app/manage/audit",
     icon: "audit",
     id: "manage-audit",
@@ -109,6 +134,13 @@ const managementItems: ManagementNavigationDefinition[] = [
   },
 ];
 
+const aiNavigationLabelKeys: Record<AiAdminRoute["id"], MessageKey> = {
+  providers: "management.navigation.aiProviders",
+  quotas: "management.navigation.aiQuotas",
+  usage: "management.navigation.aiUsage",
+  ledger: "management.navigation.aiLedger",
+};
+
 export function buildAppNavigation(
   access: AppShellAccess,
   translate: (key: MessageKey) => string,
@@ -130,6 +162,12 @@ export function buildAppNavigation(
           icon: "fonts",
           id: "fonts",
           label: translate("fontMarket.navigation"),
+        },
+        {
+          href: "/app/ai",
+          icon: "ai",
+          id: "ai-settings",
+          label: translate("ai.settings.navigation"),
         },
       ],
     });
@@ -161,11 +199,23 @@ export function buildAppNavigation(
         .filter((item) =>
           item.superOnly
             ? access.kind === "super_admin"
-            : !item.permission ||
-              access.kind === "super_admin" ||
-              access.permissions.includes(item.permission),
+            : access.kind === "super_admin" ||
+              (item.permission
+                ? access.permissions.includes(item.permission)
+                : item.permissions
+                  ? item.permissions.some((permission) =>
+                      access.permissions.includes(permission)
+                    )
+                  : true),
         )
         .map((item) => ({
+          children: item.id === "manage-ai"
+            ? getAccessibleAiAdminRoutes(access).map((route) => ({
+                href: route.href,
+                id: `manage-ai-${route.id}`,
+                label: translate(aiNavigationLabelKeys[route.id]),
+              }))
+            : undefined,
           href: item.href,
           icon: item.icon,
           id: item.id,

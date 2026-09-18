@@ -1,0 +1,1 @@
+ALTER TABLE "ai_messages" ADD COLUMN "retracted_at" timestamp with time zone;
