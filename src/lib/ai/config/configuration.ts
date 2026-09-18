@@ -36,6 +36,21 @@ function positiveInteger(
   return value;
 }
 
+function nonNegativeInteger(
+  environment: AiEnvironment,
+  key: string,
+  fallback: number,
+) {
+  const raw = environment[key]?.trim();
+  if (!raw) return fallback;
+
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${key} must be a non-negative integer`);
+  }
+  return value;
+}
+
 function trustedEndpointHostnames(environment: AiEnvironment) {
   const raw = environment.AI_TRUSTED_ENDPOINT_HOSTNAMES?.trim();
   if (!raw) return [];
@@ -115,7 +130,7 @@ export function resolveAiConfiguration(environment: AiEnvironment) {
       "AI_MAX_CONCURRENT_RUNS",
       DEFAULTS.maxConcurrentRuns,
     ),
-    defaultMonthlyPoints: positiveInteger(
+    defaultMonthlyPoints: nonNegativeInteger(
       environment,
       "AI_DEFAULT_MONTHLY_POINTS",
       DEFAULTS.defaultMonthlyPoints,

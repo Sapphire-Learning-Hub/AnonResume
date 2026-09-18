@@ -54,4 +54,10 @@ describe("AI runtime configuration", () => {
       resolveAiConfiguration({ AI_AUDIT_RETENTION_DAYS: "0" }),
     ).toThrow("AI_AUDIT_RETENTION_DAYS");
   });
+
+  it("allows the default monthly quota to be disabled", () => {
+    expect(
+      resolveAiConfiguration({ AI_DEFAULT_MONTHLY_POINTS: "0" }),
+    ).toMatchObject({ defaultMonthlyPoints: 0 });
+  });
 });
