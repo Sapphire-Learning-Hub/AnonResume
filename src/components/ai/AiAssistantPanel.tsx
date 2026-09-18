@@ -63,6 +63,7 @@ export function AiAssistantPanel({
   sectionId,
   onClose,
   onApplyProposal,
+  onProposalPersisted,
   onPreviewProposal,
 }: {
   open: boolean;
@@ -88,6 +89,11 @@ export function AiAssistantPanel({
     baseResumeVersion: number;
     selectedChangeIds: string[];
   }) => boolean;
+  onProposalPersisted?: (resume: {
+    document: import("@/domain/resume/schema").ResumeDocument;
+    version: number;
+    updatedAt: number;
+  }) => void;
 }) {
   const { styles } = useAiAssistantPanelStyles();
   const { t } = useI18n();
@@ -163,10 +169,11 @@ export function AiAssistantPanel({
         });
         return false;
       }
-      await markAiProposalApplied({
+      const applied = await markAiProposalApplied({
         proposalId: storedProposal.id,
         selectedChangeIds,
       });
+      onProposalPersisted?.(applied.resume);
       await assistant.refresh();
       toast.success({
         key: "ai-proposal-applied",

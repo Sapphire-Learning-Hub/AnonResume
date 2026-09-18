@@ -65,7 +65,18 @@ describe("AiAssistantPanel", () => {
   beforeEach(() => {
     assistantMock.current = createAssistantState();
     clientMock.markAiProposalApplied.mockReset();
-    clientMock.markAiProposalApplied.mockResolvedValue(undefined);
+    clientMock.markAiProposalApplied.mockResolvedValue({
+      proposal: {
+        id: "7accc68d-d40d-418a-99d3-20c63f80d283",
+        appliedChangeIds: ["change-summary"],
+        appliedAt: new Date("2026-09-18T00:00:00.000Z"),
+      },
+      resume: {
+        document: createDefaultResumeDocument(),
+        version: 2,
+        updatedAt: 1_789_689_600_000,
+      },
+    });
   });
 
   it("renders as a resizable complementary panel instead of an overlay", () => {
@@ -789,6 +800,7 @@ describe("AiAssistantPanel", () => {
 
   it("confirms resume persistence before marking a proposal as applied", async () => {
     const document = createDefaultResumeDocument();
+    const onProposalPersisted = vi.fn();
     let confirmSaved!: () => void;
     const saveConfirmed = new Promise<void>((resolve) => {
       confirmSaved = resolve;
@@ -846,6 +858,7 @@ describe("AiAssistantPanel", () => {
         resumeId="resume-demo"
         resumeVersion={1}
         onApplyProposal={onApplyProposal}
+        onProposalPersisted={onProposalPersisted}
         onClose={vi.fn()}
       />,
     );
@@ -860,6 +873,9 @@ describe("AiAssistantPanel", () => {
         proposalId: "7accc68d-d40d-418a-99d3-20c63f80d283",
         selectedChangeIds: ["change-summary"],
       }),
+    );
+    expect(onProposalPersisted).toHaveBeenCalledWith(
+      expect.objectContaining({ version: 2 }),
     );
   });
 });

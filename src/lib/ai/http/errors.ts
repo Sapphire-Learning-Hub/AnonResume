@@ -9,7 +9,10 @@ import {
   AiRunRateLimitedError,
   AiRunVersionConflictError,
 } from "@/lib/ai/runs/service";
-import { AiProposalNotFoundError } from "@/lib/ai/proposals/repository";
+import {
+  AiProposalConflictError,
+  AiProposalNotFoundError,
+} from "@/lib/ai/proposals/repository";
 import { AiQuotaExceededError } from "@/lib/ai/usage/ledger";
 import { RequestBodyTooLargeError } from "@/lib/http/request-body";
 
@@ -21,6 +24,15 @@ export class AiFeatureUnavailableError extends Error {
 }
 
 export function createAiErrorResponse(error: unknown) {
+  if (error instanceof AiProposalConflictError) {
+    return Response.json(
+      {
+        error: "ai_resume_version_conflict",
+        currentVersion: error.currentVersion,
+      },
+      { status: 409 },
+    );
+  }
   if (error instanceof AiRunVersionConflictError) {
     return Response.json(
       {

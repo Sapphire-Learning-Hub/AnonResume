@@ -3280,12 +3280,24 @@ export function ResumeEditorShell({
         resumeVersion={version}
         sectionId={selection.sectionId}
         onApplyProposal={async (input) => {
-          const result = store.getState().applyAiProposal(input);
+          const current = store.getState();
+          const result = applySelectedAiChanges({
+            document: current.document,
+            currentVersion: current.version,
+            ...input,
+          });
           if (result.ok) {
             await flushSave();
-            setAiProposalPreview(undefined);
           }
           return result;
+        }}
+        onProposalPersisted={(persisted) => {
+          store.getState().updateDocument(() => persisted.document);
+          store.getState().markSaved({
+            ...persisted,
+            document: persisted.document,
+          });
+          setAiProposalPreview(undefined);
         }}
         onClose={() => {
           setAiAssistantOpen(false);

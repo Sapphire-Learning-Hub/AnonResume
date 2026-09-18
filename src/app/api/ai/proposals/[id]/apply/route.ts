@@ -32,12 +32,12 @@ export async function POST(
     const body = appliedProposalSchema.parse(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
-    const proposal = await markAiProposalApplied({
+    const result = await markAiProposalApplied({
       userId: session.user.id,
       proposalId: id,
       selectedChangeIds: body.selectedChangeIds,
     });
-    return Response.json({ proposal });
+    return Response.json(result);
   } catch (error) {
     const response = createAiErrorResponse(error);
     if (response) return response;

@@ -4,6 +4,7 @@ import {
   aiRunProgressStages,
   type AiClientStreamEvent,
 } from "@/lib/ai/runs/stream-events";
+import { resumeDocumentSchema } from "@/domain/resume/schema";
 
 const modelSchema = z.object({
   id: z.string().uuid(),
@@ -46,6 +47,19 @@ const storedProposalSchema = z.object({
   completionState: z.enum(["complete", "incomplete", "invalid"]),
   appliedChangeIds: z.array(z.string()),
   appliedAt: z.string().nullable(),
+});
+
+const appliedProposalResultSchema = z.object({
+  proposal: z.object({
+    id: z.string().uuid(),
+    appliedChangeIds: z.array(z.string()),
+    appliedAt: z.coerce.date().nullable(),
+  }),
+  resume: z.object({
+    document: resumeDocumentSchema,
+    version: z.number().int().positive(),
+    updatedAt: z.number().int().nonnegative(),
+  }),
 });
 
 const conversationDetailsSchema = z.object({
@@ -347,5 +361,5 @@ export async function markAiProposalApplied(input: {
       selectedChangeIds: input.selectedChangeIds,
     }),
   });
-  if (!response.ok) await parseResponse(response, z.unknown());
+  return parseResponse(response, appliedProposalResultSchema);
 }
