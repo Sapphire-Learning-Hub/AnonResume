@@ -1,4 +1,7 @@
-import { assertSafeAiEndpoint } from "@/lib/ai/security/endpoint-policy";
+import {
+  assertSafeAiEndpoint,
+  resolveSafeAiEndpoint,
+} from "@/lib/ai/security/endpoint-policy";
 
 describe("AI endpoint policy", () => {
   it("accepts HTTPS hosts only when every resolved address is public", async () => {
@@ -11,6 +14,22 @@ describe("AI endpoint policy", () => {
     );
 
     expect(endpoint.href).toBe("https://models.example.com/v1/");
+  });
+
+  it("returns the validated addresses so the transport can pin the connection", async () => {
+    const resolved = await resolveSafeAiEndpoint(
+      "https://models.example.com/v1/",
+      async () => [
+        { address: "93.184.216.34", family: 4 },
+        { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+      ],
+    );
+
+    expect(resolved.endpoint.href).toBe("https://models.example.com/v1/");
+    expect(resolved.addresses).toEqual([
+      { address: "93.184.216.34", family: 4 },
+      { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+    ]);
   });
 
   it.each([

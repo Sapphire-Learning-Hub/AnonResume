@@ -34,6 +34,60 @@ const publicResolver = async () =>
   [{ address: "93.184.216.34", family: 4 }] as const;
 
 describe("OpenAI-compatible provider adapter", () => {
+  it("aborts a provider request that exceeds the local deadline", async () => {
+    vi.useFakeTimers();
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      requestTimeoutMs: 50,
+      fetchImpl: async (_input, init) => {
+        await new Promise<void>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(init.signal?.reason),
+            { once: true },
+          );
+        });
+        throw new Error("unreachable");
+      },
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest(),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+    const result = consume();
+    await vi.advanceTimersByTimeAsync(51);
+
+    await expect(result).rejects.toMatchObject({ code: "timeout" });
+    vi.useRealTimers();
+  });
+
+  it("rejects provider streams that exceed the response byte limit", async () => {
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      maxResponseBytes: 32,
+      fetchImpl: async () =>
+        streamResponse([
+          `data: ${JSON.stringify({ choices: [{ delta: { content: "x".repeat(64) } }] })}\n\n`,
+        ]),
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest(),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({ code: "invalid_response" });
+  });
+
   it("turns private reasoning chunks into content-free progress events", async () => {
     const adapter = createOpenAiCompatibleAdapter({
       resolver: publicResolver,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, desc, eq, gt, inArray, isNull, max, or } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, max, or, sql } from "drizzle-orm";
 
 import {
   aiConversations,
@@ -339,31 +339,6 @@ export async function prepareAiRun(input: {
     throw new AiRunVersionConflictError(row.currentResumeVersion);
   }
 
-  const [{ recentRuns }] = await db
-    .select({ recentRuns: count() })
-    .from(aiRuns)
-    .where(
-      and(
-        eq(aiRuns.userId, input.userId),
-        gt(aiRuns.createdAt, new Date(now.getTime() - 60_000)),
-      ),
-    );
-  if (recentRuns >= input.configuration.requestsPerMinute) {
-    throw new AiRunRateLimitedError();
-  }
-  const [{ activeRuns }] = await db
-    .select({ activeRuns: count() })
-    .from(aiRuns)
-    .where(
-      and(
-        eq(aiRuns.userId, input.userId),
-        or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
-      ),
-    );
-  if (activeRuns >= (input.configuration.maxConcurrentRuns ?? 1)) {
-    throw new AiRunAlreadyActiveError();
-  }
-
   const document = validateResumeDocument(row.resumeDocument);
   const context = buildAiResumeContext({
     document,
@@ -443,6 +418,33 @@ export async function prepareAiRun(input: {
         });
   try {
     await db.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`anonresume:ai-admission:${input.userId}`}))`,
+      );
+      const [{ recentRuns }] = await transaction
+        .select({ recentRuns: count() })
+        .from(aiRuns)
+        .where(
+          and(
+            eq(aiRuns.userId, input.userId),
+            gt(aiRuns.createdAt, new Date(now.getTime() - 60_000)),
+          ),
+        );
+      if (recentRuns >= input.configuration.requestsPerMinute) {
+        throw new AiRunRateLimitedError();
+      }
+      const [{ activeRuns }] = await transaction
+        .select({ activeRuns: count() })
+        .from(aiRuns)
+        .where(
+          and(
+            eq(aiRuns.userId, input.userId),
+            or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
+          ),
+        );
+      if (activeRuns >= (input.configuration.maxConcurrentRuns ?? 1)) {
+        throw new AiRunAlreadyActiveError();
+      }
       const [locked] = await transaction
         .select({ id: aiConversations.id })
         .from(aiConversations)

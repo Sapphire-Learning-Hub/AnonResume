@@ -3279,9 +3279,12 @@ export function ResumeEditorShell({
         resumeId={resumeId}
         resumeVersion={version}
         sectionId={selection.sectionId}
-        onApplyProposal={(input) => {
+        onApplyProposal={async (input) => {
           const result = store.getState().applyAiProposal(input);
-          if (result.ok) setAiProposalPreview(undefined);
+          if (result.ok) {
+            await flushSave();
+            setAiProposalPreview(undefined);
+          }
           return result;
         }}
         onClose={() => {

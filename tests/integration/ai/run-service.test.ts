@@ -26,6 +26,7 @@ import {
   type AiProviderAdapter,
 } from "@/lib/ai/providers/types";
 import {
+  AiRunAlreadyActiveError,
   executePreparedAiRun,
   prepareAiRun,
   stopAiRun,
@@ -219,6 +220,75 @@ describe("AI run service", () => {
           ),
         ),
     ).toHaveLength(2);
+  });
+
+  it("serializes per-user admission across different resumes", async () => {
+    const secondResumeId = `resume-${randomUUID()}`;
+    await db.insert(resumes).values({
+      id: secondResumeId,
+      userId,
+      name: "Second run test resume",
+      summary: "",
+      document,
+    });
+    const secondConversation = await createAiConversation({
+      userId,
+      resumeId: secondResumeId,
+      modelId,
+      title: "Second run test",
+      contextScope: "resume",
+    });
+    const configuration = {
+      credentialsEncryptionKey: encryptionKey,
+      auditRetentionDays: 30,
+      defaultMonthlyPoints,
+      requestsPerMinute,
+      streamCheckpointMs: 10,
+      runLeaseSeconds: 90,
+      maxConcurrentRuns: 1,
+    };
+
+    try {
+      const results = await Promise.allSettled([
+        prepareAiRun({
+          userId,
+          conversationId,
+          message: "分析第一份简历",
+          resumeVersion: 1,
+          configuration,
+        }),
+        prepareAiRun({
+          userId,
+          conversationId: secondConversation.id,
+          message: "分析第二份简历",
+          resumeVersion: 1,
+          configuration,
+        }),
+      ]);
+
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
+      expect(rejected).toMatchObject({
+        status: "rejected",
+        reason: expect.any(AiRunAlreadyActiveError),
+      });
+
+      const prepared = results.find(
+        (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof prepareAiRun>>> =>
+          result.status === "fulfilled",
+      )!.value;
+      const adapter: AiProviderAdapter = {
+        async *start() {
+          yield { type: "text_delta", delta: "分析完成" };
+          yield { type: "complete", finishReason: "stop" };
+        },
+      };
+      for await (const event of executePreparedAiRun(prepared, { adapter })) {
+        void event;
+      }
+    } finally {
+      await db.delete(resumes).where(eq(resumes.id, secondResumeId));
+    }
   });
 
   it("observes stop requests written by another process", async () => {

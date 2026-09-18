@@ -1,5 +1,13 @@
 import {
-  assertSafeAiEndpoint,
+  Agent,
+  buildConnector,
+  fetch as undiciFetch,
+  type Dispatcher,
+} from "undici";
+
+import {
+  resolveSafeAiEndpoint,
+  type AiResolvedAddress,
   type AiDnsResolver,
 } from "@/lib/ai/security/endpoint-policy";
 
@@ -35,9 +43,14 @@ interface OpenAiCompatibleAdapterOptions {
   fetchImpl?: typeof fetch;
   resolver?: AiDnsResolver;
   maxRedirects?: number;
+  maxResponseBytes?: number;
+  requestTimeoutMs?: number;
 }
 
 const MAX_DIAGNOSTIC_EXCERPT_LENGTH = 4_096;
+const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1_024 * 1_024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+const MAX_SSE_EVENT_BYTES = 1 * 1_024 * 1_024;
 
 function diagnosticExcerpt(value: string) {
   return value.slice(0, MAX_DIAGNOSTIC_EXCERPT_LENGTH);
@@ -103,15 +116,23 @@ function serializeMessages(request: AiProviderRequest) {
   });
 }
 
-async function* readSseData(response: Response) {
+async function* readSseData(response: Response, maxResponseBytes: number) {
   if (!response.body) throw new AiProviderError("invalid_response");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let receivedBytes = 0;
 
   while (true) {
     const { done, value } = await reader.read();
+    receivedBytes += value?.byteLength ?? 0;
+    if (receivedBytes > maxResponseBytes) {
+      throw new AiProviderError("invalid_response");
+    }
     buffer += decoder.decode(value, { stream: !done }).replaceAll("\r\n", "\n");
+    if (buffer.length > MAX_SSE_EVENT_BYTES && !buffer.includes("\n\n")) {
+      throw new AiProviderError("invalid_response");
+    }
 
     let boundary = buffer.indexOf("\n\n");
     while (boundary !== -1) {
@@ -139,28 +160,60 @@ async function* readSseData(response: Response) {
   }
 }
 
+function createPinnedDispatcher({
+  hostname,
+  addresses,
+  maxResponseBytes,
+  requestTimeoutMs,
+}: {
+  hostname: string;
+  addresses: readonly AiResolvedAddress[];
+  maxResponseBytes: number;
+  requestTimeoutMs: number;
+}) {
+  const connector = buildConnector({ timeout: requestTimeoutMs });
+  let nextAddress = 0;
+
+  return new Agent({
+    bodyTimeout: requestTimeoutMs,
+    headersTimeout: requestTimeoutMs,
+    maxResponseSize: maxResponseBytes,
+    connect(options, callback) {
+      const address = addresses[nextAddress % addresses.length]!;
+      nextAddress += 1;
+      connector(
+        {
+          ...options,
+          host: address.address,
+          hostname: address.address,
+          servername: hostname,
+        },
+        callback,
+      );
+    },
+  });
+}
+
 async function fetchWithValidatedRedirects({
   fetchImpl,
   resolver,
   request,
   signal,
   maxRedirects,
+  maxResponseBytes,
+  requestTimeoutMs,
 }: {
   fetchImpl: typeof fetch;
   resolver?: AiDnsResolver;
   request: AiProviderRequest;
   signal: AbortSignal;
   maxRedirects: number;
+  maxResponseBytes: number;
+  requestTimeoutMs: number;
 }) {
   const trustedProxyHostnames = new Set(request.trustedEndpointHostnames ?? []);
   const tools = request.tools ?? (request.proposalTool ? [request.proposalTool] : []);
-  let target = completionUrl(
-    await assertSafeAiEndpoint(
-      request.endpoint,
-      resolver,
-      trustedProxyHostnames,
-    ),
-  );
+  let target = completionUrl(request.endpoint);
   const body = JSON.stringify({
     model: request.model,
     messages: serializeMessages(request),
@@ -182,6 +235,18 @@ async function fetchWithValidatedRedirects({
     redirectCount <= maxRedirects;
     redirectCount += 1
   ) {
+    const resolved = await resolveSafeAiEndpoint(
+      target,
+      resolver,
+      trustedProxyHostnames,
+    );
+    target = resolved.endpoint;
+    const dispatcher = createPinnedDispatcher({
+      hostname: target.hostname,
+      addresses: resolved.addresses,
+      maxResponseBytes,
+      requestTimeoutMs,
+    });
     let response: Response;
     try {
       response = await fetchImpl(target, {
@@ -194,8 +259,10 @@ async function fetchWithValidatedRedirects({
         body,
         redirect: "manual",
         signal,
-      });
+        dispatcher,
+      } as RequestInit);
     } catch (error) {
+      await dispatcher.close().catch(() => undefined);
       if (signal.aborted) throw new AiProviderError("aborted");
       if (error instanceof DOMException && error.name === "TimeoutError") {
         throw new AiProviderError("timeout");
@@ -206,17 +273,16 @@ async function fetchWithValidatedRedirects({
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || redirectCount === maxRedirects) {
+        await dispatcher.close().catch(() => undefined);
         throw new AiProviderError("invalid_response");
       }
-      target = await assertSafeAiEndpoint(
-        new URL(location, target),
-        resolver,
-        trustedProxyHostnames,
-      );
+      await response.body?.cancel().catch(() => undefined);
+      await dispatcher.close().catch(() => undefined);
+      target = new URL(location, target);
       continue;
     }
 
-    return response;
+    return { dispatcher, response };
   }
 
   throw new AiProviderError("invalid_response");
@@ -225,32 +291,42 @@ async function fetchWithValidatedRedirects({
 export function createOpenAiCompatibleAdapter(
   options: OpenAiCompatibleAdapterOptions = {},
 ): AiProviderAdapter {
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? (undiciFetch as unknown as typeof fetch);
   const maxRedirects = options.maxRedirects ?? 2;
+  const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
   return {
     async *start(request, signal) {
       const startedAt = Date.now();
-      const response = await fetchWithValidatedRedirects({
-        fetchImpl,
-        resolver: options.resolver,
-        request,
-        signal,
-        maxRedirects,
-      });
-      if (!response.ok) {
-        throw new AiProviderError(providerErrorCode(response.status), {
-          httpStatus: response.status,
-          responseExcerpt: diagnosticExcerpt(await response.text()),
+      const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+      const requestSignal = AbortSignal.any([signal, timeoutSignal]);
+      let dispatcher: Dispatcher | undefined;
+      try {
+        const fetched = await fetchWithValidatedRedirects({
+          fetchImpl,
+          resolver: options.resolver,
+          request,
+          signal: requestSignal,
+          maxRedirects,
+          maxResponseBytes,
+          requestTimeoutMs,
         });
-      }
+        const response = fetched.response;
+        dispatcher = fetched.dispatcher;
+        if (!response.ok) {
+          throw new AiProviderError(providerErrorCode(response.status), {
+            httpStatus: response.status,
+            responseExcerpt: diagnosticExcerpt(await response.text()),
+          });
+        }
 
-      const headerRequestId =
-        response.headers.get("x-request-id") ??
-        response.headers.get("openai-request-id");
-      if (headerRequestId) {
-        yield { type: "request_id", requestId: headerRequestId };
-      }
+        const headerRequestId =
+          response.headers.get("x-request-id") ??
+          response.headers.get("openai-request-id");
+        if (headerRequestId) {
+          yield { type: "request_id", requestId: headerRequestId };
+        }
 
       let finishReason: string | null = null;
       let proposalToolCallIndex: number | undefined;
@@ -260,7 +336,7 @@ export function createOpenAiCompatibleAdapter(
       let toolCallFinishEventExcerpt: string | undefined;
       let firstChunkLogged = false;
       let firstUnhandledDeltaLogged = false;
-      for await (const data of readSseData(response)) {
+      for await (const data of readSseData(response, maxResponseBytes)) {
         if (data === "[DONE]") break;
 
         let chunk: OpenAiChunk;
@@ -403,7 +479,23 @@ export function createOpenAiCompatibleAdapter(
         };
       }
 
-      yield { type: "complete", finishReason };
+        yield { type: "complete", finishReason };
+      } catch (error) {
+        if (error instanceof AiProviderError) {
+          if (error.code === "aborted" && timeoutSignal.aborted && !signal.aborted) {
+            throw new AiProviderError("timeout");
+          }
+          throw error;
+        }
+        if (requestSignal.aborted) {
+          throw new AiProviderError(
+            timeoutSignal.aborted && !signal.aborted ? "timeout" : "aborted",
+          );
+        }
+        throw error;
+      } finally {
+        await dispatcher?.close().catch(() => undefined);
+      }
     },
   };
 }

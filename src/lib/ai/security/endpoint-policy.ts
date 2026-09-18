@@ -83,7 +83,7 @@ async function resolveAll(hostname: string) {
   return lookup(hostname, { all: true, verbatim: true });
 }
 
-export async function assertSafeAiEndpoint(
+export async function resolveSafeAiEndpoint(
   value: string | URL,
   resolver: AiDnsResolver = resolveAll,
   trustedProxyHostnames: ReadonlySet<string> = new Set(),
@@ -134,5 +134,18 @@ export async function assertSafeAiEndpoint(
     return unsafeEndpoint();
   }
 
-  return endpoint;
+  return { endpoint, addresses };
+}
+
+export async function assertSafeAiEndpoint(
+  value: string | URL,
+  resolver: AiDnsResolver = resolveAll,
+  trustedProxyHostnames: ReadonlySet<string> = new Set(),
+) {
+  const resolved = await resolveSafeAiEndpoint(
+    value,
+    resolver,
+    trustedProxyHostnames,
+  );
+  return resolved.endpoint;
 }

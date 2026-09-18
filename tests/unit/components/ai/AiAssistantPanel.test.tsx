@@ -4,6 +4,19 @@ import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 
 const assistantMock = vi.hoisted(() => ({ current: undefined as unknown }));
+const clientMock = vi.hoisted(() => ({
+  markAiProposalApplied: vi.fn(),
+}));
+
+vi.mock("@/lib/ai/client", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/ai/client")>(
+    "@/lib/ai/client",
+  );
+  return {
+    ...actual,
+    markAiProposalApplied: clientMock.markAiProposalApplied,
+  };
+});
 
 vi.mock("@/components/ai/useAiConversation", () => ({
   useAiConversation: () => assistantMock.current,
@@ -51,6 +64,8 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 describe("AiAssistantPanel", () => {
   beforeEach(() => {
     assistantMock.current = createAssistantState();
+    clientMock.markAiProposalApplied.mockReset();
+    clientMock.markAiProposalApplied.mockResolvedValue(undefined);
   });
 
   it("renders as a resizable complementary panel instead of an overlay", () => {
@@ -770,5 +785,81 @@ describe("AiAssistantPanel", () => {
       baseResumeVersion: 1,
       selectedChangeIds: ["change-summary"],
     });
+  });
+
+  it("confirms resume persistence before marking a proposal as applied", async () => {
+    const document = createDefaultResumeDocument();
+    let confirmSaved!: () => void;
+    const saveConfirmed = new Promise<void>((resolve) => {
+      confirmSaved = resolve;
+    });
+    const onApplyProposal = vi.fn(() => saveConfirmed.then(() => ({
+      ok: true as const,
+      appliedChangeIds: ["change-summary"],
+      document,
+    })));
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [],
+        proposals: [
+          {
+            id: "7accc68d-d40d-418a-99d3-20c63f80d283",
+            runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+            baseResumeVersion: 1,
+            proposal: {
+              summary: "调整个人简介",
+              changes: [
+                {
+                  id: "change-summary",
+                  type: "replace_section_title",
+                  sectionId: document.sections[0]!.id,
+                  beforeHash: "a".repeat(64),
+                  content: document.sections[0]!.title,
+                  reason: "让标题更清晰",
+                },
+              ],
+            },
+            completionState: "complete",
+            appliedChangeIds: [],
+            appliedAt: null,
+          },
+        ],
+        activeRun: null,
+      },
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={onApplyProposal}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "应用所选 1 项" }));
+    expect(onApplyProposal).toHaveBeenCalledTimes(1);
+    expect(clientMock.markAiProposalApplied).not.toHaveBeenCalled();
+
+    confirmSaved();
+    await waitFor(() =>
+      expect(clientMock.markAiProposalApplied).toHaveBeenCalledWith({
+        proposalId: "7accc68d-d40d-418a-99d3-20c63f80d283",
+        selectedChangeIds: ["change-summary"],
+      }),
+    );
   });
 });

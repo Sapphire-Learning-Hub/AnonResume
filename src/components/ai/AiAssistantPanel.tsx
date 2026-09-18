@@ -74,9 +74,15 @@ export function AiAssistantPanel({
     proposal: AiResumeProposal;
     baseResumeVersion: number;
     selectedChangeIds: string[];
-  }) => ReturnType<
-    typeof import("@/domain/resume/ai/proposal-apply").applySelectedAiChanges
-  >;
+  }) =>
+    | ReturnType<
+        typeof import("@/domain/resume/ai/proposal-apply").applySelectedAiChanges
+      >
+    | Promise<
+        ReturnType<
+          typeof import("@/domain/resume/ai/proposal-apply").applySelectedAiChanges
+        >
+      >;
   onPreviewProposal?: (input: {
     proposal: AiResumeProposal;
     baseResumeVersion: number;
@@ -144,29 +150,33 @@ export function AiAssistantPanel({
   ) {
     const parsed = aiResumeProposalSchema.safeParse(storedProposal.proposal);
     if (!parsed.success) return false;
-    const result = onApplyProposal({
-      proposal: parsed.data,
-      baseResumeVersion: storedProposal.baseResumeVersion,
-      selectedChangeIds,
-    });
-    if (!result.ok) {
-      toast.error({
-        key: "ai-proposal-conflict",
-        content: t("ai.proposal.conflict"),
+    try {
+      const result = await onApplyProposal({
+        proposal: parsed.data,
+        baseResumeVersion: storedProposal.baseResumeVersion,
+        selectedChangeIds,
       });
+      if (!result.ok) {
+        toast.error({
+          key: "ai-proposal-conflict",
+          content: t("ai.proposal.conflict"),
+        });
+        return false;
+      }
+      await markAiProposalApplied({
+        proposalId: storedProposal.id,
+        selectedChangeIds,
+      });
+      await assistant.refresh();
+      toast.success({
+        key: "ai-proposal-applied",
+        content: t("ai.proposal.applySuccess"),
+      });
+      return true;
+    } catch (error) {
+      reportError(error);
       return false;
     }
-    toast.success({
-      key: "ai-proposal-applied",
-      content: t("ai.proposal.applySuccess"),
-    });
-    void markAiProposalApplied({
-      proposalId: storedProposal.id,
-      selectedChangeIds,
-    })
-      .then(assistant.refresh)
-      .catch(() => undefined);
-    return true;
   }
 
   async function submitDraft() {
