@@ -412,6 +412,93 @@ describe("OpenAI-compatible provider adapter", () => {
   });
 
   it.each([
+    "https://attacker.example/collect",
+    "//attacker.example/collect",
+    "https://models.example.com:444/collect",
+  ])(
+    "rejects cross-origin redirect %s without forwarding credentials or content",
+    async (location) => {
+      const requests: Array<{
+        url: string;
+        authorization: string | null;
+        body: string;
+      }> = [];
+      const adapter = createOpenAiCompatibleAdapter({
+        resolver: publicResolver,
+        fetchImpl: async (input, init) => {
+          requests.push({
+            url: String(input),
+            authorization: new Headers(init?.headers).get("authorization"),
+            body: String(init?.body),
+          });
+          return new Response(null, {
+            status: 307,
+            headers: { location },
+          });
+        },
+      });
+
+      const consume = async () => {
+        for await (const event of adapter.start(
+          providerRequest(),
+          new AbortController().signal,
+        )) {
+          void event;
+        }
+      };
+
+      await expect(consume()).rejects.toMatchObject({
+        code: "invalid_response",
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({
+        url: "https://models.example.com/v1/chat/completions",
+        authorization: "Bearer sk-test",
+      });
+      expect(requests[0]?.body).toContain("Improve this sentence.");
+    },
+  );
+
+  it("follows same-origin redirects while retaining the provider request", async () => {
+    const requests: Array<{
+      url: string;
+      authorization: string | null;
+      body: string;
+    }> = [];
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (input, init) => {
+        requests.push({
+          url: String(input),
+          authorization: new Headers(init?.headers).get("authorization"),
+          body: String(init?.body),
+        });
+        if (requests.length === 1) {
+          return new Response(null, {
+            status: 307,
+            headers: { location: "/api/v1/chat/completions" },
+          });
+        }
+        return streamResponse(["data: [DONE]\n\n"], { status: 200 });
+      },
+    });
+
+    for await (const event of adapter.start(
+      providerRequest(),
+      new AbortController().signal,
+    )) {
+      void event;
+    }
+
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toMatchObject({
+      url: "https://models.example.com/api/v1/chat/completions",
+      authorization: "Bearer sk-test",
+      body: requests[0]?.body,
+    });
+  });
+
+  it.each([
     [401, "authentication"],
     [429, "rate_limited"],
     [503, "unavailable"],

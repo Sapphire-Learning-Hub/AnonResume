@@ -276,9 +276,20 @@ async function fetchWithValidatedRedirects({
         await dispatcher.close().catch(() => undefined);
         throw new AiProviderError("invalid_response");
       }
+      let redirectTarget: URL;
+      try {
+        redirectTarget = new URL(location, target);
+      } catch {
+        await response.body?.cancel().catch(() => undefined);
+        await dispatcher.close().catch(() => undefined);
+        throw new AiProviderError("invalid_response");
+      }
       await response.body?.cancel().catch(() => undefined);
       await dispatcher.close().catch(() => undefined);
-      target = new URL(location, target);
+      if (redirectTarget.origin !== target.origin) {
+        throw new AiProviderError("invalid_response");
+      }
+      target = redirectTarget;
       continue;
     }
 
