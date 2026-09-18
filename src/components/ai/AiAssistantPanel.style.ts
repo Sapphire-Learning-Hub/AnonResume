@@ -170,6 +170,62 @@ export const useAiAssistantPanelStyles = createStyles(({ token, css }) => ({
     font-size: 12px;
   `,
   messageContent: css`
+    min-width: 0;
+    white-space: normal;
+
+    p,
+    ul,
+    ol,
+    pre,
+    blockquote {
+      margin-block: 0 8px;
+    }
+
+    > :last-child {
+      margin-block-end: 0;
+    }
+
+    ul,
+    ol {
+      padding-inline-start: 1.5em;
+    }
+
+    li + li {
+      margin-block-start: 3px;
+    }
+
+    code {
+      padding: 1px 4px;
+      border-radius: ${token.borderRadiusSM}px;
+      background: ${token.colorFillSecondary};
+      font-family: ${token.fontFamilyCode};
+      font-size: 0.92em;
+    }
+
+    pre {
+      max-width: 100%;
+      overflow: auto;
+      padding: 10px;
+      border-radius: ${token.borderRadius}px;
+      background: ${token.colorFillSecondary};
+      white-space: pre;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+    }
+
+    blockquote {
+      padding-inline-start: 10px;
+      border-inline-start: 3px solid ${token.colorBorder};
+      color: ${token.colorTextSecondary};
+    }
+
+    a {
+      color: ${token.colorLink};
+    }
+
     &[data-loading="true"] {
       display: inline-flex;
       align-items: center;

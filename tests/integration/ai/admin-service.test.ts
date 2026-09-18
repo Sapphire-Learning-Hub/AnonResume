@@ -10,6 +10,7 @@ import {
   listAiAdminModelRateVersions,
   listAiAdminProviders,
   listAiAdminQuotas,
+  resolveAiAdminSettlement,
   updateAiAdminModel,
   updateAiAdminQuota,
 } from "@/lib/ai/admin/service";
@@ -111,6 +112,95 @@ describe("AI administration service", () => {
       ]],
     );
     await pool.query(`DELETE FROM "user" WHERE id = ANY($1::text[])`, [[userId, actorUserId]]);
+  });
+
+  it("preserves a failed generation status when an administrator settles its charge", async () => {
+    const resumeId = `${marker}-settlement-resume`;
+    const conversationId = randomUUID();
+    const messageId = randomUUID();
+    const runId = randomUUID();
+    const pool = getDatabasePool();
+
+    try {
+      await pool.query(
+        `INSERT INTO ${schema}.resumes
+           (id, user_id, name, summary, document)
+         VALUES ($1, $2, 'Settlement test', '', '{}'::jsonb)`,
+        [resumeId, userId],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_conversations
+           (id, user_id, resume_id, title, context_scope, model_id)
+         VALUES ($1, $2, $3, 'Settlement test', 'resume', $4)`,
+        [conversationId, userId, resumeId, modelId],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_messages
+           (id, conversation_id, role, text, sequence, completion_state)
+         VALUES ($1, $2, 'assistant', '', 1, 'failed')`,
+        [messageId, conversationId],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_runs
+           (id, user_id, resume_id, conversation_id, assistant_message_id,
+            model_id, key_source, status, resume_version, context_hash,
+            prompt_version, reserved_points, failure_code, input_tokens,
+            cached_input_tokens, output_tokens)
+         VALUES ($1, $2, $3, $4, $5, $6, 'platform', 'settlement_pending',
+                 1, 'context', 1, 2, 'provider_execution_failed', 100, 0, 10)`,
+        [runId, userId, resumeId, conversationId, messageId, modelId],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_quota_accounts
+           (user_id, monthly_limit, period_started_at, period_ends_at,
+            used_points, reserved_points)
+         VALUES ($1, 100, now(), now() + interval '1 month', 0, 2)`,
+        [userId],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_usage_ledger
+           (user_id, run_id, entry_type, points_delta, model_id,
+            rate_card_version, metadata)
+         VALUES ($1, $2, 'reserve', 2, $3, 1, $4::jsonb)`,
+        [userId, runId, modelId, JSON.stringify({ operationId: runId })],
+      );
+
+      await resolveAiAdminSettlement({
+        actorUserId,
+        runId,
+        decision: "charge_reserved",
+      });
+
+      const result = await pool.query<{
+        status: string;
+        failureCode: string | null;
+        finalPoints: string | null;
+      }>(
+        `SELECT status, failure_code AS "failureCode",
+                final_points AS "finalPoints"
+           FROM ${schema}.ai_runs
+          WHERE id = $1`,
+        [runId],
+      );
+      expect(result.rows[0]).toEqual({
+        status: "failed",
+        failureCode: "provider_execution_failed",
+        finalPoints: "2",
+      });
+    } finally {
+      await pool.query(
+        `DELETE FROM ${schema}.ai_usage_ledger WHERE user_id = $1`,
+        [userId],
+      );
+      await pool.query(
+        `DELETE FROM ${schema}.ai_quota_accounts WHERE user_id = $1`,
+        [userId],
+      );
+      await pool.query(
+        `DELETE FROM ${schema}.resumes WHERE user_id = $1 AND id = $2`,
+        [userId, resumeId],
+      );
+    }
   });
 
   it("soft-deletes only disabled providers and their models", async () => {

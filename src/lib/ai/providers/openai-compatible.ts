@@ -37,6 +37,12 @@ interface OpenAiCompatibleAdapterOptions {
   maxRedirects?: number;
 }
 
+const MAX_DIAGNOSTIC_EXCERPT_LENGTH = 4_096;
+
+function diagnosticExcerpt(value: string) {
+  return value.slice(0, MAX_DIAGNOSTIC_EXCERPT_LENGTH);
+}
+
 function providerErrorCode(status: number): AiProviderErrorCode {
   if (status === 401 || status === 403) return "authentication";
   if (status === 408) return "timeout";
@@ -233,7 +239,10 @@ export function createOpenAiCompatibleAdapter(
         maxRedirects,
       });
       if (!response.ok) {
-        throw new AiProviderError(providerErrorCode(response.status));
+        throw new AiProviderError(providerErrorCode(response.status), {
+          httpStatus: response.status,
+          responseExcerpt: diagnosticExcerpt(await response.text()),
+        });
       }
 
       const headerRequestId =
@@ -248,6 +257,7 @@ export function createOpenAiCompatibleAdapter(
       let proposalToolCallId: string | undefined;
       let toolCallName: string | undefined;
       let toolCallArguments = "";
+      let toolCallFinishEventExcerpt: string | undefined;
       let firstChunkLogged = false;
       let firstUnhandledDeltaLogged = false;
       for await (const data of readSseData(response)) {
@@ -257,7 +267,9 @@ export function createOpenAiCompatibleAdapter(
         try {
           chunk = JSON.parse(data) as OpenAiChunk;
         } catch {
-          throw new AiProviderError("invalid_response");
+          throw new AiProviderError("invalid_response", {
+            streamEventExcerpt: diagnosticExcerpt(data),
+          });
         }
 
         const deltaKeys = [
@@ -337,6 +349,9 @@ export function createOpenAiCompatibleAdapter(
           }
           if (typeof choice.finish_reason === "string") {
             finishReason = choice.finish_reason;
+            if (choice.finish_reason === "tool_calls") {
+              toolCallFinishEventExcerpt = diagnosticExcerpt(data);
+            }
           }
         }
 
@@ -373,6 +388,12 @@ export function createOpenAiCompatibleAdapter(
         }
       }
 
+      if (finishReason === "tool_calls" && !toolCallName) {
+        throw new AiProviderError("invalid_response", {
+          protocolViolation: "missing_tool_payload",
+          streamEventExcerpt: toolCallFinishEventExcerpt,
+        });
+      }
       if (toolCallName && toolCallName !== "propose_resume_changes") {
         yield {
           type: "tool_call",

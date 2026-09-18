@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, max } from "drizzle-orm";
 
 import {
   aiAuditPayloads,
@@ -16,11 +16,15 @@ import {
 } from "@/db";
 import { hashAiContent } from "@/domain/resume/ai/content-hash";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { decryptAiAuditEvidence } from "@/lib/ai/audit/store";
 import {
   createAiConversation,
   getAiConversationDetails,
 } from "@/lib/ai/conversations/repository";
-import type { AiProviderAdapter } from "@/lib/ai/providers/types";
+import {
+  AiProviderError,
+  type AiProviderAdapter,
+} from "@/lib/ai/providers/types";
 import {
   executePreparedAiRun,
   prepareAiRun,
@@ -30,6 +34,8 @@ import { encryptAiCredential } from "@/lib/ai/security/credentials";
 
 describe("AI run service", () => {
   const encryptionKey = Buffer.alloc(32, 6);
+  const defaultMonthlyPoints = 10_000;
+  const requestsPerMinute = 100;
   const userId = `ai-run-${randomUUID()}`;
   const resumeId = `resume-${randomUUID()}`;
   let providerId = "";
@@ -135,8 +141,8 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
@@ -247,8 +253,8 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
@@ -276,6 +282,281 @@ describe("AI run service", () => {
       status: "settlement_pending",
       failureCode: "stopped",
       checkpointText: "partial",
+    });
+  });
+
+  it("stores encrypted diagnostics when execution fails after usage arrives", async () => {
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "request_id", requestId: "provider-request-failed" };
+        yield { type: "text_delta", delta: "已生成的部分内容" };
+        yield {
+          type: "usage",
+          inputTokens: 400,
+          cachedInputTokens: 100,
+          outputTokens: 80,
+        };
+        throw Object.assign(new Error("simulated provider stream failure"), {
+          code: "ECONNRESET",
+        });
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "帮我修改工作经历",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    const events = [];
+    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      events.push(event);
+    }
+
+    expect(events.at(-1)).toMatchObject({
+      type: "error",
+      code: "provider_execution_failed",
+    });
+    const [audit] = await db
+      .select()
+      .from(aiAuditPayloads)
+      .where(eq(aiAuditPayloads.runId, prepared.runId));
+    expect(audit?.encryptedResponse).toBeTruthy();
+    expect(
+      decryptAiAuditEvidence(
+        {
+          encryptedRequest: audit!.encryptedRequest,
+          encryptedResponse: audit!.encryptedResponse!,
+        },
+        encryptionKey,
+      ).response,
+    ).toMatchObject({
+      failure: {
+        phase: "provider_execution",
+        error: {
+          name: "Error",
+          code: "ECONNRESET",
+          message: "simulated provider stream failure",
+        },
+      },
+      providerRequestId: "provider-request-failed",
+      text: "已生成的部分内容",
+      usage: {
+        inputTokens: 400,
+        cachedInputTokens: 100,
+        outputTokens: 80,
+      },
+    });
+  });
+
+  it("retracts a failed turn that produced no user-visible output", async () => {
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "request_id", requestId: "empty-failure" };
+        throw new Error("empty provider failure");
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "这条失败消息不应保留",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      void event;
+    }
+
+    const details = await getAiConversationDetails({ userId, conversationId });
+    expect(details.messages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: "这条失败消息不应保留" }),
+        expect.objectContaining({ id: prepared.assistantMessageId }),
+      ]),
+    );
+  });
+
+  it("excludes incomplete legacy turns from the provider context", async () => {
+    const [{ lastSequence }] = await db
+      .select({ lastSequence: max(aiMessages.sequence) })
+      .from(aiMessages)
+      .where(eq(aiMessages.conversationId, conversationId));
+    const sequence = lastSequence ?? 0;
+    await db.insert(aiMessages).values([
+      {
+        conversationId,
+        role: "user",
+        text: "legacy failed request",
+        sequence: sequence + 1,
+        completionState: "complete",
+      },
+      {
+        conversationId,
+        role: "assistant",
+        text: "",
+        sequence: sequence + 2,
+        completionState: "failed",
+      },
+    ]);
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "这份简历有哪些问题？",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    expect(prepared.request.messages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ content: "legacy failed request" }),
+      ]),
+    );
+
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "text_delta", delta: "建议先补充真实经历。" };
+        yield {
+          type: "usage",
+          inputTokens: 100,
+          cachedInputTokens: 0,
+          outputTokens: 20,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      void event;
+    }
+  });
+
+  it("retries one missing tool payload and settles both provider attempts", async () => {
+    let attempts = 0;
+    const adapter: AiProviderAdapter = {
+      async *start(request) {
+        attempts += 1;
+        if (attempts === 1) {
+          yield {
+            type: "usage",
+            inputTokens: 100,
+            cachedInputTokens: 20,
+            outputTokens: 10,
+          };
+          throw new AiProviderError("invalid_response", {
+            protocolViolation: "missing_tool_payload",
+          });
+        }
+        expect(request.messages.at(-1)?.content).toContain(
+          "list_resume_capabilities",
+        );
+        yield { type: "text_delta", delta: "建议先明确目标岗位。" };
+        yield {
+          type: "usage",
+          inputTokens: 120,
+          cachedInputTokens: 30,
+          outputTokens: 20,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "这份简历有哪些问题？",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      void event;
+    }
+
+    expect(attempts).toBe(2);
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({
+      status: "complete",
+      inputTokens: 220,
+      cachedInputTokens: 50,
+      outputTokens: 30,
+    });
+  });
+
+  it("fails an editing run that ends without a reviewable proposal", async () => {
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "text_delta", delta: "我会优化这份简历。" };
+        yield {
+          type: "usage",
+          inputTokens: 100,
+          cachedInputTokens: 0,
+          outputTokens: 20,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "帮我优化一下简历排版",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    const events = [];
+    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      events.push(event);
+    }
+
+    expect(events.at(-1)).toMatchObject({
+      type: "error",
+      code: "proposal_validation_failed",
+    });
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({
+      status: "settlement_pending",
+      failureCode: "proposal_validation_failed",
     });
   });
 
@@ -347,8 +628,8 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
@@ -458,12 +739,17 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
     });
+
+    expect(prepared.request.toolChoice).toBe("required");
+    expect(prepared.request.tools?.map((tool) => tool.name)).not.toContain(
+      "propose_resume_changes",
+    );
 
     const events = [];
     for await (const event of executePreparedAiRun(prepared, { adapter })) {
@@ -472,6 +758,18 @@ describe("AI run service", () => {
 
     expect(round).toBe(2);
     expect(events.map((event) => String(event.type))).not.toContain("tool_call");
+    expect(events).toContainEqual({
+      sequence: expect.any(Number),
+      type: "proposal_progress",
+      changes: [
+        {
+          id: expect.any(String),
+          type: "create_section",
+          reason: "创建工作经历骨架",
+          preview: "工作经历",
+        },
+      ],
+    });
     const [storedProposal] = await db
       .select()
       .from(aiProposals)
@@ -501,8 +799,8 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
@@ -539,8 +837,8 @@ describe("AI run service", () => {
       configuration: {
         credentialsEncryptionKey: encryptionKey,
         auditRetentionDays: 30,
-        defaultMonthlyPoints: 100,
-        requestsPerMinute: 10,
+        defaultMonthlyPoints,
+        requestsPerMinute,
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },

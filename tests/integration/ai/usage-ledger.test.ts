@@ -17,10 +17,17 @@ import {
 
 describe("AI usage ledger", () => {
   const userId = `ai-ledger-${randomUUID()}`;
+  const overageUserId = `ai-ledger-overage-${randomUUID()}`;
 
   afterAll(async () => {
-    await db.delete(aiUsageLedger).where(eq(aiUsageLedger.userId, userId));
-    await db.delete(aiQuotaAccounts).where(eq(aiQuotaAccounts.userId, userId));
+    for (const cleanupUserId of [userId, overageUserId]) {
+      await db
+        .delete(aiUsageLedger)
+        .where(eq(aiUsageLedger.userId, cleanupUserId));
+      await db
+        .delete(aiQuotaAccounts)
+        .where(eq(aiQuotaAccounts.userId, cleanupUserId));
+    }
   });
 
   it("reserves, settles, and preserves an append-only net charge", async () => {
@@ -95,6 +102,35 @@ describe("AI usage ledger", () => {
         now: new Date("2026-09-16T00:01:00.000Z"),
       }),
     ).rejects.toBeInstanceOf(AiQuotaExceededError);
+  });
+
+  it("settles above the estimate when the account still has available quota", async () => {
+    const reservation = await reserveAiQuota({
+      userId: overageUserId,
+      runId: null,
+      points: 20,
+      monthlyLimit: 100,
+      modelId: null,
+      rateCardVersion: 1,
+      now: new Date("2026-09-16T00:01:00.000Z"),
+    });
+
+    await settleAiQuota({
+      userId: overageUserId,
+      runId: null,
+      operationId: reservation.operationId,
+      actualPoints: 35,
+      inputTokens: 300_000,
+      cachedInputTokens: 100_000,
+      outputTokens: 50_000,
+    });
+
+    expect(await getAiQuotaSnapshot(overageUserId)).toMatchObject({
+      monthlyLimit: 100,
+      usedPoints: 35,
+      reservedPoints: 0,
+      availablePoints: 65,
+    });
   });
 
   it("releases an unused reservation once", async () => {

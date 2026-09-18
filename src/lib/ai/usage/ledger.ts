@@ -269,11 +269,15 @@ export async function settleAiQuota(input: {
     );
     if (!reservation) throw new Error("ai_reservation_not_found");
     const reservedPoints = Number(reservation.pointsDelta);
-    if (
-      !Number.isSafeInteger(input.actualPoints) ||
-      input.actualPoints < 0 ||
-      input.actualPoints > reservedPoints
-    ) {
+    if (!Number.isSafeInteger(input.actualPoints) || input.actualPoints < 0) {
+      throw new AiSettlementExceedsReservationError();
+    }
+    const current = snapshot(account);
+    const additionalPoints = Math.max(
+      0,
+      input.actualPoints - reservedPoints,
+    );
+    if (additionalPoints > current.availablePoints) {
       throw new AiSettlementExceedsReservationError();
     }
 
@@ -302,7 +306,12 @@ export async function settleAiQuota(input: {
         input.inputTokens,
         input.cachedInputTokens,
         input.outputTokens,
-        JSON.stringify({ operationId: input.operationId, actualPoints: input.actualPoints }),
+        JSON.stringify({
+          operationId: input.operationId,
+          actualPoints: input.actualPoints,
+          reservedPoints,
+          additionalPoints,
+        }),
       ],
     );
     return snapshot(updated.rows[0]!);

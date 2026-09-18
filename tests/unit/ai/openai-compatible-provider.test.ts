@@ -268,6 +268,43 @@ describe("OpenAI-compatible provider adapter", () => {
     });
   });
 
+  it("rejects a tool-call finish without a tool payload", async () => {
+    const finishChunk =
+      '{"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":"tool_calls"}]}';
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async () =>
+        streamResponse([
+          `data: ${finishChunk}\n\n`,
+          'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":0}}\n\n',
+          "data: [DONE]\n\n",
+        ]),
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest({
+          tools: [
+            {
+              name: "stage_section_changes",
+              description: "Stage section changes.",
+              parameters: { type: "object" },
+            },
+          ],
+          toolChoice: "required",
+        }),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+
+    await expect(consume()).rejects.toMatchObject({
+      code: "invalid_response",
+      diagnostics: { streamEventExcerpt: finishChunk },
+    });
+  });
+
   it("disables deep thinking for fast FireArk requests", async () => {
     let body: Record<string, unknown> | undefined;
     const adapter = createOpenAiCompatibleAdapter({
@@ -340,7 +377,13 @@ describe("OpenAI-compatible provider adapter", () => {
       }
     };
 
-    await expect(consume()).rejects.toMatchObject({ code });
+    await expect(consume()).rejects.toMatchObject({
+      code,
+      diagnostics: {
+        httpStatus: status,
+        responseExcerpt: "provider details must not escape",
+      },
+    });
     await expect(consume()).rejects.not.toThrow("provider details");
   });
 });

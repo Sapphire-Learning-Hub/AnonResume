@@ -1,5 +1,4 @@
 import type { AiToolDefinition } from "@/lib/ai/providers/types";
-import { createAiProposalToolDefinition } from "@/lib/ai/proposals/tool";
 
 const reason = { type: "string", minLength: 1, maxLength: 500 };
 const blockPath = {
@@ -259,6 +258,5 @@ export function createAiAgentToolDefinitions(): AiToolDefinition[] {
         },
       },
     },
-    createAiProposalToolDefinition(),
   ];
 }

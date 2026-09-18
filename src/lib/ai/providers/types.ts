@@ -64,8 +64,18 @@ export type AiProviderErrorCode =
   | "aborted"
   | "invalid_response";
 
+export interface AiProviderErrorDiagnostics {
+  httpStatus?: number;
+  protocolViolation?: "missing_tool_payload";
+  responseExcerpt?: string;
+  streamEventExcerpt?: string;
+}
+
 export class AiProviderError extends Error {
-  constructor(public readonly code: AiProviderErrorCode) {
+  constructor(
+    public readonly code: AiProviderErrorCode,
+    public readonly diagnostics?: AiProviderErrorDiagnostics,
+  ) {
     super(`ai_provider_${code}`);
     this.name = "AiProviderError";
   }

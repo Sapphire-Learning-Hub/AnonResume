@@ -34,6 +34,7 @@ function createAssistantState() {
     startNewConversation: vi.fn(),
     stop: vi.fn(),
     stopping: false,
+    streamingProposalChanges: [],
     streamingProposalText: "",
     streamingProgressStages: [],
     streamingText: "",
@@ -185,6 +186,58 @@ describe("AiAssistantPanel", () => {
     );
   });
 
+  it("renders assistant Markdown as safe semantic content", () => {
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [
+          {
+            id: "9b958d42-21a0-4187-9ee4-101004080968",
+            role: "assistant",
+            text: "**重点内容**\n\n第一行\n第二行\n\n- 第一项\n- 第二项\n\n<img src=x onerror=alert(1)>",
+            sequence: 1,
+            completionState: "complete",
+            runId: null,
+            createdAt: "2026-09-16T15:00:00.000Z",
+          },
+        ],
+        proposals: [],
+        activeRun: null,
+      },
+    };
+
+    const { container } = render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("重点内容").tagName).toBe("STRONG");
+    expect(screen.getByText(/第一行/).querySelector("br")).not.toBeNull();
+    expect(screen.getByRole("list")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+  });
+
   it("restores the submitted message when sending fails", async () => {
     const send = vi.fn().mockRejectedValue(new Error("provider_failed"));
     assistantMock.current = {
@@ -290,7 +343,7 @@ describe("AiAssistantPanel", () => {
       ...createAssistantState(),
       sending: true,
       streamingProposalText:
-        '{"summary":"正在重新组织项目经历","changes":[{"type":"replace_text"}',
+        '{"summary":"正在重新组织项目经历\\n并保留已有事实","changes":[{"type":"replace_text"}',
     };
 
     render(
@@ -307,8 +360,123 @@ describe("AiAssistantPanel", () => {
       />,
     );
 
-    expect(screen.getByText("正在重新组织项目经历")).toBeInTheDocument();
+    expect(
+      screen.getByText(/正在重新组织项目经历/).querySelector("br"),
+    ).not.toBeNull();
     expect(screen.getByText("正在生成修改建议…")).toBeInTheDocument();
+  });
+
+  it("shows staged proposal changes as they are produced", () => {
+    assistantMock.current = {
+      ...createAssistantState(),
+      sending: true,
+      streamingProgressStages: ["analyzing_resume", "generating_changes"],
+      streamingProposalChanges: [
+        {
+          id: "change-work",
+          type: "replace_text",
+          reason: "突出可量化成果\n保留已有事实",
+          preview: "将项目交付周期缩短 30%",
+        },
+      ],
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document: createDefaultResumeDocument(),
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("改写文本")).toBeInTheDocument();
+    expect(screen.getByText("将项目交付周期缩短 30%")).toBeInTheDocument();
+    expect(screen.getByText(/突出可量化成果/).querySelector("br")).not.toBeNull();
+  });
+
+  it("preserves line breaks in completed proposal content", () => {
+    const document = createDefaultResumeDocument();
+    assistantMock.current = {
+      ...createAssistantState(),
+      details: {
+        conversation: {
+          id: "70fe89d9-17c0-4212-bb90-03c3fa846a8b",
+          resumeId: "resume-demo",
+          title: "优化简历",
+          contextScope: "resume",
+          sectionId: null,
+          modelId: "ed081f44-ec13-42c6-8f18-c3644e83f07d",
+          archivedAt: null,
+          createdAt: "2026-09-16T15:00:00.000Z",
+          updatedAt: "2026-09-16T15:00:01.000Z",
+        },
+        messages: [],
+        proposals: [
+          {
+            id: "7accc68d-d40d-418a-99d3-20c63f80d283",
+            runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+            baseResumeVersion: 1,
+            proposal: {
+              summary: "调整结构\n保留事实",
+              changes: [
+                {
+                  id: "change-summary",
+                  type: "replace_section_title",
+                  sectionId: document.sections[0]!.id,
+                  beforeHash: "a".repeat(64),
+                  content: {
+                    type: "doc",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [
+                          { type: "text", text: "第一行" },
+                          { type: "hardBreak" },
+                          { type: "text", text: "第二行" },
+                        ],
+                      },
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "第三段" }],
+                      },
+                    ],
+                  },
+                  reason: "突出重点\n避免冗余",
+                },
+              ],
+            },
+            completionState: "complete",
+            appliedChangeIds: [],
+            appliedAt: null,
+          },
+        ],
+        activeRun: null,
+      },
+    };
+
+    render(
+      <AiAssistantPanel
+        open
+        resumeId="resume-demo"
+        resumeVersion={1}
+        onApplyProposal={() => ({
+          ok: true,
+          appliedChangeIds: [],
+          document,
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/调整结构/).querySelector("br")).not.toBeNull();
+    expect(screen.getByText(/突出重点/).querySelector("br")).not.toBeNull();
+    expect(screen.getByText(/第一行/).querySelectorAll("br")).toHaveLength(2);
   });
 
   it("shows a safe execution trace without exposing private reasoning text", () => {

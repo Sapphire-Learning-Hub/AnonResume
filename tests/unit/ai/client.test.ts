@@ -37,7 +37,8 @@ describe("AI client stream parser", () => {
           encoder.encode(
             '{"sequence":1,"type":"progress","stage":"analyzing_resume"}\n' +
               '{"sequence":2,"type":"progress","stage":"validating_result"}\n' +
-              '{"sequence":3,"type":"proposal_reset"}\n',
+              '{"sequence":3,"type":"proposal_progress","changes":[{"id":"change-one","type":"replace_text","reason":"突出成果","preview":"效率提升 30%"}]}\n' +
+              '{"sequence":4,"type":"proposal_reset"}\n',
           ),
         );
         controller.close();
@@ -50,7 +51,19 @@ describe("AI client stream parser", () => {
     expect(events).toEqual([
       { sequence: 1, type: "progress", stage: "analyzing_resume" },
       { sequence: 2, type: "progress", stage: "validating_result" },
-      { sequence: 3, type: "proposal_reset" },
+      {
+        sequence: 3,
+        type: "proposal_progress",
+        changes: [
+          {
+            id: "change-one",
+            type: "replace_text",
+            reason: "突出成果",
+            preview: "效率提升 30%",
+          },
+        ],
+      },
+      { sequence: 4, type: "proposal_reset" },
     ]);
   });
 

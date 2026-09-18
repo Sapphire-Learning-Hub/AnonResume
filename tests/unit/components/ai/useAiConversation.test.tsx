@@ -121,6 +121,15 @@ describe("useAiConversation", () => {
           stage: "analyzing_resume" | "thinking";
         }
       | { type: "proposal_delta"; delta: string }
+      | {
+          type: "proposal_progress";
+          changes: Array<{
+            id: string;
+            type: string;
+            reason: string;
+            preview: string | null;
+          }>;
+        }
       | { type: "proposal_reset" }) => void;
     clientMock.sendAiMessage.mockImplementation(
       ({
@@ -155,6 +164,17 @@ describe("useAiConversation", () => {
       emitEvent({ type: "progress", stage: "analyzing_resume" });
       emitEvent({ type: "progress", stage: "thinking" });
       emitEvent({ type: "proposal_delta", delta: "invalid draft" });
+      emitEvent({
+        type: "proposal_progress",
+        changes: [
+          {
+            id: "change-work",
+            type: "replace_text",
+            reason: "突出可量化成果",
+            preview: "将项目交付周期缩短 30%",
+          },
+        ],
+      });
     });
 
     await waitFor(() =>
@@ -164,8 +184,17 @@ describe("useAiConversation", () => {
       ]),
     );
     expect(result.current.streamingProposalText).toBe("invalid draft");
+    expect(result.current.streamingProposalChanges).toEqual([
+      {
+        id: "change-work",
+        type: "replace_text",
+        reason: "突出可量化成果",
+        preview: "将项目交付周期缩短 30%",
+      },
+    ]);
     act(() => emitEvent({ type: "proposal_reset" }));
     expect(result.current.streamingProposalText).toBe("");
+    expect(result.current.streamingProposalChanges).toEqual([]);
     act(() => finishStream());
     await sendPromise;
   });

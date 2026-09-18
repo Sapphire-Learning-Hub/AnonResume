@@ -11,6 +11,13 @@ export const aiRunProgressStages = [
 
 export type AiRunProgressStage = (typeof aiRunProgressStages)[number];
 
+export type AiProposalProgressChange = {
+  id: string;
+  type: string;
+  reason: string;
+  preview: string | null;
+};
+
 export type AiProviderEvent =
   | { type: "request_id"; requestId: string }
   | { type: "reasoning_progress" }
@@ -33,6 +40,11 @@ export type AiProviderEvent =
 export type AiClientStreamEvent =
   | { sequence: number; type: "snapshot"; text: string; proposalText: string }
   | { sequence: number; type: "progress"; stage: AiRunProgressStage }
+  | {
+      sequence: number;
+      type: "proposal_progress";
+      changes: AiProposalProgressChange[];
+    }
   | { sequence: number; type: "proposal_reset" }
   | ({ sequence: number } & Exclude<AiProviderEvent, { type: "tool_call" }>)
   | { sequence: number; type: "error"; code: string };

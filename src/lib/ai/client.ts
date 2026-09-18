@@ -91,6 +91,18 @@ const streamEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     sequence: z.number().int(),
+    type: z.literal("proposal_progress"),
+    changes: z.array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        reason: z.string(),
+        preview: z.string().nullable(),
+      }),
+    ),
+  }),
+  z.object({
+    sequence: z.number().int(),
     type: z.literal("proposal_reset"),
   }),
   z.object({

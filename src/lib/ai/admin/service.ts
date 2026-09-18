@@ -867,7 +867,16 @@ export async function resolveAiAdminSettlement(input: {
   runId: string;
   decision: "charge_reserved" | "release";
 }) {
-  const targetStatus = input.decision === "release" ? "failed" : "complete";
+  const [pendingRun] = await db
+    .select({ failureCode: aiRuns.failureCode })
+    .from(aiRuns)
+    .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.status, "settlement_pending")))
+    .limit(1);
+  const targetStatus = input.decision === "release" || pendingRun?.failureCode
+    ? pendingRun?.failureCode === "stopped"
+      ? "stopped"
+      : "failed"
+    : "complete";
   const [run] = await db
     .update(aiRuns)
     .set({

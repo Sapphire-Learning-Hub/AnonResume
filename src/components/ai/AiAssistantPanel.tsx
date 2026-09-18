@@ -33,7 +33,9 @@ import { useI18n } from "@/i18n/I18nProvider";
 import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
 
 import { useAiAssistantPanelStyles } from "./AiAssistantPanel.style";
-import { AiProposalCard } from "./AiProposalCard";
+import { AiMarkdownMessage } from "./AiMarkdownMessage";
+import { AiPlainText } from "./AiPlainText";
+import { AiProposalCard, AiProposalProgressCard } from "./AiProposalCard";
 import { useAiConversation } from "./useAiConversation";
 
 const DEFAULT_PANEL_WIDTH = 480;
@@ -464,10 +466,17 @@ export function AiAssistantPanel({
                     </span>
                     {isStreamingAssistant ? renderProgressTrace() : null}
                     {liveMessageText || !isStreamingAssistant ? (
-                      <span className={styles.messageContent}>
-                        {(isStreamingAssistant ? liveMessageText : message.text) ||
-                          t("ai.thinking")}
-                      </span>
+                      <div className={styles.messageContent}>
+                        {message.role === "assistant" ? (
+                          <AiMarkdownMessage>
+                            {(isStreamingAssistant
+                              ? liveMessageText
+                              : message.text) || t("ai.thinking")}
+                          </AiMarkdownMessage>
+                        ) : (
+                          message.text
+                        )}
+                      </div>
                     ) : null}
                     {message.role === "user" &&
                     index === messages.length - 2 &&
@@ -503,7 +512,9 @@ export function AiAssistantPanel({
                     {t("ai.assistant")}
                   </span>
                   {renderProgressTrace()}
-                  <span>{assistant.streamingText}</span>
+                  <div className={styles.messageContent}>
+                    <AiMarkdownMessage>{assistant.streamingText}</AiMarkdownMessage>
+                  </div>
                 </div>
               ) : !hasPersistedPendingTurn &&
                 !hasStreamingAssistant &&
@@ -524,13 +535,19 @@ export function AiAssistantPanel({
                   {renderProgressTrace()}
                 </div>
               ) : null}
-              {proposalStreamText ? (
+              {assistant.streamingProposalChanges.length > 0 ? (
+                <AiProposalProgressCard
+                  changes={assistant.streamingProposalChanges}
+                />
+              ) : proposalStreamText ? (
                 <div className={styles.proposal} data-streaming="true">
                   <div className={styles.proposalTitle}>
                     <strong>{t("ai.proposal.generating")}</strong>
                     <span>
-                      {proposalStreamProgress.summary ||
-                        t("ai.proposal.generatingDescription")}
+                      <AiPlainText>
+                        {proposalStreamProgress.summary ||
+                          t("ai.proposal.generatingDescription")}
+                      </AiPlainText>
                       <i aria-hidden className={styles.streamCursor} />
                     </span>
                   </div>

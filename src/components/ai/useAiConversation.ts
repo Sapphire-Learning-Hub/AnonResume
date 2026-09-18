@@ -8,8 +8,11 @@ import {
   useState,
 } from "react";
 
-import type { AiClientStreamEvent } from "@/lib/ai/runs/stream-events";
-import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
+import type {
+  AiClientStreamEvent,
+  AiProposalProgressChange,
+  AiRunProgressStage,
+} from "@/lib/ai/runs/stream-events";
 import {
   AiClientError,
   createAiConversation,
@@ -78,6 +81,9 @@ export function useAiConversation({
   const [pendingAfterSequence, setPendingAfterSequence] = useState(0);
   const [streamingText, setStreamingText] = useState("");
   const [streamingProposalText, setStreamingProposalText] = useState("");
+  const [streamingProposalChanges, setStreamingProposalChanges] = useState<
+    AiProposalProgressChange[]
+  >([]);
   const [streamingProgressStages, setStreamingProgressStages] = useState<
     AiRunProgressStage[]
   >([]);
@@ -181,6 +187,7 @@ export function useAiConversation({
     setPendingAfterSequence(details?.messages.at(-1)?.sequence ?? 0);
     setStreamingText("");
     setStreamingProposalText("");
+    setStreamingProposalChanges([]);
     setStreamingProgressStages([]);
     try {
       const streamPromise = sendAiMessage({
@@ -205,8 +212,16 @@ export function useAiConversation({
           if (event.type === "proposal_delta") {
             setStreamingProposalText((current) => current + event.delta);
           }
+          if (event.type === "proposal_progress") {
+            setStreamingProposalChanges((current) => {
+              const byId = new Map(current.map((change) => [change.id, change]));
+              for (const change of event.changes) byId.set(change.id, change);
+              return [...byId.values()];
+            });
+          }
           if (event.type === "proposal_reset") {
             setStreamingProposalText("");
+            setStreamingProposalChanges([]);
           }
         },
       });
@@ -215,6 +230,7 @@ export function useAiConversation({
       await Promise.all([loadDetails(conversationId), loadIndex()]);
       setStreamingText("");
       setStreamingProposalText("");
+      setStreamingProposalChanges([]);
       setStreamingProgressStages([]);
     } catch (error) {
       if (
@@ -234,6 +250,7 @@ export function useAiConversation({
       setPendingUserMessage("");
       setStreamingText("");
       setStreamingProposalText("");
+      setStreamingProposalChanges([]);
       setStreamingProgressStages([]);
       setLiveRunId(undefined);
       streamPromiseRef.current = undefined;
@@ -316,6 +333,7 @@ export function useAiConversation({
     pendingAfterSequence,
     streamingText,
     streamingProposalText,
+    streamingProposalChanges,
     streamingProgressStages,
     setSelectedConversationId,
     setSelectedModelId,

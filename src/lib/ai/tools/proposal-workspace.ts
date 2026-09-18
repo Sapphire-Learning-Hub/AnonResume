@@ -165,6 +165,7 @@ export type AiProposalWorkspaceResult =
   | {
       ok: true;
       stagedChanges: number;
+      changes?: AiResumeChange[];
       proposal?: AiResumeProposalInput;
     }
   | {
@@ -304,7 +305,7 @@ export function createAiProposalWorkspace(input: {
       }
     }
     stagedChanges.push(...changes);
-    return { ok: true, stagedChanges: stagedChanges.length };
+    return { ok: true, stagedChanges: stagedChanges.length, changes };
   }
 
   function stageBlocks(argumentsValue: unknown): AiProposalWorkspaceResult {
@@ -361,7 +362,7 @@ export function createAiProposalWorkspace(input: {
       );
     }
     stagedChanges.push(...changes);
-    return { ok: true, stagedChanges: stagedChanges.length };
+    return { ok: true, stagedChanges: stagedChanges.length, changes };
   }
 
   function stageContent(argumentsValue: unknown): AiProposalWorkspaceResult {
@@ -450,7 +451,7 @@ export function createAiProposalWorkspace(input: {
       );
     }
     stagedChanges.push(...changes);
-    return { ok: true, stagedChanges: stagedChanges.length };
+    return { ok: true, stagedChanges: stagedChanges.length, changes };
   }
 
   function submit(argumentsValue: unknown): AiProposalWorkspaceResult {

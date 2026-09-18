@@ -30,6 +30,7 @@ type AiStreamDiagnostics = {
   reasoningProgress: number;
   textDelta: number;
   proposalDelta: number;
+  proposalProgress: number;
   proposalReset: number;
   usage: number;
   complete: number;
@@ -101,6 +102,7 @@ export async function POST(
           reasoningProgress: 0,
           textDelta: 0,
           proposalDelta: 0,
+          proposalProgress: 0,
           proposalReset: 0,
           usage: 0,
           complete: 0,
@@ -126,6 +128,8 @@ export async function POST(
                     ? "textDelta"
                     : event.type === "proposal_delta"
                       ? "proposalDelta"
+                      : event.type === "proposal_progress"
+                        ? "proposalProgress"
                       : event.type === "proposal_reset"
                         ? "proposalReset"
                         : event.type;
