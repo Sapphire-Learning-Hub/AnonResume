@@ -26,5 +26,7 @@ describe("AI provider credential encryption", () => {
       "32 bytes",
     );
     expect(maskAiCredential("sk-1234567890")).toBe("••••7890");
+    expect(maskAiCredential("key")).toBe("••••");
+    expect(maskAiCredential("1234")).toBe("••••");
   });
 });

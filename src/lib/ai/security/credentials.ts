@@ -45,5 +45,6 @@ export function decryptAiCredential(encrypted: Buffer, key: Buffer) {
 }
 
 export function maskAiCredential(secret: string) {
+  if (secret.length <= 4) return "••••";
   return `••••${secret.slice(-4)}`;
 }
