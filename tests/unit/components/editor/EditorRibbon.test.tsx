@@ -125,4 +125,117 @@ describe("EditorRibbon", () => {
     expect(insertTab).toHaveFocus();
   });
 
+  it("translates vertical wheel input into horizontal ribbon scrolling", () => {
+    render(
+      <EditorRibbon
+        activeTab="home"
+        backHref="/app"
+        backLabel="返回工作台"
+        commandGroups={[
+          { key: "mode", label: "编辑模式", content: <button>内容编辑</button> },
+        ]}
+        documentActions={null}
+        documentName="简历"
+        documentNameLabel="简历标题"
+        quickActions={null}
+        saveStatus="空闲"
+        tabs={tabs}
+        tablistLabel="编辑器功能区"
+        onDocumentNameChange={() => undefined}
+        onTabChange={() => undefined}
+      />,
+    );
+
+    const documentViewport = screen.getByRole("link", {
+      name: "返回工作台",
+    }).parentElement!;
+    const tabsViewport = screen.getByRole("tablist").parentElement!;
+    const commandViewport = screen.getByRole("tabpanel").parentElement!;
+    for (const viewport of [
+      documentViewport,
+      tabsViewport,
+      commandViewport,
+    ]) {
+      Object.defineProperties(viewport, {
+        clientWidth: { configurable: true, value: 200 },
+        scrollLeft: { configurable: true, value: 20, writable: true },
+        scrollWidth: { configurable: true, value: 600 },
+      });
+      const wheel = new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        deltaY: 80,
+      });
+
+      fireEvent(viewport, wheel);
+
+      expect(viewport.scrollLeft).toBe(100);
+      expect(wheel.defaultPrevented).toBe(true);
+
+      const reverseWheel = new WheelEvent("wheel", {
+        bubbles: true,
+        cancelable: true,
+        deltaY: -40,
+      });
+
+      fireEvent(viewport, reverseWheel);
+
+      expect(viewport.scrollLeft).toBe(60);
+      expect(reverseWheel.defaultPrevented).toBe(true);
+    }
+  });
+
+  it("does not trap wheel input at ribbon boundaries or without overflow", () => {
+    render(
+      <EditorRibbon
+        activeTab="home"
+        backHref="/app"
+        backLabel="返回工作台"
+        commandGroups={[]}
+        documentActions={null}
+        documentName="简历"
+        documentNameLabel="简历标题"
+        quickActions={null}
+        saveStatus="空闲"
+        tabs={tabs}
+        tablistLabel="编辑器功能区"
+        onDocumentNameChange={() => undefined}
+        onTabChange={() => undefined}
+      />,
+    );
+
+    const viewport = screen.getByRole("tabpanel").parentElement!;
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollLeft: { configurable: true, value: 400, writable: true },
+      scrollWidth: { configurable: true, value: 600 },
+    });
+    const wheel = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 80,
+    });
+
+    fireEvent(viewport, wheel);
+
+    expect(viewport.scrollLeft).toBe(400);
+    expect(wheel.defaultPrevented).toBe(false);
+
+    Object.defineProperties(viewport, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+      scrollWidth: { configurable: true, value: 200 },
+    });
+    const wheelWithoutOverflow = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 80,
+    });
+
+    fireEvent(viewport, wheelWithoutOverflow);
+
+    expect(viewport.scrollLeft).toBe(0);
+    expect(wheelWithoutOverflow.defaultPrevented).toBe(false);
+  });
+
 });

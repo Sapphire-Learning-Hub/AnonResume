@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "antd";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { WorkspaceBackIcon } from "@/components/ui/InlineIcons";
@@ -21,6 +21,38 @@ export type EditorRibbonGroup = {
   label: string;
   content: ReactNode;
 };
+
+function wheelDistance(event: WheelEvent, viewportWidth: number) {
+  if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return 0;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return event.deltaY * viewportWidth;
+  }
+  return event.deltaY;
+}
+
+function enableHorizontalWheelScrolling(viewport: HTMLDivElement) {
+  const handleWheel = (event: WheelEvent) => {
+    const maxScrollLeft = Math.max(
+      0,
+      viewport.scrollWidth - viewport.clientWidth,
+    );
+    const distance = wheelDistance(event, viewport.clientWidth);
+    if (maxScrollLeft === 0 || distance === 0) return;
+
+    const nextScrollLeft = Math.min(
+      maxScrollLeft,
+      Math.max(0, viewport.scrollLeft + distance),
+    );
+    if (nextScrollLeft === viewport.scrollLeft) return;
+
+    viewport.scrollLeft = nextScrollLeft;
+    event.preventDefault();
+  };
+
+  viewport.addEventListener("wheel", handleWheel, { passive: false });
+  return () => viewport.removeEventListener("wheel", handleWheel);
+}
 
 export function EditorRibbonPropertyGroup({
   children,
@@ -84,7 +116,22 @@ export function EditorRibbon({
   onTabChange: (tab: EditorRibbonTab) => void;
 }) {
   const { styles } = useEditorRibbonStyles();
+  const documentViewportRef = useRef<HTMLDivElement>(null);
+  const tabsViewportRef = useRef<HTMLDivElement>(null);
+  const commandViewportRef = useRef<HTMLDivElement>(null);
   const activeTabItem = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
+
+  useEffect(() => {
+    const viewports = [
+      documentViewportRef.current,
+      tabsViewportRef.current,
+      commandViewportRef.current,
+    ];
+    const cleanups = viewports
+      .filter((viewport): viewport is HTMLDivElement => viewport !== null)
+      .map(enableHorizontalWheelScrolling);
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, []);
 
   function handleTabKeyDown(
     event: KeyboardEvent<HTMLButtonElement>,
@@ -116,7 +163,7 @@ export function EditorRibbon({
 
   return (
     <header className={styles.ribbon} data-testid="editor-ribbon">
-      <div className={styles.documentBar}>
+      <div className={styles.documentBar} ref={documentViewportRef}>
         <Button
           aria-label={backLabel}
           className={styles.backButton}
@@ -148,7 +195,7 @@ export function EditorRibbon({
         <div className={styles.documentActions}>{documentActions}</div>
       </div>
 
-      <div className={styles.tabsViewport}>
+      <div className={styles.tabsViewport} ref={tabsViewportRef}>
         <div aria-label={tablistLabel} className={styles.tablist} role="tablist">
           {tabs.map((tab) => (
             <button
@@ -170,7 +217,7 @@ export function EditorRibbon({
         </div>
       </div>
 
-      <div className={styles.commandViewport}>
+      <div className={styles.commandViewport} ref={commandViewportRef}>
         <div
           aria-label={activeTabItem?.label}
           aria-labelledby={`editor-ribbon-tab-${activeTab}`}

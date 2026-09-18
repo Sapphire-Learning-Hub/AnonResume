@@ -50,9 +50,16 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     align-items: center;
     min-width: 0;
     height: 44px;
+    overflow-x: auto;
+    overflow-y: hidden;
     padding: 0 12px;
     gap: 8px;
     border-bottom: 1px solid ${token.colorBorderSecondary};
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   `,
   quickActions: css`
     display: flex;
