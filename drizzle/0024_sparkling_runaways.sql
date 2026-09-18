@@ -1,0 +1,1 @@
+ALTER TABLE "ai_provider_credentials" ADD COLUMN "allow_cross_origin_redirects" boolean DEFAULT false NOT NULL;

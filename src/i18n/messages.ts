@@ -519,6 +519,9 @@ const messages = {
     "ai.settings.endpoint": "兼容接口地址",
     "ai.settings.apiKey": "API 密钥",
     "ai.settings.keyKeep": "留空将继续使用当前密钥 {masked}",
+    "ai.settings.allowCrossOriginRedirects": "允许跨域重定向",
+    "ai.settings.crossOriginRedirectWarning":
+      "跨域重定向可能会将 API 密钥和简历内容发送到其他域名，仅应为完全信任的服务开启。",
     "ai.settings.modelKey": "模型标识",
     "ai.settings.modelName": "显示名称",
     "ai.settings.model": "模型",
@@ -1535,6 +1538,9 @@ const messages = {
     "ai.settings.endpoint": "Compatible endpoint",
     "ai.settings.apiKey": "API key",
     "ai.settings.keyKeep": "Leave blank to keep the current key {masked}",
+    "ai.settings.allowCrossOriginRedirects": "Allow cross-origin redirects",
+    "ai.settings.crossOriginRedirectWarning":
+      "Cross-origin redirects may send the API key and resume content to another domain. Enable this only for a fully trusted service.",
     "ai.settings.modelKey": "Model identifier",
     "ai.settings.modelName": "Display name",
     "ai.settings.model": "Model",

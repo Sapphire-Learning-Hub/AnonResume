@@ -38,5 +38,6 @@ export const aiAdminProviderSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
   baseUrl: z.string().url().max(2_000),
   apiKey: z.string().trim().min(1).max(4_000).optional(),
+  allowCrossOriginRedirects: z.boolean().default(false),
   enabled: z.boolean(),
 }).strict();

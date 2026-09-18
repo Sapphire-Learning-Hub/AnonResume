@@ -27,6 +27,7 @@ export interface PersonalAiProviderInput {
   providerName: string;
   baseUrl: string;
   apiKey?: string;
+  allowCrossOriginRedirects?: boolean;
 }
 
 export interface PersonalAiModelInput {
@@ -97,6 +98,8 @@ export async function listPersonalAiProviders(input: {
       providerName: aiProviderCredentials.displayName,
       baseUrl: aiProviderCredentials.baseUrl,
       encryptedApiKey: aiProviderCredentials.encryptedApiKey,
+      allowCrossOriginRedirects:
+        aiProviderCredentials.allowCrossOriginRedirects,
       providerEnabled: aiProviderCredentials.enabled,
       modelId: aiModels.id,
       modelKey: aiModels.providerModelKey,
@@ -135,6 +138,7 @@ export async function listPersonalAiProviders(input: {
       providerName: string;
       baseUrl: string;
       maskedApiKey: string;
+      allowCrossOriginRedirects: boolean;
       enabled: boolean;
       models: Array<{
         id: string;
@@ -157,6 +161,7 @@ export async function listPersonalAiProviders(input: {
         id: row.providerId,
         providerName: row.providerName,
         baseUrl: row.baseUrl,
+        allowCrossOriginRedirects: row.allowCrossOriginRedirects,
         maskedApiKey: maskAiCredential(
           decryptAiCredential(row.encryptedApiKey, input.encryptionKey),
         ),
@@ -200,6 +205,8 @@ export async function createPersonalAiProvider(input: {
       kind: "user",
       displayName: input.value.providerName,
       baseUrl: endpoint.href,
+      allowCrossOriginRedirects:
+        input.value.allowCrossOriginRedirects ?? false,
       encryptedApiKey: encryptAiCredential(
         input.value.apiKey,
         input.encryptionKey,
@@ -218,7 +225,7 @@ export async function updatePersonalAiProvider(input: {
   trustedEndpointHostnames?: readonly string[];
   value: PersonalAiProviderInput & { enabled: boolean };
 }) {
-  await getOwnedProvider(input);
+  const provider = await getOwnedProvider(input);
   const endpoint = await assertSafeAiEndpoint(
     input.value.baseUrl,
     undefined,
@@ -230,6 +237,9 @@ export async function updatePersonalAiProvider(input: {
       .set({
         displayName: input.value.providerName,
         baseUrl: endpoint.href,
+        allowCrossOriginRedirects:
+          input.value.allowCrossOriginRedirects ??
+          provider.allowCrossOriginRedirects,
         encryptedApiKey: input.value.apiKey
           ? encryptAiCredential(input.value.apiKey, input.encryptionKey)
           : undefined,
@@ -428,6 +438,7 @@ export async function testPersonalAiProvider(input: {
       model: input.modelKey,
       messages: [{ role: "user", content: "Reply with OK." }],
       maxOutputTokens: 8,
+      allowCrossOriginRedirects: provider.allowCrossOriginRedirects,
       trustedEndpointHostnames: input.trustedEndpointHostnames,
     },
     signal,

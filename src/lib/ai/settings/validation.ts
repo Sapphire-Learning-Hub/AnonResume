@@ -7,10 +7,12 @@ const providerBaseSchema = z.object({
 
 export const createPersonalAiProviderSchema = providerBaseSchema.extend({
   apiKey: z.string().trim().min(1).max(4_000),
+  allowCrossOriginRedirects: z.boolean().default(false),
 }).strict();
 
 export const updatePersonalAiProviderSchema = providerBaseSchema.extend({
   apiKey: z.string().trim().min(1).max(4_000).optional(),
+  allowCrossOriginRedirects: z.boolean().optional(),
   enabled: z.boolean(),
 }).strict();
 

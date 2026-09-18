@@ -17,6 +17,7 @@ export interface ProviderItem {
   providerId: string;
   providerName: string;
   baseUrl: string;
+  allowCrossOriginRedirects: boolean;
   providerEnabled: boolean;
   models: ProviderModelItem[];
 }

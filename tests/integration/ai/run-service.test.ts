@@ -52,6 +52,7 @@ describe("AI run service", () => {
         displayName: "Run test provider",
         baseUrl: "https://models.example.com/v1",
         encryptedApiKey: encryptAiCredential("sk-run-test", encryptionKey),
+        allowCrossOriginRedirects: true,
       })
       .returning({ id: aiProviderCredentials.id });
     providerId = provider!.id;
@@ -149,6 +150,7 @@ describe("AI run service", () => {
       },
     });
     expect(prepared.request.latencyPreference).toBe("fast");
+    expect(prepared.request.allowCrossOriginRedirects).toBe(true);
     expect(prepared.request.messages[0]?.content).not.toContain("beforeHash");
     expect(prepared.request.messages[0]?.content).not.toContain("contentHash");
 

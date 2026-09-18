@@ -76,6 +76,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "模型服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",
@@ -110,6 +111,38 @@ describe("AI billing administration forms", () => {
     expect(within(dialog).getByText("输入费率（积分/百万 Token）")).toBeInTheDocument();
   });
 
+  it("warns only after administrative cross-origin redirects are enabled", async () => {
+    render(
+      <AdminAiProviders
+        providers={{
+          items: [],
+          page: 1,
+          pageSize: 20,
+          total: 0,
+          totalPages: 0,
+        }}
+        searchParams={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "添加模型服务" }));
+    const dialog = screen.getByRole("dialog", { name: "添加模型服务" });
+    expect(
+      within(dialog).queryByLabelText(/跨域重定向可能会将 API 密钥/),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: "允许跨域重定向" }),
+    );
+    const warning = within(dialog).getByLabelText(
+      /跨域重定向可能会将 API 密钥/,
+    );
+    fireEvent.mouseEnter(warning);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "跨域重定向可能会将 API 密钥和简历内容发送到其他域名，仅应为完全信任的服务开启。",
+    );
+  });
+
   it("groups each provider and its models in an accessible catalog card", () => {
     render(
       <AdminAiProviders
@@ -118,6 +151,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "模型服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",
@@ -163,6 +197,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "已停用服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",
@@ -202,6 +237,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "已停用服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: false,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",
@@ -221,6 +257,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000003",
             providerName: "启用服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000003",
@@ -300,6 +337,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "模型服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",
@@ -347,6 +385,7 @@ describe("AI billing administration forms", () => {
             providerId: "00000000-0000-4000-8000-000000000001",
             providerName: "模型服务",
             baseUrl: "https://example.com/v1",
+            allowCrossOriginRedirects: false,
             providerEnabled: true,
             models: [{
               providerId: "00000000-0000-4000-8000-000000000001",

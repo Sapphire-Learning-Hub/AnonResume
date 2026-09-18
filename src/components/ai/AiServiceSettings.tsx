@@ -260,6 +260,8 @@ export function AiServiceSettings() {
                         void runOperation(
                           async () => {
                             await updatePersonalAiProvider(provider.id, {
+                              allowCrossOriginRedirects:
+                                provider.allowCrossOriginRedirects,
                               baseUrl: provider.baseUrl,
                               enabled: !provider.enabled,
                               providerName: provider.providerName,

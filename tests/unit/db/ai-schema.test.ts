@@ -40,6 +40,9 @@ describe("AI database schema", () => {
   });
 
   it("stores run settlement, proposal validation, and encrypted evidence fields", () => {
+    expect(Object.keys(getTableColumns(database.aiProviderCredentials))).toContain(
+      "allowCrossOriginRedirects",
+    );
     expect(Object.keys(getTableColumns(database.aiRuns))).toEqual(
       expect.arrayContaining([
         "resumeVersion",

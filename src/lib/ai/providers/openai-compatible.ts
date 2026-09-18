@@ -286,7 +286,10 @@ async function fetchWithValidatedRedirects({
       }
       await response.body?.cancel().catch(() => undefined);
       await dispatcher.close().catch(() => undefined);
-      if (redirectTarget.origin !== target.origin) {
+      if (
+        redirectTarget.origin !== target.origin &&
+        !request.allowCrossOriginRedirects
+      ) {
         throw new AiProviderError("invalid_response");
       }
       target = redirectTarget;

@@ -35,6 +35,7 @@ export function AiProviderEditorModal({
   provider?: PersonalAiProvider;
 }) {
   const { t } = useI18n();
+  const { token } = theme.useToken();
   return (
     <Modal
       centered
@@ -53,6 +54,8 @@ export function AiProviderEditorModal({
         initialValues={{
           baseUrl: provider?.baseUrl ?? "",
           providerName: provider?.providerName ?? "",
+          allowCrossOriginRedirects:
+            provider?.allowCrossOriginRedirects ?? false,
         }}
         layout="vertical"
         onFinish={(value) => void onSubmit(value)}
@@ -84,6 +87,46 @@ export function AiProviderEditorModal({
           rules={[{ required: !provider }]}
         >
           <Input.Password autoComplete="new-password" maxLength={4_000} />
+        </Form.Item>
+        <Form.Item
+          noStyle
+          shouldUpdate={(previous, current) =>
+            previous.allowCrossOriginRedirects !==
+            current.allowCrossOriginRedirects
+          }
+        >
+          {({ getFieldValue }) => {
+            const allowCrossOriginRedirects = Boolean(
+              getFieldValue("allowCrossOriginRedirects"),
+            );
+
+            return (
+              <Form.Item
+                label={(
+                  <Space size={6}>
+                    {t("ai.settings.allowCrossOriginRedirects")}
+                    {allowCrossOriginRedirects ? (
+                      <Tooltip
+                        title={t("ai.settings.crossOriginRedirectWarning")}
+                      >
+                        <ExclamationCircleFilled
+                          aria-label={t(
+                            "ai.settings.crossOriginRedirectWarning",
+                          )}
+                          style={{ color: token.colorWarning }}
+                          tabIndex={0}
+                        />
+                      </Tooltip>
+                    ) : null}
+                  </Space>
+                )}
+                name="allowCrossOriginRedirects"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            );
+          }}
         </Form.Item>
         <Form.Item noStyle>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>

@@ -48,6 +48,7 @@ export interface AiAdminProviderInput {
   displayName: string;
   baseUrl: string;
   apiKey?: string;
+  allowCrossOriginRedirects: boolean;
   enabled: boolean;
 }
 
@@ -119,6 +120,7 @@ export async function listAiAdminProviders(request: AiAdminListRequest) {
     providerId: string;
     providerName: string;
     baseUrl: string;
+    allowCrossOriginRedirects: boolean;
     providerEnabled: boolean;
   }>(
     request,
@@ -126,7 +128,9 @@ export async function listAiAdminProviders(request: AiAdminListRequest) {
        FROM ${schema}.ai_provider_credentials AS provider
        WHERE ${where}`,
     `SELECT provider.id::text AS "providerId", provider.display_name AS "providerName",
-            provider.base_url AS "baseUrl", provider.enabled AS "providerEnabled"
+            provider.base_url AS "baseUrl",
+            provider.allow_cross_origin_redirects AS "allowCrossOriginRedirects",
+            provider.enabled AS "providerEnabled"
        FROM ${schema}.ai_provider_credentials AS provider
        WHERE ${where}
       ORDER BY lower(provider.display_name), provider.id
@@ -217,6 +221,7 @@ export async function saveAiAdminProvider(input: {
         .set({
           displayName: input.value.displayName,
           baseUrl: endpoint.href,
+          allowCrossOriginRedirects: input.value.allowCrossOriginRedirects,
           enabled: input.value.enabled,
           encryptedApiKey: input.value.apiKey
             ? encryptAiCredential(input.value.apiKey, input.encryptionKey)
@@ -240,6 +245,7 @@ export async function saveAiAdminProvider(input: {
           kind: "platform",
           displayName: input.value.displayName,
           baseUrl: endpoint.href,
+          allowCrossOriginRedirects: input.value.allowCrossOriginRedirects,
           encryptedApiKey: encryptAiCredential(input.value.apiKey!, input.encryptionKey),
           enabled: input.value.enabled,
         })
@@ -258,6 +264,7 @@ export async function saveAiAdminProvider(input: {
     outcome: "success",
     metadata: {
       providerName: input.value.displayName,
+      allowCrossOriginRedirects: input.value.allowCrossOriginRedirects,
       enabled: input.value.enabled,
     },
   });

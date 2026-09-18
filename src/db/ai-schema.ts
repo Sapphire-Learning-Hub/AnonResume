@@ -56,6 +56,9 @@ const providerCredentialColumns = {
   baseUrl: text("base_url").notNull(),
   encryptedApiKey: bytea("encrypted_api_key").notNull(),
   encryptionKeyVersion: integer("encryption_key_version").notNull().default(1),
+  allowCrossOriginRedirects: boolean("allow_cross_origin_redirects")
+    .notNull()
+    .default(false),
   enabled: boolean("enabled").notNull().default(true),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

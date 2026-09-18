@@ -288,6 +288,8 @@ export async function prepareAiRun(input: {
       currentResumeVersion: resumes.version,
       providerBaseUrl: aiProviderCredentials.baseUrl,
       encryptedApiKey: aiProviderCredentials.encryptedApiKey,
+      allowCrossOriginRedirects:
+        aiProviderCredentials.allowCrossOriginRedirects,
       keySource: aiProviderCredentials.kind,
       providerModelKey: aiModels.providerModelKey,
       supportsToolCalls: aiModels.supportsToolCalls,
@@ -388,6 +390,7 @@ export async function prepareAiRun(input: {
     messages,
     maxOutputTokens: row.maxOutputTokens,
     latencyPreference: "fast",
+    allowCrossOriginRedirects: row.allowCrossOriginRedirects,
     trustedEndpointHostnames: input.configuration.trustedEndpointHostnames,
     proposalTool: row.supportsToolCalls
       ? createAiProposalToolDefinition()

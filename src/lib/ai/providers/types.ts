@@ -42,6 +42,7 @@ export interface AiProviderRequest {
   messages: AiProviderMessage[];
   maxOutputTokens: number;
   latencyPreference?: "fast" | "provider_default";
+  allowCrossOriginRedirects?: boolean;
   trustedEndpointHostnames?: readonly string[];
   proposalTool?: AiProposalToolDefinition;
   tools?: AiToolDefinition[];

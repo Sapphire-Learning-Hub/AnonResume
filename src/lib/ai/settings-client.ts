@@ -17,6 +17,7 @@ const personalProviderSchema = z.object({
   providerName: z.string(),
   baseUrl: z.string(),
   maskedApiKey: z.string(),
+  allowCrossOriginRedirects: z.boolean(),
   enabled: z.boolean(),
   models: z.array(personalModelSchema),
 });
@@ -46,6 +47,7 @@ export interface PersonalAiProviderInput {
   providerName: string;
   baseUrl: string;
   apiKey?: string;
+  allowCrossOriginRedirects: boolean;
   enabled?: boolean;
 }
 

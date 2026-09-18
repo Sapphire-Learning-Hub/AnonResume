@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { AiServiceSettings } from "@/components/ai/AiServiceSettings";
-import { AiModelEditorModal } from "@/components/ai/AiServiceSettingsDialogs";
+import {
+  AiModelEditorModal,
+  AiProviderEditorModal,
+} from "@/components/ai/AiServiceSettingsDialogs";
 
 const clientMock = vi.hoisted(() => ({
   createModel: vi.fn(),
@@ -67,6 +70,7 @@ describe("AiServiceSettings", () => {
           providerName: "Provider One",
           baseUrl: "https://one.example.com/v1",
           maskedApiKey: "••••-one",
+          allowCrossOriginRedirects: false,
           enabled: true,
           models: [
             {
@@ -98,6 +102,7 @@ describe("AiServiceSettings", () => {
           providerName: "Provider Two",
           baseUrl: "https://two.example.com/v1",
           maskedApiKey: "••••-two",
+          allowCrossOriginRedirects: false,
           enabled: true,
           models: [],
         },
@@ -147,6 +152,28 @@ describe("AiServiceSettings", () => {
 
     expect(await screen.findByRole("tooltip")).toHaveTextContent(
       "该模型不能用于修改简历，仅支持基本聊天功能。",
+    );
+  });
+
+  it("warns only after cross-origin redirects are enabled", async () => {
+    render(
+      <AiProviderEditorModal
+        busy={false}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+        open
+      />,
+    );
+
+    expect(
+      screen.queryByLabelText(/跨域重定向可能会将 API 密钥/),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "允许跨域重定向" }));
+    const warning = screen.getByLabelText(/跨域重定向可能会将 API 密钥/);
+    fireEvent.mouseEnter(warning);
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "跨域重定向可能会将 API 密钥和简历内容发送到其他域名，仅应为完全信任的服务开启。",
     );
   });
 });

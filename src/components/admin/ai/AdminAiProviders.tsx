@@ -53,6 +53,7 @@ interface ProviderDraft {
   providerName: string;
   baseUrl: string;
   apiKey: string;
+  allowCrossOriginRedirects: boolean;
   providerEnabled: boolean;
 }
 
@@ -84,6 +85,7 @@ const EMPTY_PROVIDER: ProviderDraft = {
   providerName: "",
   baseUrl: "https://",
   apiKey: "",
+  allowCrossOriginRedirects: false,
   providerEnabled: true,
 };
 
@@ -164,6 +166,7 @@ export function AdminAiProviders({
       providerName: item.providerName,
       baseUrl: item.baseUrl,
       apiKey: "",
+      allowCrossOriginRedirects: item.allowCrossOriginRedirects,
       providerEnabled: item.providerEnabled,
     } : { ...EMPTY_PROVIDER });
   }
@@ -182,6 +185,7 @@ export function AdminAiProviders({
           displayName: draft.providerName,
           baseUrl: draft.baseUrl,
           apiKey: draft.apiKey || undefined,
+          allowCrossOriginRedirects: draft.allowCrossOriginRedirects,
           enabled: draft.providerEnabled,
         }),
       },
@@ -239,6 +243,7 @@ export function AdminAiProviders({
         body: JSON.stringify({
           displayName: item.providerName,
           baseUrl: item.baseUrl,
+          allowCrossOriginRedirects: item.allowCrossOriginRedirects,
           enabled,
         }),
       },
@@ -577,6 +582,26 @@ export function AdminAiProviders({
             <Form.Item label={t("ai.apiKey")}>
               <Input.Password onChange={(event) => setProviderDraft({ ...providerDraft, apiKey: event.target.value })} placeholder={providerDraft.providerId ? t("ai.apiKeyPlaceholder") : undefined} value={providerDraft.apiKey} />
             </Form.Item>
+            <Space size={6}>
+              <Checkbox
+                checked={providerDraft.allowCrossOriginRedirects}
+                onChange={(event) => setProviderDraft({
+                  ...providerDraft,
+                  allowCrossOriginRedirects: event.target.checked,
+                })}
+              >
+                {t("ai.allowCrossOriginRedirects")}
+              </Checkbox>
+              {providerDraft.allowCrossOriginRedirects ? (
+                <Tooltip title={t("ai.crossOriginRedirectWarning")}>
+                  <ExclamationCircleFilled
+                    aria-label={t("ai.crossOriginRedirectWarning")}
+                    style={{ color: token.colorWarning }}
+                    tabIndex={0}
+                  />
+                </Tooltip>
+              ) : null}
+            </Space>
           </Form>
         ) : null}
       </Modal>

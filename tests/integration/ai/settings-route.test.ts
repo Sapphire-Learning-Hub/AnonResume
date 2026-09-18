@@ -69,6 +69,7 @@ describe("personal AI provider and model routes", () => {
         providerName: "Provider One",
         baseUrl: "https://one.example.com/v1",
         apiKey: "sk-provider-one",
+        allowCrossOriginRedirects: true,
       },
     ));
     const firstProvider = (await firstProviderResponse.json()).provider as { id: string };
@@ -111,11 +112,18 @@ describe("personal AI provider and model routes", () => {
     expect(payload.providers).toEqual(expect.arrayContaining([
       expect.objectContaining({
         id: firstProvider.id,
+        allowCrossOriginRedirects: true,
         maskedApiKey: "••••-one",
         models: [
           expect.objectContaining({ modelKey: "model-one" }),
           expect.objectContaining({ modelKey: "model-two" }),
         ],
+      }),
+    ]));
+    expect(payload.providers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerName: "Provider Two",
+        allowCrossOriginRedirects: false,
       }),
     ]));
     expect(JSON.stringify(payload)).not.toContain("sk-provider-one");

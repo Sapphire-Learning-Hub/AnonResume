@@ -498,6 +498,71 @@ describe("OpenAI-compatible provider adapter", () => {
     });
   });
 
+  it("follows a validated cross-origin redirect only when explicitly allowed", async () => {
+    const resolvedHostnames: string[] = [];
+    const requests: string[] = [];
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: async (hostname) => {
+        resolvedHostnames.push(hostname);
+        return publicResolver();
+      },
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        if (requests.length === 1) {
+          return new Response(null, {
+            status: 307,
+            headers: { location: "https://trusted-cdn.example/v1/stream" },
+          });
+        }
+        return streamResponse(["data: [DONE]\n\n"], { status: 200 });
+      },
+    });
+
+    for await (const event of adapter.start(
+      providerRequest({ allowCrossOriginRedirects: true }),
+      new AbortController().signal,
+    )) {
+      void event;
+    }
+
+    expect(requests).toEqual([
+      "https://models.example.com/v1/chat/completions",
+      "https://trusted-cdn.example/v1/stream",
+    ]);
+    expect(resolvedHostnames).toEqual([
+      "models.example.com",
+      "trusted-cdn.example",
+    ]);
+  });
+
+  it("keeps private-network redirects blocked when cross-origin redirects are allowed", async () => {
+    const requests: string[] = [];
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        return new Response(null, {
+          status: 307,
+          headers: { location: "https://127.0.0.1/internal" },
+        });
+      },
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest({ allowCrossOriginRedirects: true }),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+
+    await expect(consume()).rejects.toThrow("unsafe_ai_endpoint");
+    expect(requests).toEqual([
+      "https://models.example.com/v1/chat/completions",
+    ]);
+  });
+
   it.each([
     [401, "authentication"],
     [429, "rate_limited"],

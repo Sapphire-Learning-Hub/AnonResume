@@ -169,6 +169,13 @@
       "when": 1789672732690,
       "tag": "0023_fantastic_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789716955884,
+      "tag": "0024_sparkling_runaways",
+      "breakpoints": true
     }
   ]
 }
