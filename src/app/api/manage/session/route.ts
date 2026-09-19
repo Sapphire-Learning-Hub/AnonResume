@@ -21,7 +21,6 @@ import {
   getAdminSessionClearCookieOptions,
   getAdminSessionCookieOptions,
 } from "@/lib/admin/request";
-import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 
 const verificationSchema = z.object({
   code: z.string().trim().regex(/^(?:\d{6}|[A-Fa-f0-9]{4}(?:-[A-Fa-f0-9]{4}){4})$/),
@@ -41,13 +40,15 @@ const bodySchema = z.union([
   verificationSchema,
 ]);
 
-async function setManagementSessionCookie(rawToken: string) {
-  const config = resolveAdminSecurityConfiguration(process.env);
+async function setManagementSessionCookie(
+  rawToken: string,
+  maxAgeSeconds: number,
+) {
   const cookieStore = await cookies();
   cookieStore.set(
     ADMIN_SESSION_COOKIE,
     rawToken,
-    getAdminSessionCookieOptions(config.maxSeconds),
+    getAdminSessionCookieOptions(maxAgeSeconds),
   );
 }
 
@@ -93,7 +94,10 @@ export async function POST(request: Request) {
         baseSessionId: session.session.id,
         mfaDeviceId: parsed.data.deviceId,
       });
-      await setManagementSessionCookie(created.rawToken);
+      await setManagementSessionCookie(
+        created.rawToken,
+        created.maxAgeSeconds,
+      );
       return NextResponse.json({ ok: true, recoveryCodes });
     }
 
@@ -115,7 +119,7 @@ export async function POST(request: Request) {
       baseSessionId: session.session.id,
       mfaDeviceId,
     });
-    await setManagementSessionCookie(created.rawToken);
+    await setManagementSessionCookie(created.rawToken, created.maxAgeSeconds);
     const currentAccess = await getAdminAccessForUser(session.user.id);
     return NextResponse.json({
       ok: true,

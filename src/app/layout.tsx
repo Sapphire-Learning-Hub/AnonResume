@@ -22,6 +22,11 @@ import "@/styles/print.css";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { SystemStatePage } from "@/components/system/SystemStatePage";
 import ConfigurationRecoveryPage from "@/app/configuration-recovery/page";
+import {
+  DEFAULT_PUBLIC_RUNTIME_CONFIG,
+  PublicRuntimeConfigProvider,
+  type PublicRuntimeConfig,
+} from "@/components/config/PublicRuntimeConfigProvider";
 import { GlobalFloatingActions } from "@/components/ui/GlobalFloatingActions";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
@@ -108,15 +113,28 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const recoveryAllowed = pathname
     ? isManagedRecoveryPathAllowed(pathname)
     : true;
-  let recoveryRequired = false;
-  if (!recoveryAllowed) {
+  let publicRuntimeConfig: PublicRuntimeConfig =
+    DEFAULT_PUBLIC_RUNTIME_CONFIG;
+  let runtimeUnavailable = false;
+  if (pathname) {
     try {
-      recoveryRequired =
-        (await getRuntimeConfig("web")).health === "recovery_required";
+      const runtime = await getRuntimeConfig("web");
+      publicRuntimeConfig = {
+        configurationHealth: runtime.health,
+        sourceCodeUrl: runtime.values.sourceCodeUrl,
+      };
     } catch {
-      recoveryRequired = true;
+      runtimeUnavailable = true;
+      publicRuntimeConfig = {
+        ...DEFAULT_PUBLIC_RUNTIME_CONFIG,
+        configurationHealth: "recovery_required",
+      };
     }
   }
+  const recoveryRequired =
+    !recoveryAllowed &&
+    (runtimeUnavailable ||
+      publicRuntimeConfig.configurationHealth === "recovery_required");
 
   if (recoveryRequired) {
     return (
@@ -151,16 +169,18 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           initialLocale={locale}
           initialMessages={getMessages(locale)}
         >
-          <AppThemeProvider
-            initialAccent={initialTheme.accent}
-            initialMode={initialTheme.mode}
-            initialResolvedMode={initialTheme.resolvedMode}
-          >
-            <StyleRegistry>
-              {children}
-              <GlobalFloatingActions />
-            </StyleRegistry>
-          </AppThemeProvider>
+          <PublicRuntimeConfigProvider value={publicRuntimeConfig}>
+            <AppThemeProvider
+              initialAccent={initialTheme.accent}
+              initialMode={initialTheme.mode}
+              initialResolvedMode={initialTheme.resolvedMode}
+            >
+              <StyleRegistry>
+                {children}
+                <GlobalFloatingActions />
+              </StyleRegistry>
+            </AppThemeProvider>
+          </PublicRuntimeConfigProvider>
         </I18nProvider>
       </body>
     </html>

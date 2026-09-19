@@ -75,7 +75,10 @@ describe("management session route", () => {
     mocks.verifyEnrollment.mockResolvedValue([
       "AAAA-BBBB-CCCC-DDDD-EEEE",
     ]);
-    mocks.createSession.mockResolvedValue({ rawToken: "management-token" });
+    mocks.createSession.mockResolvedValue({
+      maxAgeSeconds: 28_800,
+      rawToken: "management-token",
+    });
 
     const response = await POST(
       request({

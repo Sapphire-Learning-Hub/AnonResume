@@ -30,6 +30,7 @@ describe("application feedback architecture", () => {
     const allowed = new Set([
       "src/components/announcements/AnnouncementBanner.tsx",
       "src/components/admin/config/AdminConfigurationManager.tsx",
+      "src/components/config/ConfigurationHealthBanner.tsx",
       "src/components/dashboard/ResumeMarkdownImportDialog.tsx",
     ]);
     const offenders = listSourceFiles("src").filter((file) => {

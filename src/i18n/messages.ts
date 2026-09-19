@@ -155,6 +155,16 @@ const messages = {
     "system.configurationRecovery.description":
       "当前配置版本无法安全加载，系统已暂停普通功能。管理员仍可登录并从配置历史准备回滚版本。",
     "system.configurationRecovery.action": "进入管理恢复",
+    "system.configurationHealth.restart.title": "部分配置等待重启生效",
+    "system.configurationHealth.restart.description":
+      "邮件发送与第三方登录配置已更新，当前进程将在重启后启用新设置。",
+    "system.configurationHealth.degraded.title": "配置同步暂时受限",
+    "system.configurationHealth.degraded.description":
+      "配置同步能力暂时不可用，系统正在继续使用最近一次安全加载的配置。",
+    "system.configurationHealth.recovery.title": "平台配置需要恢复",
+    "system.configurationHealth.recovery.description":
+      "平台配置无法安全加载，仅保留管理恢复能力，请检查配置状态或回滚版本。",
+    "system.configurationHealth.action": "查看平台配置",
     "home.metaDescription":
       "在线编辑、自由排版、精选字体、历史版本与 PDF 导出，轻松做出清晰专业的简历。",
     "home.skipToContent": "跳到主要内容",
@@ -1144,6 +1154,19 @@ const messages = {
     "system.configurationRecovery.description":
       "The active configuration cannot be loaded safely, so regular features are paused. An administrator can still sign in and prepare a rollback from configuration history.",
     "system.configurationRecovery.action": "Open management recovery",
+    "system.configurationHealth.restart.title":
+      "Some settings require a restart",
+    "system.configurationHealth.restart.description":
+      "Email delivery and third-party sign-in settings were updated. Restart this process to activate them.",
+    "system.configurationHealth.degraded.title":
+      "Configuration synchronization is limited",
+    "system.configurationHealth.degraded.description":
+      "Configuration synchronization is temporarily unavailable. The system continues using the last safely loaded configuration.",
+    "system.configurationHealth.recovery.title":
+      "Platform configuration needs recovery",
+    "system.configurationHealth.recovery.description":
+      "The platform configuration cannot be loaded safely. Only management recovery remains available until the configuration is repaired or rolled back.",
+    "system.configurationHealth.action": "View platform configuration",
     "home.metaDescription":
       "Create a polished resume with easy editing, flexible styling, version history, sharing, and PDF export.",
     "home.skipToContent": "Skip to main content",

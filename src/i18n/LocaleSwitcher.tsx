@@ -23,6 +23,7 @@ import { createStyles } from "antd-style";
 import { useState } from "react";
 
 import { useAppTheme } from "@/theme/AppThemeProvider";
+import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
 import type { AppAccentTheme, AppThemeMode } from "@/theme/app-theme";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 
@@ -246,7 +247,7 @@ export function LocaleSwitcher() {
   const [section, setSection] = useState<SettingsSection>("general");
   const { locale, setLocale, t } = useI18n();
   const { mode, accent, setMode, setAccent } = useAppTheme();
-  const sourceCodeUrl = process.env.NEXT_PUBLIC_SOURCE_CODE_URL?.trim();
+  const { sourceCodeUrl } = usePublicRuntimeConfig();
 
   const sectionTitle =
     section === "general"

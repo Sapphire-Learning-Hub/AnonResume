@@ -34,6 +34,7 @@ import {
   ADMIN_PERMISSION_KEYS,
   normalizeAdminPermissions,
 } from "@/lib/admin/permissions";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 export class AdminMfaLockedError extends Error {
@@ -65,6 +66,11 @@ export class AdminMfaDeviceConflictError extends Error {
 }
 
 const MAX_ADMIN_MFA_DEVICES = 5;
+
+async function getAdminSecurityConfiguration() {
+  const runtime = await getRuntimeConfig("web");
+  return resolveAdminSecurityConfiguration(runtime.values);
+}
 
 type AdminMfaSecurityState = {
   failedAttempts: number;
@@ -112,19 +118,22 @@ async function recordAdminMfaFailure({
   schema,
   userId,
   failedAttempts,
+  maxMfaFailures,
+  mfaLockSeconds,
   now,
 }: {
   client: PoolClient;
   schema: string;
   userId: string;
   failedAttempts: number;
+  maxMfaFailures: number;
+  mfaLockSeconds: number;
   now: Date;
 }) {
-  const config = resolveAdminSecurityConfiguration(process.env);
   const attempts = failedAttempts + 1;
   const lockedUntil =
-    attempts >= config.maxMfaFailures
-      ? new Date(now.getTime() + config.mfaLockSeconds * 1000)
+    attempts >= maxMfaFailures
+      ? new Date(now.getTime() + mfaLockSeconds * 1000)
       : null;
   await client.query(
     `UPDATE ${schema}.admin_security_states
@@ -285,7 +294,7 @@ export async function createAdminSession({
   const access = await getAdminAccessForUser(userId);
   if (!access) throw new Error("Management access is not assigned");
 
-  const config = resolveAdminSecurityConfiguration(process.env);
+  const config = await getAdminSecurityConfiguration();
   const { rawToken, tokenHash } = generateAdminSessionToken();
   const absoluteExpiresAt = new Date(now.getTime() + config.maxSeconds * 1000);
   const idleExpiresAt = new Date(
@@ -307,7 +316,12 @@ export async function createAdminSession({
     reauthenticatedAt: now,
   });
 
-  return { rawToken, idleExpiresAt, absoluteExpiresAt };
+  return {
+    rawToken,
+    idleExpiresAt,
+    absoluteExpiresAt,
+    maxAgeSeconds: config.maxSeconds,
+  };
 }
 
 export async function revokeAdminSessionsForUser(userId: string) {
@@ -437,6 +451,7 @@ export async function verifyAdminMfaCode({
   token: string;
   now?: Date;
 }) {
+  const config = await getAdminSecurityConfiguration();
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
 
@@ -492,6 +507,8 @@ export async function verifyAdminMfaCode({
         schema,
         userId,
         failedAttempts: security.failedAttempts,
+        maxMfaFailures: config.maxMfaFailures,
+        mfaLockSeconds: config.mfaLockSeconds,
         now,
       });
       await client.query("COMMIT");
@@ -529,6 +546,7 @@ export async function verifyAdminMfaEnrollment({
   requireNoVerifiedDevices?: boolean;
   now?: Date;
 }) {
+  const config = await getAdminSecurityConfiguration();
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
   try {
@@ -581,6 +599,8 @@ export async function verifyAdminMfaEnrollment({
         schema,
         userId,
         failedAttempts: security.failedAttempts,
+        maxMfaFailures: config.maxMfaFailures,
+        mfaLockSeconds: config.mfaLockSeconds,
         now,
       });
       await client.query("COMMIT");
@@ -643,6 +663,7 @@ export async function consumeAdminRecoveryCode(
   rawCode: string,
   now = new Date(),
 ) {
+  const config = await getAdminSecurityConfiguration();
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
   try {
@@ -666,6 +687,8 @@ export async function consumeAdminRecoveryCode(
         schema,
         userId,
         failedAttempts: security.failedAttempts,
+        maxMfaFailures: config.maxMfaFailures,
+        mfaLockSeconds: config.mfaLockSeconds,
         now,
       });
       await client.query("COMMIT");

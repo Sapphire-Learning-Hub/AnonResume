@@ -2,10 +2,13 @@ import {
   resolveAdminSecurityConfiguration,
   resolveAdminSuperAdminEmail,
 } from "@/lib/admin/configuration";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
 
 describe("admin configuration", () => {
   it("uses bounded development defaults for session lifetimes", () => {
-    expect(resolveAdminSecurityConfiguration({})).toEqual({
+    expect(
+      resolveAdminSecurityConfiguration(getManagedConfigDefaults()),
+    ).toEqual({
       idleSeconds: 1800,
       maxSeconds: 28_800,
       reauthSeconds: 300,
@@ -26,9 +29,10 @@ describe("admin configuration", () => {
   it("rejects incoherent management session windows", () => {
     expect(() =>
       resolveAdminSecurityConfiguration({
-        ADMIN_SESSION_IDLE_SECONDS: "3600",
-        ADMIN_SESSION_MAX_SECONDS: "1800",
+        ...getManagedConfigDefaults(),
+        adminSessionIdleSeconds: 3600,
+        adminSessionMaxSeconds: 1800,
       }),
-    ).toThrow("ADMIN_SESSION_IDLE_SECONDS");
+    ).toThrow("adminSessionIdleSeconds");
   });
 });

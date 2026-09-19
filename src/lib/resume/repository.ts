@@ -11,6 +11,8 @@ import {
 } from "@/domain/resume/templates";
 import { validateResumeDocument } from "@/domain/resume/validation";
 import { defaultLocale, type AppLocale } from "@/i18n/messages";
+import type { ManagedConfig } from "@/lib/config/registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   createPageResult,
   resolvePage,
@@ -276,20 +278,19 @@ async function requireExistingResumeRecord(userId: string, resumeId: string) {
   return existing;
 }
 
-export function getResumeVersionHistoryLimit() {
-  const parsed = Number.parseInt(
-    process.env.RESUME_VERSION_HISTORY_LIMIT ?? "",
-    10,
-  );
-
-  return Number.isSafeInteger(parsed) && parsed > 0
-    ? parsed
+export function getResumeVersionHistoryLimit(
+  configuration: Pick<ManagedConfig, "resumeVersionHistoryLimit">,
+) {
+  return Number.isSafeInteger(configuration.resumeVersionHistoryLimit) &&
+    configuration.resumeVersionHistoryLimit > 0
+    ? configuration.resumeVersionHistoryLimit
     : DEFAULT_RESUME_VERSION_HISTORY_LIMIT;
 }
 
 async function createResumeVersionSnapshotFromRecord(record: ResumeRecord) {
   const snapshotId = randomUUID();
-  const historyLimit = getResumeVersionHistoryLimit();
+  const runtime = await getRuntimeConfig("web");
+  const historyLimit = getResumeVersionHistoryLimit(runtime.values);
 
   return db.transaction(async (transaction) => {
     await transaction.execute(

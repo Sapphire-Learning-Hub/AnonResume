@@ -1,6 +1,17 @@
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { createRichTextFromPlainText } from "@/domain/resume/operations";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
 import { getDatabasePool } from "@/lib/runtime/database";
+
+const runtimeConfig = vi.hoisted(() => ({
+  values: null as ReturnType<typeof getManagedConfigDefaults> | null,
+}));
+
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(async () => ({
+    values: runtimeConfig.values,
+  })),
+}));
 
 import {
   createGeneratedResumeRecord,
@@ -41,6 +52,7 @@ async function listResumeVersionSnapshots(userId: string, resumeId: string) {
 describe("resume repository persistence", () => {
   beforeEach(async () => {
     vi.unstubAllEnvs();
+    runtimeConfig.values = getManagedConfigDefaults();
     await resetResumeRepository();
   });
 
@@ -419,7 +431,10 @@ describe("resume repository persistence", () => {
   });
 
   it("retains only the configured maximum number of version snapshots", async () => {
-    vi.stubEnv("RESUME_VERSION_HISTORY_LIMIT", "2");
+    runtimeConfig.values = {
+      ...getManagedConfigDefaults(),
+      resumeVersionHistoryLimit: 2,
+    };
     await createGeneratedResumeRecord({
       userId: "user-demo",
       templateId: "centered",
@@ -436,7 +451,10 @@ describe("resume repository persistence", () => {
   });
 
   it("paginates retained version snapshots", async () => {
-    vi.stubEnv("RESUME_VERSION_HISTORY_LIMIT", "10");
+    runtimeConfig.values = {
+      ...getManagedConfigDefaults(),
+      resumeVersionHistoryLimit: 10,
+    };
     await createResumeRecord("user-history-page", "resume-history-page");
     for (let index = 0; index < 5; index += 1) {
       await snapshotResumeVersion("user-history-page", "resume-history-page");

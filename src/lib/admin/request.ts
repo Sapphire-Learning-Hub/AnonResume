@@ -7,15 +7,18 @@ import {
 import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
 import { PostgresAdminAuthorizationStore } from "@/lib/admin/store";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export const ADMIN_SESSION_COOKIE = "anonresume.admin_session";
 
 export async function getAdminRequestContext() {
-  const [baseSession, cookieStore] = await Promise.all([
-    getOptionalIdentitySession(),
-    cookies(),
-  ]);
+  const baseSession = await getOptionalIdentitySession();
   if (!baseSession) throw new AdminAuthenticationError();
+
+  const [cookieStore, runtime] = await Promise.all([
+    cookies(),
+    getRuntimeConfig("web"),
+  ]);
 
   const context = await authorizeAdminRequest({
     store: new PostgresAdminAuthorizationStore(),
@@ -24,7 +27,7 @@ export async function getAdminRequestContext() {
       sessionId: baseSession.session.id,
     },
     rawAdminToken: cookieStore.get(ADMIN_SESSION_COOKIE)?.value,
-    idleSeconds: resolveAdminSecurityConfiguration(process.env).idleSeconds,
+    idleSeconds: resolveAdminSecurityConfiguration(runtime.values).idleSeconds,
   });
 
   return {

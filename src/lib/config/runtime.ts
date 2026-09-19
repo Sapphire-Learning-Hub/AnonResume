@@ -110,6 +110,7 @@ export class RuntimeConfigManager {
   private restartValues: ManagedConfig | null = null;
   private lastCheckedAt = 0;
   private refreshPromise: Promise<void> | null = null;
+  private startPromise: Promise<void> | null = null;
   private started = false;
 
   constructor(options: RuntimeConfigManagerOptions) {
@@ -124,6 +125,14 @@ export class RuntimeConfigManager {
   }
 
   async start() {
+    if (this.started) return;
+    this.startPromise ??= this.performStart().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
+  }
+
+  private async performStart() {
     if (this.started) return;
     await ensureConfigurationState({ keyring: this.keyring });
     const resolved = await readActiveConfigSnapshot({ keyring: this.keyring });

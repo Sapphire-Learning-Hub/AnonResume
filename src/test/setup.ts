@@ -68,6 +68,7 @@ for (const key of [
 }
 
 process.env.BETTER_AUTH_SECRET ??= "anonresume-test-secret-2026-08-28";
+process.env.CONFIG_MASTER_KEY ??= Buffer.alloc(32, 7).toString("base64");
 process.env.ANONRESUME_DB_SCHEMA ??=
   `anonresume_test_${process.env.VITEST_POOL_ID ?? "0"}`;
 

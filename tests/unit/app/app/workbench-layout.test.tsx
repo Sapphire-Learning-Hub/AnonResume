@@ -9,6 +9,10 @@ vi.mock("@/lib/auth/app-shell-context", () => ({
   requireAppShellContext: vi.fn(),
 }));
 
+vi.mock("next/server", () => ({
+  connection: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/app",
   useRouter: () => ({ refresh: vi.fn() }),

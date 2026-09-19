@@ -12,6 +12,7 @@ import { writeAdminAuditEvent } from "@/lib/admin/audit";
 import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 import type { AdminPermission } from "@/lib/admin/permissions";
 import { getAdminRequestContext } from "@/lib/admin/request";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export async function requireAdminApi(input: {
   permission?: AdminPermission;
@@ -53,10 +54,11 @@ export async function requireAdminApi(input: {
   }
   if (input.recentMfa) {
     try {
+      const runtime = await getRuntimeConfig("web");
       requireRecentAdminReauthentication(
         context,
         new Date(),
-        resolveAdminSecurityConfiguration(process.env).reauthSeconds,
+        resolveAdminSecurityConfiguration(runtime.values).reauthSeconds,
         { allowRecoveryEnrollment: input.recoveryMfaEnrollment },
       );
     } catch (error) {

@@ -25,8 +25,10 @@ import {
 
 class FakeNotifier implements ConfigurationNotifier {
   private listener?: () => void;
+  startCalls = 0;
 
   async start(listener: () => void) {
+    this.startCalls += 1;
     this.listener = listener;
   }
 
@@ -36,7 +38,6 @@ class FakeNotifier implements ConfigurationNotifier {
 
   async emit() {
     this.listener?.();
-    await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
 
@@ -86,6 +87,9 @@ describe("runtime configuration snapshots", () => {
 
     const published = await publish({ resumeVersionHistoryLimit: 12 });
     await notifier.emit();
+    await vi.waitFor(async () => {
+      expect((await runtime.snapshot()).hotRevisionId).toBe(published.id);
+    });
     const after = await runtime.snapshot();
 
     expect(Object.isFrozen(before)).toBe(true);
@@ -97,6 +101,20 @@ describe("runtime configuration snapshots", () => {
     await runtime.stop();
   });
 
+  it("initializes one runtime for concurrent first snapshots", async () => {
+    const notifier = new FakeNotifier();
+    const runtime = manager(notifier);
+
+    const [first, second] = await Promise.all([
+      runtime.snapshot(),
+      runtime.snapshot(),
+    ]);
+
+    expect(first).toBe(second);
+    expect(notifier.startCalls).toBe(1);
+    await runtime.stop();
+  });
+
   it("keeps restart values at their startup revision", async () => {
     const notifier = new FakeNotifier();
     const runtime = manager(notifier);
@@ -105,6 +123,9 @@ describe("runtime configuration snapshots", () => {
 
     const published = await publish({ smtpPort: 2_525 });
     await notifier.emit();
+    await vi.waitFor(async () => {
+      expect((await runtime.snapshot()).desiredRevisionId).toBe(published.id);
+    });
     const refreshed = await runtime.snapshot();
 
     expect(refreshed.values.smtpPort).toBe(initial.values.smtpPort);
