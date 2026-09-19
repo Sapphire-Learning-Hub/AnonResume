@@ -13,6 +13,7 @@ import {
   NotificationOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
@@ -372,6 +373,7 @@ const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
   announcements: <NotificationOutlined />,
   approvals: <CheckSquareOutlined />,
   audit: <AuditOutlined />,
+  configuration: <SettingOutlined />,
   dashboard: <DashboardOutlined />,
   exports: <CloudServerOutlined />,
   fonts: <FontSizeOutlined />,
