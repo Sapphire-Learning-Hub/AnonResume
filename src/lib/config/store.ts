@@ -50,9 +50,12 @@ export interface ConfigurationRevisionView {
 }
 
 export interface ConfigSnapshot {
-  id: string;
+  desiredRevisionId: string | null;
+  fallbackRevisionId: string | null;
+  id: string | null;
+  lastError: "active_revision_unreadable" | "no_readable_revision" | null;
   values: ManagedConfig;
-  version: number;
+  version: number | null;
 }
 
 export interface ConfigurationFieldState {
@@ -436,18 +439,44 @@ export async function createRollbackDraft(input: {
 export async function readActiveConfigSnapshot(input: {
   keyring: ConfigKeyring;
 }): Promise<ConfigSnapshot> {
-  const [active] = await db
+  const revisions = await db
     .select()
     .from(systemConfigRevisions)
-    .where(eq(systemConfigRevisions.status, "active"))
-    .limit(1);
-  if (!active) {
-    throw new ConfigurationStateError();
+    .where(ne(systemConfigRevisions.status, "draft"))
+    .orderBy(desc(systemConfigRevisions.version));
+  const active = revisions.find((revision) => revision.status === "active");
+  const candidates = active
+    ? [
+        active,
+        ...revisions.filter((revision) => revision.status === "superseded"),
+      ]
+    : revisions;
+
+  for (const revision of candidates) {
+    try {
+      return {
+        desiredRevisionId: active?.id ?? null,
+        fallbackRevisionId:
+          active && revision.id !== active.id ? revision.id : null,
+        id: revision.id,
+        lastError:
+          active && revision.id !== active.id
+            ? "active_revision_unreadable"
+            : null,
+        values: await readRevisionValues(revision.id, input.keyring),
+        version: revision.version,
+      };
+    } catch {
+      continue;
+    }
   }
 
   return {
-    id: active.id,
-    values: await readRevisionValues(active.id, input.keyring),
-    version: active.version,
+    desiredRevisionId: active?.id ?? null,
+    fallbackRevisionId: null,
+    id: null,
+    lastError: "no_readable_revision",
+    values: getManagedConfigDefaults(),
+    version: null,
   };
 }
