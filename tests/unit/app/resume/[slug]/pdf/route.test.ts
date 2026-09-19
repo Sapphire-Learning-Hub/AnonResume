@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getOptionalSession } from "@/lib/auth/session";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getPdfExportWorkerAvailability } from "@/lib/pdf/export-availability";
-import { getPdfExportStatus } from "@/lib/pdf/export-queue";
+import {
+  getPdfExportQueueConfig,
+  getPdfExportStatus,
+} from "@/lib/pdf/export-queue";
 import {
   createGeneratedResumeRecord,
   publishResumeRecord,
@@ -21,6 +26,10 @@ vi.mock("@/lib/pdf/export-availability", () => ({
   PDF_EXPORT_OFFLINE_POLL_MS: 30_000,
 }));
 
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(),
+}));
+
 describe("public resume pdf route", () => {
   beforeEach(async () => {
     vi.unstubAllEnvs();
@@ -28,6 +37,9 @@ describe("public resume pdf route", () => {
     vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
       available: true,
     });
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      values: getManagedConfigDefaults(),
+    } as never);
     await resetResumeRepository();
   });
 
@@ -42,7 +54,10 @@ describe("public resume pdf route", () => {
       templateId: "centered",
       createId: () => "resume-foundation",
     });
-    const published = await publishResumeRecord("user-demo", "resume-foundation");
+    const published = await publishResumeRecord(
+      "user-demo",
+      "resume-foundation",
+    );
     const response = await POST(
       new Request(`http://localhost/resume/${published.slug}/pdf`, {
         method: "POST",
@@ -58,13 +73,20 @@ describe("public resume pdf route", () => {
   });
 
   it("allows anonymous public PDF exports only with the explicit override", async () => {
-    vi.stubEnv("PDF_EXPORT_ALLOW_ANONYMOUS", "true");
+    const values = {
+      ...getManagedConfigDefaults(),
+      pdfAllowAnonymous: true,
+    };
+    vi.mocked(getRuntimeConfig).mockResolvedValue({ values } as never);
     await createGeneratedResumeRecord({
       userId: "user-demo",
       templateId: "centered",
       createId: () => "resume-foundation",
     });
-    const published = await publishResumeRecord("user-demo", "resume-foundation");
+    const published = await publishResumeRecord(
+      "user-demo",
+      "resume-foundation",
+    );
     const response = await POST(
       new Request(`http://localhost/resume/${published.slug}/pdf`, {
         method: "POST",
@@ -81,10 +103,13 @@ describe("public resume pdf route", () => {
       status: "queued",
     });
     await expect(
-      getPdfExportStatus({
-        jobId: payload.job.id,
-        accessToken: payload.job.accessToken,
-      }),
+      getPdfExportStatus(
+        {
+          jobId: payload.job.id,
+          accessToken: payload.job.accessToken,
+        },
+        getPdfExportQueueConfig(values),
+      ),
     ).resolves.toMatchObject({ status: "queued" });
   });
 

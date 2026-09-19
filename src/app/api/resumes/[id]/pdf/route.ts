@@ -12,11 +12,9 @@ import {
   PdfExportQueueFullError,
   PdfExportUserQueueLimitError,
 } from "@/lib/pdf/export-queue";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { requireSameOrigin } from "@/lib/http/request-origin";
-import {
-  getResumeRecord,
-  ResumeNotFoundError,
-} from "@/lib/resume/repository";
+import { getResumeRecord, ResumeNotFoundError } from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,
@@ -35,6 +33,9 @@ export async function POST(
   }
 
   const { id } = await params;
+  const runtime = await getRuntimeConfig("web");
+  const queueConfig = getPdfExportQueueConfig(runtime.values);
+
   try {
     const resume = await getResumeRecord(session.user.id, id);
 
@@ -56,13 +57,16 @@ export async function POST(
       );
     }
 
-    const queued = await enqueuePdfExport({
-      resumeUserId: session.user.id,
-      resumeId: resume.id,
-      requesterUserId: session.user.id,
-      document: resume.document,
-      filename: createPdfFilename(resume.slug || resume.title || resume.id),
-    });
+    const queued = await enqueuePdfExport(
+      {
+        resumeUserId: session.user.id,
+        resumeId: resume.id,
+        requesterUserId: session.user.id,
+        document: resume.document,
+        filename: createPdfFilename(resume.slug || resume.title || resume.id),
+      },
+      queueConfig,
+    );
 
     return NextResponse.json(
       {
@@ -87,7 +91,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "user_queue_limit",
-          limit: getPdfExportQueueConfig().maxActivePerUser,
+          limit: queueConfig.maxActivePerUser,
         },
         { status: 429 },
       );

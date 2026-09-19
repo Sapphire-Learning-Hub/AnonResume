@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
 import {
   adminCancelPdfExport,
   adminRetryPdfExport,
@@ -12,9 +13,11 @@ import {
   getPdfExportDownload,
   getPdfExportDocumentForWorker,
   getPdfExportStatus,
+  getPdfExportQueueConfig,
   deleteExpiredPdfExportResults,
   PdfExportAccessError,
   PdfExportNotFoundError,
+  PdfExportQueueFullError,
   PdfExportUserQueueLimitError,
 } from "@/lib/pdf/export-queue";
 import {
@@ -23,6 +26,13 @@ import {
 } from "@/lib/resume/repository";
 
 describe("PDF export queue", () => {
+  function configuration(overrides: Record<string, unknown> = {}) {
+    return getPdfExportQueueConfig({
+      ...getManagedConfigDefaults(),
+      ...overrides,
+    });
+  }
+
   beforeEach(async () => {
     vi.unstubAllEnvs();
     await resetResumeRepository();
@@ -39,14 +49,19 @@ describe("PDF export queue", () => {
   });
 
   async function enqueue(index = 1) {
-    return enqueuePdfExport({
-      resumeUserId: "user-demo",
-      resumeId: "resume-demo",
-      requesterUserId: "user-demo",
-      document: createDefaultResumeDocument(),
-      filename: `resume-${index}.pdf`,
-      queueLimit: 20,
-    });
+    return enqueuePdfExport(
+      {
+        resumeUserId: "user-demo",
+        resumeId: "resume-demo",
+        requesterUserId: "user-demo",
+        document: createDefaultResumeDocument(),
+        filename: `resume-${index}.pdf`,
+      },
+      configuration({
+        pdfMaxActivePerUser: 20,
+        pdfQueueLimit: 20,
+      }),
+    );
   }
 
   it("stores only a token hash and reports FIFO position", async () => {
@@ -59,10 +74,13 @@ describe("PDF export queue", () => {
 
     expect(rows[0]?.accessTokenHash).not.toBe(first.accessToken);
     await expect(
-      getPdfExportStatus({
-        jobId: second.jobId,
-        accessToken: second.accessToken,
-      }),
+      getPdfExportStatus(
+        {
+          jobId: second.jobId,
+          accessToken: second.accessToken,
+        },
+        configuration(),
+      ),
     ).resolves.toMatchObject({
       status: "queued",
       position: 2,
@@ -75,15 +93,21 @@ describe("PDF export queue", () => {
     const queued = await enqueue(2);
     await claimPdfExportJobs({
       workerId: "admin-cancel-worker",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
+      }),
     });
 
     await adminCancelPdfExport(running.jobId);
     await adminCancelPdfExport(queued.jobId);
 
     const rows = await db
-      .select({ id: pdfExportJobs.id, status: pdfExportJobs.status, cancelRequested: pdfExportJobs.cancelRequested })
+      .select({
+        id: pdfExportJobs.id,
+        status: pdfExportJobs.status,
+        cancelRequested: pdfExportJobs.cancelRequested,
+      })
       .from(pdfExportJobs);
     expect(rows.find((row) => row.id === running.jobId)).toMatchObject({
       status: "running",
@@ -107,7 +131,10 @@ describe("PDF export queue", () => {
       })
       .where(eq(pdfExportJobs.id, failed.jobId));
 
-    const retried = await adminRetryPdfExport(failed.jobId, { queueLimit: 20 });
+    const retried = await adminRetryPdfExport(
+      failed.jobId,
+      configuration({ pdfQueueLimit: 20 }),
+    );
 
     const rows = await db
       .select()
@@ -134,19 +161,20 @@ describe("PDF export queue", () => {
 
     const claimed = await claimPdfExportJobs({
       workerId: "worker-one",
-      maxConcurrency: 2,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 2,
+      }),
     });
     const blocked = await claimPdfExportJobs({
       workerId: "worker-two",
-      maxConcurrency: 2,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 2,
+      }),
     });
 
-    expect(claimed.map((job) => job.id)).toEqual([
-      first.jobId,
-      second.jobId,
-    ]);
+    expect(claimed.map((job) => job.id)).toEqual([first.jobId, second.jobId]);
     expect(blocked).toEqual([]);
   });
 
@@ -155,8 +183,10 @@ describe("PDF export queue", () => {
 
     await claimPdfExportJobs({
       workerId: "dead-worker",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
+      }),
     });
     await db
       .update(pdfExportJobs)
@@ -165,8 +195,10 @@ describe("PDF export queue", () => {
 
     const reclaimed = await claimPdfExportJobs({
       workerId: "new-worker",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
+      }),
     });
 
     expect(reclaimed).toHaveLength(1);
@@ -182,9 +214,11 @@ describe("PDF export queue", () => {
 
     await claimPdfExportJobs({
       workerId: "dead-worker",
-      maxConcurrency: 1,
-      maxAttempts: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxAttempts: 1,
+        pdfMaxConcurrency: 1,
+      }),
     });
     await db
       .update(pdfExportJobs)
@@ -194,16 +228,21 @@ describe("PDF export queue", () => {
     await expect(
       claimPdfExportJobs({
         workerId: "new-worker",
-        maxConcurrency: 1,
-        maxAttempts: 1,
-        leaseMs: 30_000,
+        configuration: configuration({
+          pdfLeaseMs: 30_000,
+          pdfMaxAttempts: 1,
+          pdfMaxConcurrency: 1,
+        }),
       }),
     ).resolves.toEqual([]);
     await expect(
-      getPdfExportStatus({
-        jobId: queued.jobId,
-        requesterUserId: "user-demo",
-      }),
+      getPdfExportStatus(
+        {
+          jobId: queued.jobId,
+          requesterUserId: "user-demo",
+        },
+        configuration(),
+      ),
     ).resolves.toMatchObject({ status: "failed" });
   });
 
@@ -213,29 +252,43 @@ describe("PDF export queue", () => {
 
     await claimPdfExportJobs({
       workerId: "worker-one",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
-    });
-    await cancelPdfExport({
-      jobId: running.jobId,
-      requesterUserId: "user-demo",
-    });
-    await cancelPdfExport({
-      jobId: queued.jobId,
-      requesterUserId: "user-demo",
-    });
-
-    await expect(
-      getPdfExportStatus({
-        jobId: queued.jobId,
-        requesterUserId: "user-demo",
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
       }),
-    ).resolves.toMatchObject({ status: "cancelled" });
-    await expect(
-      getPdfExportStatus({
+    });
+    await cancelPdfExport(
+      {
         jobId: running.jobId,
         requesterUserId: "user-demo",
-      }),
+      },
+      configuration(),
+    );
+    await cancelPdfExport(
+      {
+        jobId: queued.jobId,
+        requesterUserId: "user-demo",
+      },
+      configuration(),
+    );
+
+    await expect(
+      getPdfExportStatus(
+        {
+          jobId: queued.jobId,
+          requesterUserId: "user-demo",
+        },
+        configuration(),
+      ),
+    ).resolves.toMatchObject({ status: "cancelled" });
+    await expect(
+      getPdfExportStatus(
+        {
+          jobId: running.jobId,
+          requesterUserId: "user-demo",
+        },
+        configuration(),
+      ),
     ).resolves.toMatchObject({
       status: "running",
       cancelRequested: true,
@@ -246,22 +299,27 @@ describe("PDF export queue", () => {
     const queued = await enqueue();
     const [job] = await claimPdfExportJobs({
       workerId: "worker-one",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
+      }),
     });
 
     await completePdfExport({
       jobId: job!.id,
       workerId: "worker-one",
       result: new Uint8Array([1, 2, 3]),
-      resultTtlMs: 60_000,
+      configuration: configuration({ pdfResultTtlMs: 60_000 }),
     });
 
     await expect(
-      getPdfExportDownload({
-        jobId: queued.jobId,
-        accessToken: queued.accessToken,
-      }),
+      getPdfExportDownload(
+        {
+          jobId: queued.jobId,
+          accessToken: queued.accessToken,
+        },
+        configuration(),
+      ),
     ).resolves.toMatchObject({
       filename: "resume-1.pdf",
       result: Buffer.from([1, 2, 3]),
@@ -272,38 +330,75 @@ describe("PDF export queue", () => {
     const queued = await enqueue();
 
     await expect(
-      getPdfExportStatus({
-        jobId: queued.jobId,
-        accessToken: "incorrect-token",
-      }),
+      getPdfExportStatus(
+        {
+          jobId: queued.jobId,
+          accessToken: "incorrect-token",
+        },
+        configuration(),
+      ),
     ).rejects.toBeInstanceOf(PdfExportAccessError);
   });
 
   it("enforces an active export limit per authenticated requester", async () => {
-    vi.stubEnv("PDF_EXPORT_MAX_ACTIVE_PER_USER", "1");
-    await enqueuePdfExport({
-      resumeUserId: "user-demo",
-      resumeId: "resume-demo",
-      requesterUserId: "user-demo",
-      document: createDefaultResumeDocument(),
-      filename: "first.pdf",
-      queueLimit: 20,
-    });
-
-    await expect(
-      enqueuePdfExport({
+    const config = configuration({ pdfMaxActivePerUser: 1 });
+    await enqueuePdfExport(
+      {
         resumeUserId: "user-demo",
         resumeId: "resume-demo",
         requesterUserId: "user-demo",
         document: createDefaultResumeDocument(),
-        filename: "second.pdf",
-        queueLimit: 20,
-      }),
+        filename: "first.pdf",
+      },
+      config,
+    );
+
+    await expect(
+      enqueuePdfExport(
+        {
+          resumeUserId: "user-demo",
+          resumeId: "resume-demo",
+          requesterUserId: "user-demo",
+          document: createDefaultResumeDocument(),
+          filename: "second.pdf",
+        },
+        config,
+      ),
     ).rejects.toBeInstanceOf(PdfExportUserQueueLimitError);
   });
 
+  it("applies a captured queue limit only to the request using it", async () => {
+    const limitThree = configuration({
+      pdfQueueLimit: 3,
+      pdfMaxActivePerUser: 3,
+    });
+    const limitOne = configuration({
+      pdfQueueLimit: 1,
+      pdfMaxActivePerUser: 1,
+    });
+    const request = (index: number) => ({
+      resumeUserId: "user-demo",
+      resumeId: "resume-demo",
+      requesterUserId: `user-${index}`,
+      document: createDefaultResumeDocument(),
+      filename: `captured-${index}.pdf`,
+    });
+
+    await expect(enqueuePdfExport(request(1), limitThree)).resolves.toEqual({
+      accessToken: expect.any(String),
+      jobId: expect.any(String),
+    });
+    await expect(enqueuePdfExport(request(2), limitThree)).resolves.toEqual({
+      accessToken: expect.any(String),
+      jobId: expect.any(String),
+    });
+    await expect(enqueuePdfExport(request(3), limitOne)).rejects.toBeInstanceOf(
+      PdfExportQueueFullError,
+    );
+  });
+
   it("force-deletes jobs after the configured maximum lifetime", async () => {
-    vi.stubEnv("PDF_EXPORT_FORCE_EXPIRY_MS", "1000");
+    const config = configuration({ pdfForceExpiryMs: 1_000 });
     const queued = await enqueue();
 
     await db
@@ -311,27 +406,31 @@ describe("PDF export queue", () => {
       .set({ createdAt: new Date(Date.now() - 60_000) })
       .where(eq(pdfExportJobs.id, queued.jobId));
 
-    await deleteExpiredPdfExportResults();
+    await deleteExpiredPdfExportResults(config);
 
     await expect(
-      getPdfExportStatus({
-        jobId: queued.jobId,
-        requesterUserId: "user-demo",
-      }),
+      getPdfExportStatus(
+        {
+          jobId: queued.jobId,
+          requesterUserId: "user-demo",
+        },
+        config,
+      ),
     ).rejects.toBeInstanceOf(Error);
   });
 
   it("denies worker document access after the forced lifetime", async () => {
-    vi.stubEnv("PDF_EXPORT_FORCE_EXPIRY_MS", "1000");
+    const config = configuration({ pdfForceExpiryMs: 1_000 });
     const queued = await enqueue();
     const [job] = await claimPdfExportJobs({
       workerId: "worker-one",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration: configuration({
+        pdfLeaseMs: 30_000,
+        pdfMaxConcurrency: 1,
+      }),
     });
-    const { createPdfExportWorkerToken } = await import(
-      "@/lib/pdf/export-queue"
-    );
+    const { createPdfExportWorkerToken } =
+      await import("@/lib/pdf/export-queue");
 
     await db
       .update(pdfExportJobs)
@@ -339,10 +438,13 @@ describe("PDF export queue", () => {
       .where(eq(pdfExportJobs.id, queued.jobId));
 
     await expect(
-      getPdfExportDocumentForWorker({
-        jobId: job!.id,
-        workerToken: createPdfExportWorkerToken(job!.id),
-      }),
+      getPdfExportDocumentForWorker(
+        {
+          jobId: job!.id,
+          workerToken: createPdfExportWorkerToken(job!.id),
+        },
+        config,
+      ),
     ).rejects.toBeInstanceOf(PdfExportNotFoundError);
   });
 });

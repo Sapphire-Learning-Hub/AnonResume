@@ -4,16 +4,15 @@ import {
   claimPdfExportJobs,
   completePdfExport,
   enqueuePdfExport,
+  getPdfExportQueueConfig,
 } from "@/lib/pdf/export-queue";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
 import {
   createGeneratedResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume/repository";
 
-import {
-  DELETE,
-  GET,
-} from "@/app/api/pdf-exports/[id]/route";
+import { DELETE, GET } from "@/app/api/pdf-exports/[id]/route";
 import { GET as DOWNLOAD } from "@/app/api/pdf-exports/[id]/download/route";
 
 vi.mock("@/lib/auth/session", () => ({
@@ -27,6 +26,8 @@ vi.mock("@/lib/pdf/export-availability", () => ({
 }));
 
 describe("PDF export job routes", () => {
+  const configuration = getPdfExportQueueConfig(getManagedConfigDefaults());
+
   beforeEach(async () => {
     vi.mocked(getOptionalSession).mockResolvedValue(null);
     vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
@@ -45,12 +46,17 @@ describe("PDF export job routes", () => {
   });
 
   async function createPublicJob() {
-    return enqueuePdfExport({
-      resumeUserId: "user-demo",
-      resumeId: "resume-demo",
-      document: (await import("@/domain/resume/default-document")).createDefaultResumeDocument(),
-      filename: "demo.pdf",
-    });
+    return enqueuePdfExport(
+      {
+        resumeUserId: "user-demo",
+        resumeId: "resume-demo",
+        document: (
+          await import("@/domain/resume/default-document")
+        ).createDefaultResumeDocument(),
+        filename: "demo.pdf",
+      },
+      configuration,
+    );
   }
 
   it("returns queue position and accepts capability-token cancellation", async () => {
@@ -69,16 +75,13 @@ describe("PDF export job routes", () => {
     });
 
     const cancelled = await DELETE(
-      new Request(
-        `http://localhost/api/pdf-exports/${job.jobId}`,
-        {
-          method: "DELETE",
-          headers: {
-            authorization: `Bearer ${job.accessToken}`,
-            origin: "http://localhost",
-          },
+      new Request(`http://localhost/api/pdf-exports/${job.jobId}`, {
+        method: "DELETE",
+        headers: {
+          authorization: `Bearer ${job.accessToken}`,
+          origin: "http://localhost",
         },
-      ),
+      }),
       context,
     );
 
@@ -115,21 +118,20 @@ describe("PDF export job routes", () => {
     const queued = await createPublicJob();
     const [claimed] = await claimPdfExportJobs({
       workerId: "worker-one",
-      maxConcurrency: 1,
-      leaseMs: 30_000,
+      configuration,
     });
 
     await completePdfExport({
       jobId: claimed!.id,
       workerId: "worker-one",
       result: new Uint8Array([4, 5, 6]),
+      configuration,
     });
 
     const response = await DOWNLOAD(
-      new Request(
-        `http://localhost/api/pdf-exports/${queued.jobId}/download`,
-        { headers: { authorization: `Bearer ${queued.accessToken}` } },
-      ),
+      new Request(`http://localhost/api/pdf-exports/${queued.jobId}/download`, {
+        headers: { authorization: `Bearer ${queued.accessToken}` },
+      }),
       { params: Promise.resolve({ id: queued.jobId }) },
     );
 

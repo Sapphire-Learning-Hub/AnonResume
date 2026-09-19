@@ -15,7 +15,8 @@ import {
 } from "@/lib/admin/permissions";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
-import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
+import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ConfigConsumer } from "@/lib/config/types";
 
 export type AdminListRequest = PageRequest & { query?: string };
@@ -810,7 +811,7 @@ export async function listAdminWorkers(request: AdminListRequest) {
 export async function getAdminSystemStatus() {
   const schema = schemaName();
   const pool = getDatabasePool();
-  const [database, desiredConfiguration, runtimeStates] = await Promise.all([
+  const [database, desiredConfiguration, runtimeStates, runtime] = await Promise.all([
     pool.query<{
       database: string;
       serverTime: Date;
@@ -863,8 +864,9 @@ export async function getAdminSystemStatus() {
          ON fallback.id = runtime.fallback_revision_id
        ORDER BY runtime.consumer ASC, runtime.instance_id ASC`,
     ),
+    getRuntimeConfig("web"),
   ]);
-  const configuration = validateRuntimeConfiguration(process.env);
+  const configuration = validateBootstrapConfiguration();
   const now = database.rows[0]?.serverTime ?? new Date();
   return {
     release: getApplicationRelease(),
@@ -890,11 +892,13 @@ export async function getAdminSystemStatus() {
     configurationValid: configuration.valid,
     configurationIssues: configuration.issues,
     smtpConfigured: Boolean(
-      process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD,
+      runtime.values.smtpHost &&
+        runtime.values.smtpUser &&
+        runtime.values.smtpPassword,
     ),
     queue: {
-      maxConcurrency: Number(process.env.PDF_EXPORT_MAX_CONCURRENCY || 2),
-      queueLimit: Number(process.env.PDF_EXPORT_QUEUE_LIMIT || 100),
+      maxConcurrency: runtime.values.pdfMaxConcurrency,
+      queueLimit: runtime.values.pdfQueueLimit,
     },
   };
 }
