@@ -1156,6 +1156,7 @@ export async function* executePreparedAiRun(
       );
       auditRequests.push(auditProviderRequest(providerRequest));
       proposalText = "";
+      proposalChanges = [];
       sequence += 1;
       await persistCheckpoint(new Date());
       yield { sequence, type: "proposal_reset" };

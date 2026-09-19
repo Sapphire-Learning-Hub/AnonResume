@@ -1361,6 +1361,90 @@ describe("AI run service", () => {
     expect(storedProposal).toMatchObject({ completionState: "complete" });
   });
 
+  it("clears staged proposal progress from the repair checkpoint", async () => {
+    let round = 0;
+    const adapter: AiProviderAdapter = {
+      async *start(request) {
+        round += 1;
+        if (round === 1) {
+          yield {
+            type: "tool_call",
+            callId: "call-stage-before-repair",
+            name: "stage_section_changes",
+            arguments: JSON.stringify({
+              operations: [
+                {
+                  type: "create",
+                  title: "项目经历",
+                  semantic: "projects",
+                  afterSectionId: document.sections.at(-1)!.id,
+                  blocks: [{ type: "text", text: "[填写项目经历]" }],
+                  reason: "创建项目经历骨架",
+                },
+              ],
+            }),
+          };
+          yield { type: "complete", finishReason: "tool_calls" };
+          return;
+        }
+        if (round === 2) {
+          expect(request.messages.at(-1)?.content).toContain(
+            "stage_section_changes",
+          );
+          yield {
+            type: "proposal_delta",
+            delta: '{"changes":[{"type":"replace_text"}]}',
+          };
+          yield { type: "complete", finishReason: "tool_calls" };
+          return;
+        }
+
+        expect(request.messages.at(-1)?.content).toContain(
+          "invalid structured proposal",
+        );
+        yield {
+          type: "tool_call",
+          callId: "call-submit-after-repair",
+          name: "submit_resume_proposal",
+          arguments: JSON.stringify({ summary: "修正后的简历骨架" }),
+        };
+        yield { type: "complete", finishReason: "tool_calls" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "创建项目经历并修正建议",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    const claimed = await claimPreparedRun(prepared.runId);
+    const stream = executePreparedAiRun(claimed, { adapter });
+    let resetObserved = false;
+    for (;;) {
+      const next = await stream.next();
+      if (next.done) break;
+      if (next.value.type !== "proposal_reset") continue;
+      resetObserved = true;
+      const [repairCheckpoint] = await db
+        .select({ checkpointChanges: aiRuns.checkpointChanges })
+        .from(aiRuns)
+        .where(eq(aiRuns.id, prepared.runId));
+      expect(repairCheckpoint?.checkpointChanges).toEqual([]);
+    }
+
+    expect(resetObserved).toBe(true);
+    expect(round).toBe(3);
+  });
+
   it("executes staged structural tools before publishing a proposal", async () => {
     let round = 0;
     const adapter: AiProviderAdapter = {

@@ -58,6 +58,7 @@ export function AdminAiUsage({
     ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value))
     : "-";
   const statusLabels: Record<string, string> = {
+    queued: t("ai.status.queued"),
     preparing: t("ai.status.preparing"),
     streaming: t("ai.status.streaming"),
     complete: t("ai.status.complete"),
