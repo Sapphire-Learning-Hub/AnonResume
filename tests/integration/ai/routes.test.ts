@@ -12,11 +12,14 @@ import {
 } from "@/db";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { getOptionalSession } from "@/lib/auth/session";
+import { getAiCredentialsEncryptionKey } from "@/lib/ai/config/configuration";
 import { createAiProviderAdapter } from "@/lib/ai/providers/registry";
 import { executePreparedAiRun } from "@/lib/ai/runs/service";
 import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
 import { getAiWorkerAvailability } from "@/lib/ai/worker-availability";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 import {
   GET as listConversations,
@@ -39,6 +42,10 @@ vi.mock("@/lib/ai/worker-availability", () => ({
   getAiWorkerAvailability: vi.fn(),
 }));
 
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(),
+}));
+
 function session(userId: string) {
   return {
     session: { id: `session-${userId}`, userId },
@@ -58,7 +65,7 @@ function mutationRequest(url: string, body: unknown) {
 }
 
 describe("AI conversation routes", () => {
-  const encryptionKey = Buffer.alloc(32, 8);
+  const encryptionKey = getAiCredentialsEncryptionKey();
   const userId = `ai-route-${randomUUID()}`;
   const otherUserId = `ai-route-other-${randomUUID()}`;
   const resumeId = `resume-${randomUUID()}`;
@@ -66,13 +73,8 @@ describe("AI conversation routes", () => {
   let modelId = "";
   let conversationId = "";
   let latestRunId = "";
-  const originalEnvironment = { ...process.env };
 
   beforeAll(async () => {
-    process.env.AI_ENABLED = "true";
-    process.env.AI_PLATFORM_ENABLED = "true";
-    process.env.AI_CREDENTIALS_ENCRYPTION_KEY = encryptionKey.toString("base64");
-
     const [provider] = await db
       .insert(aiProviderCredentials)
       .values({
@@ -107,6 +109,13 @@ describe("AI conversation routes", () => {
   });
 
   beforeEach(() => {
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      values: {
+        ...getManagedConfigDefaults(),
+        aiEnabled: true,
+        aiPlatformEnabled: true,
+      },
+    } as never);
     vi.mocked(getOptionalSession).mockResolvedValue(session(userId));
     vi.mocked(getAiWorkerAvailability).mockResolvedValue({ available: true });
     vi.mocked(createAiProviderAdapter).mockReturnValue({
@@ -124,7 +133,6 @@ describe("AI conversation routes", () => {
   });
 
   afterAll(async () => {
-    process.env = originalEnvironment;
     await db.delete(aiUsageLedger).where(eq(aiUsageLedger.userId, userId));
     await db.delete(aiQuotaAccounts).where(eq(aiQuotaAccounts.userId, userId));
     await db.delete(resumes).where(eq(resumes.id, resumeId));

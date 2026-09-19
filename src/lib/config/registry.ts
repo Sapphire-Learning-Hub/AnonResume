@@ -51,10 +51,10 @@ export const managedConfigSchema = z
     aiRequestsPerMinute: positiveInteger,
     aiMaxConcurrentRuns: positiveInteger,
     aiDefaultMonthlyPoints: nonNegativeInteger,
-    aiWorkerBatchSize: positiveInteger,
-    aiWorkerPollIntervalMs: positiveInteger,
-    aiWorkerRecoveryIntervalMs: positiveInteger,
-    aiWorkerRetentionIntervalMs: positiveInteger,
+    aiWorkerBatchSize: positiveInteger.max(1_000),
+    aiWorkerPollIntervalMs: positiveInteger.min(250).max(60_000),
+    aiWorkerRecoveryIntervalMs: positiveInteger.min(250).max(3_600_000),
+    aiWorkerRetentionIntervalMs: positiveInteger.min(1_000).max(86_400_000),
     sourceCodeUrl: optionalText.refine((value) => {
       if (!value) return true;
       try {

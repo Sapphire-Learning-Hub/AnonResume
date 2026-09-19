@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AiProviderKind } from "@/db/ai-schema";
 import { getOptionalSession } from "@/lib/auth/session";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   createAiConversation,
   listAiConversations,
@@ -59,7 +60,8 @@ export async function GET(request: Request) {
     return Response.json({ error: "invalid_ai_request" }, { status: 400 });
   }
 
-  const configuration = resolveAiConfiguration(process.env);
+  const runtime = await getRuntimeConfig("web");
+  const configuration = resolveAiConfiguration(runtime.values);
   const [conversations, models] = await Promise.all([
     listAiConversations({
       userId: session.user.id,
@@ -90,7 +92,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const configuration = resolveAiConfiguration(process.env);
+    const runtime = await getRuntimeConfig("web");
+    const configuration = resolveAiConfiguration(runtime.values);
     if (!configuration.enabled) throw new AiFeatureUnavailableError();
     const body = createConversationSchema.parse(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),

@@ -45,4 +45,19 @@ describe("managed configuration registry", () => {
       "githubClientSecret",
     );
   });
+
+  it("enforces AI worker operating bounds", () => {
+    expect(() => parseManagedConfig({ aiWorkerBatchSize: 1_001 })).toThrow(
+      "aiWorkerBatchSize",
+    );
+    expect(() => parseManagedConfig({ aiWorkerPollIntervalMs: 249 })).toThrow(
+      "aiWorkerPollIntervalMs",
+    );
+    expect(() =>
+      parseManagedConfig({ aiWorkerRecoveryIntervalMs: 3_600_001 }),
+    ).toThrow("aiWorkerRecoveryIntervalMs");
+    expect(() =>
+      parseManagedConfig({ aiWorkerRetentionIntervalMs: 86_400_001 }),
+    ).toThrow("aiWorkerRetentionIntervalMs");
+  });
 });

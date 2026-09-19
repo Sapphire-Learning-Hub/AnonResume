@@ -1,5 +1,6 @@
 import { getOptionalSession } from "@/lib/auth/session";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   AiFeatureUnavailableError,
   createAiErrorResponse,
@@ -14,8 +15,9 @@ export async function GET() {
   }
 
   try {
-    const configuration = resolveAiConfiguration(process.env);
-    if (!configuration.enabled || !configuration.credentialsEncryptionKey) {
+    const runtime = await getRuntimeConfig("web");
+    const configuration = resolveAiConfiguration(runtime.values);
+    if (!configuration.enabled) {
       throw new AiFeatureUnavailableError();
     }
     const [providers, quota] = await Promise.all([

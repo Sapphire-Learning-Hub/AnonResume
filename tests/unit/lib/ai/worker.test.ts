@@ -3,6 +3,10 @@ import {
   runAiWorker,
   type AiWorkerOperations,
 } from "@/lib/ai/worker";
+import {
+  getManagedConfigDefaults,
+  parseManagedConfig,
+} from "@/lib/config/registry";
 
 function createOperations(
   overrides: Partial<AiWorkerOperations> = {},
@@ -25,9 +29,45 @@ function createOperations(
   };
 }
 
+function runtimeManager(overrides: Record<string, unknown> = {}) {
+  const values = {
+    ...getManagedConfigDefaults(),
+    ...overrides,
+  };
+  return {
+    refreshIfDue: vi.fn(),
+    snapshot: vi.fn(async () => ({
+      consumer: "ai-worker" as const,
+      desiredRevisionId: "revision-1",
+      fallbackRevisionId: null,
+      health: "healthy" as const,
+      hotRevisionId: "revision-1",
+      instanceId: "ai-worker-test-runtime",
+      lastError: null,
+      restartRevisionId: "revision-1",
+      values,
+    })),
+    start: vi.fn(),
+  };
+}
+
+function preparedRun() {
+  return {
+    runId: "run-one",
+    configuration: {
+      credentialsEncryptionKey: Buffer.alloc(32, 8),
+      auditRetentionDays: 30,
+      defaultMonthlyPoints: 10_000,
+      requestsPerMinute: 10,
+      streamCheckpointMs: 5_000,
+      runLeaseSeconds: 120,
+    },
+  } as never;
+}
+
 describe("AI worker", () => {
   it("uses bounded production defaults and rejects invalid overrides", () => {
-    expect(getAiWorkerConfiguration({})).toEqual({
+    expect(getAiWorkerConfiguration(getManagedConfigDefaults())).toEqual({
       batchSize: 100,
       pollIntervalMs: 5_000,
       recoveryIntervalMs: 15_000,
@@ -35,10 +75,11 @@ describe("AI worker", () => {
     });
     expect(
       getAiWorkerConfiguration({
-        AI_WORKER_BATCH_SIZE: "25",
-        AI_WORKER_POLL_INTERVAL_MS: "1000",
-        AI_WORKER_RECOVERY_INTERVAL_MS: "5000",
-        AI_WORKER_RETENTION_INTERVAL_MS: "60000",
+        ...getManagedConfigDefaults(),
+        aiWorkerBatchSize: 25,
+        aiWorkerPollIntervalMs: 1_000,
+        aiWorkerRecoveryIntervalMs: 5_000,
+        aiWorkerRetentionIntervalMs: 60_000,
       }),
     ).toEqual({
       batchSize: 25,
@@ -47,14 +88,16 @@ describe("AI worker", () => {
       retentionIntervalMs: 60_000,
     });
     expect(() =>
-      getAiWorkerConfiguration({ AI_WORKER_BATCH_SIZE: "0" }),
-    ).toThrow("AI_WORKER_BATCH_SIZE");
-    expect(() =>
-      getAiWorkerConfiguration({
-        AI_WORKER_POLL_INTERVAL_MS: "20000",
-        AI_WORKER_RECOVERY_INTERVAL_MS: "10000",
+      parseManagedConfig({
+        aiWorkerBatchSize: 0,
       }),
-    ).toThrow("AI_WORKER_RECOVERY_INTERVAL_MS");
+    ).toThrow("aiWorkerBatchSize");
+    expect(() =>
+      parseManagedConfig({
+        aiWorkerPollIntervalMs: 20_000,
+        aiWorkerRecoveryIntervalMs: 10_000,
+      }),
+    ).toThrow("aiWorkerRecoveryIntervalMs");
   });
 
   it("runs recovery and retention immediately and records its heartbeat", async () => {
@@ -71,12 +114,12 @@ describe("AI worker", () => {
     const operations = createOperations({ recoverExpiredRuns });
 
     await runAiWorker({
-      configuration: {
-        batchSize: 10,
-        pollIntervalMs: 1_000,
-        recoveryIntervalMs: 5_000,
-        retentionIntervalMs: 60_000,
-      },
+      runtimeManager: runtimeManager({
+        aiWorkerBatchSize: 10,
+        aiWorkerPollIntervalMs: 1_000,
+        aiWorkerRecoveryIntervalMs: 5_000,
+        aiWorkerRetentionIntervalMs: 60_000,
+      }),
       now: () => new Date("2026-09-19T00:00:00.000Z"),
       operations,
       signal: controller.signal,
@@ -85,6 +128,11 @@ describe("AI worker", () => {
 
     expect(operations.recordHeartbeat).toHaveBeenCalledWith(
       expect.objectContaining({
+        metadata: expect.objectContaining({
+          desiredRevisionId: "revision-1",
+          hotRevisionId: "revision-1",
+          restartRevisionId: "revision-1",
+        }),
         workerId: "ai-worker-test",
         workerType: "ai-runtime",
       }),
@@ -97,7 +145,7 @@ describe("AI worker", () => {
 
   it("claims and executes queued runs outside the request process", async () => {
     const controller = new AbortController();
-    const prepared = { runId: "run-one" } as never;
+    const prepared = preparedRun();
     const executeRun = vi.fn().mockImplementation(async () => {
       controller.abort();
     });
@@ -107,14 +155,16 @@ describe("AI worker", () => {
     });
 
     await runAiWorker({
-      configuration: {
-        batchSize: 10,
-        pollIntervalMs: 1_000,
-        recoveryIntervalMs: 5_000,
-        retentionIntervalMs: 60_000,
-      },
       encryptionKey: Buffer.alloc(32, 1),
-      leaseSeconds: 90,
+      runtimeManager: runtimeManager({
+        aiEnabled: true,
+        aiRunLeaseSeconds: 90,
+        aiStreamCheckpointMs: 1_000,
+        aiWorkerBatchSize: 10,
+        aiWorkerPollIntervalMs: 1_000,
+        aiWorkerRecoveryIntervalMs: 5_000,
+        aiWorkerRetentionIntervalMs: 60_000,
+      }),
       operations,
       signal: controller.signal,
       workerId: "ai-worker-execution",
@@ -127,7 +177,14 @@ describe("AI worker", () => {
       encryptionKey: Buffer.alloc(32, 1),
     });
     expect(executeRun).toHaveBeenCalledWith(
-      prepared,
+      expect.objectContaining({
+        runId: "run-one",
+        configuration: expect.objectContaining({
+          credentialsEncryptionKey: Buffer.alloc(32, 1),
+          runLeaseSeconds: 90,
+          streamCheckpointMs: 1_000,
+        }),
+      }),
       controller.signal,
     );
   });
@@ -139,12 +196,12 @@ describe("AI worker", () => {
     let waits = 0;
 
     await runAiWorker({
-      configuration: {
-        batchSize: 10,
-        pollIntervalMs: 100,
-        recoveryIntervalMs: 200,
-        retentionIntervalMs: 300,
-      },
+      runtimeManager: runtimeManager({
+        aiWorkerBatchSize: 10,
+        aiWorkerPollIntervalMs: 250,
+        aiWorkerRecoveryIntervalMs: 500,
+        aiWorkerRetentionIntervalMs: 750,
+      }),
       now: () => new Date(currentMs),
       operations,
       signal: controller.signal,
@@ -179,12 +236,12 @@ describe("AI worker", () => {
     let currentMs = 0;
 
     await runAiWorker({
-      configuration: {
-        batchSize: 10,
-        pollIntervalMs: 100,
-        recoveryIntervalMs: 100,
-        retentionIntervalMs: 1_000,
-      },
+      runtimeManager: runtimeManager({
+        aiWorkerBatchSize: 10,
+        aiWorkerPollIntervalMs: 250,
+        aiWorkerRecoveryIntervalMs: 250,
+        aiWorkerRetentionIntervalMs: 1_000,
+      }),
       logger,
       now: () => new Date(currentMs),
       operations: createOperations({ recoverExpiredRuns }),
@@ -200,5 +257,70 @@ describe("AI worker", () => {
       "[AnonResume] AI worker recovery failed",
       expect.any(Error),
     );
+  });
+
+  it("stops new claims after AI is disabled while an active run settles", async () => {
+    const controller = new AbortController();
+    const initialValues = {
+      ...getManagedConfigDefaults(),
+      aiEnabled: true,
+      aiRunLeaseSeconds: 90,
+      aiStreamCheckpointMs: 1_000,
+      aiWorkerPollIntervalMs: 250,
+      aiWorkerRecoveryIntervalMs: 1_000,
+      aiWorkerRetentionIntervalMs: 1_000,
+    };
+    let snapshot = {
+      consumer: "ai-worker" as const,
+      desiredRevisionId: "revision-1",
+      fallbackRevisionId: null,
+      health: "healthy" as const,
+      hotRevisionId: "revision-1",
+      instanceId: "ai-worker-disable-runtime",
+      lastError: null,
+      restartRevisionId: "revision-1",
+      values: initialValues,
+    };
+    const runtime = {
+      refreshIfDue: vi.fn(),
+      snapshot: vi.fn(async () => snapshot),
+      start: vi.fn(),
+    };
+    let finishActive!: () => void;
+    const activeMayFinish = new Promise<void>((resolve) => {
+      finishActive = resolve;
+    });
+    const executeRun = vi.fn(async () => activeMayFinish);
+    const claimQueuedRuns = vi
+      .fn()
+      .mockResolvedValueOnce([preparedRun()])
+      .mockResolvedValue([preparedRun()]);
+    let waits = 0;
+
+    await runAiWorker({
+      encryptionKey: Buffer.alloc(32, 1),
+      operations: createOperations({ claimQueuedRuns, executeRun }),
+      runtimeManager: runtime,
+      signal: controller.signal,
+      wait: async () => {
+        waits += 1;
+        if (waits === 1) {
+          snapshot = {
+            ...snapshot,
+            desiredRevisionId: "revision-2",
+            hotRevisionId: "revision-2",
+            values: { ...initialValues, aiEnabled: false },
+          };
+        } else if (waits === 2) {
+          finishActive();
+        } else {
+          controller.abort();
+        }
+      },
+      workerId: "ai-worker-disable",
+    });
+
+    expect(executeRun).toHaveBeenCalledTimes(1);
+    expect(claimQueuedRuns).toHaveBeenCalledTimes(1);
   });
 });

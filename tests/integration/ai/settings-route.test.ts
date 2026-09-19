@@ -6,6 +6,8 @@ import { aiProviderCredentials, db } from "@/db";
 import { getOptionalSession } from "@/lib/auth/session";
 import { listAvailableAiModels } from "@/lib/ai/conversations/repository";
 import { assertSafeAiEndpoint } from "@/lib/ai/security/endpoint-policy";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 import { GET as GET_SETTINGS } from "@/app/api/ai/settings/route";
 import { POST as CREATE_PROVIDER } from "@/app/api/ai/settings/providers/route";
@@ -23,6 +25,9 @@ vi.mock("@/lib/auth/session", () => ({ getOptionalSession: vi.fn() }));
 vi.mock("@/lib/ai/security/endpoint-policy", () => ({
   assertSafeAiEndpoint: vi.fn(async (value: string | URL) => new URL(value)),
 }));
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(),
+}));
 
 function actionRequest(url: string, method: string, body?: unknown) {
   return new Request(url, {
@@ -38,16 +43,15 @@ function actionRequest(url: string, method: string, body?: unknown) {
 describe("personal AI provider and model routes", () => {
   const userId = `ai-settings-${randomUUID()}`;
   const otherUserId = `ai-settings-other-${randomUUID()}`;
-  const encryptionKey = Buffer.alloc(32, 9);
-  const originalEnvironment = { ...process.env };
-
-  beforeAll(() => {
-    process.env.AI_ENABLED = "true";
-    process.env.AI_BYOK_ENABLED = "true";
-    process.env.AI_CREDENTIALS_ENCRYPTION_KEY = encryptionKey.toString("base64");
-  });
 
   beforeEach(() => {
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      values: {
+        ...getManagedConfigDefaults(),
+        aiEnabled: true,
+        aiByokEnabled: true,
+      },
+    } as never);
     vi.mocked(getOptionalSession).mockResolvedValue({
       session: { id: `session-${userId}`, userId },
       user: { id: userId, name: userId, email: `${userId}@example.com` },
@@ -55,7 +59,6 @@ describe("personal AI provider and model routes", () => {
   });
 
   afterAll(async () => {
-    process.env = originalEnvironment;
     await db
       .delete(aiProviderCredentials)
       .where(eq(aiProviderCredentials.ownerUserId, userId));

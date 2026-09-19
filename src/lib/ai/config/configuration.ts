@@ -1,139 +1,49 @@
-type AiEnvironment = Record<string, string | undefined>;
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { createConfigKeyring } from "@/lib/config/crypto";
+import type { ManagedConfig } from "@/lib/config/registry";
 
-const DEFAULTS = {
-  auditRetentionDays: 30,
-  streamCheckpointMs: 1_000,
-  runLeaseSeconds: 90,
-  requestsPerMinute: 10,
-  maxConcurrentRuns: 1,
-  defaultMonthlyPoints: 100_000,
-} as const;
-
-function booleanValue(
-  environment: AiEnvironment,
-  key: string,
-  fallback: boolean,
-) {
-  const raw = environment[key]?.trim().toLowerCase();
-  if (!raw) return fallback;
-  if (raw === "true") return true;
-  if (raw === "false") return false;
-  throw new Error(`${key} must be true or false`);
+export interface AiRuntimeConfiguration {
+  auditRetentionDays: number;
+  byokEnabled: boolean;
+  credentialsEncryptionKey: Buffer;
+  defaultMonthlyPoints: number;
+  enabled: boolean;
+  maxConcurrentRuns: number;
+  platformEnabled: boolean;
+  requestsPerMinute: number;
+  runLeaseSeconds: number;
+  streamCheckpointMs: number;
+  trustedEndpointHostnames: readonly string[];
 }
 
-function positiveInteger(
-  environment: AiEnvironment,
-  key: string,
-  fallback: number,
-) {
-  const raw = environment[key]?.trim();
-  if (!raw) return fallback;
-
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${key} must be a positive integer`);
-  }
-  return value;
+export function getAiCredentialsEncryptionKey() {
+  const bootstrap = readBootstrapConfig();
+  return createConfigKeyring({
+    current: bootstrap.currentMasterKey,
+    previous: bootstrap.previousMasterKey,
+  }).keyFor("ai-credentials");
 }
 
-function nonNegativeInteger(
-  environment: AiEnvironment,
-  key: string,
-  fallback: number,
-) {
-  const raw = environment[key]?.trim();
-  if (!raw) return fallback;
+export function resolveAiConfiguration(
+  values: Readonly<ManagedConfig>,
+  credentialsEncryptionKey = getAiCredentialsEncryptionKey(),
+): Readonly<AiRuntimeConfiguration> {
+  const enabled = values.aiEnabled;
+  const trustedEndpointHostnames = Object.freeze([
+    ...values.aiTrustedEndpointHostnames,
+  ]);
 
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${key} must be a non-negative integer`);
-  }
-  return value;
-}
-
-function trustedEndpointHostnames(environment: AiEnvironment) {
-  const raw = environment.AI_TRUSTED_ENDPOINT_HOSTNAMES?.trim();
-  if (!raw) return [];
-
-  return [...new Set(raw.split(",").map((value) => value.trim().toLowerCase()))]
-    .filter(Boolean)
-    .map((hostname) => {
-      const parsed = new URL(`https://${hostname}`);
-      if (
-        parsed.hostname !== hostname ||
-        parsed.pathname !== "/" ||
-        parsed.port ||
-        !hostname.includes(".")
-      ) {
-        throw new Error("AI_TRUSTED_ENDPOINT_HOSTNAMES must contain exact hostnames");
-      }
-      return hostname;
-    });
-}
-
-export function decodeAiCredentialsEncryptionKey(value: string | undefined) {
-  if (!value?.trim()) return undefined;
-
-  const supplied = value.trim().replace(/=+$/, "");
-  const decoded = Buffer.from(value.trim(), "base64");
-  const canonical = decoded.toString("base64").replace(/=+$/, "");
-
-  return decoded.length === 32 && canonical === supplied ? decoded : undefined;
-}
-
-export function resolveAiConfiguration(environment: AiEnvironment) {
-  const enabled = booleanValue(environment, "AI_ENABLED", false);
-  const platformEnabled = booleanValue(
-    environment,
-    "AI_PLATFORM_ENABLED",
-    false,
-  );
-  const byokEnabled = booleanValue(environment, "AI_BYOK_ENABLED", false);
-  const credentialsEncryptionKey = decodeAiCredentialsEncryptionKey(
-    environment.AI_CREDENTIALS_ENCRYPTION_KEY,
-  );
-
-  if (enabled && !credentialsEncryptionKey) {
-    throw new Error(
-      "AI_CREDENTIALS_ENCRYPTION_KEY must be a base64-encoded 32-byte key",
-    );
-  }
-
-  return {
-    enabled,
-    platformEnabled: enabled && platformEnabled,
-    byokEnabled: enabled && byokEnabled,
+  return Object.freeze({
+    auditRetentionDays: values.aiAuditRetentionDays,
+    byokEnabled: enabled && values.aiByokEnabled,
     credentialsEncryptionKey,
-    trustedEndpointHostnames: trustedEndpointHostnames(environment),
-    auditRetentionDays: positiveInteger(
-      environment,
-      "AI_AUDIT_RETENTION_DAYS",
-      DEFAULTS.auditRetentionDays,
-    ),
-    streamCheckpointMs: positiveInteger(
-      environment,
-      "AI_STREAM_CHECKPOINT_MS",
-      DEFAULTS.streamCheckpointMs,
-    ),
-    runLeaseSeconds: positiveInteger(
-      environment,
-      "AI_RUN_LEASE_SECONDS",
-      DEFAULTS.runLeaseSeconds,
-    ),
-    requestsPerMinute: positiveInteger(
-      environment,
-      "AI_REQUESTS_PER_MINUTE",
-      DEFAULTS.requestsPerMinute,
-    ),
-    maxConcurrentRuns: positiveInteger(
-      environment,
-      "AI_MAX_CONCURRENT_RUNS",
-      DEFAULTS.maxConcurrentRuns,
-    ),
-    defaultMonthlyPoints: nonNegativeInteger(
-      environment,
-      "AI_DEFAULT_MONTHLY_POINTS",
-      DEFAULTS.defaultMonthlyPoints,
-    ),
-  };
+    defaultMonthlyPoints: values.aiDefaultMonthlyPoints,
+    enabled,
+    maxConcurrentRuns: values.aiMaxConcurrentRuns,
+    platformEnabled: enabled && values.aiPlatformEnabled,
+    requestsPerMinute: values.aiRequestsPerMinute,
+    runLeaseSeconds: values.aiRunLeaseSeconds,
+    streamCheckpointMs: values.aiStreamCheckpointMs,
+    trustedEndpointHostnames,
+  });
 }

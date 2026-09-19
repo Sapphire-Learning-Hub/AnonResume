@@ -40,16 +40,9 @@ vi.mock("@/lib/ai/admin/service", () => ({
 }));
 
 describe("AI administration routes", () => {
-  const originalEnvironment = { ...process.env };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AI_CREDENTIALS_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
     vi.mocked(requireAdminApi).mockResolvedValue({ userId: "admin-1" } as never);
-  });
-
-  afterAll(() => {
-    process.env = originalEnvironment;
   });
 
   it("keeps usage reads separate from sensitive evidence access", async () => {

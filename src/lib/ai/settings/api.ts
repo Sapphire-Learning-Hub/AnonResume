@@ -1,5 +1,6 @@
 import { getOptionalSession } from "@/lib/auth/session";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   AiFeatureUnavailableError,
   createAiErrorResponse,
@@ -12,11 +13,11 @@ import {
 export async function requirePersonalAiApi() {
   const session = await getOptionalSession();
   if (!session) return null;
-  const configuration = resolveAiConfiguration(process.env);
+  const runtime = await getRuntimeConfig("web");
+  const configuration = resolveAiConfiguration(runtime.values);
   if (
     !configuration.enabled ||
-    !configuration.byokEnabled ||
-    !configuration.credentialsEncryptionKey
+    !configuration.byokEnabled
   ) {
     throw new AiFeatureUnavailableError();
   }

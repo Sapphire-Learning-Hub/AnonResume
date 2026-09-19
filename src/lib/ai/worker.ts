@@ -5,19 +5,21 @@ import {
   runAiRecoveryMaintenance,
   runAiRetentionMaintenance,
 } from "@/lib/ai/maintenance";
+import {
+  getAiCredentialsEncryptionKey,
+  resolveAiConfiguration,
+} from "@/lib/ai/config/configuration";
 import { createAiProviderAdapter } from "@/lib/ai/providers/registry";
 import { executePreparedAiRun } from "@/lib/ai/runs/executor";
 import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
 import type { ClaimedAiRun } from "@/lib/ai/runs/service";
+import type { ManagedConfig } from "@/lib/config/registry";
+import {
+  getRuntimeConfigManager,
+  type RuntimeConfigManager,
+} from "@/lib/config/runtime";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
 import { recordWorkerHeartbeat } from "@/lib/runtime/worker-heartbeat";
-
-const DEFAULT_CONFIGURATION = {
-  batchSize: 100,
-  pollIntervalMs: 5_000,
-  recoveryIntervalMs: 15_000,
-  retentionIntervalMs: 3_600_000,
-} as const;
 
 export interface AiWorkerConfiguration {
   batchSize: number;
@@ -42,72 +44,20 @@ interface AiWorkerLogger {
   info(message: string): void;
 }
 
-type WorkerEnvironment = Record<string, string | undefined>;
-
-function parseInteger(
-  environment: WorkerEnvironment,
-  name: string,
-  fallback: number,
-  minimum: number,
-  maximum: number,
-) {
-  const rawValue = environment[name]?.trim();
-  if (!rawValue) return fallback;
-
-  const value = Number(rawValue);
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(
-      `${name} must be an integer from ${minimum} to ${maximum}`,
-    );
-  }
-  return value;
-}
+type AiRuntimeManager = Pick<
+  RuntimeConfigManager,
+  "refreshIfDue" | "snapshot" | "start"
+>;
 
 export function getAiWorkerConfiguration(
-  environment: WorkerEnvironment = process.env,
-): AiWorkerConfiguration {
-  const configuration = {
-    batchSize: parseInteger(
-      environment,
-      "AI_WORKER_BATCH_SIZE",
-      DEFAULT_CONFIGURATION.batchSize,
-      1,
-      1_000,
-    ),
-    pollIntervalMs: parseInteger(
-      environment,
-      "AI_WORKER_POLL_INTERVAL_MS",
-      DEFAULT_CONFIGURATION.pollIntervalMs,
-      250,
-      60_000,
-    ),
-    recoveryIntervalMs: parseInteger(
-      environment,
-      "AI_WORKER_RECOVERY_INTERVAL_MS",
-      DEFAULT_CONFIGURATION.recoveryIntervalMs,
-      250,
-      3_600_000,
-    ),
-    retentionIntervalMs: parseInteger(
-      environment,
-      "AI_WORKER_RETENTION_INTERVAL_MS",
-      DEFAULT_CONFIGURATION.retentionIntervalMs,
-      1_000,
-      86_400_000,
-    ),
-  };
-
-  if (configuration.recoveryIntervalMs < configuration.pollIntervalMs) {
-    throw new Error(
-      "AI_WORKER_RECOVERY_INTERVAL_MS must be greater than or equal to AI_WORKER_POLL_INTERVAL_MS",
-    );
-  }
-  if (configuration.retentionIntervalMs < configuration.pollIntervalMs) {
-    throw new Error(
-      "AI_WORKER_RETENTION_INTERVAL_MS must be greater than or equal to AI_WORKER_POLL_INTERVAL_MS",
-    );
-  }
-  return configuration;
+  values: Readonly<ManagedConfig>,
+): Readonly<AiWorkerConfiguration> {
+  return Object.freeze({
+    batchSize: values.aiWorkerBatchSize,
+    pollIntervalMs: values.aiWorkerPollIntervalMs,
+    recoveryIntervalMs: values.aiWorkerRecoveryIntervalMs,
+    retentionIntervalMs: values.aiWorkerRetentionIntervalMs,
+  });
 }
 
 function waitForNextPoll(ms: number, signal?: AbortSignal) {
@@ -131,15 +81,17 @@ export async function runAiWorker(options: {
   signal?: AbortSignal;
   workerId?: string;
   encryptionKey?: Buffer;
-  leaseSeconds?: number;
-  configuration?: AiWorkerConfiguration;
+  runtimeManager?: AiRuntimeManager;
   operations?: AiWorkerOperations;
   logger?: AiWorkerLogger;
   now?: () => Date;
   wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
 } = {}) {
-  const configuration =
-    options.configuration ?? getAiWorkerConfiguration(process.env);
+  const runtime =
+    options.runtimeManager ?? getRuntimeConfigManager("ai-worker");
+  await runtime.start();
+  const encryptionKey =
+    options.encryptionKey ?? getAiCredentialsEncryptionKey();
   const workerId =
     options.workerId ?? `${hostname()}:${process.pid}:${randomUUID()}`;
   const operations = options.operations ?? {
@@ -169,6 +121,13 @@ export async function runAiWorker(options: {
   logger.info(`[AnonResume] AI worker started: ${workerId}`);
 
   while (!options.signal?.aborted) {
+    await runtime.refreshIfDue();
+    const snapshot = await runtime.snapshot();
+    const aiConfiguration = resolveAiConfiguration(
+      snapshot.values,
+      encryptionKey,
+    );
+    const configuration = getAiWorkerConfiguration(snapshot.values);
     const current = now();
     const currentMs = current.getTime();
 
@@ -181,7 +140,12 @@ export async function runAiWorker(options: {
         now: current,
         metadata: {
           batchSize: configuration.batchSize,
+          configurationHealth: snapshot.health,
+          desiredRevisionId: snapshot.desiredRevisionId,
+          enabled: aiConfiguration.enabled,
+          hotRevisionId: snapshot.hotRevisionId,
           recoveryIntervalMs: configuration.recoveryIntervalMs,
+          restartRevisionId: snapshot.restartRevisionId,
           retentionIntervalMs: configuration.retentionIntervalMs,
         },
       });
@@ -223,17 +187,31 @@ export async function runAiWorker(options: {
       }
     }
 
-    if (!activeExecution && options.encryptionKey && !options.signal?.aborted) {
+    if (
+      !activeExecution &&
+      aiConfiguration.enabled &&
+      !options.signal?.aborted
+    ) {
       try {
         const [prepared] = await operations.claimQueuedRuns({
           workerId,
           limit: 1,
-          leaseSeconds: options.leaseSeconds ?? 90,
-          encryptionKey: options.encryptionKey,
+          leaseSeconds: aiConfiguration.runLeaseSeconds,
+          encryptionKey,
         });
         if (prepared) {
+          const claimedConfiguration = Object.freeze({
+            ...prepared.configuration,
+            credentialsEncryptionKey: encryptionKey,
+            runLeaseSeconds: aiConfiguration.runLeaseSeconds,
+            streamCheckpointMs: aiConfiguration.streamCheckpointMs,
+          });
+          const claimed = {
+            ...prepared,
+            configuration: claimedConfiguration,
+          };
           const execution = operations
-            .executeRun(prepared, options.signal)
+            .executeRun(claimed, options.signal)
             .catch((error) => {
               logger.error("[AnonResume] AI worker execution failed", error);
             })

@@ -1,8 +1,18 @@
-import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import {
+  getAiCredentialsEncryptionKey,
+  resolveAiConfiguration,
+} from "@/lib/ai/config/configuration";
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { createConfigKeyring } from "@/lib/config/crypto";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
 
 describe("AI runtime configuration", () => {
-  it("keeps AI disabled and uses bounded defaults without configuration", () => {
-    expect(resolveAiConfiguration({})).toMatchObject({
+  const encryptionKey = Buffer.alloc(32, 9);
+
+  it("derives disabled AI behavior from managed defaults", () => {
+    expect(
+      resolveAiConfiguration(getManagedConfigDefaults(), encryptionKey),
+    ).toMatchObject({
       enabled: false,
       platformEnabled: false,
       byokEnabled: false,
@@ -13,51 +23,62 @@ describe("AI runtime configuration", () => {
       maxConcurrentRuns: 1,
       defaultMonthlyPoints: 100_000,
       trustedEndpointHostnames: [],
+      credentialsEncryptionKey: encryptionKey,
     });
   });
 
-  it("requires a canonical base64 32-byte key when AI is enabled", () => {
-    expect(() =>
-      resolveAiConfiguration({
-        AI_ENABLED: "true",
-        AI_CREDENTIALS_ENCRYPTION_KEY: "invalid",
-      }),
-    ).toThrow("AI_CREDENTIALS_ENCRYPTION_KEY");
-
-    const key = Buffer.alloc(32, 9).toString("base64");
+  it("uses managed switches, trusted hosts, limits, and quota", () => {
     expect(
-      resolveAiConfiguration({
-        AI_ENABLED: "true",
-        AI_PLATFORM_ENABLED: "true",
-        AI_BYOK_ENABLED: "true",
-        AI_TRUSTED_ENDPOINT_HOSTNAMES:
-          "ark.cn-beijing.volces.com, models.example.com",
-        AI_CREDENTIALS_ENCRYPTION_KEY: key,
-      }),
+      resolveAiConfiguration(
+        {
+          ...getManagedConfigDefaults(),
+          aiEnabled: true,
+          aiPlatformEnabled: true,
+          aiByokEnabled: true,
+          aiTrustedEndpointHostnames: [
+            "ark.cn-beijing.volces.com",
+            "models.example.com",
+          ],
+          aiAuditRetentionDays: 14,
+          aiRequestsPerMinute: 3,
+          aiMaxConcurrentRuns: 2,
+          aiDefaultMonthlyPoints: 0,
+        },
+        encryptionKey,
+      ),
     ).toMatchObject({
       enabled: true,
       platformEnabled: true,
       byokEnabled: true,
-      credentialsEncryptionKey: Buffer.alloc(32, 9),
+      credentialsEncryptionKey: encryptionKey,
       trustedEndpointHostnames: [
         "ark.cn-beijing.volces.com",
         "models.example.com",
       ],
+      auditRetentionDays: 14,
+      requestsPerMinute: 3,
+      maxConcurrentRuns: 2,
+      defaultMonthlyPoints: 0,
     });
   });
 
-  it("rejects invalid booleans and non-positive limits", () => {
-    expect(() => resolveAiConfiguration({ AI_ENABLED: "yes" })).toThrow(
-      "AI_ENABLED",
+  it("returns an immutable request snapshot", () => {
+    const configuration = resolveAiConfiguration(
+      getManagedConfigDefaults(),
+      encryptionKey,
     );
-    expect(() =>
-      resolveAiConfiguration({ AI_AUDIT_RETENTION_DAYS: "0" }),
-    ).toThrow("AI_AUDIT_RETENTION_DAYS");
+
+    expect(Object.isFrozen(configuration)).toBe(true);
+    expect(Object.isFrozen(configuration.trustedEndpointHostnames)).toBe(true);
   });
 
-  it("allows the default monthly quota to be disabled", () => {
-    expect(
-      resolveAiConfiguration({ AI_DEFAULT_MONTHLY_POINTS: "0" }),
-    ).toMatchObject({ defaultMonthlyPoints: 0 });
+  it("derives the credential key from the bootstrap master key", () => {
+    const bootstrap = readBootstrapConfig();
+    const expected = createConfigKeyring({
+      current: bootstrap.currentMasterKey,
+      previous: bootstrap.previousMasterKey,
+    }).keyFor("ai-credentials");
+
+    expect(getAiCredentialsEncryptionKey()).toEqual(expected);
   });
 });
