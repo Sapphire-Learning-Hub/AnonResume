@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:push": "drizzle-kit push",
+    "config:import-env": "bun run scripts/config-import-env.ts",
     "worker:ai": "bun run scripts/ai-worker.ts",
     "worker:pdf": "bun run scripts/pdf-worker.ts",
     "ai:maintenance": "bun run scripts/ai-maintenance.ts",
