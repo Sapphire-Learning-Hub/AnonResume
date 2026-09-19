@@ -4,6 +4,11 @@ import {
   randomBytes,
 } from "node:crypto";
 
+import {
+  decryptVersionedSecret,
+  type VersionedSecretKeys,
+} from "@/lib/config/secret-keyring";
+
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
@@ -42,6 +47,18 @@ export function decryptAiCredential(encrypted: Buffer, key: Buffer) {
     decipher.update(ciphertext),
     decipher.final(),
   ]).toString("utf8");
+}
+
+export function decryptVersionedAiCredential(
+  encrypted: Buffer,
+  keyVersion: number,
+  keys: VersionedSecretKeys,
+) {
+  return decryptVersionedSecret({
+    decrypt: (key) => decryptAiCredential(encrypted, key),
+    keys,
+    keyVersion,
+  });
 }
 
 export function maskAiCredential(secret: string) {

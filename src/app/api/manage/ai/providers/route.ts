@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     const configuration = await requireProviderConfiguration();
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
+      credentialKeys: configuration.credentialKeys,
       encryptionKey: configuration.credentialsEncryptionKey,
       trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       value,

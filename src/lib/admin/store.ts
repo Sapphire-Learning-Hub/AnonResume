@@ -18,12 +18,12 @@ import {
   type StoredAdminAccess,
 } from "@/lib/admin/authorization";
 import {
-  getAdminMfaEncryptionKey,
+  getAdminMfaSecretKeys,
   resolveAdminSecurityConfiguration,
 } from "@/lib/admin/configuration";
 import {
   createAdminTotpEnrollment,
-  decryptAdminMfaSecret,
+  decryptVersionedAdminMfaSecret,
   encryptAdminMfaSecret,
   generateAdminRecoveryCodes,
   generateAdminSessionToken,
@@ -381,9 +381,10 @@ export async function beginAdminMfaEnrollment({
   requireNoVerifiedDevices?: boolean;
 }) {
   const enrollment = createAdminTotpEnrollment(email);
+  const secretKeys = getAdminMfaSecretKeys();
   const encrypted = encryptAdminMfaSecret(
     enrollment.secret,
-    getAdminMfaEncryptionKey(process.env),
+    secretKeys.current,
   );
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
@@ -416,7 +417,7 @@ export async function beginAdminMfaEnrollment({
     const result = await client.query<{ id: string }>(
       `INSERT INTO ${schema}.admin_mfa_devices
         (user_id, name, encrypted_secret, encryption_iv, encryption_tag, key_version)
-       VALUES ($1, $2, $3, $4, $5, 1) RETURNING id::text`,
+       VALUES ($1, $2, $3, $4, $5, 2) RETURNING id::text`,
       [
         userId,
         name.trim() || "验证器",
@@ -452,6 +453,7 @@ export async function verifyAdminMfaCode({
   now?: Date;
 }) {
   const config = await getAdminSecurityConfiguration();
+  const secretKeys = getAdminMfaSecretKeys();
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
 
@@ -469,10 +471,12 @@ export async function verifyAdminMfaCode({
       encryptedSecret: string;
       encryptionIv: string;
       encryptionTag: string;
+      keyVersion: number;
       lastAcceptedStep: string | number | null;
     }>(
       `SELECT id, encrypted_secret AS "encryptedSecret",
               encryption_iv AS "encryptionIv", encryption_tag AS "encryptionTag",
+              key_version AS "keyVersion",
               last_accepted_step AS "lastAcceptedStep"
          FROM ${schema}.admin_mfa_devices
         WHERE user_id = $1 AND verified_at IS NOT NULL
@@ -482,9 +486,10 @@ export async function verifyAdminMfaCode({
 
     let accepted: { deviceId: string; step: number } | null = null;
     for (const device of deviceResult.rows) {
-      const secret = decryptAdminMfaSecret(
+      const secret = decryptVersionedAdminMfaSecret(
         device,
-        getAdminMfaEncryptionKey(process.env),
+        device.keyVersion,
+        secretKeys,
       );
       const step = verifyAdminTotp({
         secret,
@@ -547,6 +552,7 @@ export async function verifyAdminMfaEnrollment({
   now?: Date;
 }) {
   const config = await getAdminSecurityConfiguration();
+  const secretKeys = getAdminMfaSecretKeys();
   const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
   try {
@@ -574,9 +580,11 @@ export async function verifyAdminMfaEnrollment({
       encryptedSecret: string;
       encryptionIv: string;
       encryptionTag: string;
+      keyVersion: number;
     }>(
       `SELECT encrypted_secret AS "encryptedSecret",
-              encryption_iv AS "encryptionIv", encryption_tag AS "encryptionTag"
+              encryption_iv AS "encryptionIv", encryption_tag AS "encryptionTag",
+              key_version AS "keyVersion"
          FROM ${schema}.admin_mfa_devices
         WHERE id = $1 AND user_id = $2 AND verified_at IS NULL
         FOR UPDATE`,
@@ -585,9 +593,10 @@ export async function verifyAdminMfaEnrollment({
     const device = deviceResult.rows[0];
     const step = device
       ? verifyAdminTotp({
-          secret: decryptAdminMfaSecret(
+          secret: decryptVersionedAdminMfaSecret(
             device,
-            getAdminMfaEncryptionKey(process.env),
+            device.keyVersion,
+            secretKeys,
           ),
           token,
           timestamp: now.getTime(),

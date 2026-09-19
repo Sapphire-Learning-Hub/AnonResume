@@ -7,6 +7,11 @@ import {
 
 import { Secret, TOTP } from "otpauth";
 
+import {
+  decryptVersionedSecret,
+  type VersionedSecretKeys,
+} from "@/lib/config/secret-keyring";
+
 const MFA_ALGORITHM = "aes-256-gcm";
 const MFA_IV_BYTES = 12;
 const TOTP_PERIOD_SECONDS = 30;
@@ -70,6 +75,18 @@ export function decryptAdminMfaSecret(
     decipher.update(Buffer.from(encrypted.encryptedSecret, "base64")),
     decipher.final(),
   ]).toString("utf8");
+}
+
+export function decryptVersionedAdminMfaSecret(
+  encrypted: EncryptedAdminMfaSecret,
+  keyVersion: number,
+  keys: VersionedSecretKeys,
+) {
+  return decryptVersionedSecret({
+    decrypt: (key) => decryptAdminMfaSecret(encrypted, key),
+    keys,
+    keyVersion,
+  });
 }
 
 export function createAdminTotpEnrollment(email: string) {

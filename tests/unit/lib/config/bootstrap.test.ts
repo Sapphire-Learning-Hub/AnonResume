@@ -64,6 +64,25 @@ describe("bootstrap configuration provider", () => {
     expect(result.databaseSchema).toBe("anonresume_runtime");
   });
 
+  it("loads migration-only legacy encryption credentials", () => {
+    const credentials = requiredCredentials({
+      "anonresume.legacy-admin-mfa-key": Buffer.alloc(32, 4).toString(
+        "base64",
+      ),
+      "anonresume.legacy-ai-credentials-key": Buffer.alloc(32, 5).toString(
+        "base64",
+      ),
+    });
+
+    const result = readBootstrapConfig({
+      environment: { NODE_ENV: "production" },
+      readCredential: (name) => credentials[name],
+    });
+
+    expect(result.legacyAdminMfaKey).toEqual(Buffer.alloc(32, 4));
+    expect(result.legacyAiCredentialsKey).toEqual(Buffer.alloc(32, 5));
+  });
+
   it("does not invent database or master-key credentials in development", () => {
     expect(() =>
       readBootstrapConfig({

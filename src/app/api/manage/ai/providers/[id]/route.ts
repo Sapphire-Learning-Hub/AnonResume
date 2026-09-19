@@ -37,6 +37,7 @@ export async function PATCH(
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
       providerId: (await params).id,
+      credentialKeys: configuration.credentialKeys,
       encryptionKey: configuration.credentialsEncryptionKey,
       trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       value,

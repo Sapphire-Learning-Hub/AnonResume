@@ -19,6 +19,8 @@ const CREDENTIAL_NAMES = {
   currentMasterKey: "anonresume.config-master-key",
   databaseSchema: "anonresume.database-schema",
   databaseUrl: "anonresume.database-url",
+  legacyAdminMfaKey: "anonresume.legacy-admin-mfa-key",
+  legacyAiCredentialsKey: "anonresume.legacy-ai-credentials-key",
   previousMasterKey: "anonresume.config-master-key-previous",
 } as const;
 
@@ -28,6 +30,8 @@ export interface BootstrapConfig {
   currentMasterKey: Buffer;
   databaseSchema: string;
   databaseUrl: string;
+  legacyAdminMfaKey?: Buffer;
+  legacyAiCredentialsKey?: Buffer;
   previousMasterKey?: Buffer;
 }
 
@@ -144,8 +148,20 @@ export function readBootstrapConfig(
     "previousMasterKey",
     "CONFIG_MASTER_KEY_PREVIOUS",
   );
+  const legacyAdminMfaKeyValue = read(
+    "legacyAdminMfaKey",
+    "ADMIN_MFA_ENCRYPTION_KEY",
+  );
+  const legacyAiCredentialsKeyValue = read(
+    "legacyAiCredentialsKey",
+    "AI_CREDENTIALS_ENCRYPTION_KEY",
+  );
   const currentMasterKey = decodeMasterKey(currentMasterKeyValue);
   const previousMasterKey = decodeMasterKey(previousMasterKeyValue);
+  const legacyAdminMfaKey = decodeMasterKey(legacyAdminMfaKeyValue);
+  const legacyAiCredentialsKey = decodeMasterKey(
+    legacyAiCredentialsKeyValue,
+  );
   const databaseSchema =
     read("databaseSchema", "ANONRESUME_DB_SCHEMA")?.trim() || "public";
   const issues: string[] = [];
@@ -165,6 +181,12 @@ export function readBootstrapConfig(
   if (previousMasterKeyValue && !previousMasterKey) {
     issues.push("config_master_key_previous_invalid");
   }
+  if (legacyAdminMfaKeyValue && !legacyAdminMfaKey) {
+    issues.push("legacy_admin_mfa_key_invalid");
+  }
+  if (legacyAiCredentialsKeyValue && !legacyAiCredentialsKey) {
+    issues.push("legacy_ai_credentials_key_invalid");
+  }
   if (!/^[a-z_][a-z0-9_]*$/i.test(databaseSchema)) {
     issues.push("database_schema_invalid");
   }
@@ -177,6 +199,8 @@ export function readBootstrapConfig(
     currentMasterKey: currentMasterKey!,
     databaseSchema,
     databaseUrl: databaseUrl!,
+    ...(legacyAdminMfaKey ? { legacyAdminMfaKey } : {}),
+    ...(legacyAiCredentialsKey ? { legacyAiCredentialsKey } : {}),
     ...(previousMasterKey ? { previousMasterKey } : {}),
   };
 }

@@ -6,7 +6,7 @@ import {
   runAiRetentionMaintenance,
 } from "@/lib/ai/maintenance";
 import {
-  getAiCredentialsEncryptionKey,
+  getAiCredentialSecretKeys,
   resolveAiConfiguration,
 } from "@/lib/ai/config/configuration";
 import { createAiProviderAdapter } from "@/lib/ai/providers/registry";
@@ -14,6 +14,7 @@ import { executePreparedAiRun } from "@/lib/ai/runs/executor";
 import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
 import type { ClaimedAiRun } from "@/lib/ai/runs/service";
 import type { ManagedConfig } from "@/lib/config/registry";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 import {
   getRuntimeConfigManager,
   type RuntimeConfigManager,
@@ -81,6 +82,7 @@ export async function runAiWorker(options: {
   signal?: AbortSignal;
   workerId?: string;
   encryptionKey?: Buffer;
+  credentialKeys?: VersionedSecretKeys;
   runtimeManager?: AiRuntimeManager;
   operations?: AiWorkerOperations;
   logger?: AiWorkerLogger;
@@ -90,8 +92,11 @@ export async function runAiWorker(options: {
   const runtime =
     options.runtimeManager ?? getRuntimeConfigManager("ai-worker");
   await runtime.start();
-  const encryptionKey =
-    options.encryptionKey ?? getAiCredentialsEncryptionKey();
+  const credentialKeys = options.credentialKeys ??
+    (options.encryptionKey
+      ? { current: options.encryptionKey, legacy: options.encryptionKey }
+      : getAiCredentialSecretKeys());
+  const encryptionKey = credentialKeys.current;
   const workerId =
     options.workerId ?? `${hostname()}:${process.pid}:${randomUUID()}`;
   const operations = options.operations ?? {
@@ -125,7 +130,7 @@ export async function runAiWorker(options: {
     const snapshot = await runtime.snapshot();
     const aiConfiguration = resolveAiConfiguration(
       snapshot.values,
-      encryptionKey,
+      credentialKeys,
     );
     const configuration = getAiWorkerConfiguration(snapshot.values);
     const current = now();
@@ -197,11 +202,13 @@ export async function runAiWorker(options: {
           workerId,
           limit: 1,
           leaseSeconds: aiConfiguration.runLeaseSeconds,
+          credentialKeys,
           encryptionKey,
         });
         if (prepared) {
           const claimedConfiguration = Object.freeze({
             ...prepared.configuration,
+            credentialKeys,
             credentialsEncryptionKey: encryptionKey,
             runLeaseSeconds: aiConfiguration.runLeaseSeconds,
             streamCheckpointMs: aiConfiguration.streamCheckpointMs,

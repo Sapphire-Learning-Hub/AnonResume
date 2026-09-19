@@ -16,13 +16,12 @@ export async function GET(
       recentMfa: true,
     });
     const runtime = await getRuntimeConfig("web");
-    const encryptionKey = resolveAiConfiguration(
-      runtime.values,
-    ).credentialsEncryptionKey;
+    const configuration = resolveAiConfiguration(runtime.values);
     const evidence = await getAiAdminAuditEvidence({
       actorUserId: context.userId,
       runId: (await params).runId,
-      encryptionKey,
+      credentialKeys: configuration.credentialKeys,
+      encryptionKey: configuration.credentialsEncryptionKey,
     });
     return NextResponse.json(evidence);
   } catch (error) {

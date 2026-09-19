@@ -2,10 +2,11 @@ import { z } from "zod";
 
 import { resumeDocumentSchema } from "@/domain/resume/schema";
 import {
-  decryptAiCredential,
+  decryptVersionedAiCredential,
   encryptAiCredential,
 } from "@/lib/ai/security/credentials";
 import type { PreparedAiRun } from "@/lib/ai/runs/service";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 const providerMessageSchema = z.union([
   z.object({
@@ -127,8 +128,16 @@ export function encryptPreparedAiRunPayload(
         endpoint: prepared.request.endpoint.toString(),
       },
       configuration: {
-        ...prepared.configuration,
-        credentialsEncryptionKey: undefined,
+        auditRetentionDays: prepared.configuration.auditRetentionDays,
+        byokEnabled: prepared.configuration.byokEnabled,
+        defaultMonthlyPoints: prepared.configuration.defaultMonthlyPoints,
+        maxConcurrentRuns: prepared.configuration.maxConcurrentRuns,
+        platformEnabled: prepared.configuration.platformEnabled,
+        requestsPerMinute: prepared.configuration.requestsPerMinute,
+        runLeaseSeconds: prepared.configuration.runLeaseSeconds,
+        streamCheckpointMs: prepared.configuration.streamCheckpointMs,
+        trustedEndpointHostnames:
+          prepared.configuration.trustedEndpointHostnames,
       },
     }),
     encryptionKey,
@@ -136,13 +145,23 @@ export function encryptPreparedAiRunPayload(
 }
 
 export function decryptPreparedAiRunPayload(input: {
+  credentialKeys?: VersionedSecretKeys;
   encryptedPayload: Buffer;
   encryptionKey: Buffer;
   expectedRunId: string;
+  keyVersion?: number;
 }): PreparedAiRun {
+  const credentialKeys = input.credentialKeys ?? {
+    current: input.encryptionKey,
+    legacy: input.encryptionKey,
+  };
   const parsed = payloadSchema.parse(
     JSON.parse(
-      decryptAiCredential(input.encryptedPayload, input.encryptionKey),
+      decryptVersionedAiCredential(
+        input.encryptedPayload,
+        input.keyVersion ?? 2,
+        credentialKeys,
+      ),
     ) as unknown,
   );
   if (parsed.runId !== input.expectedRunId) {
@@ -157,7 +176,8 @@ export function decryptPreparedAiRunPayload(input: {
     },
     configuration: {
       ...parsed.configuration,
-      credentialsEncryptionKey: input.encryptionKey,
+      credentialKeys,
+      credentialsEncryptionKey: credentialKeys.current,
     },
   };
 }

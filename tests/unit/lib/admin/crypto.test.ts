@@ -2,6 +2,7 @@ import { Secret, TOTP } from "otpauth";
 
 import {
   decryptAdminMfaSecret,
+  decryptVersionedAdminMfaSecret,
   encryptAdminMfaSecret,
   generateAdminRecoveryCodes,
   generateAdminSessionToken,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/admin/crypto";
 
 const encryptionKey = Buffer.alloc(32, 11);
+const legacyEncryptionKey = Buffer.alloc(32, 12);
 
 describe("admin cryptography", () => {
   it("encrypts MFA secrets with authenticated encryption", () => {
@@ -28,6 +30,28 @@ describe("admin cryptography", () => {
         encryptionKey,
       ),
     ).toThrow();
+  });
+
+  it("selects the MFA decryption key from the stored key version", () => {
+    const legacy = encryptAdminMfaSecret(
+      "LEGACYMFASECRET",
+      legacyEncryptionKey,
+    );
+    const current = encryptAdminMfaSecret("CURRENTMFASECRET", encryptionKey);
+    const keys = {
+      current: encryptionKey,
+      legacy: legacyEncryptionKey,
+    };
+
+    expect(
+      decryptVersionedAdminMfaSecret(legacy, 1, keys),
+    ).toBe("LEGACYMFASECRET");
+    expect(
+      decryptVersionedAdminMfaSecret(current, 2, keys),
+    ).toBe("CURRENTMFASECRET");
+    expect(() =>
+      decryptVersionedAdminMfaSecret(current, 3, keys),
+    ).toThrow("Unsupported secret key version");
   });
 
   it("generates high-entropy session tokens and stores only stable hashes", () => {

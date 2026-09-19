@@ -23,6 +23,7 @@ export async function requirePersonalAiApi() {
   }
   return {
     userId: session.user.id,
+    credentialKeys: configuration.credentialKeys,
     encryptionKey: configuration.credentialsEncryptionKey,
     trustedEndpointHostnames: configuration.trustedEndpointHostnames,
   };

@@ -20,6 +20,7 @@ export type ConfigKeyPurpose =
 export interface ConfigKeyring {
   currentKeyId: string;
   keyFor(purpose: ConfigKeyPurpose, keyId?: string): Buffer;
+  keysFor(purpose: ConfigKeyPurpose): readonly Buffer[];
 }
 
 export interface EncryptedConfigSecret {
@@ -73,6 +74,11 @@ export function createConfigKeyring(input: {
         throw new Error("Configuration secret authentication failed");
       }
       return derivePurposeKey(masterKey, purpose);
+    },
+    keysFor(purpose) {
+      return Object.freeze(
+        [...keys.values()].map((masterKey) => derivePurposeKey(masterKey, purpose)),
+      );
     },
   };
 }

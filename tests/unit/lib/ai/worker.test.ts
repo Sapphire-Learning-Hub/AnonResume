@@ -174,6 +174,10 @@ describe("AI worker", () => {
       workerId: "ai-worker-execution",
       limit: 1,
       leaseSeconds: 90,
+      credentialKeys: {
+        current: Buffer.alloc(32, 1),
+        legacy: Buffer.alloc(32, 1),
+      },
       encryptionKey: Buffer.alloc(32, 1),
     });
     expect(executeRun).toHaveBeenCalledWith(

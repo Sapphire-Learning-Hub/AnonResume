@@ -3,6 +3,9 @@ type AdminEnvironment = Record<string, string | undefined>;
 import { createHash } from "node:crypto";
 
 import type { ManagedConfig } from "@/lib/config/registry";
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { createConfigKeyring } from "@/lib/config/crypto";
+import { createVersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 const DEFAULTS = {
   idleSeconds: 1800,
@@ -66,6 +69,18 @@ export function getAdminMfaEncryptionKey(environment: AdminEnvironment) {
       "utf8",
     )
     .digest();
+}
+
+export function getAdminMfaSecretKeys() {
+  const bootstrap = readBootstrapConfig();
+  return createVersionedSecretKeys({
+    keyring: createConfigKeyring({
+      current: bootstrap.currentMasterKey,
+      previous: bootstrap.previousMasterKey,
+    }),
+    legacy: bootstrap.legacyAdminMfaKey,
+    purpose: "admin-mfa",
+  });
 }
 
 export function resolveAdminSecurityConfiguration(
