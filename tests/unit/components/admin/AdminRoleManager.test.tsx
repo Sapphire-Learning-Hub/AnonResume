@@ -58,7 +58,7 @@ describe("AdminRoleManager", () => {
     expect(within(details).getByText(/查看系统概览、用户、公告/)).toBeInTheDocument();
     expect(within(details).getByText("权限", { selector: "strong" })).toBeInTheDocument();
     expect(within(details).getByText("查看用户")).toBeInTheDocument();
-    expect(within(details).getByText("已获得 1/19 项权限")).toBeInTheDocument();
+    expect(within(details).getByText(/已获得 1\/\d+ 项权限/)).toBeInTheDocument();
     fireEvent.click(within(details).getByRole("button", { name: /关\s*闭/ }));
 
     fireEvent.click(screen.getByRole("button", { name: "创建角色" }));

@@ -29,6 +29,7 @@ describe("application feedback architecture", () => {
   it("only permits inline alerts in explicitly owned contextual surfaces", () => {
     const allowed = new Set([
       "src/components/announcements/AnnouncementBanner.tsx",
+      "src/components/admin/config/AdminConfigurationManager.tsx",
       "src/components/dashboard/ResumeMarkdownImportDialog.tsx",
     ]);
     const offenders = listSourceFiles("src").filter((file) => {

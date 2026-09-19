@@ -139,7 +139,7 @@ describe("AdminConfigurationManager", () => {
     });
   });
 
-  it("keeps configured secrets empty until replacement or explicit clear", async () => {
+  it("keeps configured secrets empty until explicit replacement", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(initialState), { status: 200 }),
     );
@@ -159,11 +159,15 @@ describe("AdminConfigurationManager", () => {
       operation: "set",
       value: "replacement-secret",
     });
+  });
 
-    fetchMock.mockClear();
+  it("clears configured secrets only after an explicit clear action", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(initialState), { status: 200 }),
+    );
     renderManager();
-    fireEvent.click(screen.getAllByRole("button", { name: "清除 SMTP 密码" })[1]!);
-    fireEvent.click(screen.getAllByRole("button", { name: "保存草稿" }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: "清除 SMTP 密码" }));
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).changes).toContainEqual({
       key: "smtpPassword",
