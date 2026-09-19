@@ -38,7 +38,14 @@ export type AiProviderEvent =
   | { type: "complete"; finishReason: string | null };
 
 export type AiClientStreamEvent =
-  | { sequence: number; type: "snapshot"; text: string; proposalText: string }
+  | {
+      sequence: number;
+      type: "snapshot";
+      text: string;
+      proposalText: string;
+      proposalChanges: AiProposalProgressChange[];
+      progress: AiRunProgressStage[];
+    }
   | { sequence: number; type: "progress"; stage: AiRunProgressStage }
   | {
       sequence: number;

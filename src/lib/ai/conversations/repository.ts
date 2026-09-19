@@ -2,6 +2,7 @@ import {
   and,
   desc,
   eq,
+  inArray,
   isNull,
   or,
 } from "drizzle-orm";
@@ -253,7 +254,7 @@ export async function getAiConversationDetails(input: {
         and(
           eq(aiRuns.userId, input.userId),
           eq(aiRuns.conversationId, conversation.id),
-          or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
+          inArray(aiRuns.status, ["queued", "preparing", "streaming"]),
         ),
       )
       .limit(1),

@@ -6,7 +6,6 @@ import {
   aiConversations,
   aiMessages,
   aiModels,
-  aiProposals,
   aiProviderCredentials,
   aiRuns,
   db,
@@ -35,11 +34,12 @@ import { decryptAiCredential } from "@/lib/ai/security/credentials";
 import { createAiAgentToolDefinitions } from "@/lib/ai/tools/catalog";
 import { createAiProposalWorkspace } from "@/lib/ai/tools/proposal-workspace";
 import { createAiProposalProgressChanges } from "@/lib/ai/proposals/progress";
+import { encryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
+import { finalizeOwnedAiRun } from "@/lib/ai/runs/finalize";
 import {
   getAiQuotaSnapshot,
   releaseAiQuota,
   reserveAiQuota,
-  settleAiQuota,
 } from "@/lib/ai/usage/ledger";
 import { calculateAiUsagePoints, type AiPointRates } from "@/lib/ai/usage/rates";
 
@@ -167,6 +167,10 @@ export interface PreparedAiRun {
   proposalTargets: AiEditableTarget[];
   resumeDocument: ResumeDocument;
   providerContext: unknown;
+}
+
+export interface ClaimedAiRun extends PreparedAiRun {
+  leaseOwner: string;
 }
 
 export class AiRunRateLimitedError extends Error {
@@ -442,7 +446,7 @@ export async function prepareAiRun(input: {
         .where(
           and(
             eq(aiRuns.userId, input.userId),
-            or(eq(aiRuns.status, "preparing"), eq(aiRuns.status, "streaming")),
+            inArray(aiRuns.status, ["queued", "preparing", "streaming"]),
           ),
         );
       if (activeRuns >= (input.configuration.maxConcurrentRuns ?? 1)) {
@@ -536,7 +540,7 @@ export async function prepareAiRun(input: {
       }),
     });
 
-    return {
+    const prepared: PreparedAiRun = {
       runId,
       userId: input.userId,
       resumeId: row.conversation.resumeId,
@@ -555,6 +559,31 @@ export async function prepareAiRun(input: {
       resumeDocument: document,
       providerContext,
     };
+    const encryptedExecutionPayload = encryptPreparedAiRunPayload(
+      prepared,
+      input.configuration.credentialsEncryptionKey,
+    );
+    const [queuedRun] = await db
+      .update(aiRuns)
+      .set({
+        status: "queued",
+        encryptedExecutionPayload,
+        executionPayloadKeyVersion: 1,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(aiRuns.id, runId),
+          eq(aiRuns.status, "preparing"),
+          isNull(aiRuns.stopRequestedAt),
+          isNull(aiRuns.leaseOwner),
+        ),
+      )
+      .returning({ id: aiRuns.id });
+    if (!queuedRun) throw new Error("ai_run_preparation_cancelled");
+    return prepared;
   } catch (error) {
     if (quotaReserved) {
       await releaseAiQuota({
@@ -563,18 +592,32 @@ export async function prepareAiRun(input: {
         operationId: runId,
       }).catch(() => undefined);
     }
-    await db
+    const [failedRun] = await db
       .update(aiRuns)
       .set({
         status: "failed",
         failureCode: "preflight_failed",
         completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
       })
-      .where(eq(aiRuns.id, runId));
-    await db
-      .update(aiMessages)
-      .set({ completionState: "failed", updatedAt: new Date() })
-      .where(eq(aiMessages.id, assistantMessageId));
+      .where(
+        and(
+          eq(aiRuns.id, runId),
+          eq(aiRuns.status, "preparing"),
+          isNull(aiRuns.stopRequestedAt),
+          isNull(aiRuns.leaseOwner),
+        ),
+      )
+      .returning({ id: aiRuns.id });
+    if (failedRun) {
+      await db
+        .update(aiMessages)
+        .set({ completionState: "failed", updatedAt: new Date() })
+        .where(eq(aiMessages.id, assistantMessageId));
+    }
     throw error;
   }
 }
@@ -753,30 +796,42 @@ function resumeCapabilities() {
   };
 }
 
-function startAiRunStopMonitor(input: {
+function startAiRunLeaseMonitor(input: {
   runId: string;
+  leaseOwner: string;
+  leaseSeconds: number;
   controller: AbortController;
   intervalMs: number;
+  onLeaseLost: () => void;
 }) {
   let stopped = false;
   let polling = false;
   const timer = setInterval(() => {
     if (stopped || polling || input.controller.signal.aborted) return;
     polling = true;
+    const now = new Date();
     void db
-      .select({
-        status: aiRuns.status,
-        stopRequestedAt: aiRuns.stopRequestedAt,
+      .update(aiRuns)
+      .set({
+        leaseExpiresAt: runLease(now, input.leaseSeconds),
+        updatedAt: now,
       })
-      .from(aiRuns)
-      .where(eq(aiRuns.id, input.runId))
-      .limit(1)
+      .where(
+        and(
+          eq(aiRuns.id, input.runId),
+          eq(aiRuns.status, "streaming"),
+          eq(aiRuns.leaseOwner, input.leaseOwner),
+          gt(aiRuns.leaseExpiresAt, now),
+        ),
+      )
+      .returning({ stopRequestedAt: aiRuns.stopRequestedAt })
       .then(([run]) => {
-        if (
-          run?.stopRequestedAt ||
-          (run && run.status !== "preparing" && run.status !== "streaming")
-        ) {
-          input.controller.abort();
+        if (stopped) return;
+        if (!run) {
+          input.onLeaseLost();
+          input.controller.abort(new Error("ai_run_lease_lost"));
+        } else if (run.stopRequestedAt) {
+          input.controller.abort(new Error("ai_run_stopped"));
         }
       })
       .catch(() => undefined)
@@ -792,13 +847,22 @@ function startAiRunStopMonitor(input: {
 }
 
 export async function* executePreparedAiRun(
-  prepared: PreparedAiRun,
-  options: { adapter: AiProviderAdapter },
+  prepared: ClaimedAiRun,
+  options: { adapter: AiProviderAdapter; signal?: AbortSignal },
 ): AsyncGenerator<AiClientStreamEvent> {
   const controller = new AbortController();
+  let callerAborted = false;
+  let leaseLost = false;
+  const abortFromCaller = () => {
+    callerAborted = true;
+    controller.abort(options.signal?.reason);
+  };
+  options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (options.signal?.aborted) abortFromCaller();
   activeRunControllers.set(prepared.runId, controller);
   let text = "";
   let proposalText = "";
+  let proposalChanges: ReturnType<typeof createAiProposalProgressChanges> = [];
   const progressStages: AiRunProgressStage[] = ["analyzing_resume"];
   let providerRequestId: string | undefined;
   let sequence = 0;
@@ -811,30 +875,66 @@ export async function* executePreparedAiRun(
   let finishReason: string | null = null;
   let proposal: unknown;
 
-  await db
+  if (callerAborted) {
+    options.signal?.removeEventListener("abort", abortFromCaller);
+    activeRunControllers.delete(prepared.runId);
+    return;
+  }
+
+  const startedAt = new Date();
+  const [startedRun] = await db
     .update(aiRuns)
     .set({
       status: "streaming",
-      startedAt: new Date(),
-      leaseExpiresAt: runLease(new Date(), prepared.configuration.runLeaseSeconds),
-      updatedAt: new Date(),
+      startedAt,
+      leaseExpiresAt: runLease(
+        startedAt,
+        prepared.configuration.runLeaseSeconds,
+      ),
+      updatedAt: startedAt,
     })
-    .where(eq(aiRuns.id, prepared.runId));
+    .where(
+      and(
+        eq(aiRuns.id, prepared.runId),
+        eq(aiRuns.status, "preparing"),
+        eq(aiRuns.leaseOwner, prepared.leaseOwner),
+        isNull(aiRuns.stopRequestedAt),
+        gt(aiRuns.leaseExpiresAt, startedAt),
+      ),
+    )
+    .returning({ id: aiRuns.id });
+  if (!startedRun) {
+    options.signal?.removeEventListener("abort", abortFromCaller);
+    activeRunControllers.delete(prepared.runId);
+    return;
+  }
 
-  const stopMonitoring = startAiRunStopMonitor({
+  const stopMonitoring = startAiRunLeaseMonitor({
     runId: prepared.runId,
+    leaseOwner: prepared.leaseOwner,
+    leaseSeconds: prepared.configuration.runLeaseSeconds,
     controller,
-    intervalMs: prepared.configuration.streamCheckpointMs,
+    intervalMs: Math.max(
+      250,
+      Math.min(
+        prepared.configuration.streamCheckpointMs,
+        Math.floor((prepared.configuration.runLeaseSeconds * 1_000) / 3),
+      ),
+    ),
+    onLeaseLost: () => {
+      leaseLost = true;
+    },
   });
 
   async function persistCheckpoint(now: Date) {
-    await db
+    const [checkpointedRun] = await db
       .update(aiRuns)
       .set({
         checkpointSequence: sequence,
         checkpointText: text,
         checkpointProposal: proposalText || null,
         checkpointProgress: progressStages,
+        checkpointChanges: proposalChanges,
         providerRequestId,
         inputTokens: usage?.inputTokens,
         cachedInputTokens: usage?.cachedInputTokens,
@@ -845,7 +945,27 @@ export async function* executePreparedAiRun(
         ),
         updatedAt: now,
       })
-      .where(eq(aiRuns.id, prepared.runId));
+      .where(
+        and(
+          eq(aiRuns.id, prepared.runId),
+          eq(aiRuns.status, "streaming"),
+          eq(aiRuns.leaseOwner, prepared.leaseOwner),
+          gt(aiRuns.leaseExpiresAt, now),
+        ),
+      )
+      .returning({
+        id: aiRuns.id,
+        stopRequestedAt: aiRuns.stopRequestedAt,
+      });
+    if (!checkpointedRun) {
+      leaseLost = true;
+      controller.abort(new Error("ai_run_lease_lost"));
+      throw new Error("ai_run_lease_lost");
+    }
+    if (checkpointedRun.stopRequestedAt) {
+      controller.abort(new Error("ai_run_stopped"));
+      throw new Error("ai_run_stopped");
+    }
     lastCheckpointAt = now.getTime();
   }
 
@@ -973,11 +1093,18 @@ export async function* executePreparedAiRun(
               : workspace.execute(toolCall.name, argumentsValue);
 
         if (result.ok && "changes" in result && result.changes?.length) {
+          const nextChanges = createAiProposalProgressChanges(result.changes);
+          const changesById = new Map(
+            proposalChanges.map((change) => [change.id, change]),
+          );
+          for (const change of nextChanges) changesById.set(change.id, change);
+          proposalChanges = [...changesById.values()];
           sequence += 1;
+          await persistCheckpoint(new Date());
           yield {
             sequence,
             type: "proposal_progress",
-            changes: createAiProposalProgressChanges(result.changes),
+            changes: nextChanges,
           };
         }
 
@@ -1029,6 +1156,7 @@ export async function* executePreparedAiRun(
       );
       auditRequests.push(auditProviderRequest(providerRequest));
       proposalText = "";
+      proposalChanges = [];
       sequence += 1;
       await persistCheckpoint(new Date());
       yield { sequence, type: "proposal_reset" };
@@ -1040,83 +1168,9 @@ export async function* executePreparedAiRun(
       failurePhase = "proposal_validation";
       throw new Error("ai_proposal_missing");
     }
-    stopMonitoring();
-
-    if (proposalText && proposalState) {
-      failurePhase = "proposal_persistence";
-      await db.insert(aiProposals).values({
-        runId: prepared.runId,
-        baseResumeVersion: prepared.resumeVersion,
-        targetHashes: proposalState === "complete"
-          ? Object.fromEntries(
-              (proposal as { changes: Array<{ id: string; beforeHash: string }> }).changes.map(
-                (change) => [change.id, change.beforeHash],
-              ),
-            )
-          : {},
-        proposal,
-        completionState: proposalState,
-      });
-    }
-
     failurePhase = "checkpoint_persistence";
     const savingEvent = await advanceProgress("saving_result");
     if (savingEvent) yield savingEvent;
-
-    if (!usage) {
-      failurePhase = "result_persistence";
-      await db
-        .update(aiRuns)
-        .set({
-          status: "settlement_pending",
-          checkpointSequence: sequence,
-          checkpointText: text,
-          checkpointProposal: proposalText || null,
-          providerRequestId,
-          completedAt: new Date(),
-          leaseExpiresAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(aiRuns.id, prepared.runId));
-      await db
-        .update(aiMessages)
-        .set({ text, completionState: "complete", updatedAt: new Date() })
-        .where(eq(aiMessages.id, prepared.assistantMessageId));
-    } else {
-      const finalPoints = prepared.keySource === "user"
-        ? 0
-        : calculateAiUsagePoints({ ...usage, rates: prepared.rates });
-      failurePhase = "quota_settlement";
-      await settleAiQuota({
-        userId: prepared.userId,
-        runId: prepared.runId,
-        operationId: prepared.reservationOperationId,
-        actualPoints: finalPoints,
-        ...usage,
-      });
-      failurePhase = "result_persistence";
-      await db
-        .update(aiRuns)
-        .set({
-          status: "complete",
-          finalPoints,
-          checkpointSequence: sequence,
-          checkpointText: text,
-          checkpointProposal: proposalText || null,
-          providerRequestId,
-          inputTokens: usage.inputTokens,
-          cachedInputTokens: usage.cachedInputTokens,
-          outputTokens: usage.outputTokens,
-          completedAt: new Date(),
-          leaseExpiresAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(aiRuns.id, prepared.runId));
-      await db
-        .update(aiMessages)
-        .set({ text, completionState: "complete", updatedAt: new Date() })
-        .where(eq(aiMessages.id, prepared.assistantMessageId));
-    }
 
     failurePhase = "audit_persistence";
     await replaceAiAuditEvidence({
@@ -1138,9 +1192,55 @@ export async function* executePreparedAiRun(
         retentionDays: prepared.configuration.auditRetentionDays,
       }),
     });
+
+    const finalPoints = usage
+      ? prepared.keySource === "user"
+        ? 0
+        : calculateAiUsagePoints({ ...usage, rates: prepared.rates })
+      : undefined;
+    failurePhase = usage ? "quota_settlement" : "result_persistence";
+    const finalized = await finalizeOwnedAiRun({
+      runId: prepared.runId,
+      assistantMessageId: prepared.assistantMessageId,
+      leaseOwner: prepared.leaseOwner,
+      sequence,
+      text,
+      proposalText,
+      providerRequestId,
+      proposal: proposalText && proposalState
+        ? {
+            baseResumeVersion: prepared.resumeVersion,
+            targetHashes: proposalState === "complete"
+              ? Object.fromEntries(
+                  (proposal as {
+                    changes: Array<{ id: string; beforeHash: string }>;
+                  }).changes.map((change) => [change.id, change.beforeHash]),
+                )
+              : {},
+            proposal,
+            completionState: proposalState,
+          }
+        : undefined,
+      settlement: usage && finalPoints !== undefined
+        ? {
+            userId: prepared.userId,
+            runId: prepared.runId,
+            operationId: prepared.reservationOperationId,
+            actualPoints: finalPoints,
+            ...usage,
+          }
+        : undefined,
+    });
+    if (!finalized) {
+      leaseLost = true;
+      throw new Error("ai_run_lease_lost");
+    }
+    stopMonitoring();
+
     sequence += 1;
     yield { sequence, type: "complete", finishReason };
   } catch (error) {
+    if (callerAborted || leaseLost) throw error;
     const stopped = controller.signal.aborted;
     const failureCode = failureCodeForPhase(failurePhase, error, stopped);
     const safelyUnbilled =
@@ -1210,10 +1310,19 @@ export async function* executePreparedAiRun(
         cachedInputTokens: usage?.cachedInputTokens,
         outputTokens: usage?.outputTokens,
         completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
         leaseExpiresAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(aiRuns.id, prepared.runId));
+      .where(
+        and(
+          eq(aiRuns.id, prepared.runId),
+          eq(aiRuns.status, "streaming"),
+          eq(aiRuns.leaseOwner, prepared.leaseOwner),
+        ),
+      );
     await db
       .update(aiMessages)
       .set({
@@ -1247,6 +1356,7 @@ export async function* executePreparedAiRun(
     };
   } finally {
     stopMonitoring();
+    options.signal?.removeEventListener("abort", abortFromCaller);
     activeRunControllers.delete(prepared.runId);
   }
 }
@@ -1278,6 +1388,7 @@ async function retractAiTurn(input: {
       .limit(1);
     if (
       !run ||
+      run.status === "queued" ||
       run.status === "preparing" ||
       run.status === "streaming"
     ) {
@@ -1362,6 +1473,62 @@ export async function stopAiRun(input: {
     });
   }
   const now = new Date();
+  const [unstartedRun] = await db
+    .update(aiRuns)
+    .set({
+      status: "settlement_pending",
+      stopRequestedAt: now,
+      failureCode: "stopped",
+      completedAt: now,
+      encryptedExecutionPayload: null,
+      executionPayloadKeyVersion: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(aiRuns.id, input.runId),
+        eq(aiRuns.userId, input.userId),
+        inArray(aiRuns.status, ["queued", "preparing"]),
+        isNull(aiRuns.startedAt),
+      ),
+    )
+    .returning({
+      id: aiRuns.id,
+      assistantMessageId: aiRuns.assistantMessageId,
+    });
+  if (unstartedRun) {
+    await db
+      .update(aiMessages)
+      .set({ completionState: "stopped", updatedAt: now })
+      .where(eq(aiMessages.id, unstartedRun.assistantMessageId));
+    activeRunControllers.get(input.runId)?.abort();
+    try {
+      await releaseAiQuota({
+        userId: input.userId,
+        runId: input.runId,
+        operationId: input.runId,
+      });
+    } catch (error) {
+      console.error(
+        `[AnonResume] Failed to release quota for stopped AI run ${input.runId}; settlement remains pending.`,
+        error,
+      );
+      return true;
+    }
+    await db
+      .update(aiRuns)
+      .set({ status: "stopped", finalPoints: 0, updatedAt: new Date() })
+      .where(
+        and(
+          eq(aiRuns.id, input.runId),
+          eq(aiRuns.status, "settlement_pending"),
+          eq(aiRuns.failureCode, "stopped"),
+        ),
+      );
+    return true;
+  }
   const run = await db.transaction(async (transaction) => {
     const [stoppedRun] = await transaction
       .update(aiRuns)
@@ -1372,6 +1539,8 @@ export async function stopAiRun(input: {
         completedAt: now,
         leaseOwner: null,
         leaseExpiresAt: null,
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
         updatedAt: now,
       })
       .where(
@@ -1409,6 +1578,8 @@ export async function getAiRunSnapshot(input: {
       sequence: aiRuns.checkpointSequence,
       text: aiRuns.checkpointText,
       proposalText: aiRuns.checkpointProposal,
+      proposalChanges: aiRuns.checkpointChanges,
+      progress: aiRuns.checkpointProgress,
       failureCode: aiRuns.failureCode,
       finalPoints: aiRuns.finalPoints,
     })

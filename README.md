@@ -81,6 +81,12 @@ bun run dev
 bun run worker:pdf
 ```
 
+启用 AI 功能时，还需要启动独立的 AI Worker。它负责执行模型调用、自动恢复异常中断的生成任务并清理过期审计数据：
+
+```bash
+bun run worker:ai
+```
+
 默认开发地址为 <http://localhost:3000>。
 
 ## 配置说明
@@ -95,6 +101,7 @@ bun run worker:pdf
 - 匿名 PDF 导出默认禁止。虽然可以通过环境变量开启，但不建议在缺少外部滥用防护时这样做。
 - `RESUME_VERSION_HISTORY_LIMIT` 控制每份简历保留的历史版本数量。
 - `ANONRESUME_SUPER_ADMIN_EMAIL` 和 `ADMIN_*` 配置用于唯一超管、管理会话及 MFA 安全能力。
+- `AI_WORKER_*` 可选配置用于调整 AI Worker 的轮询、租约恢复、审计清理周期和单批处理量。
 - GitHub OAuth 是可选功能；客户端 ID 与密钥必须同时配置或同时省略。
 
 数据库结构只通过 Better Auth 与 Drizzle 迁移更新，应用请求不会在运行时创建或修复表结构。
@@ -115,14 +122,15 @@ bun run auth:migrate
 bun run db:migrate
 ```
 
-分别运行 Web 服务和 PDF Worker：
+分别运行 Web 服务、PDF Worker 和 AI Worker：
 
 ```bash
 bun run start
 bun run worker:pdf
+bun run worker:ai
 ```
 
-两者需要连接同一个 PostgreSQL 数据库，并使用一致的应用配置。PDF Worker 可以运行多个进程，但 `PDF_EXPORT_MAX_CONCURRENCY` 是通过 PostgreSQL 在全局范围内限制的，而不是每个 Worker 单独计算。
+三个进程需要连接同一个 PostgreSQL 数据库，并使用一致的应用配置。PDF Worker 可以运行多个进程，但 `PDF_EXPORT_MAX_CONCURRENCY` 是通过 PostgreSQL 在全局范围内限制的，而不是每个 Worker 单独计算。AI Worker 使用 PostgreSQL 持久化任务和检查点，并通过数据库锁协调执行与维护，不依赖单独的 Redis 或定时任务服务；`bun run ai:maintenance` 仅保留用于运维诊断，不应作为生产正确性的前提。
 
 生产环境应使用权限受限的专用数据库账号，并备份简历与历史版本数据。PDF 导出任务包含临时队列和下载数据，通常不需要长期备份。
 

@@ -17,7 +17,7 @@ import {
   resolveApplicationOriginForBootstrap,
   validateRuntimeConfiguration,
 } from "@/lib/runtime/configuration";
-import { recordWorkerHeartbeat } from "@/lib/pdf/worker-heartbeat";
+import { recordWorkerHeartbeat } from "@/lib/runtime/worker-heartbeat";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;

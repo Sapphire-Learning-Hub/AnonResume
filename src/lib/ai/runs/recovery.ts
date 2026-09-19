@@ -124,7 +124,9 @@ export async function recoverExpiredAiRuns({
             SET status = $2,
                 final_points = CASE WHEN $2 = 'interrupted' THEN 0 ELSE final_points END,
                 failure_code = 'lease_expired', completed_at = $3, updated_at = $3,
-                lease_owner = NULL, lease_expires_at = NULL
+                lease_owner = NULL, lease_expires_at = NULL,
+                encrypted_execution_payload = NULL,
+                execution_payload_key_version = NULL
           WHERE id = $1`,
         [run.id, status, now],
       );
@@ -143,44 +145,5 @@ export async function recoverExpiredAiRuns({
     }
 
     return { interrupted, settlementPending, releasedPoints };
-  });
-}
-
-export async function renewExpiredAiQuotaPeriods({
-  now = new Date(),
-  batchSize = 100,
-}: {
-  now?: Date;
-  batchSize?: number;
-} = {}) {
-  validateBatchSize(batchSize);
-  return withTransaction(async (client) => {
-    const expired = await client.query<{ userId: string }>(
-      `SELECT user_id AS "userId"
-         FROM ${table("ai_quota_accounts")}
-        WHERE period_ends_at <= $1 AND reserved_points = 0
-        ORDER BY period_ends_at ASC, user_id ASC
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED`,
-      [now, batchSize],
-    );
-    const periodEndsAt = new Date(now);
-    periodEndsAt.setUTCMonth(periodEndsAt.getUTCMonth() + 1);
-    for (const account of expired.rows) {
-      await client.query(
-        `UPDATE ${table("ai_quota_accounts")}
-            SET period_started_at = $2, period_ends_at = $3,
-                used_points = 0, updated_at = $2
-          WHERE user_id = $1`,
-        [account.userId, now, periodEndsAt],
-      );
-      await client.query(
-        `INSERT INTO ${table("ai_usage_ledger")}
-           (user_id, entry_type, points_delta, metadata)
-         VALUES ($1, 'renewal', 0, $2::jsonb)`,
-        [account.userId, JSON.stringify({ periodStartedAt: now })],
-      );
-    }
-    return expired.rowCount ?? 0;
   });
 }

@@ -20,6 +20,7 @@ import {
   fetchAiConversation,
   fetchAiConversationIndex,
   sendAiMessage,
+  streamAiRun,
   stopAiRun,
   updateAiConversation,
   type AiConversationDetails,
@@ -87,11 +88,42 @@ export function useAiConversation({
   const [streamingProgressStages, setStreamingProgressStages] = useState<
     AiRunProgressStage[]
   >([]);
-  const [liveRunId, setLiveRunId] = useState<string>();
+  const liveRunIdRef = useRef<string | undefined>(undefined);
   const streamPromiseRef = useRef<Promise<void> | undefined>(undefined);
   const runIdWaiterRef = useRef<RunIdWaiter | undefined>(undefined);
   const intentionalStopRef = useRef(false);
   const reportError = useEffectEvent(onError);
+  function consumeStreamEvent(event: AiClientStreamEvent) {
+    if (event.type === "snapshot") {
+      setStreamingText(event.text);
+      setStreamingProposalText(event.proposalText);
+      setStreamingProposalChanges(event.proposalChanges);
+      setStreamingProgressStages(event.progress);
+    }
+    if (event.type === "progress") {
+      setStreamingProgressStages((current) =>
+        current.includes(event.stage) ? current : [...current, event.stage],
+      );
+    }
+    if (event.type === "text_delta") {
+      setStreamingText((current) => current + event.delta);
+    }
+    if (event.type === "proposal_delta") {
+      setStreamingProposalText((current) => current + event.delta);
+    }
+    if (event.type === "proposal_progress") {
+      setStreamingProposalChanges((current) => {
+        const byId = new Map(current.map((change) => [change.id, change]));
+        for (const change of event.changes) byId.set(change.id, change);
+        return [...byId.values()];
+      });
+    }
+    if (event.type === "proposal_reset") {
+      setStreamingProposalText("");
+      setStreamingProposalChanges([]);
+    }
+  }
+  const consumeReconnectedStreamEvent = useEffectEvent(consumeStreamEvent);
 
   const loadIndex = useCallback(async () => {
     const result = await fetchAiConversationIndex(resumeId);
@@ -157,11 +189,36 @@ export function useAiConversation({
   const activeRunId = details?.activeRun?.id;
   useEffect(() => {
     if (!open || !selectedConversationId || !activeRunId) return;
-    const timer = window.setInterval(() => {
-      void loadDetails(selectedConversationId).catch(reportError);
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [activeRunId, loadDetails, open, selectedConversationId]);
+    const controller = new AbortController();
+    liveRunIdRef.current = activeRunId;
+    const streamPromise = streamAiRun({
+      runId: activeRunId,
+      signal: controller.signal,
+      onEvent: consumeReconnectedStreamEvent,
+    })
+      .then(async () => {
+        await Promise.all([loadDetails(selectedConversationId), loadIndex()]);
+      })
+      .catch((error) => {
+        const stopped =
+          error instanceof AiClientError && error.code === "stopped";
+        if (!controller.signal.aborted && !stopped) reportError(error);
+      })
+      .finally(() => {
+        if (streamPromiseRef.current === streamPromise) {
+          streamPromiseRef.current = undefined;
+          if (liveRunIdRef.current === activeRunId) {
+            liveRunIdRef.current = undefined;
+          }
+          setStreamingText("");
+          setStreamingProposalText("");
+          setStreamingProposalChanges([]);
+          setStreamingProgressStages([]);
+        }
+      });
+    streamPromiseRef.current = streamPromise;
+    return () => controller.abort();
+  }, [activeRunId, loadDetails, loadIndex, open, selectedConversationId]);
 
   async function send(message: string) {
     let conversationId = selectedConversationId;
@@ -189,41 +246,17 @@ export function useAiConversation({
     setStreamingProposalText("");
     setStreamingProposalChanges([]);
     setStreamingProgressStages([]);
+    let streamPromise: Promise<void> | undefined;
     try {
-      const streamPromise = sendAiMessage({
+      streamPromise = sendAiMessage({
         conversationId,
         message,
         resumeVersion,
         onRun(runId) {
-          setLiveRunId(runId);
+          liveRunIdRef.current = runId;
           runIdWaiter.settle(runId);
         },
-        onEvent(event: AiClientStreamEvent) {
-          if (event.type === "progress") {
-            setStreamingProgressStages((current) =>
-              current.includes(event.stage)
-                ? current
-                : [...current, event.stage],
-            );
-          }
-          if (event.type === "text_delta") {
-            setStreamingText((current) => current + event.delta);
-          }
-          if (event.type === "proposal_delta") {
-            setStreamingProposalText((current) => current + event.delta);
-          }
-          if (event.type === "proposal_progress") {
-            setStreamingProposalChanges((current) => {
-              const byId = new Map(current.map((change) => [change.id, change]));
-              for (const change of event.changes) byId.set(change.id, change);
-              return [...byId.values()];
-            });
-          }
-          if (event.type === "proposal_reset") {
-            setStreamingProposalText("");
-            setStreamingProposalChanges([]);
-          }
-        },
+        onEvent: consumeStreamEvent,
       });
       streamPromiseRef.current = streamPromise;
       await streamPromise;
@@ -252,8 +285,10 @@ export function useAiConversation({
       setStreamingProposalText("");
       setStreamingProposalChanges([]);
       setStreamingProgressStages([]);
-      setLiveRunId(undefined);
-      streamPromiseRef.current = undefined;
+      if (streamPromiseRef.current === streamPromise) {
+        liveRunIdRef.current = undefined;
+        streamPromiseRef.current = undefined;
+      }
     }
   }
 
@@ -262,7 +297,7 @@ export function useAiConversation({
     intentionalStopRef.current = true;
     try {
       const runId =
-        liveRunId ??
+        liveRunIdRef.current ??
         details?.activeRun?.id ??
         (await runIdWaiterRef.current?.promise);
       if (!runId) return;

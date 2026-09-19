@@ -16,7 +16,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
+import type {
+  AiProposalProgressChange,
+  AiRunProgressStage,
+} from "@/lib/ai/runs/stream-events";
 
 import { getDatabaseSchemaName, resumes } from "./schema";
 
@@ -25,6 +28,7 @@ export type AiConversationScope = "resume" | "section";
 export type AiMessageRole = "user" | "assistant";
 export type AiMessageCompletionState = "streaming" | "complete" | "stopped" | "failed";
 export type AiRunStatus =
+  | "queued"
   | "preparing"
   | "streaming"
   | "complete"
@@ -341,6 +345,12 @@ const runColumns = {
     .$type<AiRunProgressStage[]>()
     .notNull()
     .default(sql`'["analyzing_resume"]'::jsonb`),
+  checkpointChanges: jsonb("checkpoint_changes")
+    .$type<AiProposalProgressChange[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  encryptedExecutionPayload: bytea("encrypted_execution_payload"),
+  executionPayloadKeyVersion: integer("execution_payload_key_version"),
   inputTokens: integer("input_tokens"),
   cachedInputTokens: integer("cached_input_tokens"),
   outputTokens: integer("output_tokens"),
@@ -362,18 +372,20 @@ export const aiRuns =
         foreignKey({ columns: [table.conversationId], foreignColumns: [aiConversations.id], name: "ai_runs_conversation_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.assistantMessageId], foreignColumns: [aiMessages.id], name: "ai_runs_message_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_runs_model_fk" }),
-        check("ai_runs_status_check", sql`${table.status} IN ('preparing', 'streaming', 'complete', 'stopped', 'failed', 'interrupted', 'settlement_pending')`),
+        check("ai_runs_status_check", sql`${table.status} IN ('queued', 'preparing', 'streaming', 'complete', 'stopped', 'failed', 'interrupted', 'settlement_pending')`),
         check("ai_runs_points_check", sql`${table.reservedPoints} >= 0 AND (${table.finalPoints} IS NULL OR ${table.finalPoints} >= 0)`),
-        uniqueIndex("ai_runs_active_user_resume_unique").on(table.userId, table.resumeId).where(sql`${table.status} IN ('preparing', 'streaming')`),
+        check("ai_runs_execution_payload_check", sql`(${table.encryptedExecutionPayload} IS NULL AND ${table.executionPayloadKeyVersion} IS NULL) OR (${table.encryptedExecutionPayload} IS NOT NULL AND ${table.executionPayloadKeyVersion} IS NOT NULL)`),
+        uniqueIndex("ai_runs_active_user_resume_unique").on(table.userId, table.resumeId).where(sql`${table.status} IN ('queued', 'preparing', 'streaming')`),
         index("ai_runs_status_lease_idx").on(table.status, table.leaseExpiresAt),
       ])
     : pgSchema(schemaName).table("ai_runs", runColumns, (table) => [
         foreignKey({ columns: [table.conversationId], foreignColumns: [aiConversations.id], name: "ai_runs_conversation_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.assistantMessageId], foreignColumns: [aiMessages.id], name: "ai_runs_message_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_runs_model_fk" }),
-        check("ai_runs_status_check", sql`${table.status} IN ('preparing', 'streaming', 'complete', 'stopped', 'failed', 'interrupted', 'settlement_pending')`),
+        check("ai_runs_status_check", sql`${table.status} IN ('queued', 'preparing', 'streaming', 'complete', 'stopped', 'failed', 'interrupted', 'settlement_pending')`),
         check("ai_runs_points_check", sql`${table.reservedPoints} >= 0 AND (${table.finalPoints} IS NULL OR ${table.finalPoints} >= 0)`),
-        uniqueIndex("ai_runs_active_user_resume_unique").on(table.userId, table.resumeId).where(sql`${table.status} IN ('preparing', 'streaming')`),
+        check("ai_runs_execution_payload_check", sql`(${table.encryptedExecutionPayload} IS NULL AND ${table.executionPayloadKeyVersion} IS NULL) OR (${table.encryptedExecutionPayload} IS NOT NULL AND ${table.executionPayloadKeyVersion} IS NOT NULL)`),
+        uniqueIndex("ai_runs_active_user_resume_unique").on(table.userId, table.resumeId).where(sql`${table.status} IN ('queued', 'preparing', 'streaming')`),
         index("ai_runs_status_lease_idx").on(table.status, table.leaseExpiresAt),
       ]);
 

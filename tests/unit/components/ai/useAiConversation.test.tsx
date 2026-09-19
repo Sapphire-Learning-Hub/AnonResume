@@ -1,11 +1,13 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 
 import { useAiConversation } from "@/components/ai/useAiConversation";
+import { AiClientError } from "@/lib/ai/client";
 
 const clientMock = vi.hoisted(() => ({
   fetchAiConversation: vi.fn(),
   fetchAiConversationIndex: vi.fn(),
   sendAiMessage: vi.fn(),
+  streamAiRun: vi.fn(),
   stopAiRun: vi.fn(),
 }));
 
@@ -16,6 +18,7 @@ vi.mock("@/lib/ai/client", async (importOriginal) => ({
   fetchAiConversation: clientMock.fetchAiConversation,
   fetchAiConversationIndex: clientMock.fetchAiConversationIndex,
   sendAiMessage: clientMock.sendAiMessage,
+  streamAiRun: clientMock.streamAiRun,
   stopAiRun: clientMock.stopAiRun,
   updateAiConversation: vi.fn(),
 }));
@@ -32,8 +35,24 @@ describe("useAiConversation", () => {
     createdAt: "2026-09-16T15:00:00.000Z",
     updatedAt: "2026-09-16T15:00:01.000Z",
   };
+  const secondConversation = {
+    ...conversation,
+    id: "571f3841-497d-4d6a-b3a5-52be6823ff6e",
+    title: "第二份对话",
+  };
+
+  const activeRun = (id: string) => ({
+    id,
+    status: "streaming",
+    sequence: 0,
+    text: "",
+    proposal: null,
+    progress: ["analyzing_resume"],
+  });
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    clientMock.streamAiRun.mockResolvedValue(undefined);
     clientMock.fetchAiConversationIndex.mockResolvedValue({
       enabled: true,
       conversations: [conversation],
@@ -67,6 +86,107 @@ describe("useAiConversation", () => {
             }
           : { stopped: true },
     );
+  });
+
+  it("subscribes to the new active run when conversations switch", async () => {
+    let rejectFirstStream!: (error: unknown) => void;
+    const firstStream = new Promise<void>((_resolve, reject) => {
+      rejectFirstStream = reject;
+    });
+    const firstRunId = "62622b5d-ec93-43fb-925d-6b631703799b";
+    const secondRunId = "e1272dcf-48c9-4cc7-b23a-8ee12e4971a6";
+    clientMock.fetchAiConversationIndex.mockResolvedValue({
+      enabled: true,
+      conversations: [conversation, secondConversation],
+      models: [],
+    });
+    clientMock.fetchAiConversation.mockImplementation(async (id: string) => ({
+      conversation: id === conversation.id ? conversation : secondConversation,
+      messages: [],
+      proposals: [],
+      activeRun: activeRun(id === conversation.id ? firstRunId : secondRunId),
+    }));
+    clientMock.streamAiRun.mockImplementation(
+      ({ runId }: { runId: string }) =>
+        runId === firstRunId ? firstStream : new Promise<void>(() => undefined),
+    );
+
+    const { result, unmount } = renderHook(() =>
+      useAiConversation({
+        open: true,
+        resumeId: "resume-demo",
+        resumeVersion: 1,
+        onError: vi.fn(),
+      }),
+    );
+    await waitFor(() =>
+      expect(clientMock.streamAiRun).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: firstRunId }),
+      ),
+    );
+
+    act(() => result.current.setSelectedConversationId(secondConversation.id));
+    await waitFor(() =>
+      expect(clientMock.fetchAiConversation).toHaveBeenCalledWith(
+        secondConversation.id,
+      ),
+    );
+    act(() => rejectFirstStream(new DOMException("Aborted", "AbortError")));
+
+    await waitFor(() =>
+      expect(clientMock.streamAiRun).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: secondRunId }),
+      ),
+    );
+    unmount();
+  });
+
+  it("does not report an intentional stop from a reconnected run", async () => {
+    const onError = vi.fn();
+    const runId = "62622b5d-ec93-43fb-925d-6b631703799b";
+    let rejectStream!: (error: unknown) => void;
+    clientMock.fetchAiConversation.mockResolvedValue({
+      conversation,
+      messages: [],
+      proposals: [],
+      activeRun: activeRun(runId),
+    });
+    clientMock.streamAiRun.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectStream = reject;
+        }),
+    );
+    clientMock.stopAiRun.mockImplementation(
+      async (_runId: string, retract?: "if-empty" | "always") => {
+        if (!retract) {
+          rejectStream(new AiClientError("stopped", 400));
+          return { stopped: true };
+        }
+        return {
+          stopped: true,
+          retracted: true,
+          hadOutput: false,
+          message: "停止重连任务",
+        };
+      },
+    );
+
+    const { result } = renderHook(() =>
+      useAiConversation({
+        open: true,
+        resumeId: "resume-demo",
+        resumeVersion: 1,
+        onError,
+      }),
+    );
+    await waitFor(() => expect(clientMock.streamAiRun).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.stop();
+    });
+    expect(clientMock.stopAiRun).toHaveBeenCalledWith(runId);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("waits for a run id when stop is requested immediately after send", async () => {
