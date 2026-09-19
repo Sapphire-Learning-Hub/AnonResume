@@ -306,5 +306,7 @@ export function getRuntimeConfigManager(consumer: ConfigConsumer = "web") {
 }
 
 export async function getRuntimeConfig(consumer: ConfigConsumer = "web") {
-  return getRuntimeConfigManager(consumer).snapshot();
+  const manager = getRuntimeConfigManager(consumer);
+  await manager.refreshIfDue();
+  return manager.snapshot();
 }

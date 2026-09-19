@@ -27,4 +27,7 @@ it("keeps local package script entrypoints valid", async () => {
   expect(manifest.scripts?.["worker:ai"]).toBe(
     "bun run scripts/ai-worker.ts",
   );
+  expect(manifest.scripts?.["config:doctor"]).toBe(
+    "bun run scripts/config-doctor.ts",
+  );
 });

@@ -18,7 +18,7 @@ export type BootstrapNodeEnvironment =
   | "production"
   | "test";
 
-const CREDENTIAL_NAMES = {
+export const BOOTSTRAP_CREDENTIAL_NAMES = {
   applicationOrigin: "anonresume.application-origin",
   authSecret: "anonresume.auth-secret",
   currentMasterKey: "anonresume.config-master-key",
@@ -27,7 +27,14 @@ const CREDENTIAL_NAMES = {
   legacyAdminMfaKey: "anonresume.legacy-admin-mfa-key",
   legacyAiCredentialsKey: "anonresume.legacy-ai-credentials-key",
   previousMasterKey: "anonresume.config-master-key-previous",
+  superAdminEmail: "anonresume.super-admin-email",
 } as const;
+
+export interface BootstrapCredentialInspection {
+  name: string;
+  required: boolean;
+  status: "absent" | "invalid" | "missing" | "present";
+}
 
 export interface BootstrapConfig {
   applicationOrigin: string;
@@ -64,14 +71,15 @@ function readSystemdCredential(
 
 function readBootstrapValue(
   input: BootstrapConfigInput,
-  name: keyof typeof CREDENTIAL_NAMES,
+  name: keyof typeof BOOTSTRAP_CREDENTIAL_NAMES,
   environmentKey: string,
 ) {
   const environment = input.environment ?? process.env;
   const readCredential = input.readCredential ??
     ((credentialName: string) =>
       readSystemdCredential(credentialName, environment));
-  return readCredential(CREDENTIAL_NAMES[name]) ?? environment[environmentKey];
+  return readCredential(BOOTSTRAP_CREDENTIAL_NAMES[name]) ??
+    environment[environmentKey];
 }
 
 export function readBootstrapDatabaseUrl(input: BootstrapConfigInput = {}) {
@@ -167,8 +175,11 @@ export function readBootstrapConfig(
   const environment = input.environment ?? process.env;
   const readCredential = input.readCredential ??
     ((name: string) => readSystemdCredential(name, environment));
-  const read = (name: keyof typeof CREDENTIAL_NAMES, environmentKey: string) =>
-    readCredential(CREDENTIAL_NAMES[name]) ?? environment[environmentKey];
+  const read = (
+    name: keyof typeof BOOTSTRAP_CREDENTIAL_NAMES,
+    environmentKey: string,
+  ) => readCredential(BOOTSTRAP_CREDENTIAL_NAMES[name]) ??
+    environment[environmentKey];
   const production = environment.NODE_ENV === "production";
   const databaseUrl = read("databaseUrl", "DATABASE_URL")?.trim();
   const applicationOrigin = read("applicationOrigin", "BETTER_AUTH_URL")?.trim();
@@ -235,6 +246,90 @@ export function readBootstrapConfig(
     ...(legacyAiCredentialsKey ? { legacyAiCredentialsKey } : {}),
     ...(previousMasterKey ? { previousMasterKey } : {}),
   };
+}
+
+export function inspectBootstrapCredentials(
+  input: BootstrapConfigInput = {},
+): BootstrapCredentialInspection[] {
+  const environment = input.environment ?? process.env;
+  const production = environment.NODE_ENV === "production";
+  const definitions = [
+    {
+      key: "databaseUrl" as const,
+      environmentKey: "DATABASE_URL",
+      required: true,
+      valid: validDatabaseUrl,
+    },
+    {
+      key: "applicationOrigin" as const,
+      environmentKey: "BETTER_AUTH_URL",
+      required: true,
+      valid: (value: string | undefined) =>
+        validApplicationOrigin(value, production),
+    },
+    {
+      key: "authSecret" as const,
+      environmentKey: "BETTER_AUTH_SECRET",
+      required: true,
+      valid: (value: string | undefined) =>
+        Boolean(value && value.trim().length >= 32 && !value.includes(
+          "replace_with",
+        )),
+    },
+    {
+      key: "currentMasterKey" as const,
+      environmentKey: "CONFIG_MASTER_KEY",
+      required: true,
+      valid: (value: string | undefined) => Boolean(decodeMasterKey(value)),
+    },
+    {
+      key: "databaseSchema" as const,
+      environmentKey: "ANONRESUME_DB_SCHEMA",
+      required: false,
+      valid: (value: string | undefined) =>
+        Boolean(value && /^[a-z_][a-z0-9_]*$/i.test(value.trim())),
+    },
+    {
+      key: "previousMasterKey" as const,
+      environmentKey: "CONFIG_MASTER_KEY_PREVIOUS",
+      required: false,
+      valid: (value: string | undefined) => Boolean(decodeMasterKey(value)),
+    },
+    {
+      key: "legacyAdminMfaKey" as const,
+      environmentKey: "ADMIN_MFA_ENCRYPTION_KEY",
+      required: false,
+      valid: (value: string | undefined) => Boolean(decodeMasterKey(value)),
+    },
+    {
+      key: "legacyAiCredentialsKey" as const,
+      environmentKey: "AI_CREDENTIALS_ENCRYPTION_KEY",
+      required: false,
+      valid: (value: string | undefined) => Boolean(decodeMasterKey(value)),
+    },
+    {
+      key: "superAdminEmail" as const,
+      environmentKey: "ANONRESUME_SUPER_ADMIN_EMAIL",
+      required: false,
+      valid: (value: string | undefined) =>
+        Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())),
+    },
+  ];
+
+  return definitions.map((definition) => {
+    const value = readBootstrapValue(
+      input,
+      definition.key,
+      definition.environmentKey,
+    )?.trim();
+    return {
+      name: BOOTSTRAP_CREDENTIAL_NAMES[definition.key],
+      required: definition.required,
+      status: !value
+        ? definition.required ? "missing" as const : "absent" as const
+        : definition.valid(value) ? "present" as const : "invalid" as const,
+    };
+  });
 }
 
 export function validateBootstrapConfiguration(

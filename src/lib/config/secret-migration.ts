@@ -1,4 +1,4 @@
-import { and, count, eq, gte, isNotNull } from "drizzle-orm";
+import { and, count, eq, gte, isNotNull, notInArray } from "drizzle-orm";
 
 import {
   adminMfaDevices,
@@ -76,6 +76,42 @@ export async function countLegacySecrets(): Promise<LegacySecretCounts> {
     aiAuditPayloads: audit[0]?.value ?? 0,
   };
   return { ...counts, total: Object.values(counts).reduce((sum, value) => sum + value, 0) };
+}
+
+export async function countUnsupportedSecrets(): Promise<LegacySecretCounts> {
+  const supportedVersions = [
+    LEGACY_SECRET_KEY_VERSION,
+    DERIVED_SECRET_KEY_VERSION,
+  ];
+  const [admin, providers, runs, audit] = await Promise.all([
+    db.select({ value: count() }).from(adminMfaDevices)
+      .where(notInArray(adminMfaDevices.keyVersion, supportedVersions)),
+    db.select({ value: count() }).from(aiProviderCredentials)
+      .where(notInArray(
+        aiProviderCredentials.encryptionKeyVersion,
+        supportedVersions,
+      )),
+    db.select({ value: count() }).from(aiRuns)
+      .where(and(
+        isNotNull(aiRuns.encryptedExecutionPayload),
+        notInArray(aiRuns.executionPayloadKeyVersion, supportedVersions),
+      )),
+    db.select({ value: count() }).from(aiAuditPayloads)
+      .where(notInArray(
+        aiAuditPayloads.encryptionKeyVersion,
+        supportedVersions,
+      )),
+  ]);
+  const counts = {
+    adminMfaDevices: admin[0]?.value ?? 0,
+    aiProviderCredentials: providers[0]?.value ?? 0,
+    aiRuns: runs[0]?.value ?? 0,
+    aiAuditPayloads: audit[0]?.value ?? 0,
+  };
+  return {
+    ...counts,
+    total: Object.values(counts).reduce((sum, value) => sum + value, 0),
+  };
 }
 
 async function hasFreshAiWorker(input: { now: Date; staleMs: number }) {
