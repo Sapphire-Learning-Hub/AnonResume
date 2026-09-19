@@ -164,7 +164,24 @@ describe("configuration administration service", () => {
 
     const history = await listConfigurationHistory({ keyring });
     const original = history.find((revision) => revision.version === 1);
+    const changed = history.find((revision) => revision.version === 2);
     expect(original).toBeDefined();
+    expect(changed).toMatchObject({
+      createdByUserId: actorUserId,
+      publishedByUserId: actorUserId,
+    });
+    expect(changed?.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: "resumeVersionHistoryLimit",
+        before: 5,
+        after: 9,
+      }),
+      {
+        field: "githubClientSecret",
+        operation: "set",
+        sensitive: true,
+      },
+    ]));
     const rollback = await prepareConfigurationRollback({
       actorUserId,
       keyring,

@@ -13,14 +13,30 @@ export interface ManagedConfigFieldView {
 }
 
 export interface ManagedConfigurationRevisionView {
+  changes: ManagedConfigurationHistoryChange[];
   createdAt: string;
+  createdByUserId: string;
   id: string;
   publishedAt: string | null;
+  publishedByUserId: string | null;
   status: "active" | "draft" | "superseded";
   summary: string | null;
   updatedAt: string;
   version: number;
 }
+
+export type ManagedConfigurationHistoryChange =
+  | {
+      after: unknown;
+      before: unknown;
+      field: string;
+      sensitive?: false;
+    }
+  | {
+      field: string;
+      operation: "clear" | "set";
+      sensitive: true;
+    };
 
 export interface ManagedConfigurationView {
   activeRevision: {

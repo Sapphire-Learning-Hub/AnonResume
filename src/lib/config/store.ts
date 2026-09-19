@@ -47,8 +47,10 @@ export class ConfigurationStateError extends Error {
 export interface ConfigurationRevisionView {
   baseRevisionId: string | null;
   createdAt: Date;
+  createdByUserId: string;
   id: string;
   publishedAt: Date | null;
+  publishedByUserId: string | null;
   status: RevisionRow["status"];
   summary: string | null;
   updatedAt: Date;
@@ -79,8 +81,10 @@ function revisionView(revision: RevisionRow): ConfigurationRevisionView {
   return {
     baseRevisionId: revision.baseRevisionId,
     createdAt: revision.createdAt,
+    createdByUserId: revision.createdByUserId,
     id: revision.id,
     publishedAt: revision.publishedAt,
+    publishedByUserId: revision.publishedByUserId,
     status: revision.status,
     summary: revision.summary,
     updatedAt: revision.updatedAt,

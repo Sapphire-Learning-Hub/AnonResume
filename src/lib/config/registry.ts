@@ -204,6 +204,8 @@ export const CONFIG_REGISTRY = {
   },
 } satisfies ConfigRegistry;
 
+export const CONFIG_KEYS = Object.keys(CONFIG_REGISTRY) as ConfigKey[];
+
 function definition<T>(
   group: ConfigDefinition<T>["group"],
   applyMode: ConfigDefinition<T>["applyMode"],

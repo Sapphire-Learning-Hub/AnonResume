@@ -1,4 +1,10 @@
-import { db, systemConfigRuntimeStates } from "@/db";
+import { and, eq, inArray } from "drizzle-orm";
+
+import {
+  adminAuditEvents,
+  db,
+  systemConfigRuntimeStates,
+} from "@/db";
 import {
   createAdminAuditChanges,
   writeAdminAuditEvent,
@@ -22,6 +28,7 @@ import type { ConfigConsumer } from "@/lib/config/types";
 
 import type {
   ConfigurationAuditContext,
+  ManagedConfigurationHistoryChange,
   ManagedConfigurationRevisionView,
   ManagedConfigurationView,
 } from "./types";
@@ -187,10 +194,73 @@ export async function listConfigurationHistory(
   const keyring = resolveKeyring(input.keyring);
   await ensureConfigurationState({ keyring });
   const state = await getConfigurationState({ keyring });
+  const revisionIds = state.history.map((revision) => revision.id);
+  const events = revisionIds.length > 0
+    ? await db
+        .select({
+          metadata: adminAuditEvents.metadata,
+          targetId: adminAuditEvents.targetId,
+        })
+        .from(adminAuditEvents)
+        .where(
+          and(
+            eq(adminAuditEvents.action, "configuration.draft.update"),
+            inArray(adminAuditEvents.targetId, revisionIds),
+          ),
+        )
+    : [];
+  const changesByRevision = new Map<string, ManagedConfigurationHistoryChange[]>();
+  for (const event of events) {
+    if (!event.targetId) continue;
+    const collected = changesByRevision.get(event.targetId) ?? [];
+    const metadata = event.metadata;
+    if (Array.isArray(metadata.changes)) {
+      for (const change of metadata.changes) {
+        if (
+          change &&
+          typeof change === "object" &&
+          !Array.isArray(change) &&
+          typeof (change as Record<string, unknown>).field === "string"
+        ) {
+          const value = change as Record<string, unknown>;
+          collected.push({
+            after: value.after,
+            before: value.before,
+            field: value.field as string,
+          });
+        }
+      }
+    }
+    if (Array.isArray(metadata.secretChanges)) {
+      for (const change of metadata.secretChanges) {
+        if (
+          change &&
+          typeof change === "object" &&
+          !Array.isArray(change)
+        ) {
+          const value = change as Record<string, unknown>;
+          if (
+            typeof value.key === "string" &&
+            (value.operation === "set" || value.operation === "clear")
+          ) {
+            collected.push({
+              field: value.key,
+              operation: value.operation,
+              sensitive: true,
+            });
+          }
+        }
+      }
+    }
+    changesByRevision.set(event.targetId, collected);
+  }
   return state.history.map((revision) => ({
+    changes: changesByRevision.get(revision.id) ?? [],
     createdAt: revision.createdAt.toISOString(),
+    createdByUserId: revision.createdByUserId,
     id: revision.id,
     publishedAt: revision.publishedAt?.toISOString() ?? null,
+    publishedByUserId: revision.publishedByUserId,
     status: revision.status,
     summary: revision.summary,
     updatedAt: revision.updatedAt.toISOString(),
