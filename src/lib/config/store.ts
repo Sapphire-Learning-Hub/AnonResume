@@ -18,6 +18,11 @@ import {
   type ConfigKey,
   type ManagedConfig,
 } from "@/lib/config/registry";
+import type {
+  ConfigApplyMode,
+  ConfigConsumer,
+  ConfigGroup,
+} from "@/lib/config/types";
 
 const CONFIG_PUBLISH_LOCK = "anonresume:system-config:publish";
 const SYSTEM_ACTOR = "system";
@@ -45,6 +50,7 @@ export interface ConfigurationRevisionView {
   id: string;
   publishedAt: Date | null;
   status: RevisionRow["status"];
+  summary: string | null;
   updatedAt: Date;
   version: number;
 }
@@ -59,10 +65,10 @@ export interface ConfigSnapshot {
 }
 
 export interface ConfigurationFieldState {
-  applyMode: (typeof CONFIG_REGISTRY)[ConfigKey]["applyMode"];
+  applyMode: ConfigApplyMode;
   configured: boolean;
-  consumers: readonly string[];
-  group: (typeof CONFIG_REGISTRY)[ConfigKey]["group"];
+  consumers: readonly ConfigConsumer[];
+  group: ConfigGroup;
   key: ConfigKey;
   public: boolean;
   sensitive: boolean;
@@ -76,6 +82,7 @@ function revisionView(revision: RevisionRow): ConfigurationRevisionView {
     id: revision.id,
     publishedAt: revision.publishedAt,
     status: revision.status,
+    summary: revision.summary,
     updatedAt: revision.updatedAt,
     version: revision.version,
   };
@@ -131,6 +138,13 @@ async function readRevisionValues(revisionId: string, keyring: ConfigKeyring) {
     .from(systemConfigValues)
     .where(eq(systemConfigValues.revisionId, revisionId));
   return decodeSnapshot(rows, keyring);
+}
+
+export async function readConfigurationRevisionValues(input: {
+  keyring: ConfigKeyring;
+  revisionId: string;
+}) {
+  return readRevisionValues(input.revisionId, input.keyring);
 }
 
 export async function ensureConfigurationState(input: {
@@ -283,12 +297,23 @@ export async function updateConfigurationDraft(input: {
       ...input.values,
     });
 
+    const encodedValues = encodeSnapshot(draft.id, values, input.keyring);
+    for (const encoded of encodedValues) {
+      if (
+        CONFIG_REGISTRY[encoded.key as ConfigKey].sensitive &&
+        !Object.hasOwn(input.values, encoded.key)
+      ) {
+        const previous = rows.find((row) => row.key === encoded.key);
+        encoded.encryptedValue = previous?.encryptedValue ?? encoded.encryptedValue;
+      }
+    }
+
     await transaction
       .delete(systemConfigValues)
       .where(eq(systemConfigValues.revisionId, draft.id));
     await transaction
       .insert(systemConfigValues)
-      .values(encodeSnapshot(draft.id, values, input.keyring));
+      .values(encodedValues);
     const [updated] = await transaction
       .update(systemConfigRevisions)
       .set({
