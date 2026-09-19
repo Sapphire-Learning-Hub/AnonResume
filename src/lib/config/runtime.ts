@@ -247,7 +247,10 @@ export class RuntimeConfigManager {
         healthState: state.health,
         lastSeenAt: this.now(),
         lastError: state.lastError,
-        metadata,
+        metadata: {
+          configurationPollIntervalMs: this.pollIntervalMs,
+          ...metadata,
+        },
       })
       .onConflictDoUpdate({
         target: systemConfigRuntimeStates.instanceId,
@@ -261,7 +264,10 @@ export class RuntimeConfigManager {
           healthState: state.health,
           lastSeenAt: this.now(),
           lastError: state.lastError,
-          metadata,
+          metadata: {
+            configurationPollIntervalMs: this.pollIntervalMs,
+            ...metadata,
+          },
         },
       });
   }

@@ -343,6 +343,12 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
   color: var(--app-accent);
 }
 
+.admin-runtime-recovery-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .admin-stack,
 .admin-section {
   display: grid;

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
+  classifyConfigurationRuntimeState,
   getAdminSystemStatus,
   listAdminAdministrators,
   listAdminAuditEvents,
@@ -227,6 +228,76 @@ describe("admin paginated queries", () => {
       } else {
         process.env.ANONRESUME_BUILD_COMMIT = previousCommit;
       }
+    }
+  });
+
+  it("classifies configuration runtime synchronization states", () => {
+    const now = new Date("2026-09-20T00:02:00.000Z");
+    const base = {
+      desiredRevisionId: "revision-2",
+      fallbackRevisionId: null,
+      healthState: "healthy" as const,
+      lastSeenAt: new Date("2026-09-20T00:01:45.000Z"),
+      loadedHotRevisionId: "revision-2",
+      loadedRestartRevisionId: "revision-2",
+    };
+
+    expect(classifyConfigurationRuntimeState(base, { now })).toBe("current");
+    expect(classifyConfigurationRuntimeState({
+      ...base,
+      loadedRestartRevisionId: "revision-1",
+    }, { now })).toBe("pending_restart");
+    expect(classifyConfigurationRuntimeState({
+      ...base,
+      fallbackRevisionId: "revision-1",
+      healthState: "recovery_required",
+      loadedHotRevisionId: "revision-1",
+      loadedRestartRevisionId: "revision-1",
+    }, { now })).toBe("recovery_required");
+    expect(classifyConfigurationRuntimeState({
+      ...base,
+      loadedHotRevisionId: null,
+      loadedRestartRevisionId: null,
+    }, { now })).toBe("error");
+    expect(classifyConfigurationRuntimeState({
+      ...base,
+      lastSeenAt: new Date("2026-09-20T00:00:00.000Z"),
+    }, {
+      expectedHeartbeatIntervalMs: 30_000,
+      now,
+    })).toBe("stale");
+  });
+
+  it("reports configuration runtime instances without exposing unknown errors", async () => {
+    const pool = getDatabasePool();
+    const instanceId = `${marker}-config-runtime`;
+    await pool.query(
+      `INSERT INTO ${schema}.system_config_runtime_states
+        (instance_id, consumer, release, started_at, health_state,
+         last_seen_at, last_error, metadata)
+       VALUES ($1, 'web', 'test-release', now(), 'degraded', now(), $2, $3::jsonb)`,
+      [
+        instanceId,
+        "connection to secret.internal.example failed",
+        JSON.stringify({ configurationPollIntervalMs: 60_000 }),
+      ],
+    );
+
+    try {
+      const status = await getAdminSystemStatus();
+      expect(status.configurationInstances.find(
+        (instance) => instance.instanceId === instanceId,
+      )).toMatchObject({
+        consumer: "web",
+        errorCode: "configuration_runtime_error",
+        release: "test-release",
+        state: "error",
+      });
+    } finally {
+      await pool.query(
+        `DELETE FROM ${schema}.system_config_runtime_states WHERE instance_id = $1`,
+        [instanceId],
+      );
     }
   });
 
