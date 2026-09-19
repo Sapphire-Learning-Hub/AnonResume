@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run scripts/admin-bootstrap.ts development && next dev",
     "build": "next build",
-    "start": "bun run scripts/admin-bootstrap.ts production && next start",
+    "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -165,7 +165,7 @@ export async function runPdfExportWorker(options?: {
   const workerId =
     options?.workerId ?? `${hostname()}:${process.pid}:${randomUUID()}`;
   const appOrigin =
-    options?.appOrigin ?? resolveApplicationOriginForBootstrap(process.env);
+    options?.appOrigin ?? resolveApplicationOriginForBootstrap();
   let lastCleanupAt = 0;
   const startedAt = new Date();
   const release = getApplicationRelease();

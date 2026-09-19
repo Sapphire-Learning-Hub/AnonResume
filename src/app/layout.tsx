@@ -44,7 +44,7 @@ import StyleRegistry from "./StyleRegistry";
 
 function getMetadataBase() {
   try {
-    return new URL(resolveApplicationOriginForBootstrap(process.env));
+    return new URL(resolveApplicationOriginForBootstrap());
   } catch {
     return new URL("http://localhost:3000");
   }

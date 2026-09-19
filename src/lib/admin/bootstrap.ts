@@ -192,7 +192,7 @@ export async function bootstrapSuperAdmin({
 }
 
 export async function bootstrapConfiguredSuperAdmin(
-  environment: NodeJS.ProcessEnv = process.env,
+  environment: NodeJS.ProcessEnv,
 ) {
   const email = resolveAdminSuperAdminEmail(environment);
   if (!email) {

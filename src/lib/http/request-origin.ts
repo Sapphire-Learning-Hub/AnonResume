@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import {
+  getBootstrapNodeEnvironment,
+  readBootstrapConfig,
+} from "@/lib/config/bootstrap";
 
 function getOrigin(value: string | null) {
   if (!value || value === "null") {
@@ -15,7 +18,7 @@ function getOrigin(value: string | null) {
 }
 
 function getConfiguredApplicationOrigin() {
-  if (process.env.NODE_ENV !== "production") {
+  if (getBootstrapNodeEnvironment() !== "production") {
     return null;
   }
 

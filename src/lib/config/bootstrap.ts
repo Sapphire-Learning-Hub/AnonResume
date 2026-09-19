@@ -13,6 +13,11 @@ export interface BootstrapConfigurationStatus {
   issues: readonly string[];
 }
 
+export type BootstrapNodeEnvironment =
+  | "development"
+  | "production"
+  | "test";
+
 const CREDENTIAL_NAMES = {
   applicationOrigin: "anonresume.application-origin",
   authSecret: "anonresume.auth-secret",
@@ -126,6 +131,33 @@ function validApplicationOrigin(value: string | undefined, production: boolean) 
     );
   } catch {
     return false;
+  }
+}
+
+export function getBootstrapNodeEnvironment(
+  input: BootstrapConfigInput = {},
+): BootstrapNodeEnvironment {
+  const value = (input.environment ?? process.env).NODE_ENV;
+  if (value === "production" || value === "test") return value;
+  return "development";
+}
+
+export function resolveBootstrapApplicationOrigin(
+  input: BootstrapConfigInput = {},
+) {
+  const value = readBootstrapValue(
+    input,
+    "applicationOrigin",
+    "BETTER_AUTH_URL",
+  )?.trim();
+  if (!value) return "http://localhost:3000";
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol)
+      ? url.origin
+      : "http://localhost:3000";
+  } catch {
+    return "http://localhost:3000";
   }
 }
 

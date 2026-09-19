@@ -55,15 +55,11 @@ function loadEnvFile(fileName: string) {
 
 loadEnvFile(".env.local");
 
-for (const key of [
-  "SMTP_HOST",
-  "SMTP_PORT",
-  "SMTP_SECURE",
-  "SMTP_USER",
-  "SMTP_PASSWORD",
-  "EMAIL_FROM",
-  "NEXT_PUBLIC_SOURCE_CODE_URL",
-]) {
+const { CONFIG_REGISTRY } = await import("@/lib/config/registry");
+
+for (const key of Object.values(CONFIG_REGISTRY).flatMap((definition) =>
+  definition.environmentKey ? [definition.environmentKey] : []
+)) {
   delete process.env[key];
 }
 

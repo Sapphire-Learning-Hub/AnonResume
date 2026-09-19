@@ -8,6 +8,7 @@ import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
 import { PostgresAdminAuthorizationStore } from "@/lib/admin/store";
 import { getRuntimeConfig } from "@/lib/config/runtime";
+import { resolveBootstrapApplicationOrigin } from "@/lib/config/bootstrap";
 
 export const ADMIN_SESSION_COOKIE = "anonresume.admin_session";
 
@@ -39,7 +40,7 @@ export async function getAdminRequestContext() {
 export function getAdminSessionCookieOptions(maxAgeSeconds: number) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: resolveBootstrapApplicationOrigin().startsWith("https://"),
     sameSite: "strict" as const,
     path: "/",
     maxAge: maxAgeSeconds,

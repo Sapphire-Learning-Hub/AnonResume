@@ -4,6 +4,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
+import { getBootstrapNodeEnvironment } from "@/lib/config/bootstrap";
 
 export type EmailDeliveryConfig =
   | {
@@ -49,7 +50,7 @@ declare global {
 
 export function resolveEmailDeliveryConfig(
   configuration: Readonly<ManagedConfig>,
-  nodeEnvironment = process.env.NODE_ENV,
+  nodeEnvironment = getBootstrapNodeEnvironment(),
 ): EmailDeliveryConfig {
   const host = configuration.smtpHost.trim();
   const user = configuration.smtpUser.trim();

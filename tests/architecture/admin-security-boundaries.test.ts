@@ -81,7 +81,7 @@ describe("admin security architecture", () => {
     expect(requestBoundary).toContain('sameSite: "strict"');
   });
 
-  it("runs the singleton super-admin preflight before development and production servers", () => {
+  it("keeps production bootstrap explicit while preserving development convenience", () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(root, "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
@@ -89,9 +89,7 @@ describe("admin security architecture", () => {
     expect(packageJson.scripts?.["admin:bootstrap"]).toBe(
       "bun run scripts/admin-bootstrap.ts",
     );
-    expect(packageJson.scripts?.start).toBe(
-      "bun run scripts/admin-bootstrap.ts production && next start",
-    );
+    expect(packageJson.scripts?.start).toBe("next start");
     expect(packageJson.scripts?.dev).toBe(
       "bun run scripts/admin-bootstrap.ts development && next dev",
     );

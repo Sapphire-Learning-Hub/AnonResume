@@ -1,6 +1,7 @@
 import {
   BootstrapConfigurationError,
   readBootstrapConfig,
+  resolveBootstrapApplicationOrigin,
   validateBootstrapConfiguration,
   type BootstrapConfigInput,
 } from "@/lib/config/bootstrap";
@@ -20,22 +21,15 @@ export function validateRuntimeConfiguration(
 }
 
 export function resolveApplicationOriginForBootstrap(
-  environment: Record<string, string | undefined>,
+  environment?: Record<string, string | undefined>,
 ) {
   try {
-    return readBootstrapConfig({ environment }).applicationOrigin;
+    return readBootstrapConfig(environment ? { environment } : {}).applicationOrigin;
   } catch (error) {
     if (!(error instanceof BootstrapConfigurationError)) throw error;
-    const rawUrl = environment.BETTER_AUTH_URL?.trim();
-    if (!rawUrl) return "http://localhost:3000";
-    try {
-      const url = new URL(rawUrl);
-      return ["http:", "https:"].includes(url.protocol)
-        ? url.origin
-        : "http://localhost:3000";
-    } catch {
-      return "http://localhost:3000";
-    }
+    return resolveBootstrapApplicationOrigin(
+      environment ? { environment } : {},
+    );
   }
 }
 
