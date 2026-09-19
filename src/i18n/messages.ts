@@ -151,6 +151,10 @@ const messages = {
     "system.configuration.description":
       "当前实例配置不正确，已暂停所有操作。请联系管理员修复。",
     "system.configuration.documentTitle": "实例配置异常 | AnonResume",
+    "system.configurationRecovery.title": "平台配置需要恢复",
+    "system.configurationRecovery.description":
+      "当前配置版本无法安全加载，系统已暂停普通功能。管理员仍可登录并从配置历史准备回滚版本。",
+    "system.configurationRecovery.action": "进入管理恢复",
     "home.metaDescription":
       "在线编辑、自由排版、精选字体、历史版本与 PDF 导出，轻松做出清晰专业的简历。",
     "home.skipToContent": "跳到主要内容",
@@ -1136,6 +1140,10 @@ const messages = {
       "This instance is configured incorrectly and all operations are paused. Contact the administrator.",
     "system.configuration.documentTitle":
       "Instance configuration error | AnonResume",
+    "system.configurationRecovery.title": "Platform configuration needs recovery",
+    "system.configurationRecovery.description":
+      "The active configuration cannot be loaded safely, so regular features are paused. An administrator can still sign in and prepare a rollback from configuration history.",
+    "system.configurationRecovery.action": "Open management recovery",
     "home.metaDescription":
       "Create a polished resume with easy editing, flexible styling, version history, sharing, and PDF export.",
     "home.skipToContent": "Skip to main content",

@@ -3,6 +3,16 @@ import { join } from "node:path";
 
 type BootstrapEnvironment = Record<string, string | undefined>;
 
+export interface BootstrapConfigInput {
+  environment?: BootstrapEnvironment;
+  readCredential?: (name: string) => string | undefined;
+}
+
+export interface BootstrapConfigurationStatus {
+  valid: boolean;
+  issues: readonly string[];
+}
+
 const CREDENTIAL_NAMES = {
   applicationOrigin: "anonresume.application-origin",
   authSecret: "anonresume.auth-secret",
@@ -41,6 +51,39 @@ function readSystemdCredential(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
+}
+
+function readBootstrapValue(
+  input: BootstrapConfigInput,
+  name: keyof typeof CREDENTIAL_NAMES,
+  environmentKey: string,
+) {
+  const environment = input.environment ?? process.env;
+  const readCredential = input.readCredential ??
+    ((credentialName: string) =>
+      readSystemdCredential(credentialName, environment));
+  return readCredential(CREDENTIAL_NAMES[name]) ?? environment[environmentKey];
+}
+
+export function readBootstrapDatabaseUrl(input: BootstrapConfigInput = {}) {
+  const value = readBootstrapValue(input, "databaseUrl", "DATABASE_URL")?.trim();
+  if (!value) throw new BootstrapConfigurationError(["database_url_missing"]);
+  if (!validDatabaseUrl(value)) {
+    throw new BootstrapConfigurationError(["database_url_invalid"]);
+  }
+  return value;
+}
+
+export function readBootstrapDatabaseSchema(
+  input: BootstrapConfigInput = {},
+) {
+  const value =
+    readBootstrapValue(input, "databaseSchema", "ANONRESUME_DB_SCHEMA")
+      ?.trim() || "public";
+  if (!/^[a-z_][a-z0-9_]*$/i.test(value)) {
+    throw new BootstrapConfigurationError(["database_schema_invalid"]);
+  }
+  return value;
 }
 
 function decodeMasterKey(value: string | undefined) {
@@ -83,10 +126,7 @@ function validApplicationOrigin(value: string | undefined, production: boolean) 
 }
 
 export function readBootstrapConfig(
-  input: {
-    environment?: BootstrapEnvironment;
-    readCredential?: (name: string) => string | undefined;
-  } = {},
+  input: BootstrapConfigInput = {},
 ): BootstrapConfig {
   const environment = input.environment ?? process.env;
   const readCredential = input.readCredential ??
@@ -139,4 +179,23 @@ export function readBootstrapConfig(
     databaseUrl: databaseUrl!,
     ...(previousMasterKey ? { previousMasterKey } : {}),
   };
+}
+
+export function validateBootstrapConfiguration(
+  input: BootstrapConfigInput = {},
+): BootstrapConfigurationStatus {
+  const environment = input.environment ?? process.env;
+  if (environment.NODE_ENV !== "production") {
+    return { valid: true, issues: [] };
+  }
+
+  try {
+    readBootstrapConfig(input);
+    return { valid: true, issues: [] };
+  } catch (error) {
+    if (error instanceof BootstrapConfigurationError) {
+      return { valid: false, issues: error.issues };
+    }
+    throw error;
+  }
 }

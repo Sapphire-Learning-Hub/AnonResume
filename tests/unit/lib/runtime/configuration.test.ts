@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   resolveApplicationOriginForBootstrap,
+  validateBootstrapConfiguration,
   validateRuntimeConfiguration,
 } from "@/lib/runtime/configuration";
 
@@ -10,6 +11,7 @@ const validProductionEnvironment = {
   DATABASE_URL: "postgresql://anonresume:secret@db.example.com:5432/anonresume",
   BETTER_AUTH_URL: "https://resume.example.com",
   BETTER_AUTH_SECRET: "a".repeat(64),
+  CONFIG_MASTER_KEY: Buffer.alloc(32, 5).toString("base64"),
   SMTP_HOST: "smtp.example.com",
   SMTP_PORT: "587",
   SMTP_SECURE: "false",
@@ -33,7 +35,7 @@ const validProductionEnvironment = {
   ADMIN_REAUTH_SECONDS: "300",
 } satisfies Record<string, string>;
 
-describe("validateRuntimeConfiguration", () => {
+describe("bootstrap runtime configuration", () => {
   it("does not block development when deployment variables are absent", () => {
     expect(validateRuntimeConfiguration({ NODE_ENV: "development" })).toEqual({
       valid: true,
@@ -48,26 +50,26 @@ describe("validateRuntimeConfiguration", () => {
     });
   });
 
-  it("reports missing and malformed production settings without their values", () => {
+  it("reports missing and malformed production trust roots without their values", () => {
     const result = validateRuntimeConfiguration({
       ...validProductionEnvironment,
       BETTER_AUTH_URL: "http://resume.example.com",
       BETTER_AUTH_SECRET: "short",
-      SMTP_PASSWORD: "",
+      CONFIG_MASTER_KEY: "invalid",
     });
 
     expect(result.valid).toBe(false);
     expect(result.issues).toEqual(
       expect.arrayContaining([
-        "better_auth_url_invalid",
-        "better_auth_secret_invalid",
-        "smtp_password_missing",
+        "application_origin_invalid",
+        "auth_secret_invalid",
+        "config_master_key_invalid",
       ]),
     );
     expect(JSON.stringify(result)).not.toContain("resume.example.com");
   });
 
-  it("rejects incoherent queue limits and incomplete optional OAuth settings", () => {
+  it("does not treat managed feature settings as bootstrap failures", () => {
     const result = validateRuntimeConfiguration({
       ...validProductionEnvironment,
       GITHUB_CLIENT_ID: "github-client",
@@ -75,36 +77,19 @@ describe("validateRuntimeConfiguration", () => {
       PDF_EXPORT_QUEUE_LIMIT: "4",
       PDF_EXPORT_FORCE_EXPIRY_MS: "60000",
       PDF_EXPORT_RESULT_TTL_MS: "900000",
+      SMTP_PASSWORD: "",
     });
 
     expect(result).toEqual({
-      valid: false,
-      issues: expect.arrayContaining([
-        "github_oauth_incomplete",
-        "pdf_queue_capacity_invalid",
-        "pdf_expiry_invalid",
-      ]),
+      valid: true,
+      issues: [],
     });
   });
 
-  it("rejects unsafe management-console configuration", () => {
-    const result = validateRuntimeConfiguration({
-      ...validProductionEnvironment,
-      ANONRESUME_SUPER_ADMIN_EMAIL: "not-an-email",
-      ADMIN_MFA_ENCRYPTION_KEY: "too-short",
-      ADMIN_SESSION_IDLE_SECONDS: "3600",
-      ADMIN_SESSION_MAX_SECONDS: "1800",
-      ADMIN_REAUTH_SECONDS: "3601",
-    });
-
-    expect(result.issues).toEqual(
-      expect.arrayContaining([
-        "super_admin_email_invalid",
-        "admin_mfa_encryption_key_invalid",
-        "admin_session_lifetime_invalid",
-        "admin_reauth_window_invalid",
-      ]),
-    );
+  it("exposes the bootstrap validator under its explicit name", () => {
+    expect(validateBootstrapConfiguration({
+      environment: validProductionEnvironment,
+    })).toEqual({ valid: true, issues: [] });
   });
 
   it("keeps route collection bootable while the request gate rejects an invalid origin", () => {

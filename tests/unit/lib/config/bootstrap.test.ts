@@ -1,4 +1,9 @@
-import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import {
+  readBootstrapConfig,
+  validateBootstrapConfiguration,
+} from "@/lib/config/bootstrap";
+import { createDatabasePoolOptions } from "@/lib/runtime/database";
+import { getDatabaseSchemaName } from "@/db/schema";
 
 const masterKey = Buffer.alloc(32, 7).toString("base64");
 
@@ -66,5 +71,39 @@ describe("bootstrap configuration provider", () => {
         readCredential: () => undefined,
       }),
     ).toThrow("database_url_missing");
+  });
+
+  it("routes database and schema consumers through credential-backed bootstrap values", () => {
+    const credentials = requiredCredentials({
+      "anonresume.database-schema": "credential_schema",
+    });
+    const bootstrapInput = {
+      environment: {
+        ANONRESUME_DB_SCHEMA: "legacy_schema",
+        DATABASE_URL: "postgresql://legacy/db",
+        NODE_ENV: "production",
+      },
+      readCredential: (name: string) => credentials[name],
+    };
+
+    expect(createDatabasePoolOptions(bootstrapInput)).toEqual({
+      connectionString: "postgresql://credential/db",
+    });
+    expect(getDatabaseSchemaName(bootstrapInput)).toBe("credential_schema");
+  });
+
+  it("reports every missing production trust root with stable issue codes", () => {
+    expect(validateBootstrapConfiguration({
+      environment: { NODE_ENV: "production" },
+      readCredential: () => undefined,
+    })).toEqual({
+      valid: false,
+      issues: expect.arrayContaining([
+        "database_url_missing",
+        "application_origin_missing",
+        "auth_secret_missing",
+        "config_master_key_missing",
+      ]),
+    });
   });
 });

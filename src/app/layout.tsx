@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 import "@fontsource-variable/ibm-plex-sans/wght.css";
 import "@fontsource-variable/lora/wght.css";
@@ -20,13 +21,15 @@ import "@/styles/print.css";
 
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { SystemStatePage } from "@/components/system/SystemStatePage";
+import ConfigurationRecoveryPage from "@/app/configuration-recovery/page";
 import { GlobalFloatingActions } from "@/components/ui/GlobalFloatingActions";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
 import {
   resolveApplicationOriginForBootstrap,
-  validateRuntimeConfiguration,
+  validateBootstrapConfiguration,
 } from "@/lib/runtime/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { UI_FONT_FAMILY } from "@/styles/ui-font";
 import { AppThemeProvider } from "@/theme/AppThemeProvider";
 import { getAppThemeCssVariables } from "@/theme/app-palette";
@@ -43,7 +46,7 @@ function getMetadataBase() {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const configuration = validateRuntimeConfiguration(process.env);
+  const configuration = validateBootstrapConfiguration();
   const locale = await getRequestLocale();
   const messages = getMessages(locale);
 
@@ -67,10 +70,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const configuration = validateRuntimeConfiguration(process.env);
-  const [locale, initialTheme] = await Promise.all([
+  const configuration = validateBootstrapConfiguration();
+  const [locale, initialTheme, requestHeaders] = await Promise.all([
     getRequestLocale(),
     getRequestAppTheme(),
+    headers(),
   ]);
 
   if (!configuration.valid) {
@@ -95,6 +99,38 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             description={messages["system.configuration.description"]}
             title={messages["system.configuration.title"]}
           />
+        </body>
+      </html>
+    );
+  }
+
+  const pathname = requestHeaders.get("x-anonresume-pathname");
+  const recoveryAllowed = pathname
+    ? isManagedRecoveryPathAllowed(pathname)
+    : true;
+  let recoveryRequired = false;
+  if (!recoveryAllowed) {
+    try {
+      recoveryRequired =
+        (await getRuntimeConfig("web")).health === "recovery_required";
+    } catch {
+      recoveryRequired = true;
+    }
+  }
+
+  if (recoveryRequired) {
+    return (
+      <html
+        data-app-accent={initialTheme.accent}
+        data-app-theme={initialTheme.resolvedMode}
+        lang={locale}
+        style={getAppThemeCssVariables(
+          initialTheme.resolvedMode,
+          initialTheme.accent,
+        )}
+      >
+        <body style={{ fontFamily: UI_FONT_FAMILY }}>
+          <ConfigurationRecoveryPage />
         </body>
       </html>
     );
@@ -129,4 +165,16 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </body>
     </html>
   );
+}
+
+export function isManagedRecoveryPathAllowed(pathname: string) {
+  return [
+    "/activate",
+    "/configuration-error",
+    "/configuration-recovery",
+    "/sign-in",
+    "/app/manage/configuration",
+    "/app/manage/security",
+    "/app/manage/system",
+  ].some((allowed) => pathname === allowed || pathname.startsWith(`${allowed}/`));
 }

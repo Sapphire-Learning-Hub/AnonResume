@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+
 function getOrigin(value: string | null) {
   if (!value || value === "null") {
     return null;
@@ -17,9 +19,11 @@ function getConfiguredApplicationOrigin() {
     return null;
   }
 
-  const configuredUrl = getOrigin(process.env.BETTER_AUTH_URL ?? null);
-
-  return configuredUrl;
+  try {
+    return readBootstrapConfig().applicationOrigin;
+  } catch {
+    return null;
+  }
 }
 
 export function getExpectedRequestOrigin(request: Request) {

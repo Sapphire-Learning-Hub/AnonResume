@@ -33,10 +33,13 @@ export default async function SignInPage({
   const session = await getOptionalIdentitySession();
   const params = await searchParams;
   const locale = await getRequestLocale();
-  const announcements = await getVisibleAnnouncements({
-    authenticated: Boolean(session),
-    locale,
-  });
+  const [announcements, githubEnabled] = await Promise.all([
+    getVisibleAnnouncements({
+      authenticated: Boolean(session),
+      locale,
+    }),
+    isGitHubAuthEnabled(),
+  ]);
 
   if (session) {
     if (await isAccountSuspended(session.user.id)) {
@@ -44,7 +47,7 @@ export default async function SignInPage({
         <main className="auth-page-shell">
           <AuthPanel
             announcements={announcements}
-            githubEnabled={isGitHubAuthEnabled()}
+            githubEnabled={githubEnabled}
             verificationError="ACCOUNT_SUSPENDED"
           />
         </main>
@@ -77,7 +80,7 @@ export default async function SignInPage({
     <main className="auth-page-shell">
       <AuthPanel
         announcements={announcements}
-        githubEnabled={isGitHubAuthEnabled()}
+        githubEnabled={githubEnabled}
         verificationError={
           typeof params.error === "string" ? params.error : undefined
         }
