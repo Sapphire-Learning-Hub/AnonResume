@@ -40,11 +40,11 @@ CREATE TABLE "system_config_values" (
 	CONSTRAINT "system_config_values_payload_check" CHECK (("system_config_values"."value_json" IS NULL) <> ("system_config_values"."encrypted_value" IS NULL))
 );
 --> statement-breakpoint
-ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_desired_revision_fk" FOREIGN KEY ("desired_revision_id") REFERENCES "public"."system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_loaded_hot_revision_fk" FOREIGN KEY ("loaded_hot_revision_id") REFERENCES "public"."system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_loaded_restart_revision_fk" FOREIGN KEY ("loaded_restart_revision_id") REFERENCES "public"."system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_fallback_revision_fk" FOREIGN KEY ("fallback_revision_id") REFERENCES "public"."system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "system_config_values" ADD CONSTRAINT "system_config_values_revision_fk" FOREIGN KEY ("revision_id") REFERENCES "public"."system_config_revisions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_desired_revision_fk" FOREIGN KEY ("desired_revision_id") REFERENCES "system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_loaded_hot_revision_fk" FOREIGN KEY ("loaded_hot_revision_id") REFERENCES "system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_loaded_restart_revision_fk" FOREIGN KEY ("loaded_restart_revision_id") REFERENCES "system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "system_config_runtime_states" ADD CONSTRAINT "system_config_runtime_states_fallback_revision_fk" FOREIGN KEY ("fallback_revision_id") REFERENCES "system_config_revisions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "system_config_values" ADD CONSTRAINT "system_config_values_revision_fk" FOREIGN KEY ("revision_id") REFERENCES "system_config_revisions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "system_config_revisions_version_unique" ON "system_config_revisions" USING btree ("version");--> statement-breakpoint
 CREATE UNIQUE INDEX "system_config_revisions_active_unique" ON "system_config_revisions" USING btree ("status") WHERE "system_config_revisions"."status" = 'active';--> statement-breakpoint
 CREATE UNIQUE INDEX "system_config_revisions_draft_unique" ON "system_config_revisions" USING btree ("status") WHERE "system_config_revisions"."status" = 'draft';--> statement-breakpoint
