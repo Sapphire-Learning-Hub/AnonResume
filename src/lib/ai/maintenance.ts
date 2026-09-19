@@ -1,43 +1,59 @@
 import { deleteExpiredAiAuditEvidence } from "@/lib/ai/audit/retention";
-import {
-  recoverExpiredAiRuns,
-  renewExpiredAiQuotaPeriods,
-} from "@/lib/ai/runs/recovery";
+import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { getDatabasePool } from "@/lib/runtime/database";
 
-const MAINTENANCE_LOCK = "anonresume:ai-maintenance";
+const RECOVERY_LOCK = "anonresume:ai-recovery";
+const RETENTION_LOCK = "anonresume:ai-audit-retention";
 
-export async function runAiMaintenance(input: {
-  batchSize?: number;
-  now?: Date;
-} = {}) {
+async function withMaintenanceLock<T extends object>(
+  lockName: string,
+  operation: () => Promise<T>,
+): Promise<{ acquired: false } | ({ acquired: true } & T)> {
   const client = await getDatabasePool().connect();
   let acquired = false;
 
   try {
     const lock = await client.query<{ acquired: boolean }>(
       "SELECT pg_try_advisory_lock(hashtext($1)) AS acquired",
-      [MAINTENANCE_LOCK],
+      [lockName],
     );
     acquired = Boolean(lock.rows[0]?.acquired);
-    if (!acquired) return { acquired: false as const };
+    if (!acquired) return { acquired: false };
 
-    const options = { batchSize: input.batchSize, now: input.now };
-    const runs = await recoverExpiredAiRuns(options);
-    const renewedQuotas = await renewExpiredAiQuotaPeriods(options);
-    const deletedEvidence = await deleteExpiredAiAuditEvidence(options);
-    return {
-      acquired: true as const,
-      deletedEvidence,
-      renewedQuotas,
-      ...runs,
-    };
+    return { acquired: true, ...(await operation()) };
   } finally {
     if (acquired) {
-      await client.query("SELECT pg_advisory_unlock(hashtext($1))", [
-        MAINTENANCE_LOCK,
-      ]).catch(() => undefined);
+      await client
+        .query("SELECT pg_advisory_unlock(hashtext($1))", [lockName])
+        .catch(() => undefined);
     }
     client.release();
   }
+}
+
+export async function runAiRecoveryMaintenance(input: {
+  batchSize?: number;
+  now?: Date;
+} = {}) {
+  return withMaintenanceLock(RECOVERY_LOCK, () =>
+    recoverExpiredAiRuns(input),
+  );
+}
+
+export async function runAiRetentionMaintenance(input: {
+  batchSize?: number;
+  now?: Date;
+} = {}) {
+  return withMaintenanceLock(RETENTION_LOCK, async () => ({
+    deletedEvidence: await deleteExpiredAiAuditEvidence(input),
+  }));
+}
+
+export async function runAiMaintenance(input: {
+  batchSize?: number;
+  now?: Date;
+} = {}) {
+  const recovery = await runAiRecoveryMaintenance(input);
+  const retention = await runAiRetentionMaintenance(input);
+  return { recovery, retention };
 }

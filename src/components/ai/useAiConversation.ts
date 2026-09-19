@@ -20,6 +20,7 @@ import {
   fetchAiConversation,
   fetchAiConversationIndex,
   sendAiMessage,
+  streamAiRun,
   stopAiRun,
   updateAiConversation,
   type AiConversationDetails,
@@ -92,6 +93,37 @@ export function useAiConversation({
   const runIdWaiterRef = useRef<RunIdWaiter | undefined>(undefined);
   const intentionalStopRef = useRef(false);
   const reportError = useEffectEvent(onError);
+  function consumeStreamEvent(event: AiClientStreamEvent) {
+    if (event.type === "snapshot") {
+      setStreamingText(event.text);
+      setStreamingProposalText(event.proposalText);
+      setStreamingProposalChanges(event.proposalChanges);
+      setStreamingProgressStages(event.progress);
+    }
+    if (event.type === "progress") {
+      setStreamingProgressStages((current) =>
+        current.includes(event.stage) ? current : [...current, event.stage],
+      );
+    }
+    if (event.type === "text_delta") {
+      setStreamingText((current) => current + event.delta);
+    }
+    if (event.type === "proposal_delta") {
+      setStreamingProposalText((current) => current + event.delta);
+    }
+    if (event.type === "proposal_progress") {
+      setStreamingProposalChanges((current) => {
+        const byId = new Map(current.map((change) => [change.id, change]));
+        for (const change of event.changes) byId.set(change.id, change);
+        return [...byId.values()];
+      });
+    }
+    if (event.type === "proposal_reset") {
+      setStreamingProposalText("");
+      setStreamingProposalChanges([]);
+    }
+  }
+  const consumeReconnectedStreamEvent = useEffectEvent(consumeStreamEvent);
 
   const loadIndex = useCallback(async () => {
     const result = await fetchAiConversationIndex(resumeId);
@@ -157,11 +189,33 @@ export function useAiConversation({
   const activeRunId = details?.activeRun?.id;
   useEffect(() => {
     if (!open || !selectedConversationId || !activeRunId) return;
-    const timer = window.setInterval(() => {
-      void loadDetails(selectedConversationId).catch(reportError);
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [activeRunId, loadDetails, open, selectedConversationId]);
+    if (streamPromiseRef.current) return;
+    const controller = new AbortController();
+    setLiveRunId(activeRunId);
+    const streamPromise = streamAiRun({
+      runId: activeRunId,
+      signal: controller.signal,
+      onEvent: consumeReconnectedStreamEvent,
+    })
+      .then(async () => {
+        await Promise.all([loadDetails(selectedConversationId), loadIndex()]);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) reportError(error);
+      })
+      .finally(() => {
+        if (streamPromiseRef.current === streamPromise) {
+          streamPromiseRef.current = undefined;
+          setLiveRunId(undefined);
+          setStreamingText("");
+          setStreamingProposalText("");
+          setStreamingProposalChanges([]);
+          setStreamingProgressStages([]);
+        }
+      });
+    streamPromiseRef.current = streamPromise;
+    return () => controller.abort();
+  }, [activeRunId, loadDetails, loadIndex, open, selectedConversationId]);
 
   async function send(message: string) {
     let conversationId = selectedConversationId;
@@ -198,32 +252,7 @@ export function useAiConversation({
           setLiveRunId(runId);
           runIdWaiter.settle(runId);
         },
-        onEvent(event: AiClientStreamEvent) {
-          if (event.type === "progress") {
-            setStreamingProgressStages((current) =>
-              current.includes(event.stage)
-                ? current
-                : [...current, event.stage],
-            );
-          }
-          if (event.type === "text_delta") {
-            setStreamingText((current) => current + event.delta);
-          }
-          if (event.type === "proposal_delta") {
-            setStreamingProposalText((current) => current + event.delta);
-          }
-          if (event.type === "proposal_progress") {
-            setStreamingProposalChanges((current) => {
-              const byId = new Map(current.map((change) => [change.id, change]));
-              for (const change of event.changes) byId.set(change.id, change);
-              return [...byId.values()];
-            });
-          }
-          if (event.type === "proposal_reset") {
-            setStreamingProposalText("");
-            setStreamingProposalChanges([]);
-          }
-        },
+        onEvent: consumeStreamEvent,
       });
       streamPromiseRef.current = streamPromise;
       await streamPromise;

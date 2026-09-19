@@ -81,12 +81,15 @@ describe("AI client stream parser", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(stream, {
-          status: 200,
-          headers: { "x-ai-run-id": "62622b5d-ec93-43fb-925d-6b631703799b" },
-        }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          Response.json(
+            { runId: "62622b5d-ec93-43fb-925d-6b631703799b" },
+            { status: 202 },
+          ),
+        )
+        .mockResolvedValueOnce(new Response(stream, { status: 200 })),
     );
 
     await expect(

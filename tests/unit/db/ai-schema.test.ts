@@ -45,6 +45,9 @@ describe("AI database schema", () => {
     );
     expect(Object.keys(getTableColumns(database.aiRuns))).toEqual(
       expect.arrayContaining([
+        "checkpointChanges",
+        "encryptedExecutionPayload",
+        "executionPayloadKeyVersion",
         "resumeVersion",
         "contextHash",
         "promptVersion",

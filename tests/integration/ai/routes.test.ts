@@ -13,7 +13,10 @@ import {
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { getOptionalSession } from "@/lib/auth/session";
 import { createAiProviderAdapter } from "@/lib/ai/providers/registry";
+import { executePreparedAiRun } from "@/lib/ai/runs/service";
+import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
+import { getAiWorkerAvailability } from "@/lib/ai/worker-availability";
 
 import {
   GET as listConversations,
@@ -21,6 +24,7 @@ import {
 } from "@/app/api/ai/conversations/route";
 import { GET as getConversation } from "@/app/api/ai/conversations/[id]/route";
 import { POST as sendMessage } from "@/app/api/ai/conversations/[id]/messages/route";
+import { GET as streamRun } from "@/app/api/ai/runs/[id]/stream/route";
 import { POST as stopRun } from "@/app/api/ai/runs/[id]/stop/route";
 
 vi.mock("@/lib/auth/session", () => ({
@@ -29,6 +33,10 @@ vi.mock("@/lib/auth/session", () => ({
 
 vi.mock("@/lib/ai/providers/registry", () => ({
   createAiProviderAdapter: vi.fn(),
+}));
+
+vi.mock("@/lib/ai/worker-availability", () => ({
+  getAiWorkerAvailability: vi.fn(),
 }));
 
 function session(userId: string) {
@@ -100,6 +108,7 @@ describe("AI conversation routes", () => {
 
   beforeEach(() => {
     vi.mocked(getOptionalSession).mockResolvedValue(session(userId));
+    vi.mocked(getAiWorkerAvailability).mockResolvedValue({ available: true });
     vi.mocked(createAiProviderAdapter).mockReturnValue({
       async *start() {
         yield { type: "text_delta", delta: "建议突出可量化成果。" };
@@ -151,19 +160,38 @@ describe("AI conversation routes", () => {
     expect(hiddenResponse.status).toBe(404);
   });
 
-  it("streams a message and exposes the persisted assistant result", async () => {
-    const streamResponse = await sendMessage(
+  it("queues a message and exposes its reconnectable persisted stream", async () => {
+    const queuedResponse = await sendMessage(
       mutationRequest(
         `http://localhost/api/ai/conversations/${conversationId}/messages`,
         { message: "帮我优化表达", resumeVersion: 1 },
       ),
       { params: Promise.resolve({ id: conversationId }) },
     );
+    expect(queuedResponse.status).toBe(202);
+    latestRunId = (await queuedResponse.json()).runId;
+
+    const [prepared] = await claimQueuedAiRuns({
+      workerId: "route-test-worker",
+      limit: 1,
+      leaseSeconds: 90,
+      encryptionKey,
+    });
+    expect(prepared?.runId).toBe(latestRunId);
+    for await (const event of executePreparedAiRun(prepared!, {
+      adapter: createAiProviderAdapter("openai-compatible"),
+    })) {
+      void event;
+    }
+
+    const streamResponse = await streamRun(
+      new Request(`http://localhost/api/ai/runs/${latestRunId}/stream`),
+      { params: Promise.resolve({ id: latestRunId }) },
+    );
     expect(streamResponse.status).toBe(200);
     expect(streamResponse.headers.get("content-type")).toContain(
       "application/x-ndjson",
     );
-    latestRunId = streamResponse.headers.get("x-ai-run-id") ?? "";
     expect(await streamResponse.text()).toContain("建议突出可量化成果");
 
     const detailResponse = await getConversation(

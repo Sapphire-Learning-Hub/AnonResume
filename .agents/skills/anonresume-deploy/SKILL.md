@@ -41,6 +41,7 @@ tracked file:
 | `PUBLIC_ORIGIN` | Public HTTPS origin used for health checks |
 | `WEB_SERVICE` | Existing systemd Web unit |
 | `PDF_WORKER_SERVICE` | Existing systemd PDF worker unit |
+| `AI_WORKER_SERVICE` | Existing systemd AI worker unit |
 
 Do not guess missing inputs. Ask for the non-secret identifier or ask the user
 to configure it outside the repository.
@@ -67,6 +68,7 @@ Use SSH to inspect, without mutation:
 - `git rev-parse HEAD`
 - `systemctl is-active "$WEB_SERVICE"`
 - `systemctl is-active "$PDF_WORKER_SERVICE"`
+- `systemctl is-active "$AI_WORKER_SERVICE"`
 - presence of the server environment file
 - available disk space sufficient for dependencies and a Next.js build
 
@@ -74,11 +76,20 @@ Save the current full hash as `PREVIOUS_COMMIT`. Require a clean worktree and
 verify that `PREVIOUS_COMMIT` is an ancestor of `TARGET_COMMIT`; otherwise stop
 instead of forcing history.
 
-Also inspect the existing Web and PDF Worker service definitions to identify
-their configured environment files. Do not print the files or their values.
-The deployment must use the environment files already referenced by the
-services; do not create replacement files or change service definitions as
-part of an ordinary release.
+Also inspect the existing Web, PDF Worker, and AI Worker service definitions
+to identify their configured environment files. Do not print the files or
+their values. The deployment must use the environment files already referenced
+by the services; do not create replacement files or change service definitions
+as part of an ordinary release.
+
+When the target commit introduces `worker:ai` and `AI_WORKER_SERVICE` does not
+yet exist, stop the ordinary release workflow. Installing a new systemd unit
+is an infrastructure change and requires explicit operator authorization. The
+new unit must use the same deployment user, working directory, Bun executable,
+and environment file as the existing workers; its command is
+`bun run worker:ai`, it must restart after failures, and it must not expose a
+network port. After installation, run `systemctl daemon-reload`, enable the
+unit for boot, and repeat the complete preflight before deploying.
 
 ### 3. Transfer the commit
 
@@ -105,8 +116,8 @@ Before installing dependencies or starting the production build, determine
 the required environment variable names for `TARGET_COMMIT`. Inspect the
 target version's `.env.example`, environment schema/validation, build-time
 configuration, and service-specific startup configuration. Include variables
-required by both the Web service and the PDF Worker, and distinguish required
-variables from documented optional variables.
+required by the Web service, PDF Worker, and AI Worker, and distinguish
+required variables from documented optional variables.
 
 Create a names-only manifest in the current process or an untracked temporary
 file. Never include values, secrets, or the contents of an environment file in
@@ -156,15 +167,16 @@ restart. Do not attempt automatic schema rollback.
 
 ### 7. Restart runtime services
 
-Restart the Web and PDF Worker units together, then wait briefly for startup:
+Restart the Web, PDF Worker, and AI Worker units together, then wait briefly
+for startup:
 
 ```sh
-systemctl restart "$WEB_SERVICE" "$PDF_WORKER_SERVICE"
-systemctl is-active "$WEB_SERVICE" "$PDF_WORKER_SERVICE"
+systemctl restart "$WEB_SERVICE" "$PDF_WORKER_SERVICE" "$AI_WORKER_SERVICE"
+systemctl is-active "$WEB_SERVICE" "$PDF_WORKER_SERVICE" "$AI_WORKER_SERVICE"
 ```
 
-Both units must report `active`. Use the existing service definitions; do not
-replace systemd units or change network exposure as part of an ordinary
+All three units must report `active`. Use the existing service definitions;
+do not replace systemd units or change network exposure as part of an ordinary
 release.
 
 ### 8. Verify the deployment
@@ -176,8 +188,10 @@ Verify all of the following with fresh output:
   authentication redirect.
 - Following redirects from `PUBLIC_ORIGIN` reaches an expected page with a
   successful final response.
-- Recent Web and PDF Worker journals contain startup messages and no new
-  configuration, database, schema, or runtime errors.
+- Recent Web, PDF Worker, and AI Worker journals contain startup messages and
+  no new configuration, database, schema, or runtime errors.
+- A fresh `ai-runtime` heartbeat exists for the deployed release after the
+  AI Worker starts. Do not infer AI Worker health from systemd state alone.
 - The server worktree remains clean.
 
 When an authenticated editor regression was changed, perform the narrowest
@@ -190,7 +204,13 @@ If service startup or health verification fails after restart:
 
 1. Capture concise, sanitized service status and recent journal evidence.
 2. If no incompatible migration was applied, check out `PREVIOUS_COMMIT`, run
-   the locked install and build, then restart both services once.
+   the locked install and build, then restart all services that exist in that
+   version once. If the previous version predates the AI Worker, stop and
+   disable only the newly introduced AI Worker unit after the Web and PDF
+   services are healthy.
+   If it predates the durable AI run queue, first verify that no `queued` AI
+   runs remain. Drain them with the current AI Worker before rollback; never
+   strand encrypted execution payloads for a version that cannot claim them.
 3. Stop after one rollback attempt. If it fails, report the outage and the
    exact non-secret failure evidence; do not keep cycling services.
 4. If a migration was applied, do not assume the previous application remains

@@ -31,7 +31,10 @@ import {
   prepareAiRun,
   stopAiRun,
 } from "@/lib/ai/runs/service";
+import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
+import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
+import { releaseAiQuota } from "@/lib/ai/usage/ledger";
 
 describe("AI run service", () => {
   const encryptionKey = Buffer.alloc(32, 6);
@@ -43,6 +46,18 @@ describe("AI run service", () => {
   let modelId = "";
   let conversationId = "";
   const document = createDefaultResumeDocument("zh-CN");
+
+  async function claimPreparedRun(runId: string) {
+    const claimed = await claimQueuedAiRuns({
+      workerId: "integration-worker",
+      limit: 1,
+      leaseSeconds: 90,
+      encryptionKey,
+    });
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]?.runId).toBe(runId);
+    return claimed[0]!;
+  }
 
   beforeAll(async () => {
     const [provider] = await db
@@ -153,9 +168,20 @@ describe("AI run service", () => {
     expect(prepared.request.allowCrossOriginRedirects).toBe(true);
     expect(prepared.request.messages[0]?.content).not.toContain("beforeHash");
     expect(prepared.request.messages[0]?.content).not.toContain("contentHash");
+    const [queuedRun] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(queuedRun).toMatchObject({
+      status: "queued",
+      executionPayloadKeyVersion: 1,
+      leaseExpiresAt: null,
+    });
+    expect(queuedRun?.encryptedExecutionPayload).toBeInstanceOf(Buffer);
 
     const events = [];
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }
     expect(events.some((event) => event.type === "text_delta")).toBe(true);
@@ -285,7 +311,8 @@ describe("AI run service", () => {
           yield { type: "complete", finishReason: "stop" };
         },
       };
-      for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      const claimed = await claimPreparedRun(prepared.runId);
+      for await (const event of executePreparedAiRun(claimed, { adapter })) {
         void event;
       }
     } finally {
@@ -333,7 +360,8 @@ describe("AI run service", () => {
     });
     const events: Array<{ type: string; code?: string }> = [];
     const consuming = (async () => {
-      for await (const event of executePreparedAiRun(prepared, { adapter })) {
+      const claimed = await claimPreparedRun(prepared.runId);
+      for await (const event of executePreparedAiRun(claimed, { adapter })) {
         events.push(event);
       }
     })();
@@ -355,6 +383,133 @@ describe("AI run service", () => {
       failureCode: "stopped",
       checkpointText: "partial",
     });
+  });
+
+  it("renews the execution lease while a provider is silent", async () => {
+    let notifyStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve;
+    });
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        notifyStarted();
+        await new Promise((resolve) => setTimeout(resolve, 1_300));
+        yield { type: "text_delta", delta: "延迟后完成" };
+        yield {
+          type: "usage",
+          inputTokens: 10,
+          cachedInputTokens: 0,
+          outputTokens: 5,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "等待供应商响应",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 1,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    const consuming = (async () => {
+      for await (const event of executePreparedAiRun(claimed, { adapter })) {
+        void event;
+      }
+    })();
+
+    await started;
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(
+      await recoverExpiredAiRuns({ now: new Date(), batchSize: 10 }),
+    ).toEqual({
+      interrupted: 0,
+      settlementPending: 0,
+      releasedPoints: 0,
+    });
+    await consuming;
+
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({ status: "complete" });
+  });
+
+  it("fences an executor after its lease ownership changes", async () => {
+    let notifyStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve;
+    });
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        notifyStarted();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        yield { type: "text_delta", delta: "旧执行器不应写入" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "验证执行租约隔离",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 5,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    const consuming = (async () => {
+      for await (const event of executePreparedAiRun(claimed, { adapter })) {
+        void event;
+      }
+    })();
+
+    await started;
+    await db
+      .update(aiRuns)
+      .set({ leaseOwner: "replacement-worker" })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    await expect(consuming).rejects.toThrow();
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(run).toMatchObject({
+      status: "streaming",
+      leaseOwner: "replacement-worker",
+      checkpointText: "",
+    });
+
+    await releaseAiQuota({
+      userId,
+      runId: prepared.runId,
+      operationId: prepared.runId,
+    });
+    await db
+      .update(aiRuns)
+      .set({
+        status: "interrupted",
+        finalPoints: 0,
+        completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
   });
 
   it("stores encrypted diagnostics when execution fails after usage arrives", async () => {
@@ -389,7 +544,8 @@ describe("AI run service", () => {
     });
 
     const events = [];
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }
 
@@ -451,7 +607,8 @@ describe("AI run service", () => {
       },
     });
 
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       void event;
     }
 
@@ -519,7 +676,8 @@ describe("AI run service", () => {
         yield { type: "complete", finishReason: "stop" };
       },
     };
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       void event;
     }
   });
@@ -568,7 +726,8 @@ describe("AI run service", () => {
       },
     });
 
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       void event;
     }
 
@@ -614,7 +773,8 @@ describe("AI run service", () => {
     });
 
     const events = [];
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }
 
@@ -708,7 +868,8 @@ describe("AI run service", () => {
     });
 
     const events = [];
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }
 
@@ -824,7 +985,8 @@ describe("AI run service", () => {
     );
 
     const events = [];
-    for await (const event of executePreparedAiRun(prepared, { adapter })) {
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }
 
@@ -862,7 +1024,7 @@ describe("AI run service", () => {
     });
   });
 
-  it("immediately releases the active run when its executor is unavailable", async () => {
+  it("releases a queued run without requiring manual settlement", async () => {
     const prepared = await prepareAiRun({
       userId,
       conversationId,
@@ -885,8 +1047,10 @@ describe("AI run service", () => {
       .from(aiRuns)
       .where(eq(aiRuns.id, prepared.runId));
     expect(run).toMatchObject({
-      status: "settlement_pending",
+      status: "stopped",
+      finalPoints: 0,
       failureCode: "stopped",
+      encryptedExecutionPayload: null,
       leaseExpiresAt: null,
     });
     expect(run?.stopRequestedAt).toBeInstanceOf(Date);
@@ -897,6 +1061,60 @@ describe("AI run service", () => {
       .from(aiMessages)
       .where(eq(aiMessages.id, prepared.assistantMessageId));
     expect(assistantMessage).toMatchObject({ completionState: "stopped" });
+  });
+
+  it("keeps a stopped queued run recoverable when quota release fails", async () => {
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "停止额度账本异常的请求",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+    const [reservation] = await db
+      .select()
+      .from(aiUsageLedger)
+      .where(
+        and(
+          eq(aiUsageLedger.userId, userId),
+          eq(aiUsageLedger.runId, prepared.runId),
+          eq(aiUsageLedger.entryType, "reserve"),
+        ),
+      );
+    expect(reservation).toBeDefined();
+    await db
+      .delete(aiUsageLedger)
+      .where(eq(aiUsageLedger.id, reservation!.id));
+
+    await expect(stopAiRun({ userId, runId: prepared.runId })).resolves.toBe(true);
+
+    const [pendingRun] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    expect(pendingRun).toMatchObject({
+      status: "settlement_pending",
+      failureCode: "stopped",
+      encryptedExecutionPayload: null,
+    });
+
+    await db.insert(aiUsageLedger).values(reservation!);
+    await releaseAiQuota({
+      userId,
+      runId: prepared.runId,
+      operationId: prepared.runId,
+    });
+    await db
+      .update(aiRuns)
+      .set({ status: "stopped", finalPoints: 0 })
+      .where(eq(aiRuns.id, prepared.runId));
   });
 
   it("retracts an unprocessed stopped turn back out of the conversation", async () => {

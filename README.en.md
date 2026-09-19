@@ -81,6 +81,12 @@ To enable PDF export, start the worker in another terminal:
 bun run worker:pdf
 ```
 
+When AI features are enabled, start the dedicated AI worker as well. It executes model requests, automatically recovers interrupted generation runs, and removes expired audit evidence:
+
+```bash
+bun run worker:ai
+```
+
 The development server is available at <http://localhost:3000> by default.
 
 ## Configuration
@@ -95,6 +101,7 @@ Pay particular attention to the following settings:
 - Anonymous PDF export is disabled by default. Enabling it without an external abuse-control layer is not recommended.
 - `RESUME_VERSION_HISTORY_LIMIT` controls how many snapshots each resume retains.
 - `ANONRESUME_SUPER_ADMIN_EMAIL` and `ADMIN_*` configure the unique super-admin identity, management sessions, and MFA protection.
+- Optional `AI_WORKER_*` settings tune AI worker polling, lease recovery, audit retention cleanup, and batch size.
 - GitHub OAuth is optional. Its client ID and secret must either both be configured or both be omitted.
 
 Database structures are changed only through Better Auth and Drizzle migrations. Runtime requests never create or repair application tables.
@@ -115,14 +122,15 @@ bun run auth:migrate
 bun run db:migrate
 ```
 
-Run the web application and PDF worker as separate services:
+Run the web application, PDF worker, and AI worker as separate services:
 
 ```bash
 bun run start
 bun run worker:pdf
+bun run worker:ai
 ```
 
-Both processes must use the same PostgreSQL database and application configuration. Multiple PDF workers are supported, but `PDF_EXPORT_MAX_CONCURRENCY` is enforced globally through PostgreSQL rather than independently by each worker.
+All three processes must use the same PostgreSQL database and application configuration. Multiple PDF workers are supported, but `PDF_EXPORT_MAX_CONCURRENCY` is enforced globally through PostgreSQL rather than independently by each worker. AI workers persist jobs and checkpoints in PostgreSQL and coordinate execution and maintenance through database locks, requiring neither Redis nor an external scheduler. `bun run ai:maintenance` remains available for operator diagnostics, but production correctness must not depend on scheduling it.
 
 Production deployments should use a dedicated least-privileged database role and back up resume and version-history data. PDF export jobs contain temporary queue and download data and usually do not require long-term backups.
 

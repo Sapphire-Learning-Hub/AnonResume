@@ -136,6 +136,15 @@ const streamEventSchema = z.discriminatedUnion("type", [
     type: z.literal("snapshot"),
     text: z.string(),
     proposalText: z.string(),
+    proposalChanges: z.array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        reason: z.string(),
+        preview: z.string().nullable(),
+      }),
+    ),
+    progress: z.array(z.enum(aiRunProgressStages)),
   }),
   z.object({
     sequence: z.number().int(),
@@ -305,16 +314,44 @@ export async function sendAiMessage(input: {
       signal: input.signal,
     },
   );
-  if (!response.ok) await parseResponse(response, z.unknown());
-  if (!response.body) throw new AiClientError("ai_stream_unavailable", 503);
-  const runId = response.headers.get("x-ai-run-id");
-  if (runId) input.onRun?.(runId);
-  await parseAiNdjsonStream(response.body, (event) => {
-    if (event.type === "error") {
-      throw new AiClientError(event.code, 502);
-    }
-    input.onEvent(event);
+  const { runId } = await parseResponse(
+    response,
+    z.object({ runId: z.string().uuid() }),
+  );
+  input.onRun?.(runId);
+
+  await streamAiRun({
+    runId,
+    signal: input.signal,
+    onEvent: input.onEvent,
   });
+}
+
+export async function streamAiRun(input: {
+  runId: string;
+  signal?: AbortSignal;
+  onEvent: (event: AiClientStreamEvent) => void;
+}) {
+  let complete = false;
+  while (!complete && !input.signal?.aborted) {
+    const streamResponse = await fetch(`/api/ai/runs/${input.runId}/stream`, {
+      cache: "no-store",
+      signal: input.signal,
+    });
+    if (!streamResponse.ok) {
+      await parseResponse(streamResponse, z.unknown());
+    }
+    if (!streamResponse.body) {
+      throw new AiClientError("ai_stream_unavailable", 503);
+    }
+    await parseAiNdjsonStream(streamResponse.body, (event) => {
+      if (event.type === "error") {
+        throw new AiClientError(event.code, 502);
+      }
+      if (event.type === "complete") complete = true;
+      input.onEvent(event);
+    });
+  }
 }
 
 const turnActionSchema = z.object({

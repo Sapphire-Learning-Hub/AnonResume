@@ -17,10 +17,7 @@ import {
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { deleteExpiredAiAuditEvidence } from "@/lib/ai/audit/retention";
 import { runAiMaintenance } from "@/lib/ai/maintenance";
-import {
-  recoverExpiredAiRuns,
-  renewExpiredAiQuotaPeriods,
-} from "@/lib/ai/runs/recovery";
+import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { reserveAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
 
@@ -91,6 +88,8 @@ describe("AI maintenance recovery", () => {
         contextHash: `hash-${index}`,
         promptVersion: 1,
         reservedPoints: 40,
+        encryptedExecutionPayload: Buffer.from(`payload-${index}`),
+        executionPayloadKeyVersion: 1,
         startedAt: index === 0 ? null : new Date("2026-09-16T11:00:00.000Z"),
         leaseExpiresAt: new Date("2026-09-16T11:30:00.000Z"),
       });
@@ -131,12 +130,24 @@ describe("AI maintenance recovery", () => {
       releasedPoints: 0,
     });
 
-    const runs = await db.select({ id: aiRuns.id, status: aiRuns.status })
+    const runs = await db.select({
+      id: aiRuns.id,
+      status: aiRuns.status,
+      encryptedExecutionPayload: aiRuns.encryptedExecutionPayload,
+      executionPayloadKeyVersion: aiRuns.executionPayloadKeyVersion,
+    })
       .from(aiRuns).where(inArray(aiRuns.id, runIds));
     expect(new Map(runs.map((run) => [run.id, run.status]))).toEqual(new Map([
       [runIds[0], "interrupted"],
       [runIds[1], "settlement_pending"],
     ]));
+    expect(
+      runs.every(
+        (run) =>
+          run.encryptedExecutionPayload === null &&
+          run.executionPayloadKeyVersion === null,
+      ),
+    ).toBe(true);
 
     const quotas = await db.select().from(aiQuotaAccounts)
       .where(inArray(aiQuotaAccounts.userId, userIds));
@@ -144,18 +155,17 @@ describe("AI maintenance recovery", () => {
     expect(quotas.find((quota) => quota.userId === userIds[1])?.reservedPoints).toBe(40);
   });
 
-  it("renews expired quota periods only when no reservation remains", async () => {
+  it("leaves quota renewal to the usage path", async () => {
     await db.update(aiQuotaAccounts).set({
       periodStartedAt: new Date("2026-07-01T00:00:00.000Z"),
       periodEndsAt: new Date("2026-08-01T00:00:00.000Z"),
       usedPoints: 25,
     }).where(eq(aiQuotaAccounts.userId, userIds[0]));
 
-    expect(await renewExpiredAiQuotaPeriods({ now, batchSize: 10 })).toBe(1);
-    expect(await renewExpiredAiQuotaPeriods({ now, batchSize: 10 })).toBe(0);
+    await runAiMaintenance({ now, batchSize: 10 });
     const [quota] = await db.select().from(aiQuotaAccounts)
       .where(eq(aiQuotaAccounts.userId, userIds[0]));
-    expect(quota).toMatchObject({ usedPoints: 0, reservedPoints: 0 });
+    expect(quota).toMatchObject({ usedPoints: 25, reservedPoints: 0 });
   });
 
   it("deletes expired evidence in bounded idempotent batches", async () => {
@@ -177,14 +187,15 @@ describe("AI maintenance recovery", () => {
     const client = await getDatabasePool().connect();
     try {
       await client.query(
-        "SELECT pg_advisory_lock(hashtext('anonresume:ai-maintenance'))",
+        "SELECT pg_advisory_lock(hashtext('anonresume:ai-recovery'))",
       );
       await expect(runAiMaintenance({ now, batchSize: 10 })).resolves.toEqual({
-        acquired: false,
+        recovery: { acquired: false },
+        retention: { acquired: true, deletedEvidence: 0 },
       });
     } finally {
       await client.query(
-        "SELECT pg_advisory_unlock(hashtext('anonresume:ai-maintenance'))",
+        "SELECT pg_advisory_unlock(hashtext('anonresume:ai-recovery'))",
       );
       client.release();
     }

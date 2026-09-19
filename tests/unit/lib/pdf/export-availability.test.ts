@@ -5,7 +5,7 @@ import {
   getPdfExportWorkerAvailability,
   PDF_EXPORT_WORKER_STALE_MS,
 } from "@/lib/pdf/export-availability";
-import { recordWorkerHeartbeat } from "@/lib/pdf/worker-heartbeat";
+import { recordWorkerHeartbeat } from "@/lib/runtime/worker-heartbeat";
 
 describe("PDF export worker availability", () => {
   const workerId = "pdf-availability-test-worker";
