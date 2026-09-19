@@ -1,4 +1,8 @@
 import { adminAuditEvents, db, getDatabaseSchemaName } from "@/db";
+import type {
+  AdminAuditAction,
+  AdminAuditTargetType,
+} from "@/lib/admin/audit-catalog";
 import type { PoolClient } from "pg";
 
 const FORBIDDEN_METADATA_KEYS = new Set([
@@ -91,8 +95,8 @@ function quoteIdentifier(value: string) {
 
 export interface AdminAuditEventInput {
   actorUserId?: string | null;
-  action: string;
-  targetType: string;
+  action: AdminAuditAction;
+  targetType: AdminAuditTargetType;
   targetId?: string | null;
   outcome: "success" | "denied" | "failed";
   metadata?: Record<string, unknown>;

@@ -229,4 +229,58 @@ describe("admin paginated queries", () => {
       }
     }
   });
+
+  it("resolves existing AI model audit targets to their display names", async () => {
+    const pool = getDatabasePool();
+    const providerId = randomUUID();
+    const modelId = randomUUID();
+    const modelName = `${marker} AI model`;
+
+    try {
+      await pool.query(
+        `INSERT INTO ${schema}.ai_provider_credentials
+           (id, kind, display_name, base_url, encrypted_api_key, enabled)
+         VALUES ($1, 'platform', $2, 'https://example.com/v1', $3, true)`,
+        [providerId, `${marker} AI provider`, Buffer.from("encrypted")],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.ai_models
+           (id, provider_id, provider_model_key, display_name, enabled,
+            supports_streaming, supports_tool_calls, context_window,
+            max_output_tokens, input_point_rate, cached_input_point_rate,
+            output_point_rate)
+         VALUES ($1, $2, $3, $4, true, true, true, 128000, 4096, 1, 1, 1)`,
+        [modelId, providerId, `${marker}-audit-model`, modelName],
+      );
+      await pool.query(
+        `INSERT INTO ${schema}.admin_audit_events
+           (action, target_type, target_id, outcome, metadata)
+         VALUES ('ai.model.update', 'ai_model', $1, 'success', '{}'::jsonb)`,
+        [modelId],
+      );
+
+      const events = await listAdminAuditEvents({
+        page: 1,
+        pageSize: 20,
+        query: modelId,
+      });
+
+      expect(events.items).toHaveLength(1);
+      expect(events.items[0]?.target).toMatchObject({
+        id: modelId,
+        label: modelName,
+        type: "ai_model",
+      });
+    } finally {
+      await pool.query(
+        `DELETE FROM ${schema}.admin_audit_events WHERE target_id = $1`,
+        [modelId],
+      );
+      await pool.query(`DELETE FROM ${schema}.ai_models WHERE id = $1`, [modelId]);
+      await pool.query(
+        `DELETE FROM ${schema}.ai_provider_credentials WHERE id = $1`,
+        [providerId],
+      );
+    }
+  });
 });

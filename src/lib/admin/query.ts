@@ -108,6 +108,9 @@ const auditReferenceFields: Record<string, string> = {
   retriedjobid: "pdf_export",
   deviceid: "mfa_device",
   deviceids: "mfa_device",
+  providerid: "ai_provider",
+  modelid: "ai_model",
+  runid: "ai_run",
 };
 
 function collectAuditResourceIds(
@@ -219,7 +222,24 @@ async function resolveAuditResourceLabels(
      SELECT 'admin_session', session.id::text, identity.name, identity.email
        FROM ${schema}.admin_sessions AS session
        JOIN "user" AS identity ON identity.id = session.user_id
-      WHERE session.id::text = ANY($7::text[])`,
+      WHERE session.id::text = ANY($7::text[])
+     UNION ALL
+     SELECT 'ai_provider', provider.id::text, provider.display_name,
+        provider.base_url
+       FROM ${schema}.ai_provider_credentials AS provider
+      WHERE provider.id::text = ANY($8::text[])
+     UNION ALL
+     SELECT 'ai_model', model.id::text, model.display_name,
+        provider.display_name
+       FROM ${schema}.ai_models AS model
+       JOIN ${schema}.ai_provider_credentials AS provider
+         ON provider.id = model.provider_id
+      WHERE model.id::text = ANY($9::text[])
+     UNION ALL
+     SELECT 'ai_run', run.id::text, model.display_name, run.status
+       FROM ${schema}.ai_runs AS run
+       JOIN ${schema}.ai_models AS model ON model.id = run.model_id
+      WHERE run.id::text = ANY($10::text[])`,
     [
       values("user"),
       values("admin_role"),
@@ -228,6 +248,9 @@ async function resolveAuditResourceLabels(
       values("mfa_device"),
       values("admin_mfa_reset_request"),
       values("admin_session"),
+      values("ai_provider"),
+      values("ai_model"),
+      values("ai_run"),
     ],
   );
   for (const resource of result.rows) {

@@ -129,4 +129,84 @@ describe("ManagementAuditPage", () => {
     expect(screen.getByText("停用用户")).toBeInTheDocument();
     expect(screen.getByText("权限 · users.suspend")).toBeInTheDocument();
   });
+
+  it("shows readable labels for AI audit actions and targets", async () => {
+    mocks.requireAdminPage.mockResolvedValue({ kind: "super_admin" });
+    mocks.listAdminAuditEvents.mockResolvedValue({
+      items: [
+        {
+          action: "ai.model.update",
+          actor: null,
+          actorUserId: null,
+          createdAt: new Date("2026-09-19T13:00:00.000Z"),
+          id: "event-ai-model",
+          ipHash: null,
+          metadata: {},
+          outcome: "success",
+          requestId: null,
+          resourceLabels: {},
+          target: {
+            id: "model-1",
+            label: "豆包 Seed 2.1 Pro",
+            type: "ai_model",
+          },
+          targetId: "model-1",
+          targetType: "ai_model",
+        },
+        {
+          action: "ai.provider.delete",
+          actor: null,
+          actorUserId: null,
+          createdAt: new Date("2026-09-19T12:00:00.000Z"),
+          id: "event-ai-provider",
+          ipHash: null,
+          metadata: {},
+          outcome: "success",
+          requestId: null,
+          resourceLabels: {},
+          target: {
+            id: "provider-1",
+            label: "火山方舟",
+            type: "ai_provider",
+          },
+          targetId: "provider-1",
+          targetType: "ai_provider",
+        },
+        {
+          action: "ai.settlement.resolve",
+          actor: null,
+          actorUserId: null,
+          createdAt: new Date("2026-09-19T11:00:00.000Z"),
+          id: "event-ai-run",
+          ipHash: null,
+          metadata: {},
+          outcome: "success",
+          requestId: null,
+          resourceLabels: {},
+          target: {
+            id: "run-1",
+            label: "run-1",
+            type: "ai_run",
+          },
+          targetId: "run-1",
+          targetType: "ai_run",
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 3,
+      totalPages: 1,
+    });
+
+    render(
+      await ManagementAuditPage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(screen.getByText("更新 AI 模型")).toBeInTheDocument();
+    expect(screen.getByText("删除模型服务")).toBeInTheDocument();
+    expect(screen.getByText("处理 AI 结算")).toBeInTheDocument();
+    expect(screen.getByText("AI 模型 · model-1")).toBeInTheDocument();
+    expect(screen.getByText("模型服务 · provider-1")).toBeInTheDocument();
+    expect(screen.getByText("AI 任务 · run-1")).toBeInTheDocument();
+  });
 });

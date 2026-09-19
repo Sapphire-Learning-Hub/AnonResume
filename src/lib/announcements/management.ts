@@ -6,6 +6,7 @@ import {
   createAdminAuditChanges,
   writeAdminAuditEventWithClient,
 } from "@/lib/admin/audit";
+import type { AdminAuditAction } from "@/lib/admin/audit-catalog";
 import {
   AnnouncementStateConflictError,
   assertAnnouncementCanPublish,
@@ -123,7 +124,7 @@ async function writeAnnouncementAudit(
   client: PoolClient,
   input: {
     actorUserId: string;
-    action: string;
+    action: AdminAuditAction;
     announcement: ManagedAnnouncement;
     before?: ManagedAnnouncement;
   },
