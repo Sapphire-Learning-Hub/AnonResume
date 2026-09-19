@@ -42,6 +42,7 @@ export async function finalizeOwnedAiRun(input: {
           AND status = 'streaming'
           AND lease_owner = $2
           AND stop_requested_at IS NULL
+          AND lease_expires_at > clock_timestamp()
         FOR UPDATE`,
       [input.runId, input.leaseOwner],
     );
@@ -69,7 +70,7 @@ export async function finalizeOwnedAiRun(input: {
       await settleAiQuotaInTransaction(client, input.settlement);
     }
 
-    await client.query(
+    const finishedRun = await client.query<{ id: string }>(
       `UPDATE ${table("ai_runs")}
           SET status = $3,
               final_points = $4,
@@ -86,7 +87,12 @@ export async function finalizeOwnedAiRun(input: {
               lease_owner = NULL,
               lease_expires_at = NULL,
               updated_at = now()
-        WHERE id = $1 AND lease_owner = $2`,
+        WHERE id = $1
+          AND status = 'streaming'
+          AND lease_owner = $2
+          AND stop_requested_at IS NULL
+          AND lease_expires_at > clock_timestamp()
+        RETURNING id::text`,
       [
         input.runId,
         input.leaseOwner,
@@ -101,6 +107,10 @@ export async function finalizeOwnedAiRun(input: {
         input.settlement?.outputTokens ?? null,
       ],
     );
+    if (!finishedRun.rows[0]) {
+      await client.query("ROLLBACK");
+      return false;
+    }
     await client.query(
       `UPDATE ${table("ai_messages")}
           SET text = $2, completion_state = 'complete', updated_at = now()

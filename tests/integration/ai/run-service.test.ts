@@ -549,6 +549,143 @@ describe("AI run service", () => {
     expect(run).toMatchObject({ status: "complete" });
   });
 
+  it("does not renew an already expired lease while a provider is silent", async () => {
+    let notifyStarted!: () => void;
+    let releaseProvider!: () => void;
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve;
+    });
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        notifyStarted();
+        await providerGate;
+        yield { type: "text_delta", delta: "过期后不应继续" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "验证过期租约不会被续期",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 2,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    const consuming = (async () => {
+      for await (const event of executePreparedAiRun(claimed, { adapter })) {
+        void event;
+      }
+    })();
+    await started;
+    const expiredAt = new Date(Date.now() - 1_000);
+    await db
+      .update(aiRuns)
+      .set({ leaseExpiresAt: expiredAt })
+      .where(eq(aiRuns.id, prepared.runId));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const [expiredRun] = await db
+      .select({ leaseExpiresAt: aiRuns.leaseExpiresAt })
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+    releaseProvider();
+
+    let executionError: unknown;
+    try {
+      await consuming;
+    } catch (error) {
+      executionError = error;
+    }
+    await releaseAiQuota({
+      userId,
+      runId: prepared.runId,
+      operationId: prepared.runId,
+    });
+    await db
+      .update(aiRuns)
+      .set({
+        status: "interrupted",
+        finalPoints: 0,
+        completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    expect(executionError).toBeInstanceOf(Error);
+    expect(expiredRun?.leaseExpiresAt?.getTime()).toBe(expiredAt.getTime());
+  });
+
+  it("does not start an executor after its claimed lease expires", async () => {
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "text_delta", delta: "不应执行" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "验证过期租约不会启动",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    await db
+      .update(aiRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    const events = [];
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
+      events.push(event);
+    }
+    const [run] = await db
+      .select()
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
+
+    await releaseAiQuota({
+      userId,
+      runId: prepared.runId,
+      operationId: prepared.runId,
+    });
+    await db
+      .update(aiRuns)
+      .set({
+        status: "interrupted",
+        finalPoints: 0,
+        completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    expect(events).toEqual([]);
+    expect(run).toMatchObject({
+      status: "preparing",
+      checkpointText: "",
+    });
+  });
+
   it("fences an executor after its lease ownership changes", async () => {
     let notifyStarted!: () => void;
     const started = new Promise<void>((resolve) => {
@@ -726,6 +863,108 @@ describe("AI run service", () => {
       .where(eq(aiRuns.id, prepared.runId));
 
     expect(executionError).toBeInstanceOf(Error);
+    expect(settlements).toHaveLength(0);
+    expect(proposals).toHaveLength(0);
+  });
+
+  it("does not finalize proposals or quota after the lease expires", async () => {
+    const section = document.sections[0]!;
+    const block = section.blocks[0]!;
+    if (block.type !== "text") throw new Error("Expected text block");
+    const proposal = JSON.stringify({
+      summary: "租约过期测试",
+      changes: [
+        {
+          id: "expired-lease-change",
+          type: "replace_text",
+          sectionId: section.id,
+          blockPath: [block.id],
+          content: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "不会由过期执行器写入" }],
+              },
+            ],
+          },
+          reason: "验证租约有效期",
+        },
+      ],
+    });
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "proposal_delta", delta: proposal };
+        yield {
+          type: "usage",
+          inputTokens: 50,
+          cachedInputTokens: 0,
+          outputTokens: 20,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "验证过期租约最终结算",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    const iterator = executePreparedAiRun(claimed, { adapter });
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) throw new Error("Run completed before expiry fencing test");
+      if (next.value.type === "progress" && next.value.stage === "saving_result") {
+        break;
+      }
+    }
+    await db
+      .update(aiRuns)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    await expect(iterator.next()).rejects.toThrow("ai_run_lease_lost");
+    const settlements = await db
+      .select()
+      .from(aiUsageLedger)
+      .where(
+        and(
+          eq(aiUsageLedger.runId, prepared.runId),
+          eq(aiUsageLedger.entryType, "settlement"),
+        ),
+      );
+    const proposals = await db
+      .select()
+      .from(aiProposals)
+      .where(eq(aiProposals.runId, prepared.runId));
+
+    await releaseAiQuota({
+      userId,
+      runId: prepared.runId,
+      operationId: prepared.runId,
+    });
+    await db
+      .update(aiRuns)
+      .set({
+        status: "interrupted",
+        finalPoints: 0,
+        completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
+
     expect(settlements).toHaveLength(0);
     expect(proposals).toHaveLength(0);
   });

@@ -821,6 +821,7 @@ function startAiRunLeaseMonitor(input: {
           eq(aiRuns.id, input.runId),
           eq(aiRuns.status, "streaming"),
           eq(aiRuns.leaseOwner, input.leaseOwner),
+          gt(aiRuns.leaseExpiresAt, now),
         ),
       )
       .returning({ stopRequestedAt: aiRuns.stopRequestedAt })
@@ -880,13 +881,17 @@ export async function* executePreparedAiRun(
     return;
   }
 
+  const startedAt = new Date();
   const [startedRun] = await db
     .update(aiRuns)
     .set({
       status: "streaming",
-      startedAt: new Date(),
-      leaseExpiresAt: runLease(new Date(), prepared.configuration.runLeaseSeconds),
-      updatedAt: new Date(),
+      startedAt,
+      leaseExpiresAt: runLease(
+        startedAt,
+        prepared.configuration.runLeaseSeconds,
+      ),
+      updatedAt: startedAt,
     })
     .where(
       and(
@@ -894,6 +899,7 @@ export async function* executePreparedAiRun(
         eq(aiRuns.status, "preparing"),
         eq(aiRuns.leaseOwner, prepared.leaseOwner),
         isNull(aiRuns.stopRequestedAt),
+        gt(aiRuns.leaseExpiresAt, startedAt),
       ),
     )
     .returning({ id: aiRuns.id });
@@ -944,6 +950,7 @@ export async function* executePreparedAiRun(
           eq(aiRuns.id, prepared.runId),
           eq(aiRuns.status, "streaming"),
           eq(aiRuns.leaseOwner, prepared.leaseOwner),
+          gt(aiRuns.leaseExpiresAt, now),
         ),
       )
       .returning({

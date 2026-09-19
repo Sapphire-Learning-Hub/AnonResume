@@ -88,7 +88,7 @@ export function useAiConversation({
   const [streamingProgressStages, setStreamingProgressStages] = useState<
     AiRunProgressStage[]
   >([]);
-  const [liveRunId, setLiveRunId] = useState<string>();
+  const liveRunIdRef = useRef<string | undefined>(undefined);
   const streamPromiseRef = useRef<Promise<void> | undefined>(undefined);
   const runIdWaiterRef = useRef<RunIdWaiter | undefined>(undefined);
   const intentionalStopRef = useRef(false);
@@ -189,9 +189,8 @@ export function useAiConversation({
   const activeRunId = details?.activeRun?.id;
   useEffect(() => {
     if (!open || !selectedConversationId || !activeRunId) return;
-    if (streamPromiseRef.current) return;
     const controller = new AbortController();
-    setLiveRunId(activeRunId);
+    liveRunIdRef.current = activeRunId;
     const streamPromise = streamAiRun({
       runId: activeRunId,
       signal: controller.signal,
@@ -201,12 +200,16 @@ export function useAiConversation({
         await Promise.all([loadDetails(selectedConversationId), loadIndex()]);
       })
       .catch((error) => {
-        if (!controller.signal.aborted) reportError(error);
+        const stopped =
+          error instanceof AiClientError && error.code === "stopped";
+        if (!controller.signal.aborted && !stopped) reportError(error);
       })
       .finally(() => {
         if (streamPromiseRef.current === streamPromise) {
           streamPromiseRef.current = undefined;
-          setLiveRunId(undefined);
+          if (liveRunIdRef.current === activeRunId) {
+            liveRunIdRef.current = undefined;
+          }
           setStreamingText("");
           setStreamingProposalText("");
           setStreamingProposalChanges([]);
@@ -243,13 +246,14 @@ export function useAiConversation({
     setStreamingProposalText("");
     setStreamingProposalChanges([]);
     setStreamingProgressStages([]);
+    let streamPromise: Promise<void> | undefined;
     try {
-      const streamPromise = sendAiMessage({
+      streamPromise = sendAiMessage({
         conversationId,
         message,
         resumeVersion,
         onRun(runId) {
-          setLiveRunId(runId);
+          liveRunIdRef.current = runId;
           runIdWaiter.settle(runId);
         },
         onEvent: consumeStreamEvent,
@@ -281,8 +285,10 @@ export function useAiConversation({
       setStreamingProposalText("");
       setStreamingProposalChanges([]);
       setStreamingProgressStages([]);
-      setLiveRunId(undefined);
-      streamPromiseRef.current = undefined;
+      if (streamPromiseRef.current === streamPromise) {
+        liveRunIdRef.current = undefined;
+        streamPromiseRef.current = undefined;
+      }
     }
   }
 
@@ -291,7 +297,7 @@ export function useAiConversation({
     intentionalStopRef.current = true;
     try {
       const runId =
-        liveRunId ??
+        liveRunIdRef.current ??
         details?.activeRun?.id ??
         (await runIdWaiterRef.current?.promise);
       if (!runId) return;
