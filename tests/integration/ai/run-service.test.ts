@@ -13,6 +13,7 @@ import {
   aiUsageLedger,
   db,
   resumes,
+  getDatabaseSchemaName,
 } from "@/db";
 import { hashAiContent } from "@/domain/resume/ai/content-hash";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
@@ -35,6 +36,7 @@ import { claimQueuedAiRuns } from "@/lib/ai/runs/queue";
 import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
 import { releaseAiQuota } from "@/lib/ai/usage/ledger";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 describe("AI run service", () => {
   const encryptionKey = Buffer.alloc(32, 6);
@@ -248,6 +250,110 @@ describe("AI run service", () => {
           ),
         ),
     ).toHaveLength(2);
+  });
+
+  it("does not queue a run that recovery interrupted during preflight", async () => {
+    const now = new Date();
+    await db
+      .insert(aiQuotaAccounts)
+      .values({
+        userId,
+        monthlyLimit: defaultMonthlyPoints,
+        periodStartedAt: now,
+        periodEndsAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1_000),
+      })
+      .onConflictDoNothing();
+    const client = await getDatabasePool().connect();
+    const schema = `"${getDatabaseSchemaName().replaceAll('"', '""')}"`;
+    let preparation: ReturnType<typeof prepareAiRun> | undefined;
+    let preparationError: unknown;
+    let runId = "";
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `SELECT user_id FROM ${schema}.ai_quota_accounts WHERE user_id = $1 FOR UPDATE`,
+        [userId],
+      );
+      preparation = prepareAiRun({
+        userId,
+        conversationId,
+        message: "在预处理期间模拟租约恢复",
+        resumeVersion: 1,
+        configuration: {
+          credentialsEncryptionKey: encryptionKey,
+          auditRetentionDays: 30,
+          defaultMonthlyPoints,
+          requestsPerMinute,
+          streamCheckpointMs: 10,
+          runLeaseSeconds: 90,
+        },
+      });
+
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const [preparing] = await db
+          .select({
+            id: aiRuns.id,
+            assistantMessageId: aiRuns.assistantMessageId,
+          })
+          .from(aiRuns)
+          .where(
+            and(
+              eq(aiRuns.conversationId, conversationId),
+              eq(aiRuns.status, "preparing"),
+            ),
+          )
+          .limit(1);
+        if (preparing) {
+          runId = preparing.id;
+          await db
+            .update(aiRuns)
+            .set({
+              status: "interrupted",
+              failureCode: "lease_expired",
+              completedAt: new Date(),
+              leaseExpiresAt: null,
+            })
+            .where(eq(aiRuns.id, preparing.id));
+          await db
+            .update(aiMessages)
+            .set({ completionState: "failed" })
+            .where(eq(aiMessages.id, preparing.assistantMessageId));
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(runId).not.toBe("");
+      await client.query("COMMIT");
+      try {
+        await preparation;
+      } catch (error) {
+        preparationError = error;
+      }
+    } finally {
+      await client.query("ROLLBACK").catch(() => undefined);
+      client.release();
+    }
+
+    const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, runId));
+    if (run?.status === "queued") {
+      await releaseAiQuota({ userId, runId, operationId: runId });
+      await db
+        .update(aiRuns)
+        .set({
+          status: "interrupted",
+          finalPoints: 0,
+          encryptedExecutionPayload: null,
+          executionPayloadKeyVersion: null,
+        })
+        .where(eq(aiRuns.id, runId));
+    }
+
+    expect(preparationError).toBeInstanceOf(Error);
+    expect(run).toMatchObject({
+      status: "interrupted",
+      encryptedExecutionPayload: null,
+      leaseOwner: null,
+    });
   });
 
   it("serializes per-user admission across different resumes", async () => {
@@ -510,6 +616,118 @@ describe("AI run service", () => {
         leaseExpiresAt: null,
       })
       .where(eq(aiRuns.id, prepared.runId));
+  });
+
+  it("does not persist proposals or settle quota after final lease loss", async () => {
+    const section = document.sections[0]!;
+    const block = section.blocks[0]!;
+    if (block.type !== "text") throw new Error("Expected text block");
+    const proposal = JSON.stringify({
+      summary: "租约竞争测试",
+      changes: [
+        {
+          id: "lease-race-change",
+          type: "replace_text",
+          sectionId: section.id,
+          blockPath: [block.id],
+          content: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "不会被旧执行器写入" }],
+              },
+            ],
+          },
+          reason: "验证租约栅栏",
+        },
+      ],
+    });
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        yield { type: "proposal_delta", delta: proposal };
+        yield {
+          type: "usage",
+          inputTokens: 50,
+          cachedInputTokens: 0,
+          outputTokens: 20,
+        };
+        yield { type: "complete", finishReason: "stop" };
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "验证最终结算租约",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+    const claimed = await claimPreparedRun(prepared.runId);
+    const iterator = executePreparedAiRun(claimed, { adapter });
+    let savingReached = false;
+    while (!savingReached) {
+      const next = await iterator.next();
+      if (next.done) throw new Error("Run completed before final fencing test");
+      savingReached =
+        next.value.type === "progress" &&
+        next.value.stage === "saving_result";
+    }
+    await db
+      .update(aiRuns)
+      .set({ leaseOwner: "replacement-finalizer" })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    let executionError: unknown;
+    try {
+      await iterator.next();
+    } catch (error) {
+      executionError = error;
+    }
+    const settlements = await db
+      .select()
+      .from(aiUsageLedger)
+      .where(
+        and(
+          eq(aiUsageLedger.runId, prepared.runId),
+          eq(aiUsageLedger.entryType, "settlement"),
+        ),
+      );
+    const proposals = await db
+      .select()
+      .from(aiProposals)
+      .where(eq(aiProposals.runId, prepared.runId));
+
+    if (settlements.length === 0) {
+      await releaseAiQuota({
+        userId,
+        runId: prepared.runId,
+        operationId: prepared.runId,
+      });
+    }
+    await db.delete(aiProposals).where(eq(aiProposals.runId, prepared.runId));
+    await db
+      .update(aiRuns)
+      .set({
+        status: "interrupted",
+        finalPoints: settlements.length === 0 ? 0 : undefined,
+        completedAt: new Date(),
+        encryptedExecutionPayload: null,
+        executionPayloadKeyVersion: null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      })
+      .where(eq(aiRuns.id, prepared.runId));
+
+    expect(executionError).toBeInstanceOf(Error);
+    expect(settlements).toHaveLength(0);
+    expect(proposals).toHaveLength(0);
   });
 
   it("stores encrypted diagnostics when execution fails after usage arrives", async () => {

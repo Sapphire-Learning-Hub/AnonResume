@@ -6,7 +6,6 @@ import {
   aiConversations,
   aiMessages,
   aiModels,
-  aiProposals,
   aiProviderCredentials,
   aiRuns,
   db,
@@ -36,11 +35,11 @@ import { createAiAgentToolDefinitions } from "@/lib/ai/tools/catalog";
 import { createAiProposalWorkspace } from "@/lib/ai/tools/proposal-workspace";
 import { createAiProposalProgressChanges } from "@/lib/ai/proposals/progress";
 import { encryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
+import { finalizeOwnedAiRun } from "@/lib/ai/runs/finalize";
 import {
   getAiQuotaSnapshot,
   releaseAiQuota,
   reserveAiQuota,
-  settleAiQuota,
 } from "@/lib/ai/usage/ledger";
 import { calculateAiUsagePoints, type AiPointRates } from "@/lib/ai/usage/rates";
 
@@ -564,7 +563,7 @@ export async function prepareAiRun(input: {
       prepared,
       input.configuration.credentialsEncryptionKey,
     );
-    await db
+    const [queuedRun] = await db
       .update(aiRuns)
       .set({
         status: "queued",
@@ -574,7 +573,16 @@ export async function prepareAiRun(input: {
         leaseExpiresAt: null,
         updatedAt: new Date(),
       })
-      .where(eq(aiRuns.id, runId));
+      .where(
+        and(
+          eq(aiRuns.id, runId),
+          eq(aiRuns.status, "preparing"),
+          isNull(aiRuns.stopRequestedAt),
+          isNull(aiRuns.leaseOwner),
+        ),
+      )
+      .returning({ id: aiRuns.id });
+    if (!queuedRun) throw new Error("ai_run_preparation_cancelled");
     return prepared;
   } catch (error) {
     if (quotaReserved) {
@@ -584,7 +592,7 @@ export async function prepareAiRun(input: {
         operationId: runId,
       }).catch(() => undefined);
     }
-    await db
+    const [failedRun] = await db
       .update(aiRuns)
       .set({
         status: "failed",
@@ -595,11 +603,21 @@ export async function prepareAiRun(input: {
         leaseOwner: null,
         leaseExpiresAt: null,
       })
-      .where(eq(aiRuns.id, runId));
-    await db
-      .update(aiMessages)
-      .set({ completionState: "failed", updatedAt: new Date() })
-      .where(eq(aiMessages.id, assistantMessageId));
+      .where(
+        and(
+          eq(aiRuns.id, runId),
+          eq(aiRuns.status, "preparing"),
+          isNull(aiRuns.stopRequestedAt),
+          isNull(aiRuns.leaseOwner),
+        ),
+      )
+      .returning({ id: aiRuns.id });
+    if (failedRun) {
+      await db
+        .update(aiMessages)
+        .set({ completionState: "failed", updatedAt: new Date() })
+        .where(eq(aiMessages.id, assistantMessageId));
+    }
     throw error;
   }
 }
@@ -1142,23 +1160,6 @@ export async function* executePreparedAiRun(
       failurePhase = "proposal_validation";
       throw new Error("ai_proposal_missing");
     }
-    if (proposalText && proposalState) {
-      failurePhase = "proposal_persistence";
-      await db.insert(aiProposals).values({
-        runId: prepared.runId,
-        baseResumeVersion: prepared.resumeVersion,
-        targetHashes: proposalState === "complete"
-          ? Object.fromEntries(
-              (proposal as { changes: Array<{ id: string; beforeHash: string }> }).changes.map(
-                (change) => [change.id, change.beforeHash],
-              ),
-            )
-          : {},
-        proposal,
-        completionState: proposalState,
-      });
-    }
-
     failurePhase = "checkpoint_persistence";
     const savingEvent = await advanceProgress("saving_result");
     if (savingEvent) yield savingEvent;
@@ -1184,90 +1185,49 @@ export async function* executePreparedAiRun(
       }),
     });
 
-    if (!usage) {
-      failurePhase = "result_persistence";
-      const [finishedRun] = await db
-        .update(aiRuns)
-        .set({
-          status: "settlement_pending",
-          checkpointSequence: sequence,
-          checkpointText: text,
-          checkpointProposal: proposalText || null,
-          providerRequestId,
-          completedAt: new Date(),
-          encryptedExecutionPayload: null,
-          executionPayloadKeyVersion: null,
-          leaseOwner: null,
-          leaseExpiresAt: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(aiRuns.id, prepared.runId),
-            eq(aiRuns.status, "streaming"),
-            eq(aiRuns.leaseOwner, prepared.leaseOwner),
-          ),
-        )
-        .returning({ id: aiRuns.id });
-      if (!finishedRun) {
-        leaseLost = true;
-        throw new Error("ai_run_lease_lost");
-      }
-      stopMonitoring();
-      await db
-        .update(aiMessages)
-        .set({ text, completionState: "complete", updatedAt: new Date() })
-        .where(eq(aiMessages.id, prepared.assistantMessageId));
-    } else {
-      const finalPoints = prepared.keySource === "user"
+    const finalPoints = usage
+      ? prepared.keySource === "user"
         ? 0
-        : calculateAiUsagePoints({ ...usage, rates: prepared.rates });
-      failurePhase = "quota_settlement";
-      await settleAiQuota({
-        userId: prepared.userId,
-        runId: prepared.runId,
-        operationId: prepared.reservationOperationId,
-        actualPoints: finalPoints,
-        ...usage,
-      });
-      failurePhase = "result_persistence";
-      const [finishedRun] = await db
-        .update(aiRuns)
-        .set({
-          status: "complete",
-          finalPoints,
-          checkpointSequence: sequence,
-          checkpointText: text,
-          checkpointProposal: proposalText || null,
-          providerRequestId,
-          inputTokens: usage.inputTokens,
-          cachedInputTokens: usage.cachedInputTokens,
-          outputTokens: usage.outputTokens,
-          completedAt: new Date(),
-          encryptedExecutionPayload: null,
-          executionPayloadKeyVersion: null,
-          leaseOwner: null,
-          leaseExpiresAt: null,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(aiRuns.id, prepared.runId),
-            eq(aiRuns.status, "streaming"),
-            eq(aiRuns.leaseOwner, prepared.leaseOwner),
-          ),
-        )
-        .returning({ id: aiRuns.id });
-      if (!finishedRun) {
-        leaseLost = true;
-        throw new Error("ai_run_lease_lost");
-      }
-      stopMonitoring();
-      await db
-        .update(aiMessages)
-        .set({ text, completionState: "complete", updatedAt: new Date() })
-        .where(eq(aiMessages.id, prepared.assistantMessageId));
+        : calculateAiUsagePoints({ ...usage, rates: prepared.rates })
+      : undefined;
+    failurePhase = usage ? "quota_settlement" : "result_persistence";
+    const finalized = await finalizeOwnedAiRun({
+      runId: prepared.runId,
+      assistantMessageId: prepared.assistantMessageId,
+      leaseOwner: prepared.leaseOwner,
+      sequence,
+      text,
+      proposalText,
+      providerRequestId,
+      proposal: proposalText && proposalState
+        ? {
+            baseResumeVersion: prepared.resumeVersion,
+            targetHashes: proposalState === "complete"
+              ? Object.fromEntries(
+                  (proposal as {
+                    changes: Array<{ id: string; beforeHash: string }>;
+                  }).changes.map((change) => [change.id, change.beforeHash]),
+                )
+              : {},
+            proposal,
+            completionState: proposalState,
+          }
+        : undefined,
+      settlement: usage && finalPoints !== undefined
+        ? {
+            userId: prepared.userId,
+            runId: prepared.runId,
+            operationId: prepared.reservationOperationId,
+            actualPoints: finalPoints,
+            ...usage,
+          }
+        : undefined,
+    });
+    if (!finalized) {
+      leaseLost = true;
+      throw new Error("ai_run_lease_lost");
     }
+    stopMonitoring();
 
     sequence += 1;
     yield { sequence, type: "complete", finishReason };

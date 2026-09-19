@@ -41,6 +41,16 @@ export class AiSettlementExceedsReservationError extends Error {
   }
 }
 
+export interface AiQuotaSettlementInput {
+  userId: string;
+  runId: string | null;
+  operationId: string;
+  actualPoints: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+}
+
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
 }
@@ -227,16 +237,10 @@ export async function reserveAiQuota(input: {
   });
 }
 
-export async function settleAiQuota(input: {
-  userId: string;
-  runId: string | null;
-  operationId: string;
-  actualPoints: number;
-  inputTokens: number;
-  cachedInputTokens: number;
-  outputTokens: number;
-}) {
-  return withTransaction(async (client) => {
+export async function settleAiQuotaInTransaction(
+  client: PoolClient,
+  input: AiQuotaSettlementInput,
+) {
     const accountResult = await client.query<QuotaAccountRow>(
       `SELECT monthly_limit AS "monthlyLimit",
               period_started_at AS "periodStartedAt",
@@ -315,6 +319,11 @@ export async function settleAiQuota(input: {
       ],
     );
     return snapshot(updated.rows[0]!);
+}
+
+export async function settleAiQuota(input: AiQuotaSettlementInput) {
+  return withTransaction(async (client) => {
+    return settleAiQuotaInTransaction(client, input);
   });
 }
 

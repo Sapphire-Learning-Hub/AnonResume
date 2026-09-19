@@ -332,25 +332,51 @@ export async function streamAiRun(input: {
   signal?: AbortSignal;
   onEvent: (event: AiClientStreamEvent) => void;
 }) {
+  const waitForRetry = (attempt: number) =>
+    new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timeout);
+        input.signal?.removeEventListener("abort", finish);
+        resolve();
+      };
+      const timeout = setTimeout(
+        finish,
+        Math.min(2_000, 100 * 2 ** attempt),
+      );
+      input.signal?.addEventListener("abort", finish, { once: true });
+    });
   let complete = false;
+  let retryAttempt = 0;
   while (!complete && !input.signal?.aborted) {
-    const streamResponse = await fetch(`/api/ai/runs/${input.runId}/stream`, {
-      cache: "no-store",
-      signal: input.signal,
-    });
-    if (!streamResponse.ok) {
-      await parseResponse(streamResponse, z.unknown());
-    }
-    if (!streamResponse.body) {
-      throw new AiClientError("ai_stream_unavailable", 503);
-    }
-    await parseAiNdjsonStream(streamResponse.body, (event) => {
-      if (event.type === "error") {
-        throw new AiClientError(event.code, 502);
+    try {
+      const streamResponse = await fetch(`/api/ai/runs/${input.runId}/stream`, {
+        cache: "no-store",
+        signal: input.signal,
+      });
+      if (!streamResponse.ok) {
+        await parseResponse(streamResponse, z.unknown());
       }
-      if (event.type === "complete") complete = true;
-      input.onEvent(event);
-    });
+      if (!streamResponse.body) {
+        throw new AiClientError("ai_stream_unavailable", 503);
+      }
+      await parseAiNdjsonStream(streamResponse.body, (event) => {
+        if (event.type === "error") {
+          throw new AiClientError(event.code, 400);
+        }
+        if (event.type === "complete") complete = true;
+        input.onEvent(event);
+      });
+      retryAttempt = 0;
+    } catch (error) {
+      if (input.signal?.aborted) throw error;
+      const retryable =
+        error instanceof TypeError ||
+        error instanceof SyntaxError ||
+        (error instanceof AiClientError && error.status >= 500);
+      if (!retryable || retryAttempt >= 5) throw error;
+      await waitForRetry(retryAttempt);
+      retryAttempt += 1;
+    }
   }
 }
 

@@ -12,9 +12,26 @@ describe("AI worker availability", () => {
   const heartbeatAt = new Date("2100-01-01T00:00:00.000Z");
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await db
       .delete(workerHeartbeats)
       .where(eq(workerHeartbeats.workerId, workerId));
+  });
+
+  it("keeps a healthy worker available across a configured long poll", async () => {
+    vi.stubEnv("AI_WORKER_POLL_INTERVAL_MS", "20000");
+    await recordWorkerHeartbeat({
+      workerId,
+      workerType: "ai-runtime",
+      startedAt: heartbeatAt,
+      now: heartbeatAt,
+    });
+
+    await expect(
+      getAiWorkerAvailability({
+        now: new Date(heartbeatAt.getTime() + 30_000),
+      }),
+    ).resolves.toEqual({ available: true });
   });
 
   it("requires a recent AI runtime heartbeat", async () => {

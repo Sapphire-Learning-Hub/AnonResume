@@ -1,4 +1,8 @@
-import { parseAiNdjsonStream, sendAiMessage } from "@/lib/ai/client";
+import {
+  parseAiNdjsonStream,
+  sendAiMessage,
+  streamAiRun,
+} from "@/lib/ai/client";
 
 describe("AI client stream parser", () => {
   afterEach(() => {
@@ -100,5 +104,31 @@ describe("AI client stream parser", () => {
         onEvent: vi.fn(),
       }),
     ).rejects.toMatchObject({ code: "provider_failed" });
+  });
+
+  it("reconnects after a transient persisted-stream failure", async () => {
+    const encoder = new TextEncoder();
+    const completedStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            '{"sequence":3,"type":"complete","finishReason":"stop"}\n',
+          ),
+        );
+        controller.close();
+      },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("connection reset"))
+      .mockResolvedValueOnce(new Response(completedStream, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await streamAiRun({
+      runId: "62622b5d-ec93-43fb-925d-6b631703799b",
+      onEvent: vi.fn(),
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
