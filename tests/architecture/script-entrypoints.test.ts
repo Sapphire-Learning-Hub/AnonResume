@@ -30,4 +30,7 @@ it("keeps local package script entrypoints valid", async () => {
   expect(manifest.scripts?.["config:doctor"]).toBe(
     "bun run scripts/config-doctor.ts",
   );
+  expect(manifest.scripts?.["auth:migrate"]).toBe(
+    "bunx @better-auth/cli migrate --config scripts/auth-migration-config.ts",
+  );
 });

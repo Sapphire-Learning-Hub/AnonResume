@@ -21,7 +21,7 @@
     "worker:ai": "bun run scripts/ai-worker.ts",
     "worker:pdf": "bun run scripts/pdf-worker.ts",
     "ai:maintenance": "bun run scripts/ai-maintenance.ts",
-    "auth:migrate": "bunx @better-auth/cli migrate --config src/lib/auth/config.ts",
+    "auth:migrate": "bunx @better-auth/cli migrate --config scripts/auth-migration-config.ts",
     "admin:doctor": "bun run scripts/admin-doctor.ts",
     "admin:bootstrap": "bun run scripts/admin-bootstrap.ts",
     "admin:repair-super-admin": "bun run scripts/admin-repair-super-admin.ts",
