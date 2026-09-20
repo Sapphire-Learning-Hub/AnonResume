@@ -50,6 +50,19 @@ describe("runtime instance identity", () => {
     );
   });
 
+  it("gives web replicas a stable setup-code source identity", () => {
+    const identity = resolveRuntimeIdentity("web", {
+      environment: {
+        ANONRESUME_DEPLOYMENT_ID: "production",
+        ANONRESUME_INSTANCE_ID: "web-2",
+      },
+      randomSessionId: () => "session-9",
+    });
+
+    expect(identity.stableId).toBe("production/web/web-2");
+    expect(identity.sessionId).toBe("session-9");
+  });
+
   it("uses the process session as a lease fencing token", () => {
     expect(
       createLeaseOwner({
