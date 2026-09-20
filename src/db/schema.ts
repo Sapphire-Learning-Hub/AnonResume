@@ -22,6 +22,7 @@ import type {
   AdminPermission,
   AdminSystemRoleKey,
 } from "@/lib/admin/permissions";
+import type { InstanceSetupState } from "@/lib/admin/setup/types";
 import type {
   AnnouncementAudience,
   AnnouncementStatus,
@@ -625,6 +626,115 @@ export const adminActivationTokens =
           ),
           uniqueIndex("admin_activation_tokens_hash_unique").on(table.tokenHash),
           index("admin_activation_tokens_user_id_idx").on(table.userId),
+        ],
+      );
+
+const instanceSetupStateColumns = {
+  slot: integer("slot").primaryKey().default(1),
+  state: text("state").$type<InstanceSetupState>().notNull(),
+  targetUserId: text("target_user_id"),
+  recoveryReason: text("recovery_reason"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const instanceSetupState =
+  schemaName === "public"
+    ? pgTable("instance_setup_state", instanceSetupStateColumns, (table) => [
+        check("instance_setup_state_slot_check", sql`${table.slot} = 1`),
+        check(
+          "instance_setup_state_value_check",
+          sql`${table.state} IN ('pending_initialization', 'pending_admin_recovery', 'completed')`,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "instance_setup_state",
+        instanceSetupStateColumns,
+        (table) => [
+          check("instance_setup_state_slot_check", sql`${table.slot} = 1`),
+          check(
+            "instance_setup_state_value_check",
+            sql`${table.state} IN ('pending_initialization', 'pending_admin_recovery', 'completed')`,
+          ),
+        ],
+      );
+
+const instanceSetupTokenColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sourceInstanceId: text("source_instance_id").notNull(),
+  generation: uuid("generation").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const instanceSetupTokens =
+  schemaName === "public"
+    ? pgTable("instance_setup_tokens", instanceSetupTokenColumns, (table) => [
+        uniqueIndex("instance_setup_tokens_source_unique").on(
+          table.sourceInstanceId,
+        ),
+        uniqueIndex("instance_setup_tokens_hash_unique").on(table.tokenHash),
+        index("instance_setup_tokens_expiry_idx").on(table.expiresAt),
+      ])
+    : pgSchema(schemaName).table(
+        "instance_setup_tokens",
+        instanceSetupTokenColumns,
+        (table) => [
+          uniqueIndex("instance_setup_tokens_source_unique").on(
+            table.sourceInstanceId,
+          ),
+          uniqueIndex("instance_setup_tokens_hash_unique").on(table.tokenHash),
+          index("instance_setup_tokens_expiry_idx").on(table.expiresAt),
+        ],
+      );
+
+const instanceSetupSessionColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tokenHash: text("token_hash").notNull(),
+  generation: uuid("generation").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const instanceSetupSessions =
+  schemaName === "public"
+    ? pgTable("instance_setup_sessions", instanceSetupSessionColumns, (table) => [
+        uniqueIndex("instance_setup_sessions_hash_unique").on(table.tokenHash),
+        index("instance_setup_sessions_generation_idx").on(table.generation),
+        index("instance_setup_sessions_expiry_idx").on(table.expiresAt),
+      ])
+    : pgSchema(schemaName).table(
+        "instance_setup_sessions",
+        instanceSetupSessionColumns,
+        (table) => [
+          uniqueIndex("instance_setup_sessions_hash_unique").on(table.tokenHash),
+          index("instance_setup_sessions_generation_idx").on(table.generation),
+          index("instance_setup_sessions_expiry_idx").on(table.expiresAt),
+        ],
+      );
+
+const instanceSetupClaimLimitColumns = {
+  sourceHash: text("source_hash").primaryKey(),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const instanceSetupClaimLimits =
+  schemaName === "public"
+    ? pgTable("instance_setup_claim_limits", instanceSetupClaimLimitColumns, (table) => [
+        index("instance_setup_claim_limits_expiry_idx").on(table.expiresAt),
+      ])
+    : pgSchema(schemaName).table(
+        "instance_setup_claim_limits",
+        instanceSetupClaimLimitColumns,
+        (table) => [
+          index("instance_setup_claim_limits_expiry_idx").on(table.expiresAt),
         ],
       );
 
