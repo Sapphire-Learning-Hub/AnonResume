@@ -134,7 +134,7 @@ export async function resolveSafeAiEndpoint(
     return unsafeEndpoint();
   }
 
-  return { endpoint, addresses };
+  return { endpoint, addresses, trustedProxyResolution };
 }
 
 export async function assertSafeAiEndpoint(

@@ -1140,7 +1140,27 @@ describe("AI run service", () => {
     }
   });
 
-  it("retries one missing tool payload and settles both provider attempts", async () => {
+  it("does not require editing tools when the user explicitly rejects changes", async () => {
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "请用一句话概括这份简历的核心优势，不要修改简历。",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    expect(prepared.request.toolChoice).toBeUndefined();
+    await stopAiRun({ userId, runId: prepared.runId });
+  });
+
+  it("retries a missing optional tool payload as plain text", async () => {
     let attempts = 0;
     const adapter: AiProviderAdapter = {
       async *start(request) {
@@ -1156,9 +1176,14 @@ describe("AI run service", () => {
             protocolViolation: "missing_tool_payload",
           });
         }
-        expect(request.messages.at(-1)?.content).toContain(
-          "list_resume_capabilities",
-        );
+        expect(request.tools).toBeUndefined();
+        expect(request.proposalTool).toBeUndefined();
+        expect(request.toolChoice).toBeUndefined();
+        expect(request.messages.at(-2)).toMatchObject({
+          role: "system",
+          content: expect.stringContaining("No tools are available"),
+        });
+        expect(request.messages.at(-1)?.content).toContain("plain text");
         yield { type: "text_delta", delta: "建议先明确目标岗位。" };
         yield {
           type: "usage",

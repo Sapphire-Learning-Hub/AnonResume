@@ -31,7 +31,7 @@ AnonResume 是一款开源的在线简历编辑器。你可以像编辑文档一
 
 编辑器、预览、公开页面和 PDF 使用同一套渲染能力，尽可能减少“编辑时正常，导出后变样”的意外。项目支持自行部署，数据和运行环境由部署者掌控。
 
-![AnonResume 编辑器界面](./public/marketing/editor-modular-16x9-v2-2048.webp)
+![AnonResume 编辑器界面](./public/marketing/editor-modular-16x9-v4-2048.webp)
 
 ## 功能亮点
 

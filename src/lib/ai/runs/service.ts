@@ -246,9 +246,17 @@ function systemPrompt(context: unknown, supportsToolCalls: boolean) {
 
 const EDITING_ACTION_PATTERN =
   /(?:帮我|请|直接|替我|为我).{0,24}(?:优化|修改|调整|重写|改写|润色|补充|新增|添加|创建|起草|删除|移除|移动|排序|拆分|合并|完善|生成)|^(?:优化|修改|调整|重写|改写|润色|补充|新增|添加|创建|起草|删除|移除|移动|排序|拆分|合并|完善|生成)|\b(?:optimize|improve|rewrite|edit|revise|add|create|draft|remove|delete|move|reorder|restructure)\b/iu;
+const NEGATED_EDITING_ACTION_PATTERN =
+  /(?:不要|不需要|无需|请勿|别|不)\s*(?:直接\s*)?(?:对[^，。！？,.!?]{0,8})?(?:做(?:任何)?\s*)?(?:修改|调整|重写|改写|润色|补充|新增|添加|创建|起草|删除|移除|移动|排序|拆分|合并|完善|生成)/giu;
+const NEGATED_ENGLISH_EDITING_ACTION_PATTERN =
+  /\b(?:do not|don't|dont|never|without)\s+(?:directly\s+)?(?:modify|modifying|edit|editing|change|changing|rewrite|rewriting|revise|revising|add|adding|create|creating|remove|removing|delete|deleting|move|moving|reorder|reordering|restructure|restructuring)\b/giu;
 
 function requiresEditingTool(message: string) {
-  return EDITING_ACTION_PATTERN.test(message.trim());
+  const normalized = message
+    .replace(NEGATED_EDITING_ACTION_PATTERN, "")
+    .replace(NEGATED_ENGLISH_EDITING_ACTION_PATTERN, "")
+    .trim();
+  return EDITING_ACTION_PATTERN.test(normalized);
 }
 
 function approximateTokens(value: string) {
@@ -773,6 +781,31 @@ function appendToolResult(
 function createMissingToolPayloadRetryRequest(
   request: AiProviderRequest,
 ): AiProviderRequest {
+  if (request.toolChoice === undefined) {
+    return {
+      ...request,
+      messages: [
+        ...request.messages,
+        {
+          role: "system",
+          content: [
+            "No tools are available for this recovery attempt.",
+            "Return a concise plain-text answer to the user's original request.",
+          ].join(" "),
+        },
+        {
+          role: "user",
+          content: [
+            "The previous response ended as an incomplete optional tool call.",
+            "Answer the user's request in plain text without calling tools.",
+          ].join(" "),
+        },
+      ],
+      proposalTool: undefined,
+      tools: undefined,
+      toolChoice: undefined,
+    };
+  }
   return {
     ...request,
     messages: [

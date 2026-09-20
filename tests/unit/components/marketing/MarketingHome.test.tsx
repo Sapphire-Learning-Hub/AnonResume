@@ -42,6 +42,17 @@ describe("MarketingHome", () => {
     pushState.mockRestore();
   });
 
+  it("links the AI navigation item to the AI card in the feature grid", () => {
+    const { container } = render(<MarketingHome />);
+    const aiSection = container.querySelector<HTMLElement>("#ai-assistant");
+
+    expect(aiSection).not.toBeNull();
+    expect(aiSection?.closest("#features")).not.toBeNull();
+    expect(
+      screen.getByRole("link", { name: "AI 助手" }),
+    ).toHaveAttribute("href", "#ai-assistant");
+  });
+
   it("condenses the navigation after the page starts scrolling", () => {
     Object.defineProperty(window, "scrollY", {
       configurable: true,

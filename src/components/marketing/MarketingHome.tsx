@@ -1,14 +1,18 @@
 "use client";
 
 import {
+  ApiOutlined,
   ArrowRightOutlined,
   CheckCircleFilled,
+  CloudServerOutlined,
   CloudDownloadOutlined,
   CodeOutlined,
-  FileSearchOutlined,
+  DatabaseOutlined,
   HistoryOutlined,
   ImportOutlined,
   LayoutOutlined,
+  RobotOutlined,
+  SafetyCertificateOutlined,
   SkinOutlined,
 } from "@ant-design/icons";
 import { Button } from "antd";
@@ -32,6 +36,7 @@ import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 import { useMarketingHomeStyles } from "./MarketingHome.style";
 
 type Feature = {
+  ai?: boolean;
   description: MessageKey;
   icon: ReactNode;
   tags?: MessageKey[];
@@ -65,6 +70,17 @@ const features: Feature[] = [
     description: "home.feature.history.description",
     icon: <HistoryOutlined />,
     title: "home.feature.history.title",
+  },
+  {
+    ai: true,
+    description: "home.ai.description",
+    icon: <RobotOutlined />,
+    tags: [
+      "home.ai.point.context.title",
+      "home.ai.point.structure.title",
+      "home.ai.point.preview.title",
+    ],
+    title: "home.ai.eyebrow",
   },
   {
     description: "home.feature.output.description",
@@ -108,9 +124,33 @@ const fonts = [
 
 const steps = [
   ["home.step.create.title", "home.step.create.description"],
+  ["home.step.ai.title", "home.step.ai.description"],
   ["home.step.edit.title", "home.step.edit.description"],
   ["home.step.deliver.title", "home.step.deliver.description"],
 ] as const satisfies ReadonlyArray<readonly [MessageKey, MessageKey]>;
+
+const openValues = [
+  {
+    description: "home.open.source.description" as MessageKey,
+    icon: <CodeOutlined />,
+    title: "home.open.source.title" as MessageKey,
+  },
+  {
+    description: "home.open.selfHost.description" as MessageKey,
+    icon: <CloudServerOutlined />,
+    title: "home.open.selfHost.title" as MessageKey,
+  },
+  {
+    description: "home.open.data.description" as MessageKey,
+    icon: <DatabaseOutlined />,
+    title: "home.open.data.title" as MessageKey,
+  },
+  {
+    description: "home.open.models.description" as MessageKey,
+    icon: <ApiOutlined />,
+    title: "home.open.models.title" as MessageKey,
+  },
+] as const;
 
 const MIN_SCROLL_DURATION_MS = 360;
 const MAX_SCROLL_DURATION_MS = 700;
@@ -261,8 +301,8 @@ export function MarketingHome({
             className={styles.navLinks}
             data-marketing-links="true"
           >
-            <a data-marketing-scroll="true" href="#features">
-              {t("home.navigation.features")}
+            <a data-marketing-scroll="true" href="#ai-assistant">
+              {t("home.navigation.ai")}
             </a>
             <a data-marketing-scroll="true" href="#editor">
               {t("home.navigation.editor")}
@@ -270,8 +310,8 @@ export function MarketingHome({
             <a data-marketing-scroll="true" href="#templates">
               {t("home.navigation.templates")}
             </a>
-            <a data-marketing-scroll="true" href="#typography">
-              {t("home.navigation.fonts")}
+            <a data-marketing-scroll="true" href="#open-source">
+              {t("home.navigation.open")}
             </a>
           </nav>
           <div className={styles.navActions}>
@@ -338,20 +378,20 @@ export function MarketingHome({
                 <picture>
                   <source
                     media="(max-width: 768px)"
-                    srcSet="/marketing/editor-modular-16x9-v2-960.webp"
+                    srcSet="/marketing/editor-modular-16x9-v4-960.webp"
                   />
                   <Image
                     alt={t("home.editorImageAlt")}
                     height={1152}
                     loading="eager"
                     sizes="(max-width: 768px) 94vw, (max-width: 1200px) 88vw, 1120px"
-                    src="/marketing/editor-modular-16x9-v2-2048.webp"
+                    src="/marketing/editor-modular-16x9-v4-2048.webp"
                     width={2048}
                   />
                 </picture>
               </div>
               <div className={styles.floatingNote}>
-                <FileSearchOutlined />
+                <RobotOutlined />
                 <div>
                   <strong>{t("home.floatingNote.title")}</strong>
                   <small>{t("home.floatingNote.description")}</small>
@@ -371,7 +411,9 @@ export function MarketingHome({
               {features.map((feature) => (
                 <article
                   className={styles.featureCard}
+                  data-ai={feature.ai ? "true" : "false"}
                   data-wide={feature.wide ? "true" : "false"}
+                  id={feature.ai ? "ai-assistant" : undefined}
                   key={feature.title}
                 >
                   <span className={styles.featureIcon}>{feature.icon}</span>
@@ -382,6 +424,25 @@ export function MarketingHome({
                       {feature.tags.map((tag) => (
                         <span key={tag}>{t(tag)}</span>
                       ))}
+                    </div>
+                  ) : null}
+                  {feature.ai ? (
+                    <div aria-hidden="true" className={styles.featureAiPreview}>
+                      <div className={styles.featureAiPrompt}>
+                        {t("home.ai.mock.prompt")}
+                      </div>
+                      <div className={styles.featureAiStatus}>
+                        <RobotOutlined />
+                        <span>{t("home.ai.mock.analyzed")}</span>
+                      </div>
+                      <div className={styles.featureAiSuggestion}>
+                        <strong>{t("home.ai.mock.proposal")}</strong>
+                        <p>{t("home.ai.mock.suggestion")}</p>
+                        <div>
+                          <span>{t("home.ai.mock.preview")}</span>
+                          <b>{t("home.ai.mock.apply")}</b>
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </article>
@@ -423,14 +484,14 @@ export function MarketingHome({
               <picture>
                 <source
                   media="(max-width: 768px)"
-                  srcSet="/marketing/editor-modular-16x9-v2-960.webp"
+                  srcSet="/marketing/editor-modular-16x9-v4-960.webp"
                 />
                 <Image
                   alt={t("home.editorShowcaseImageAlt")}
                   height={1152}
                   loading="lazy"
                   sizes="(max-width: 980px) 94vw, 680px"
-                  src="/marketing/editor-modular-16x9-v2-2048.webp"
+                  src="/marketing/editor-modular-16x9-v4-2048.webp"
                   width={2048}
                 />
               </picture>
@@ -460,6 +521,32 @@ export function MarketingHome({
                   </div>
                 </article>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section
+          className={`${styles.section} ${styles.openSection}`}
+          id="open-source"
+        >
+          <div className={styles.sectionInner}>
+            <div className={styles.openIntro}>
+              <span className={styles.sectionEyebrow}>{t("home.open.eyebrow")}</span>
+              <h2 className={styles.sectionTitle}>{t("home.open.title")}</h2>
+              <p className={styles.sectionLead}>{t("home.open.description")}</p>
+            </div>
+            <div className={styles.openGrid}>
+              {openValues.map((value) => (
+                <article className={styles.openCard} key={value.title}>
+                  <span>{value.icon}</span>
+                  <h3>{t(value.title)}</h3>
+                  <p>{t(value.description)}</p>
+                </article>
+              ))}
+            </div>
+            <div className={styles.openAssurance}>
+              <SafetyCertificateOutlined />
+              <span>{t("home.open.assurance")}</span>
             </div>
           </div>
         </section>
