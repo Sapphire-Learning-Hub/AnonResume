@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 import { aiDatabaseTables } from "./ai-schema";
+import { configDatabaseTables } from "./config-schema";
 
 import {
   accountRestrictions,
@@ -36,6 +37,11 @@ export {
   aiUsageLedger,
 } from "./ai-schema";
 export {
+  systemConfigRevisions,
+  systemConfigRuntimeStates,
+  systemConfigValues,
+} from "./config-schema";
+export {
   accountRestrictions,
   adminActivationTokens,
   adminAssignments,
@@ -57,6 +63,7 @@ export const db = drizzle({
   client: getDatabasePool(),
   schema: {
     ...aiDatabaseTables,
+    ...configDatabaseTables,
     accountRestrictions,
     resumes,
     resumeVersions,

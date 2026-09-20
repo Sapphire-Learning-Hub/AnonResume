@@ -24,6 +24,7 @@ import {
 
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
+import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
@@ -148,7 +149,7 @@ export function MarketingHome({
 }) {
   const { styles } = useMarketingHomeStyles();
   const { t } = useI18n();
-  const sourceCodeUrl = process.env.NEXT_PUBLIC_SOURCE_CODE_URL?.trim();
+  const { sourceCodeUrl } = usePublicRuntimeConfig();
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const scrollAnimationFrameRef = useRef<number | null>(null);
 

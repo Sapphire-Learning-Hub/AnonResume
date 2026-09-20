@@ -5,20 +5,12 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gte,
-  inArray,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
 import type { ResumeDocument } from "@/domain/resume/schema";
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import type { ManagedConfig } from "@/lib/config/registry";
 import {
   getPdfExportWorkerAvailability,
   PDF_EXPORT_ACTIVE_POLL_MS,
@@ -26,13 +18,17 @@ import {
 } from "@/lib/pdf/export-availability";
 
 const PDF_QUEUE_LOCK = "anonresume:pdf-export-capacity";
-const DEFAULT_QUEUE_LIMIT = 100;
-const DEFAULT_MAX_CONCURRENCY = 2;
-const DEFAULT_LEASE_MS = 60_000;
-const DEFAULT_RESULT_TTL_MS = 15 * 60_000;
-const DEFAULT_FORCE_EXPIRY_MS = 24 * 60 * 60_000;
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_MAX_ACTIVE_PER_USER = 3;
+
+export interface PdfExportConfiguration {
+  allowAnonymous: boolean;
+  forceExpiryMs: number;
+  leaseMs: number;
+  maxActivePerUser: number;
+  maxAttempts: number;
+  maxConcurrency: number;
+  queueLimit: number;
+  resultTtlMs: number;
+}
 
 export class PdfExportQueueFullError extends Error {}
 export class PdfExportUserQueueLimitError extends Error {}
@@ -41,62 +37,27 @@ export class PdfExportNotFoundError extends Error {}
 export class PdfExportNotReadyError extends Error {}
 export class PdfExportStateConflictError extends Error {}
 
-function parsePositiveInteger(value: string | undefined, fallback: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean) {
-  if (value === undefined) return fallback;
-
-  return value.trim().toLowerCase() === "true";
-}
-
-export function getPdfExportQueueConfig() {
-  return {
-    maxConcurrency: parsePositiveInteger(
-      process.env.PDF_EXPORT_MAX_CONCURRENCY,
-      DEFAULT_MAX_CONCURRENCY,
-    ),
-    queueLimit: parsePositiveInteger(
-      process.env.PDF_EXPORT_QUEUE_LIMIT,
-      DEFAULT_QUEUE_LIMIT,
-    ),
-    leaseMs: parsePositiveInteger(
-      process.env.PDF_EXPORT_LEASE_MS,
-      DEFAULT_LEASE_MS,
-    ),
-    resultTtlMs: parsePositiveInteger(
-      process.env.PDF_EXPORT_RESULT_TTL_MS,
-      DEFAULT_RESULT_TTL_MS,
-    ),
-    maxAttempts: parsePositiveInteger(
-      process.env.PDF_EXPORT_MAX_ATTEMPTS,
-      DEFAULT_MAX_ATTEMPTS,
-    ),
-    maxActivePerUser: parsePositiveInteger(
-      process.env.PDF_EXPORT_MAX_ACTIVE_PER_USER,
-      DEFAULT_MAX_ACTIVE_PER_USER,
-    ),
-    forceExpiryMs: parsePositiveInteger(
-      process.env.PDF_EXPORT_FORCE_EXPIRY_MS,
-      DEFAULT_FORCE_EXPIRY_MS,
-    ),
-    allowAnonymous: parseBoolean(
-      process.env.PDF_EXPORT_ALLOW_ANONYMOUS,
-      false,
-    ),
-  };
+export function getPdfExportQueueConfig(
+  values: Readonly<ManagedConfig>,
+): Readonly<PdfExportConfiguration> {
+  return Object.freeze({
+    allowAnonymous: values.pdfAllowAnonymous,
+    forceExpiryMs: values.pdfForceExpiryMs,
+    leaseMs: values.pdfLeaseMs,
+    maxActivePerUser: values.pdfMaxActivePerUser,
+    maxAttempts: values.pdfMaxAttempts,
+    maxConcurrency: values.pdfMaxConcurrency,
+    queueLimit: values.pdfQueueLimit,
+    resultTtlMs: values.pdfResultTtlMs,
+  });
 }
 
 let anonymousExportWarningShown = false;
 
-export function warnIfAnonymousPdfExportIsEnabled() {
-  if (
-    getPdfExportQueueConfig().allowAnonymous &&
-    !anonymousExportWarningShown
-  ) {
+export function warnIfAnonymousPdfExportIsEnabled(
+  configuration: Readonly<PdfExportConfiguration>,
+) {
+  if (configuration.allowAnonymous && !anonymousExportWarningShown) {
     anonymousExportWarningShown = true;
     console.warn(
       "[AnonResume] Anonymous PDF export is enabled. This is not recommended because public callers can consume shared export capacity.",
@@ -116,13 +77,7 @@ function tokenHashesMatch(token: string, expectedHash: string) {
 }
 
 function getWorkerSecret() {
-  const secret = process.env.BETTER_AUTH_SECRET;
-
-  if (!secret) {
-    throw new Error("BETTER_AUTH_SECRET is required for PDF export workers");
-  }
-
-  return secret;
+  return readBootstrapConfig().authSecret;
 }
 
 export function createPdfExportWorkerToken(jobId: string) {
@@ -157,7 +112,7 @@ function hasAccess(
 
   return Boolean(
     access.accessToken &&
-      tokenHashesMatch(access.accessToken, row.accessTokenHash),
+    tokenHashesMatch(access.accessToken, row.accessTokenHash),
   );
 }
 
@@ -167,6 +122,7 @@ async function requireAccessibleJob(
     requesterUserId?: string | null;
     accessToken?: string | null;
   },
+  configuration: Readonly<PdfExportConfiguration>,
 ) {
   const rows = await db
     .select()
@@ -179,10 +135,7 @@ async function requireAccessibleJob(
     throw new PdfExportNotFoundError(access.jobId);
   }
 
-  if (
-    row.createdAt.getTime() <=
-    Date.now() - getPdfExportQueueConfig().forceExpiryMs
-  ) {
+  if (row.createdAt.getTime() <= Date.now() - configuration.forceExpiryMs) {
     throw new PdfExportNotFoundError(access.jobId);
   }
 
@@ -193,21 +146,17 @@ async function requireAccessibleJob(
   return row;
 }
 
-export async function enqueuePdfExport(params: {
-  resumeUserId: string;
-  resumeId: string;
-  requesterUserId?: string | null;
-  document: ResumeDocument;
-  filename: string;
-  queueLimit?: number;
-  maxActivePerUser?: number;
-}) {
+export async function enqueuePdfExport(
+  params: {
+    resumeUserId: string;
+    resumeId: string;
+    requesterUserId?: string | null;
+    document: ResumeDocument;
+    filename: string;
+  },
+  configuration: Readonly<PdfExportConfiguration>,
+) {
   const accessToken = randomBytes(32).toString("base64url");
-  const queueLimit =
-    params.queueLimit ?? getPdfExportQueueConfig().queueLimit;
-  const maxActivePerUser =
-    params.maxActivePerUser ??
-    getPdfExportQueueConfig().maxActivePerUser;
 
   const [job] = await db.transaction(async (transaction) => {
     await transaction.execute(
@@ -218,7 +167,7 @@ export async function enqueuePdfExport(params: {
       .from(pdfExportJobs)
       .where(inArray(pdfExportJobs.status, ["queued", "running"]));
 
-    if ((active?.value ?? 0) >= queueLimit) {
+    if ((active?.value ?? 0) >= configuration.queueLimit) {
       throw new PdfExportQueueFullError();
     }
 
@@ -233,7 +182,7 @@ export async function enqueuePdfExport(params: {
           ),
         );
 
-      if ((requesterActive?.value ?? 0) >= maxActivePerUser) {
+      if ((requesterActive?.value ?? 0) >= configuration.maxActivePerUser) {
         throw new PdfExportUserQueueLimitError();
       }
     }
@@ -257,12 +206,15 @@ export async function enqueuePdfExport(params: {
   };
 }
 
-export async function getPdfExportStatus(params: {
-  jobId: string;
-  requesterUserId?: string | null;
-  accessToken?: string | null;
-}) {
-  const row = await requireAccessibleJob(params);
+export async function getPdfExportStatus(
+  params: {
+    jobId: string;
+    requesterUserId?: string | null;
+    accessToken?: string | null;
+  },
+  configuration: Readonly<PdfExportConfiguration>,
+) {
+  const row = await requireAccessibleJob(params, configuration);
   const active = row.status === "queued" || row.status === "running";
   const workerAvailability = active
     ? await getPdfExportWorkerAvailability()
@@ -319,12 +271,15 @@ export async function getPdfExportStatus(params: {
   };
 }
 
-export async function cancelPdfExport(params: {
-  jobId: string;
-  requesterUserId?: string | null;
-  accessToken?: string | null;
-}) {
-  const row = await requireAccessibleJob(params);
+export async function cancelPdfExport(
+  params: {
+    jobId: string;
+    requesterUserId?: string | null;
+    accessToken?: string | null;
+  },
+  configuration: Readonly<PdfExportConfiguration>,
+) {
+  const row = await requireAccessibleJob(params, configuration);
 
   if (row.status === "queued") {
     await db
@@ -335,10 +290,7 @@ export async function cancelPdfExport(params: {
         completedAt: new Date(),
       })
       .where(
-        and(
-          eq(pdfExportJobs.id, row.id),
-          eq(pdfExportJobs.status, "queued"),
-        ),
+        and(eq(pdfExportJobs.id, row.id), eq(pdfExportJobs.status, "queued")),
       );
   } else if (row.status === "running") {
     await db
@@ -393,7 +345,7 @@ export async function adminCancelPdfExport(jobId: string) {
 
 export async function adminRetryPdfExport(
   jobId: string,
-  options: { queueLimit?: number } = {},
+  configuration: Readonly<PdfExportConfiguration>,
 ) {
   return db.transaction(async (transaction) => {
     await transaction.execute(
@@ -416,10 +368,7 @@ export async function adminRetryPdfExport(
       .select({ value: count() })
       .from(pdfExportJobs)
       .where(inArray(pdfExportJobs.status, ["queued", "running"]));
-    if (
-      (active?.value ?? 0) >=
-      (options.queueLimit ?? getPdfExportQueueConfig().queueLimit)
-    ) {
+    if ((active?.value ?? 0) >= configuration.queueLimit) {
       throw new PdfExportQueueFullError();
     }
 
@@ -444,9 +393,7 @@ export async function adminRetryPdfExport(
 
 export async function claimPdfExportJobs(params: {
   workerId: string;
-  maxConcurrency: number;
-  maxAttempts?: number;
-  leaseMs: number;
+  configuration: Readonly<PdfExportConfiguration>;
 }) {
   return db.transaction(async (transaction) => {
     await transaction.execute(
@@ -454,7 +401,7 @@ export async function claimPdfExportJobs(params: {
     );
 
     const now = new Date();
-    const maxAttempts = params.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+    const maxAttempts = params.configuration.maxAttempts;
 
     await transaction
       .update(pdfExportJobs)
@@ -511,7 +458,7 @@ export async function claimPdfExportJobs(params: {
       .where(eq(pdfExportJobs.status, "running"));
     const available = Math.max(
       0,
-      params.maxConcurrency - (running?.value ?? 0),
+      params.configuration.maxConcurrency - (running?.value ?? 0),
     );
 
     if (available === 0) {
@@ -538,13 +485,10 @@ export async function claimPdfExportJobs(params: {
         workerId: params.workerId,
         attempts: sql`${pdfExportJobs.attempts} + 1`,
         startedAt: now,
-        leaseExpiresAt: new Date(now.getTime() + params.leaseMs),
+        leaseExpiresAt: new Date(now.getTime() + params.configuration.leaseMs),
       })
       .where(
-        and(
-          inArray(pdfExportJobs.id, ids),
-          eq(pdfExportJobs.status, "queued"),
-        ),
+        and(inArray(pdfExportJobs.id, ids), eq(pdfExportJobs.status, "queued")),
       )
       .returning();
     const order = new Map(ids.map((id, index) => [id, index]));
@@ -579,7 +523,7 @@ export async function completePdfExport(params: {
   jobId: string;
   workerId: string;
   result: Uint8Array;
-  resultTtlMs?: number;
+  configuration: Readonly<PdfExportConfiguration>;
 }) {
   const now = new Date();
   const rows = await db
@@ -591,8 +535,7 @@ export async function completePdfExport(params: {
       leaseExpiresAt: null,
       completedAt: now,
       resultExpiresAt: new Date(
-        now.getTime() +
-          (params.resultTtlMs ?? getPdfExportQueueConfig().resultTtlMs),
+        now.getTime() + params.configuration.resultTtlMs,
       ),
     })
     .where(
@@ -634,12 +577,15 @@ export async function failPdfExport(params: {
     );
 }
 
-export async function getPdfExportDownload(params: {
-  jobId: string;
-  requesterUserId?: string | null;
-  accessToken?: string | null;
-}) {
-  const row = await requireAccessibleJob(params);
+export async function getPdfExportDownload(
+  params: {
+    jobId: string;
+    requesterUserId?: string | null;
+    accessToken?: string | null;
+  },
+  configuration: Readonly<PdfExportConfiguration>,
+) {
+  const row = await requireAccessibleJob(params, configuration);
 
   if (
     row.status !== "completed" ||
@@ -656,10 +602,13 @@ export async function getPdfExportDownload(params: {
   };
 }
 
-export async function getPdfExportDocumentForWorker(params: {
-  jobId: string;
-  workerToken: string;
-}) {
+export async function getPdfExportDocumentForWorker(
+  params: {
+    jobId: string;
+    workerToken: string;
+  },
+  configuration: Readonly<PdfExportConfiguration>,
+) {
   if (!verifyPdfExportWorkerToken(params.jobId, params.workerToken)) {
     throw new PdfExportAccessError(params.jobId);
   }
@@ -679,8 +628,7 @@ export async function getPdfExportDocumentForWorker(params: {
   if (
     !row ||
     row.status !== "running" ||
-    row.createdAt.getTime() <=
-      Date.now() - getPdfExportQueueConfig().forceExpiryMs
+    row.createdAt.getTime() <= Date.now() - configuration.forceExpiryMs
   ) {
     throw new PdfExportNotFoundError(params.jobId);
   }
@@ -692,12 +640,10 @@ export async function getPdfExportDocumentForWorker(params: {
   };
 }
 
-export async function deleteExpiredPdfExportResults(options?: {
-  forceExpiryMs?: number;
-}) {
+export async function deleteExpiredPdfExportResults(
+  configuration: Readonly<PdfExportConfiguration>,
+) {
   const now = new Date();
-  const config = getPdfExportQueueConfig();
-  const forceExpiryMs = options?.forceExpiryMs ?? config.forceExpiryMs;
 
   return db
     .delete(pdfExportJobs)
@@ -705,14 +651,14 @@ export async function deleteExpiredPdfExportResults(options?: {
       or(
         lt(
           pdfExportJobs.createdAt,
-          new Date(now.getTime() - forceExpiryMs),
+          new Date(now.getTime() - configuration.forceExpiryMs),
         ),
         lt(pdfExportJobs.resultExpiresAt, now),
         and(
           inArray(pdfExportJobs.status, ["failed", "cancelled"]),
           lt(
             pdfExportJobs.completedAt,
-            new Date(now.getTime() - config.resultTtlMs),
+            new Date(now.getTime() - configuration.resultTtlMs),
           ),
         ),
       ),

@@ -11,6 +11,7 @@ export type AppNavigationIcon =
   | "announcements"
   | "approvals"
   | "audit"
+  | "configuration"
   | "dashboard"
   | "exports"
   | "fonts"
@@ -118,6 +119,13 @@ const managementItems: ManagementNavigationDefinition[] = [
     id: "manage-system",
     labelKey: "management.navigation.system",
     permission: "system.read",
+  },
+  {
+    href: "/app/manage/configuration",
+    icon: "configuration",
+    id: "manage-configuration",
+    labelKey: "management.navigation.configuration",
+    permission: "configuration.read",
   },
   {
     href: "/app/manage/mfa-resets",

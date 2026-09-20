@@ -2,12 +2,17 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { getExpectedRequestOrigin } from "@/lib/http/request-origin";
-import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
+import { validateBootstrapConfiguration } from "@/lib/config/bootstrap";
 
 const configurationErrorPath = "/configuration-error";
 
 export function proxy(request: NextRequest) {
-  const configuration = validateRuntimeConfiguration(process.env);
+  const configuration = validateBootstrapConfiguration();
+  const next = () => {
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-anonresume-pathname", request.nextUrl.pathname);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  };
 
   if (configuration.valid) {
     if (
@@ -22,14 +27,14 @@ export function proxy(request: NextRequest) {
         );
       }
     }
-    return NextResponse.next();
+    return next();
   }
 
   if (
     request.nextUrl.pathname === configurationErrorPath &&
     ["GET", "HEAD"].includes(request.method)
   ) {
-    return NextResponse.next();
+    return next();
   }
 
   const acceptsHtml = request.headers.get("accept")?.includes("text/html");

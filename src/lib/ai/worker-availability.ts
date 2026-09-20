@@ -4,22 +4,19 @@ import { aiRuns, db, workerHeartbeats } from "@/db";
 
 export const AI_WORKER_STALE_MS = 15_000;
 
-function defaultWorkerStaleMs() {
-  const configuredPollInterval = Number(process.env.AI_WORKER_POLL_INTERVAL_MS);
-  const pollIntervalMs = Number.isSafeInteger(configuredPollInterval) &&
-      configuredPollInterval >= 250 && configuredPollInterval <= 60_000
-    ? configuredPollInterval
-    : 5_000;
+function defaultWorkerStaleMs(pollIntervalMs = 5_000) {
   return Math.max(AI_WORKER_STALE_MS, pollIntervalMs * 2 + 5_000);
 }
 
 export async function getAiWorkerAvailability(options: {
   now?: Date;
+  pollIntervalMs?: number;
   staleAfterMs?: number;
 } = {}) {
   const now = options.now ?? new Date();
   const staleBefore = new Date(
-    now.getTime() - (options.staleAfterMs ?? defaultWorkerStaleMs()),
+    now.getTime() -
+      (options.staleAfterMs ?? defaultWorkerStaleMs(options.pollIntervalMs)),
   );
   const result = await db.execute<{ available: boolean }>(sql`
     SELECT (

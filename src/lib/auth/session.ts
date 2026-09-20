@@ -1,17 +1,20 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 
-import { auth } from "@/lib/auth/config";
+import { getAuth, type AuthInstance } from "@/lib/auth/config";
 import {
   isAccountSuspended,
   isManagementOnlyIdentity,
 } from "@/lib/admin/store";
 
 export type AppSession = NonNullable<
-  Awaited<ReturnType<typeof auth.api.getSession>>
+  Awaited<ReturnType<AuthInstance["api"]["getSession"]>>
 >;
 
 export async function getOptionalIdentitySession() {
+  await connection();
+  const auth = await getAuth();
   return auth.api.getSession({
     headers: await headers(),
   });

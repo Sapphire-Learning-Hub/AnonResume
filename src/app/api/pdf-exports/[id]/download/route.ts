@@ -4,11 +4,13 @@ import { getOptionalSession } from "@/lib/auth/session";
 import { createDownloadContentDisposition } from "@/lib/shared/download-filename";
 import {
   getPdfExportDownload,
+  getPdfExportQueueConfig,
   PdfExportAccessError,
   PdfExportNotFoundError,
   PdfExportNotReadyError,
 } from "@/lib/pdf/export-queue";
 import { getBearerToken } from "@/lib/http/request-authorization";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export async function GET(
   request: Request,
@@ -16,13 +18,18 @@ export async function GET(
 ) {
   const session = await getOptionalSession();
   const { id } = await params;
+  const runtime = await getRuntimeConfig("web");
+  const configuration = getPdfExportQueueConfig(runtime.values);
 
   try {
-    const download = await getPdfExportDownload({
-      jobId: id,
-      requesterUserId: session?.user.id,
-      accessToken: getBearerToken(request.headers),
-    });
+    const download = await getPdfExportDownload(
+      {
+        jobId: id,
+        requesterUserId: session?.user.id,
+        accessToken: getBearerToken(request.headers),
+      },
+      configuration,
+    );
 
     return new NextResponse(Uint8Array.from(download.result), {
       headers: {

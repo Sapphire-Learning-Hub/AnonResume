@@ -18,6 +18,11 @@ export const ADMIN_PERMISSION_KEYS = [
   "ai.audit.sensitive.read",
   "audit.read",
   "system.read",
+  "configuration.read",
+  "configuration.edit",
+  "configuration.publish",
+  "configuration.history",
+  "configuration.rollback",
 ] as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSION_KEYS)[number];
@@ -55,7 +60,7 @@ export interface AdminSystemRoleDefinition {
 export const ADMIN_SYSTEM_ROLES = {
   read_only_auditor: {
     name: "只读审计员",
-    description: "查看系统概览、用户、公告、AI 用量与审计记录，不读取简历正文。",
+    description: "查看系统概览、用户、公告、AI 用量、平台配置历史与审计记录，不读取简历正文。",
     permissions: [
       "overview.read",
       "users.read",
@@ -65,6 +70,8 @@ export const ADMIN_SYSTEM_ROLES = {
       "ai.usage.read",
       "audit.read",
       "system.read",
+      "configuration.read",
+      "configuration.history",
     ],
   },
   support_operator: {
@@ -97,7 +104,7 @@ export const ADMIN_SYSTEM_ROLES = {
   },
   system_operator: {
     name: "系统运维员",
-    description: "管理公告与 AI 模型服务，查看系统、AI 用量与导出队列状态。",
+    description: "管理公告、AI 模型服务与平台配置，查看系统、AI 用量与导出队列状态。",
     permissions: [
       "overview.read",
       "exports.read",
@@ -109,6 +116,11 @@ export const ADMIN_SYSTEM_ROLES = {
       "ai.usage.read",
       "audit.read",
       "system.read",
+      "configuration.read",
+      "configuration.edit",
+      "configuration.publish",
+      "configuration.history",
+      "configuration.rollback",
     ],
   },
   ai_service_manager: {

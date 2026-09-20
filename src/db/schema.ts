@@ -27,6 +27,10 @@ import type {
   AnnouncementStatus,
   AnnouncementTone,
 } from "@/lib/announcements/rules";
+import {
+  readBootstrapDatabaseSchema,
+  type BootstrapConfigInput,
+} from "@/lib/config/bootstrap";
 
 export type PdfExportJobStatus =
   | "queued"
@@ -41,8 +45,8 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
-export function getDatabaseSchemaName() {
-  return process.env.ANONRESUME_DB_SCHEMA || "public";
+export function getDatabaseSchemaName(input: BootstrapConfigInput = {}) {
+  return readBootstrapDatabaseSchema(input);
 }
 
 const schemaName = getDatabaseSchemaName();

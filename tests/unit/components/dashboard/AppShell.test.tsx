@@ -2,6 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { AppShell } from "@/components/dashboard/AppShell";
+import {
+  PublicRuntimeConfigProvider,
+  type PublicRuntimeConfig,
+} from "@/components/config/PublicRuntimeConfigProvider";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
@@ -23,11 +27,17 @@ const productAccess: AppShellAccess = {
 function renderShell(
   access: AppShellAccess = productAccess,
   announcements: readonly LocalizedAnnouncement[] = [],
+  configuration: PublicRuntimeConfig = {
+    configurationHealth: "healthy",
+    sourceCodeUrl: "",
+  },
 ) {
   return render(
-    <AppShell access={access} announcements={announcements} user={user}>
-      <div data-testid="route-child">Route content</div>
-    </AppShell>,
+    <PublicRuntimeConfigProvider value={configuration}>
+      <AppShell access={access} announcements={announcements} user={user}>
+        <div data-testid="route-child">Route content</div>
+      </AppShell>
+    </PublicRuntimeConfigProvider>,
   );
 }
 
@@ -132,5 +142,29 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "字体市场" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "管理概览" })).not.toBeInTheDocument();
+  });
+
+  it("shows restart-scoped capability status without exposing configuration keys", () => {
+    renderShell(
+      {
+        kind: "super_admin",
+        mode: "management",
+        permissions: [],
+        productAccess: false,
+      },
+      [],
+      {
+        configurationHealth: "restart_required",
+        sourceCodeUrl: "",
+      },
+    );
+
+    expect(screen.getByText("部分配置等待重启生效")).toBeInTheDocument();
+    expect(screen.getByText(/邮件发送与第三方登录配置/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看平台配置" })).toHaveAttribute(
+      "href",
+      "/app/manage/configuration",
+    );
+    expect(screen.queryByText(/smtpPassword|githubClientSecret/)).toBeNull();
   });
 });

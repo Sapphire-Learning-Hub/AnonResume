@@ -3,6 +3,14 @@ import {
   closeEmailTransporter,
   resolveEmailDeliveryConfig,
 } from "@/lib/runtime/email";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
+
+function managedConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    ...getManagedConfigDefaults(),
+    ...overrides,
+  };
+}
 
 describe("email delivery configuration", () => {
   it("closes and clears the shared SMTP transporter", () => {
@@ -18,13 +26,13 @@ describe("email delivery configuration", () => {
   it("uses configured SMTP in development", () => {
     expect(
       resolveEmailDeliveryConfig(
-        {
-          EMAIL_FROM: "AnonResume <mailer@example.com>",
-          SMTP_HOST: "smtp.example.com",
-          SMTP_PASSWORD: "secret",
-          SMTP_PORT: "587",
-          SMTP_USER: "mailer@example.com",
-        },
+        managedConfig({
+          emailFrom: "AnonResume <mailer@example.com>",
+          smtpHost: "smtp.example.com",
+          smtpPassword: "secret",
+          smtpPort: 587,
+          smtpUser: "mailer@example.com",
+        }),
         "development",
       ),
     ).toEqual({
@@ -42,12 +50,13 @@ describe("email delivery configuration", () => {
   it("uses implicit TLS for port 465", () => {
     expect(
       resolveEmailDeliveryConfig(
-        {
-          SMTP_HOST: "smtp.example.com",
-          SMTP_PASSWORD: "secret",
-          SMTP_PORT: "465",
-          SMTP_USER: "mailer@example.com",
-        },
+        managedConfig({
+          smtpHost: "smtp.example.com",
+          smtpPassword: "secret",
+          smtpPort: 465,
+          smtpSecure: true,
+          smtpUser: "mailer@example.com",
+        }),
         "production",
       ),
     ).toMatchObject({
@@ -62,21 +71,21 @@ describe("email delivery configuration", () => {
   it("rejects partial SMTP configuration instead of silently logging links", () => {
     expect(() =>
       resolveEmailDeliveryConfig(
-        {
-          SMTP_HOST: "smtp.example.com",
-          SMTP_USER: "mailer@example.com",
-        },
+        managedConfig({
+          smtpHost: "smtp.example.com",
+          smtpUser: "mailer@example.com",
+        }),
         "development",
       ),
     ).toThrow("SMTP configuration is incomplete");
   });
 
   it("only falls back to console delivery in non-production without SMTP", () => {
-    expect(resolveEmailDeliveryConfig({}, "development")).toEqual({
+    expect(resolveEmailDeliveryConfig(managedConfig(), "development")).toEqual({
       from: "AnonResume <no-reply@localhost>",
       transport: "console",
     });
-    expect(() => resolveEmailDeliveryConfig({}, "production")).toThrow(
+    expect(() => resolveEmailDeliveryConfig(managedConfig(), "production")).toThrow(
       "SMTP configuration is required in production",
     );
   });

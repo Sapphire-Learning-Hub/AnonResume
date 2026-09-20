@@ -132,7 +132,7 @@ export async function inviteUser(input: {
 
     const url = new URL(
       "/activate",
-      resolveApplicationOriginForBootstrap(process.env),
+      resolveApplicationOriginForBootstrap(),
     );
     url.searchParams.set("token", rawToken);
     await (input.deliverInvitation ?? sendUserInvitationEmail)({

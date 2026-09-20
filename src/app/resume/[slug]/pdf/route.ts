@@ -13,6 +13,7 @@ import {
   PdfExportUserQueueLimitError,
   warnIfAnonymousPdfExportIsEnabled,
 } from "@/lib/pdf/export-queue";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 import { getPublishedResumeBySlug } from "@/lib/resume/repository";
 
@@ -34,7 +35,8 @@ export async function POST(
   }
 
   const session = await getOptionalSession();
-  const queueConfig = getPdfExportQueueConfig();
+  const runtime = await getRuntimeConfig("web");
+  const queueConfig = getPdfExportQueueConfig(runtime.values);
 
   if (!session && !queueConfig.allowAnonymous) {
     return NextResponse.json(
@@ -44,7 +46,7 @@ export async function POST(
   }
 
   if (!session) {
-    warnIfAnonymousPdfExportIsEnabled();
+    warnIfAnonymousPdfExportIsEnabled(queueConfig);
   }
 
   const worker = await getPdfExportWorkerAvailability();
@@ -62,13 +64,16 @@ export async function POST(
   }
 
   try {
-    const queued = await enqueuePdfExport({
-      resumeUserId: resume.userId,
-      resumeId: resume.id,
-      requesterUserId: session?.user.id,
-      document: resume.document,
-      filename: createPdfFilename(resume.title || resume.slug),
-    });
+    const queued = await enqueuePdfExport(
+      {
+        resumeUserId: resume.userId,
+        resumeId: resume.id,
+        requesterUserId: session?.user.id,
+        document: resume.document,
+        filename: createPdfFilename(resume.title || resume.slug),
+      },
+      queueConfig,
+    );
 
     return NextResponse.json(
       {

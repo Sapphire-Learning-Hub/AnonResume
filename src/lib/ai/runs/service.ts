@@ -30,7 +30,7 @@ import type { AiProviderAdapter, AiProviderRequest } from "@/lib/ai/providers/ty
 import { AiProviderError } from "@/lib/ai/providers/types";
 import { createAiProposalToolDefinition } from "@/lib/ai/proposals/tool";
 import { attachAiProposalTargetHashes } from "@/lib/ai/proposals/target-hashes";
-import { decryptAiCredential } from "@/lib/ai/security/credentials";
+import { decryptVersionedAiCredential } from "@/lib/ai/security/credentials";
 import { createAiAgentToolDefinitions } from "@/lib/ai/tools/catalog";
 import { createAiProposalWorkspace } from "@/lib/ai/tools/proposal-workspace";
 import { createAiProposalProgressChanges } from "@/lib/ai/proposals/progress";
@@ -42,6 +42,7 @@ import {
   reserveAiQuota,
 } from "@/lib/ai/usage/ledger";
 import { calculateAiUsagePoints, type AiPointRates } from "@/lib/ai/usage/rates";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 import type {
   AiClientStreamEvent,
@@ -54,6 +55,16 @@ const MAX_AGENT_ROUNDS = 10;
 const MAX_PROVIDER_PROTOCOL_ATTEMPTS = 2;
 const MAX_ERROR_DETAIL_LENGTH = 4_096;
 const activeRunControllers = new Map<string, AbortController>();
+
+function aiCredentialKeys(configuration: {
+  credentialKeys?: VersionedSecretKeys;
+  credentialsEncryptionKey: Buffer;
+}): VersionedSecretKeys {
+  return configuration.credentialKeys ?? {
+    current: configuration.credentialsEncryptionKey,
+    legacy: configuration.credentialsEncryptionKey,
+  };
+}
 
 type AiRunFailurePhase =
   | "checkpoint_persistence"
@@ -137,6 +148,7 @@ function isMissingToolPayload(error: unknown) {
 }
 
 export interface AiRunConfiguration {
+  credentialKeys?: VersionedSecretKeys;
   credentialsEncryptionKey: Buffer;
   auditRetentionDays: number;
   defaultMonthlyPoints: number;
@@ -292,6 +304,7 @@ export async function prepareAiRun(input: {
       currentResumeVersion: resumes.version,
       providerBaseUrl: aiProviderCredentials.baseUrl,
       encryptedApiKey: aiProviderCredentials.encryptedApiKey,
+      encryptionKeyVersion: aiProviderCredentials.encryptionKeyVersion,
       allowCrossOriginRedirects:
         aiProviderCredentials.allowCrossOriginRedirects,
       keySource: aiProviderCredentials.kind,
@@ -386,9 +399,10 @@ export async function prepareAiRun(input: {
   const request: AiProviderRequest = {
     diagnosticRunId: runId,
     endpoint: new URL(row.providerBaseUrl),
-    apiKey: decryptAiCredential(
+    apiKey: decryptVersionedAiCredential(
       row.encryptedApiKey,
-      input.configuration.credentialsEncryptionKey,
+      row.encryptionKeyVersion,
+      aiCredentialKeys(input.configuration),
     ),
     model: row.providerModelKey,
     messages,
@@ -534,7 +548,7 @@ export async function prepareAiRun(input: {
         request: auditRequest,
         response: null,
         encryptionKey: input.configuration.credentialsEncryptionKey,
-        encryptionKeyVersion: 1,
+        encryptionKeyVersion: 2,
         retentionDays: input.configuration.auditRetentionDays,
         now,
       }),
@@ -568,7 +582,7 @@ export async function prepareAiRun(input: {
       .set({
         status: "queued",
         encryptedExecutionPayload,
-        executionPayloadKeyVersion: 1,
+        executionPayloadKeyVersion: 2,
         leaseOwner: null,
         leaseExpiresAt: null,
         updatedAt: new Date(),
@@ -1188,7 +1202,7 @@ export async function* executePreparedAiRun(
           finishReason,
         },
         encryptionKey: prepared.configuration.credentialsEncryptionKey,
-        encryptionKeyVersion: 1,
+        encryptionKeyVersion: 2,
         retentionDays: prepared.configuration.auditRetentionDays,
       }),
     });
@@ -1275,7 +1289,7 @@ export async function* executePreparedAiRun(
             },
           },
           encryptionKey: prepared.configuration.credentialsEncryptionKey,
-          encryptionKeyVersion: 1,
+          encryptionKeyVersion: 2,
           retentionDays: prepared.configuration.auditRetentionDays,
         }),
       });

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import "fake-indexeddb/auto";
 import "@testing-library/jest-dom/vitest";
-import { vi } from "vitest";
+import { inject, vi } from "vitest";
 
 if (!globalThis.ResizeObserver) {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -54,23 +54,16 @@ function loadEnvFile(fileName: string) {
 }
 
 loadEnvFile(".env.local");
+process.env.ANONRESUME_DB_SCHEMA =
+  `${inject("databaseSchemaPrefix")}_${process.env.VITEST_POOL_ID ?? "1"}`;
 
-for (const key of [
-  "SMTP_HOST",
-  "SMTP_PORT",
-  "SMTP_SECURE",
-  "SMTP_USER",
-  "SMTP_PASSWORD",
-  "EMAIL_FROM",
-  "NEXT_PUBLIC_SOURCE_CODE_URL",
-]) {
+const { CONFIG_REGISTRY } = await import("@/lib/config/registry");
+
+for (const key of Object.values(CONFIG_REGISTRY).flatMap((definition) =>
+  definition.environmentKey ? [definition.environmentKey] : []
+)) {
   delete process.env[key];
 }
 
 process.env.BETTER_AUTH_SECRET ??= "anonresume-test-secret-2026-08-28";
-process.env.ANONRESUME_DB_SCHEMA ??=
-  `anonresume_test_${process.env.VITEST_POOL_ID ?? "0"}`;
-
-const { migrateDatabase } = await import("@/db/migrate");
-
-await migrateDatabase();
+process.env.CONFIG_MASTER_KEY ??= Buffer.alloc(32, 7).toString("base64");

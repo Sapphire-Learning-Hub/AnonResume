@@ -1,4 +1,5 @@
 import { getDatabaseSchemaName } from "@/db";
+import type { SystemConfigHealthState } from "@/db/config-schema";
 import type { PdfExportJobStatus } from "@/db/schema";
 import type { QueryResultRow } from "pg";
 import {
@@ -14,7 +15,9 @@ import {
 } from "@/lib/admin/permissions";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
-import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
+import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
+import type { ConfigConsumer } from "@/lib/config/types";
 
 export type AdminListRequest = PageRequest & { query?: string };
 
@@ -46,6 +49,103 @@ export interface AdminAuditEvent {
   requestId: string | null;
   ipHash: string | null;
   createdAt: Date;
+}
+
+export type AdminConfigurationRuntimeStatus =
+  | "current"
+  | "pending_restart"
+  | "recovery_required"
+  | "stale"
+  | "error";
+
+interface ConfigurationRuntimeClassificationInput {
+  desiredRevisionId: string | null;
+  fallbackRevisionId: string | null;
+  healthState: SystemConfigHealthState;
+  lastSeenAt: Date;
+  loadedHotRevisionId: string | null;
+  loadedRestartRevisionId: string | null;
+}
+
+export interface AdminConfigurationRuntimeInstance {
+  consumer: ConfigConsumer;
+  desiredVersion: number | null;
+  errorCode: string | null;
+  fallbackVersion: number | null;
+  instanceId: string;
+  lastSeenAt: Date;
+  loadedHotVersion: number | null;
+  loadedRestartVersion: number | null;
+  release: string;
+  state: AdminConfigurationRuntimeStatus;
+}
+
+const DEFAULT_CONFIG_HEARTBEAT_INTERVAL_MS = 30_000;
+const SAFE_CONFIGURATION_ERROR_CODES = new Set([
+  "active_revision_unreadable",
+  "configuration_notifications_unavailable",
+  "configuration_refresh_failed",
+  "no_readable_revision",
+]);
+
+export function classifyConfigurationRuntimeState(
+  input: ConfigurationRuntimeClassificationInput,
+  options: {
+    expectedHeartbeatIntervalMs?: number;
+    now?: Date;
+  } = {},
+): AdminConfigurationRuntimeStatus {
+  const now = options.now ?? new Date();
+  const expectedHeartbeatIntervalMs =
+    options.expectedHeartbeatIntervalMs ?? DEFAULT_CONFIG_HEARTBEAT_INTERVAL_MS;
+
+  if (
+    now.getTime() - input.lastSeenAt.getTime() >
+    expectedHeartbeatIntervalMs * 3
+  ) {
+    return "stale";
+  }
+  if (input.fallbackRevisionId || input.healthState === "recovery_required") {
+    return "recovery_required";
+  }
+  if (
+    !input.desiredRevisionId ||
+    !input.loadedHotRevisionId ||
+    !input.loadedRestartRevisionId ||
+    input.healthState === "degraded"
+  ) {
+    return "error";
+  }
+  if (
+    input.desiredRevisionId === input.loadedHotRevisionId &&
+    input.desiredRevisionId === input.loadedRestartRevisionId
+  ) {
+    return "current";
+  }
+  if (
+    input.desiredRevisionId === input.loadedHotRevisionId &&
+    input.desiredRevisionId !== input.loadedRestartRevisionId
+  ) {
+    return "pending_restart";
+  }
+  return "error";
+}
+
+function expectedConfigurationHeartbeatInterval(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return DEFAULT_CONFIG_HEARTBEAT_INTERVAL_MS;
+  }
+  const value = (metadata as Record<string, unknown>).configurationPollIntervalMs;
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : DEFAULT_CONFIG_HEARTBEAT_INTERVAL_MS;
+}
+
+function sanitizedConfigurationErrorCode(value: string | null) {
+  if (!value) return null;
+  return SAFE_CONFIGURATION_ERROR_CODES.has(value)
+    ? value
+    : "configuration_runtime_error";
 }
 
 function quoteIdentifier(value: string) {
@@ -108,6 +208,9 @@ const auditReferenceFields: Record<string, string> = {
   retriedjobid: "pdf_export",
   deviceid: "mfa_device",
   deviceids: "mfa_device",
+  providerid: "ai_provider",
+  modelid: "ai_model",
+  runid: "ai_run",
 };
 
 function collectAuditResourceIds(
@@ -219,7 +322,24 @@ async function resolveAuditResourceLabels(
      SELECT 'admin_session', session.id::text, identity.name, identity.email
        FROM ${schema}.admin_sessions AS session
        JOIN "user" AS identity ON identity.id = session.user_id
-      WHERE session.id::text = ANY($7::text[])`,
+      WHERE session.id::text = ANY($7::text[])
+     UNION ALL
+     SELECT 'ai_provider', provider.id::text, provider.display_name,
+        provider.base_url
+       FROM ${schema}.ai_provider_credentials AS provider
+      WHERE provider.id::text = ANY($8::text[])
+     UNION ALL
+     SELECT 'ai_model', model.id::text, model.display_name,
+        provider.display_name
+       FROM ${schema}.ai_models AS model
+       JOIN ${schema}.ai_provider_credentials AS provider
+         ON provider.id = model.provider_id
+      WHERE model.id::text = ANY($9::text[])
+     UNION ALL
+     SELECT 'ai_run', run.id::text, model.display_name, run.status
+       FROM ${schema}.ai_runs AS run
+       JOIN ${schema}.ai_models AS model ON model.id = run.model_id
+      WHERE run.id::text = ANY($10::text[])`,
     [
       values("user"),
       values("admin_role"),
@@ -228,6 +348,9 @@ async function resolveAuditResourceLabels(
       values("mfa_device"),
       values("admin_mfa_reset_request"),
       values("admin_session"),
+      values("ai_provider"),
+      values("ai_model"),
+      values("ai_run"),
     ],
   );
   for (const resource of result.rows) {
@@ -686,22 +809,96 @@ export async function listAdminWorkers(request: AdminListRequest) {
 }
 
 export async function getAdminSystemStatus() {
-  const database = await getDatabasePool().query<{
-    database: string;
-    serverTime: Date;
-  }>(`SELECT current_database() AS database, now() AS "serverTime"`);
-  const configuration = validateRuntimeConfiguration(process.env);
+  const schema = schemaName();
+  const pool = getDatabasePool();
+  const [database, desiredConfiguration, runtimeStates, runtime] = await Promise.all([
+    pool.query<{
+      database: string;
+      serverTime: Date;
+    }>(`SELECT current_database() AS database, now() AS "serverTime"`),
+    pool.query<{ id: string; version: number }>(
+      `SELECT id::text, version
+       FROM ${schema}.system_config_revisions
+       WHERE status = 'active'
+       LIMIT 1`,
+    ),
+    pool.query<{
+      consumer: ConfigConsumer;
+      desiredRevisionId: string | null;
+      desiredVersion: number | null;
+      fallbackRevisionId: string | null;
+      fallbackVersion: number | null;
+      healthState: SystemConfigHealthState;
+      instanceId: string;
+      lastError: string | null;
+      lastSeenAt: Date;
+      loadedHotRevisionId: string | null;
+      loadedHotVersion: number | null;
+      loadedRestartRevisionId: string | null;
+      loadedRestartVersion: number | null;
+      metadata: Record<string, unknown>;
+      release: string;
+    }>(
+      `SELECT runtime.instance_id AS "instanceId",
+        runtime.consumer, runtime.release,
+        runtime.desired_revision_id::text AS "desiredRevisionId",
+        desired.version AS "desiredVersion",
+        runtime.loaded_hot_revision_id::text AS "loadedHotRevisionId",
+        hot.version AS "loadedHotVersion",
+        runtime.loaded_restart_revision_id::text AS "loadedRestartRevisionId",
+        restart.version AS "loadedRestartVersion",
+        runtime.fallback_revision_id::text AS "fallbackRevisionId",
+        fallback.version AS "fallbackVersion",
+        runtime.health_state AS "healthState",
+        runtime.last_seen_at AS "lastSeenAt",
+        runtime.last_error AS "lastError",
+        runtime.metadata
+       FROM ${schema}.system_config_runtime_states runtime
+       LEFT JOIN ${schema}.system_config_revisions desired
+         ON desired.id = runtime.desired_revision_id
+       LEFT JOIN ${schema}.system_config_revisions hot
+         ON hot.id = runtime.loaded_hot_revision_id
+       LEFT JOIN ${schema}.system_config_revisions restart
+         ON restart.id = runtime.loaded_restart_revision_id
+       LEFT JOIN ${schema}.system_config_revisions fallback
+         ON fallback.id = runtime.fallback_revision_id
+       ORDER BY runtime.consumer ASC, runtime.instance_id ASC`,
+    ),
+    getRuntimeConfig("web"),
+  ]);
+  const configuration = validateBootstrapConfiguration();
+  const now = database.rows[0]?.serverTime ?? new Date();
   return {
     release: getApplicationRelease(),
     database: database.rows[0],
+    desiredConfiguration: desiredConfiguration.rows[0] ?? null,
+    configurationInstances: runtimeStates.rows.map((state) => ({
+      consumer: state.consumer,
+      desiredVersion: state.desiredVersion,
+      errorCode: sanitizedConfigurationErrorCode(state.lastError),
+      fallbackVersion: state.fallbackVersion,
+      instanceId: state.instanceId,
+      lastSeenAt: state.lastSeenAt,
+      loadedHotVersion: state.loadedHotVersion,
+      loadedRestartVersion: state.loadedRestartVersion,
+      release: state.release,
+      state: classifyConfigurationRuntimeState(state, {
+        expectedHeartbeatIntervalMs: expectedConfigurationHeartbeatInterval(
+          state.metadata,
+        ),
+        now,
+      }),
+    })) satisfies AdminConfigurationRuntimeInstance[],
     configurationValid: configuration.valid,
     configurationIssues: configuration.issues,
     smtpConfigured: Boolean(
-      process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD,
+      runtime.values.smtpHost &&
+        runtime.values.smtpUser &&
+        runtime.values.smtpPassword,
     ),
     queue: {
-      maxConcurrency: Number(process.env.PDF_EXPORT_MAX_CONCURRENCY || 2),
-      queueLimit: Number(process.env.PDF_EXPORT_QUEUE_LIMIT || 100),
+      maxConcurrency: runtime.values.pdfMaxConcurrency,
+      queueLimit: runtime.values.pdfQueueLimit,
     },
   };
 }

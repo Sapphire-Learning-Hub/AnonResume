@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getOptionalSession } from "@/lib/auth/session";
+import { getManagedConfigDefaults } from "@/lib/config/registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getPdfExportWorkerAvailability } from "@/lib/pdf/export-availability";
 import {
   createGeneratedResumeRecord,
@@ -8,7 +10,10 @@ import {
   paginateResumeVersionSnapshots,
   resetResumeRepository,
 } from "@/lib/resume/repository";
-import { getPdfExportStatus } from "@/lib/pdf/export-queue";
+import {
+  getPdfExportQueueConfig,
+  getPdfExportStatus,
+} from "@/lib/pdf/export-queue";
 
 import { POST } from "@/app/api/resumes/[id]/pdf/route";
 
@@ -20,6 +25,10 @@ vi.mock("@/lib/pdf/export-availability", () => ({
   getPdfExportWorkerAvailability: vi.fn(),
   PDF_EXPORT_ACTIVE_POLL_MS: 2_000,
   PDF_EXPORT_OFFLINE_POLL_MS: 30_000,
+}));
+
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(),
 }));
 
 async function listResumeVersionSnapshots(userId: string, resumeId: string) {
@@ -38,6 +47,9 @@ describe("pdf route", () => {
     vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
       available: true,
     });
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      values: getManagedConfigDefaults(),
+    } as never);
     await resetResumeRepository();
     await createGeneratedResumeRecord({
       userId: "user-demo",
@@ -63,7 +75,12 @@ describe("pdf route", () => {
   });
 
   it("returns the configured per-user limit when export admission is rejected", async () => {
-    vi.stubEnv("PDF_EXPORT_MAX_ACTIVE_PER_USER", "1");
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      values: {
+        ...getManagedConfigDefaults(),
+        pdfMaxActivePerUser: 1,
+      },
+    } as never);
     const request = () =>
       POST(
         new Request("http://localhost/api/resumes/resume-foundation/pdf", {
@@ -109,10 +126,13 @@ describe("pdf route", () => {
       status: "queued",
     });
     await expect(
-      getPdfExportStatus({
-        jobId: payload.job.id,
-        requesterUserId: "user-demo",
-      }),
+      getPdfExportStatus(
+        {
+          jobId: payload.job.id,
+          requesterUserId: "user-demo",
+        },
+        getPdfExportQueueConfig(getManagedConfigDefaults()),
+      ),
     ).resolves.toMatchObject({ status: "queued", position: 1 });
     expect(
       await listResumeVersionSnapshots("user-demo", "resume-foundation"),
@@ -157,7 +177,9 @@ describe("pdf route", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(await getResumeRecord("user-demo", "resume-missing")).toBeUndefined();
+    expect(
+      await getResumeRecord("user-demo", "resume-missing"),
+    ).toBeUndefined();
   });
 
   it("rejects cross-origin pdf export requests", async () => {

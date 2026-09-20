@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { EditorViewportGuard } from "@/components/editor/EditorViewportGuard";
 import { ResumeEditorShell } from "@/components/editor/ResumeEditorShell";
 import { requireSession } from "@/lib/auth/session";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   getResumeRecord,
   getResumeVersionHistoryLimit,
@@ -15,7 +16,10 @@ export default async function ResumeEditorPage({
 }) {
   const session = await requireSession();
   const { id } = await params;
-  const resume = await getResumeRecord(session.user.id, id);
+  const [resume, runtime] = await Promise.all([
+    getResumeRecord(session.user.id, id),
+    getRuntimeConfig("web"),
+  ]);
 
   if (!resume) {
     notFound();
@@ -30,7 +34,7 @@ export default async function ResumeEditorPage({
         initialSummary={resume.summary}
         initialVersion={resume.version}
         initialUpdatedAt={resume.updatedAt}
-        versionHistoryLimit={getResumeVersionHistoryLimit()}
+        versionHistoryLimit={getResumeVersionHistoryLimit(runtime.values)}
       />
     </EditorViewportGuard>
   );

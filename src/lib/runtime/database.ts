@@ -1,23 +1,22 @@
 import { Pool } from "pg";
 
+import {
+  readBootstrapDatabaseUrl,
+  type BootstrapConfigInput,
+} from "@/lib/config/bootstrap";
+
 declare global {
   var __anonResumeDatabasePool: Pool | undefined;
 }
 
-function getDatabaseUrl() {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required");
-  }
-
-  return databaseUrl;
+export function createDatabasePoolOptions(input: BootstrapConfigInput = {}) {
+  return {
+    connectionString: readBootstrapDatabaseUrl(input),
+  };
 }
 
 export function getDatabasePool() {
-  globalThis.__anonResumeDatabasePool ??= new Pool({
-    connectionString: getDatabaseUrl(),
-  });
+  globalThis.__anonResumeDatabasePool ??= new Pool(createDatabasePoolOptions());
 
   return globalThis.__anonResumeDatabasePool;
 }

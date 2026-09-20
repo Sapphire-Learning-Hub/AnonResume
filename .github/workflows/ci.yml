@@ -19,8 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      BETTER_AUTH_SECRET: anonresume-ci-secret
+      BETTER_AUTH_SECRET: anonresume-ci-secret-for-tests-only
       BETTER_AUTH_URL: http://localhost:3000
+      CONFIG_MASTER_KEY: BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=
       DATABASE_URL: postgresql://anonresume:anonresume@127.0.0.1:5432/anonresume_test
     services:
       postgres:

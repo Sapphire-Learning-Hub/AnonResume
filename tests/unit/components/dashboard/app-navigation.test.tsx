@@ -84,6 +84,7 @@ describe("app navigation", () => {
           "/app/manage/ai",
           "/app/manage/audit",
           "/app/manage/system",
+          "/app/manage/configuration",
           "/app/manage/mfa-resets",
           "/app/manage/security",
         ],
@@ -105,6 +106,28 @@ describe("app navigation", () => {
       "/app/manage/ai/quotas",
       "/app/manage/ai/usage",
     ]);
+  });
+
+  it("shows configuration management only with explicit read access", () => {
+    const withConfiguration = hrefs({
+      kind: "delegated_admin",
+      mode: "management",
+      permissions: ["configuration.read"],
+      productAccess: false,
+    });
+    const withSystemOnly = hrefs({
+      kind: "delegated_admin",
+      mode: "management",
+      permissions: ["system.read"],
+      productAccess: false,
+    });
+
+    expect(withConfiguration[0]?.items).toContain(
+      "/app/manage/configuration",
+    );
+    expect(withSystemOnly[0]?.items).not.toContain(
+      "/app/manage/configuration",
+    );
   });
 
   it("keeps product links but limits management links during delegated-admin recovery", () => {

@@ -3,20 +3,12 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { db, getDatabaseSchemaName } from "@/db";
-import { migrateDatabase } from "@/db/migrate";
 import { pdfExportJobs, resumes, resumeVersions } from "@/db/schema";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 describe("database migrations", () => {
-  beforeAll(async () => {
-    const schemaName = getDatabaseSchemaName();
-
-    await getDatabasePool().query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
-    await migrateDatabase();
-  });
-
-  it("creates every v1 application table from an empty schema", async () => {
+  it("creates every v1 application table in the isolated test schema", async () => {
     const schemaName = getDatabaseSchemaName();
     const result = await db.execute(sql`
       SELECT table_name
@@ -191,6 +183,23 @@ describe("database migrations", () => {
       'CREATE UNIQUE INDEX IF NOT EXISTS "account_issuer_accountid_key"',
     );
     expect(migration).toContain('ON "account" ("issuer", "accountId")');
+  });
+
+  it("keeps configuration foreign keys inside the deployment schema", async () => {
+    const migration = await readFile(
+      resolve(
+        process.cwd(),
+        "drizzle/0026_clammy_the_initiative.sql",
+      ),
+      "utf8",
+    );
+
+    expect(migration).not.toContain(
+      'REFERENCES "public"."system_config_revisions"',
+    );
+    expect(migration).toContain(
+      'REFERENCES "system_config_revisions"("id")',
+    );
   });
 
   it("rejects duplicate public slugs at the database boundary", async () => {

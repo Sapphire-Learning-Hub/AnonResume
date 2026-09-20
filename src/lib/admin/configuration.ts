@@ -2,6 +2,11 @@ type AdminEnvironment = Record<string, string | undefined>;
 
 import { createHash } from "node:crypto";
 
+import type { ManagedConfig } from "@/lib/config/registry";
+import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { createConfigKeyring } from "@/lib/config/crypto";
+import { createVersionedSecretKeys } from "@/lib/config/secret-keyring";
+
 const DEFAULTS = {
   idleSeconds: 1800,
   maxSeconds: 28_800,
@@ -10,22 +15,6 @@ const DEFAULTS = {
   maxMfaFailures: 5,
   mfaLockSeconds: 900,
 } as const;
-
-function positiveInteger(
-  environment: AdminEnvironment,
-  key: string,
-  fallback: number,
-) {
-  const raw = environment[key]?.trim();
-  if (!raw) return fallback;
-
-  const value = Number(raw);
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${key} must be a positive integer`);
-  }
-
-  return value;
-}
 
 export function isValidAdminEmail(value: string | undefined) {
   return Boolean(
@@ -82,33 +71,33 @@ export function getAdminMfaEncryptionKey(environment: AdminEnvironment) {
     .digest();
 }
 
+export function getAdminMfaSecretKeys() {
+  const bootstrap = readBootstrapConfig();
+  return createVersionedSecretKeys({
+    keyring: createConfigKeyring({
+      current: bootstrap.currentMasterKey,
+      previous: bootstrap.previousMasterKey,
+    }),
+    legacy: bootstrap.legacyAdminMfaKey,
+    purpose: "admin-mfa",
+  });
+}
+
 export function resolveAdminSecurityConfiguration(
-  environment: AdminEnvironment,
+  configuration: Readonly<ManagedConfig>,
 ) {
-  const idleSeconds = positiveInteger(
-    environment,
-    "ADMIN_SESSION_IDLE_SECONDS",
-    DEFAULTS.idleSeconds,
-  );
-  const maxSeconds = positiveInteger(
-    environment,
-    "ADMIN_SESSION_MAX_SECONDS",
-    DEFAULTS.maxSeconds,
-  );
-  const reauthSeconds = positiveInteger(
-    environment,
-    "ADMIN_REAUTH_SECONDS",
-    DEFAULTS.reauthSeconds,
-  );
+  const idleSeconds = configuration.adminSessionIdleSeconds;
+  const maxSeconds = configuration.adminSessionMaxSeconds;
+  const reauthSeconds = configuration.adminReauthSeconds;
 
   if (idleSeconds > maxSeconds) {
     throw new Error(
-      "ADMIN_SESSION_IDLE_SECONDS must not exceed ADMIN_SESSION_MAX_SECONDS",
+      "adminSessionIdleSeconds must not exceed adminSessionMaxSeconds",
     );
   }
   if (reauthSeconds > maxSeconds) {
     throw new Error(
-      "ADMIN_REAUTH_SECONDS must not exceed ADMIN_SESSION_MAX_SECONDS",
+      "adminReauthSeconds must not exceed adminSessionMaxSeconds",
     );
   }
 

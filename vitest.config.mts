@@ -1,4 +1,5 @@
 import path from "node:path";
+import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
@@ -15,7 +16,9 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    globalSetup: ["./tests/setup/global-setup.ts"],
     globals: true,
+    maxWorkers: Math.max(availableParallelism() - 1, 1),
     setupFiles: ["./src/test/setup.ts"],
   },
 });

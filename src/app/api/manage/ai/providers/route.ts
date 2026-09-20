@@ -4,6 +4,7 @@ import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import { listAiAdminProviders, saveAiAdminProvider } from "@/lib/ai/admin/service";
 import { aiAdminProviderSchema } from "@/lib/ai/admin/validation";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedJsonRequest,
@@ -11,15 +12,9 @@ import {
 import { requireSameOrigin } from "@/lib/http/request-origin";
 import { parsePageRequest } from "@/lib/shared/pagination";
 
-function requireProviderConfiguration() {
-  const configuration = resolveAiConfiguration(process.env);
-  if (!configuration.credentialsEncryptionKey) {
-    throw new Error("ai_encryption_key_unavailable");
-  }
-  return {
-    ...configuration,
-    credentialsEncryptionKey: configuration.credentialsEncryptionKey,
-  };
+async function requireProviderConfiguration() {
+  const runtime = await getRuntimeConfig("web");
+  return resolveAiConfiguration(runtime.values);
 }
 
 export async function GET(request: Request) {
@@ -51,9 +46,10 @@ export async function POST(request: Request) {
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
     if (!value.apiKey) throw new Error("ai_api_key_required");
-    const configuration = requireProviderConfiguration();
+    const configuration = await requireProviderConfiguration();
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
+      credentialKeys: configuration.credentialKeys,
       encryptionKey: configuration.credentialsEncryptionKey,
       trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       value,

@@ -176,7 +176,7 @@ describe("AI run service", () => {
       .where(eq(aiRuns.id, prepared.runId));
     expect(queuedRun).toMatchObject({
       status: "queued",
-      executionPayloadKeyVersion: 1,
+      executionPayloadKeyVersion: 2,
       leaseExpiresAt: null,
     });
     expect(queuedRun?.encryptedExecutionPayload).toBeInstanceOf(Buffer);
@@ -1020,6 +1020,7 @@ describe("AI run service", () => {
         {
           encryptedRequest: audit!.encryptedRequest,
           encryptedResponse: audit!.encryptedResponse!,
+          encryptionKeyVersion: audit!.encryptionKeyVersion,
         },
         encryptionKey,
       ).response,

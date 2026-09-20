@@ -1,6 +1,6 @@
 ---
 name: anonresume-deploy
-description: Use when releasing AnonResume from this repository to its existing self-hosted production environment, including Git transfer fallback, migrations, systemd restarts, and health verification.
+description: Use when deploying AnonResume to its existing self-hosted systemd production environment or rehearsing its configuration migration.
 ---
 
 # Deploy AnonResume
@@ -18,9 +18,13 @@ instance-specific addresses in the repository.
 - Use a preconfigured SSH alias backed by an SSH key, agent, OS credential
   store, or interactive prompt. Do not use `sshpass`, inline passwords, or
   generated key files.
-- Treat the server's environment files as write-only operational state. Verify
-  that they exist and contain required variable names without printing,
-  downloading, or diffing their values.
+- Treat systemd credentials as write-only operational state. Inspect only
+  credential identifiers from unit properties; never read, print, download,
+  diff, or pass credential values to another process.
+- Run migrations, configuration import, secret re-encryption, and configuration
+  diagnosis only through preconfigured systemd oneshot units that receive the
+  same credentials. Never use shell exports or credential values in SSH
+  commands.
 - Do not overwrite a dirty local or server worktree. Stop and report the
   unexpected files.
 - Do not run destructive Git commands or automatically reverse database
@@ -42,6 +46,11 @@ tracked file:
 | `WEB_SERVICE` | Existing systemd Web unit |
 | `PDF_WORKER_SERVICE` | Existing systemd PDF worker unit |
 | `AI_WORKER_SERVICE` | Existing systemd AI worker unit |
+| `AUTH_MIGRATION_UNIT` | Existing credential-bearing Better Auth migration oneshot unit |
+| `DATABASE_MIGRATION_UNIT` | Existing credential-bearing Drizzle migration oneshot unit |
+| `CONFIG_IMPORT_UNIT` | Existing credential-bearing legacy configuration import oneshot unit |
+| `CONFIG_REENCRYPT_UNIT` | Existing credential-bearing secret re-encryption oneshot unit |
+| `CONFIG_DOCTOR_UNIT` | Existing credential-bearing configuration diagnosis oneshot unit |
 
 Do not guess missing inputs. Ask for the non-secret identifier or ask the user
 to configure it outside the repository.
@@ -69,24 +78,23 @@ Use SSH to inspect, without mutation:
 - `systemctl is-active "$WEB_SERVICE"`
 - `systemctl is-active "$PDF_WORKER_SERVICE"`
 - `systemctl is-active "$AI_WORKER_SERVICE"`
-- presence of the server environment file
+- configured credential identifiers on every runtime and maintenance unit
 - available disk space sufficient for dependencies and a Next.js build
 
 Save the current full hash as `PREVIOUS_COMMIT`. Require a clean worktree and
 verify that `PREVIOUS_COMMIT` is an ancestor of `TARGET_COMMIT`; otherwise stop
 instead of forcing history.
 
-Also inspect the existing Web, PDF Worker, and AI Worker service definitions
-to identify their configured environment files. Do not print the files or
-their values. The deployment must use the environment files already referenced
-by the services; do not create replacement files or change service definitions
-as part of an ordinary release.
+Inspect unit properties with `systemctl show`, including `LoadCredential`,
+`LoadCredentialEncrypted`, `SetCredential`, and `SetCredentialEncrypted`.
+Compare only the credential identifier before any source separator. Do not
+open credential files or include their source paths in logs or reports.
 
 When the target commit introduces `worker:ai` and `AI_WORKER_SERVICE` does not
 yet exist, stop the ordinary release workflow. Installing a new systemd unit
 is an infrastructure change and requires explicit operator authorization. The
 new unit must use the same deployment user, working directory, Bun executable,
-and environment file as the existing workers; its command is
+and credential set as the existing workers; its command is
 `bun run worker:ai`, it must restart after failures, and it must not expose a
 network port. After installation, run `systemctl daemon-reload`, enable the
 unit for boot, and repeat the complete preflight before deploying.
@@ -110,33 +118,34 @@ On the server, fetch `RELEASE_REF` from the bundle, verify `FETCH_HEAD` equals
 a transport fallback; never copy a working tree or build output over the
 server checkout. Remove local and remote temporary bundles after verification.
 
-### 4. Verify target-version environment configuration
+### 4. Verify target-version credentials
 
-Before installing dependencies or starting the production build, determine
-the required environment variable names for `TARGET_COMMIT`. Inspect the
-target version's `.env.example`, environment schema/validation, build-time
-configuration, and service-specific startup configuration. Include variables
-required by the Web service, PDF Worker, and AI Worker, and distinguish
-required variables from documented optional variables.
+Before installing dependencies or starting the production build, inspect the
+target version's bootstrap provider and verify these credential identifiers:
 
-Create a names-only manifest in the current process or an untracked temporary
-file. Never include values, secrets, or the contents of an environment file in
-the manifest, logs, Git, command arguments, or chat responses. On the server,
-compare the manifest with the variable names present in each existing service
-environment file, without printing values. A variable that is required by the
-target version but absent from its environment file is a hard stop.
+```text
+anonresume.database-url
+anonresume.application-origin
+anonresume.auth-secret
+anonresume.config-master-key
+anonresume.config-master-key-previous     optional during rotation
+anonresume.database-schema               optional
+anonresume.legacy-admin-mfa-key           migration window only
+anonresume.legacy-ai-credentials-key      migration window only
+anonresume.super-admin-email              first initialization only
+```
 
-If a required variable is missing, do not install, build, migrate, or restart.
-Ask the operator to configure it through the existing server secret or
-environment management process, then repeat the names-only preflight. Do not
-invent values, copy local development values, or modify production
-environment files without explicit operational authorization. If the target
-version changes which service consumes a variable, verify the correct service
-environment file separately.
+The first four identifiers are required by Web, PDF Worker, AI Worker, and
+credential-bearing maintenance units. Optional and migration-only identifiers
+must be present only while their documented operation requires them. If a
+required identifier is absent, stop before install, build, migration, or
+restart and ask the operator to provision it through the server's credential
+management process.
 
-Only continue once all required target-version variables are present for the
-services that need them. This check must happen before the production build so
-build-time configuration failures are caught before any service interruption.
+Do not copy development values, recreate production secrets, or edit unit
+definitions during an ordinary release. Unit changes and credential
+installation require explicit operator authorization followed by a complete
+preflight rerun.
 
 ### 5. Build before interrupting services
 
@@ -153,14 +162,17 @@ installation or build fails, do not restart services. Restore the checkout to
 
 ### 6. Apply migrations
 
-After a successful build and immediately before restart, run the repository's
-required forward migrations:
+After a successful build and immediately before restart, start the existing
+credential-bearing oneshot units for the repository's forward migrations:
 
 ```sh
-bun run auth:migrate
-bun run db:migrate
+systemctl start "$AUTH_MIGRATION_UNIT"
+systemctl start "$DATABASE_MIGRATION_UNIT"
+systemctl show "$AUTH_MIGRATION_UNIT" "$DATABASE_MIGRATION_UNIT" -p Result -p ExecMainStatus
 ```
 
+Do not run these Bun commands directly over SSH: their database credential must
+come from the oneshot unit. Require `Result=success` and `ExecMainStatus=0`.
 For a migration that removes or rewrites data, require a confirmed backup and
 an explicit user decision before continuing. If migration fails, do not
 restart. Do not attempt automatic schema rollback.
@@ -192,11 +204,40 @@ Verify all of the following with fresh output:
   no new configuration, database, schema, or runtime errors.
 - A fresh `ai-runtime` heartbeat exists for the deployed release after the
   AI Worker starts. Do not infer AI Worker health from systemd state alone.
+- The credential-bearing doctor oneshot runs `bun run config:doctor --json`.
+  Exit `0` is healthy, exit `2` is a warning requiring review, and exit `1` is
+  a deployment failure. Read only its redacted structured report.
 - The server worktree remains clean.
 
 When an authenticated editor regression was changed, perform the narrowest
 available authenticated smoke check as well. An anonymous login-page response
 does not prove editor behavior.
+
+## Configuration compatibility release
+
+For the first deployment that moves an existing installation from environment
+settings and legacy encryption keys, use this order without skipping steps:
+
+1. Create and verify a production backup.
+2. Install encrypted systemd credentials and verify names through unit
+   properties only.
+3. Deploy the dual-read application while retaining the old environment file.
+4. Run schema migrations through credential-bearing oneshot units.
+5. Run `config:import-env --dry-run`, review the names-only plan, then run
+   `config:import-env --apply` through its authorized oneshot unit.
+6. Restart Web, PDF Worker, and AI Worker together and verify loaded revisions.
+7. Stop AI Worker, run `config:reencrypt-secrets --dry-run`, then apply through
+   its authorized oneshot unit with `--worker-stopped`.
+8. Restart AI Worker and verify a fresh heartbeat.
+9. Run `config:doctor --json` through its authorized oneshot unit and resolve
+   every error; review warnings explicitly.
+10. Retain legacy credentials and the encrypted backup for one stability
+    window. Remove legacy credentials and the old environment file only in a
+    later deployment with explicit operator approval.
+
+If any required oneshot context is absent, stop. Never emulate it by placing
+credential values in command arguments, SSH input, temporary shell files, or
+exported environment variables.
 
 ## Failure handling
 

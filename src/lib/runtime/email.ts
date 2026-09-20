@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
+
 import nodemailer, { type Transporter } from "nodemailer";
 
-type EmailEnvironment = Record<string, string | undefined>;
+import { getRuntimeConfig } from "@/lib/config/runtime";
+import type { ManagedConfig } from "@/lib/config/registry";
+import { getBootstrapNodeEnvironment } from "@/lib/config/bootstrap";
 
 export type EmailDeliveryConfig =
   | {
@@ -41,43 +45,18 @@ interface UserInvitationEmailInput {
 
 declare global {
   var __anonResumeEmailTransporter: Transporter | undefined;
-}
-
-function parsePort(value: string | undefined) {
-  const port = value ? Number(value) : 587;
-
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error("SMTP_PORT must be an integer between 1 and 65535");
-  }
-
-  return port;
-}
-
-function parseBoolean(value: string | undefined, fallback: boolean) {
-  if (value === undefined || value === "") {
-    return fallback;
-  }
-
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  throw new Error("SMTP_SECURE must be either true or false");
+  var __anonResumeEmailTransporterFingerprint: string | undefined;
 }
 
 export function resolveEmailDeliveryConfig(
-  environment: EmailEnvironment,
-  nodeEnvironment = environment.NODE_ENV,
+  configuration: Readonly<ManagedConfig>,
+  nodeEnvironment = getBootstrapNodeEnvironment(),
 ): EmailDeliveryConfig {
-  const host = environment.SMTP_HOST?.trim();
-  const user = environment.SMTP_USER?.trim();
-  const password = environment.SMTP_PASSWORD;
+  const host = configuration.smtpHost.trim();
+  const user = configuration.smtpUser.trim();
+  const password = configuration.smtpPassword;
   const hasAnySmtpValue = Boolean(
-    host || user || password || environment.SMTP_PORT || environment.SMTP_SECURE,
+    host || user || password || configuration.emailFrom.trim(),
   );
 
   if (!hasAnySmtpValue) {
@@ -87,7 +66,9 @@ export function resolveEmailDeliveryConfig(
 
     return {
       transport: "console",
-      from: environment.EMAIL_FROM?.trim() || "AnonResume <no-reply@localhost>",
+      from:
+        configuration.emailFrom.trim() ||
+        "AnonResume <no-reply@localhost>",
     };
   }
 
@@ -97,12 +78,12 @@ export function resolveEmailDeliveryConfig(
     );
   }
 
-  const port = parsePort(environment.SMTP_PORT);
-  const secure = parseBoolean(environment.SMTP_SECURE, port === 465);
+  const port = configuration.smtpPort;
+  const secure = configuration.smtpSecure || port === 465;
 
   return {
     transport: "smtp",
-    from: environment.EMAIL_FROM?.trim() || user,
+    from: configuration.emailFrom.trim() || user,
     host,
     port,
     secure,
@@ -251,6 +232,15 @@ export function buildUserInvitationEmail({
 }
 
 function getSmtpTransporter(config: Extract<EmailDeliveryConfig, { transport: "smtp" }>) {
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify(config))
+    .digest("hex");
+  if (
+    globalThis.__anonResumeEmailTransporter &&
+    globalThis.__anonResumeEmailTransporterFingerprint !== fingerprint
+  ) {
+    closeEmailTransporter();
+  }
   globalThis.__anonResumeEmailTransporter ??= nodemailer.createTransport({
     pool: true,
     host: config.host,
@@ -262,6 +252,7 @@ function getSmtpTransporter(config: Extract<EmailDeliveryConfig, { transport: "s
       pass: config.password,
     },
   });
+  globalThis.__anonResumeEmailTransporterFingerprint = fingerprint;
 
   return globalThis.__anonResumeEmailTransporter;
 }
@@ -269,7 +260,13 @@ function getSmtpTransporter(config: Extract<EmailDeliveryConfig, { transport: "s
 export function closeEmailTransporter() {
   const transporter = globalThis.__anonResumeEmailTransporter;
   globalThis.__anonResumeEmailTransporter = undefined;
+  globalThis.__anonResumeEmailTransporterFingerprint = undefined;
   transporter?.close();
+}
+
+async function getEmailDeliveryConfig() {
+  const runtime = await getRuntimeConfig("web");
+  return resolveEmailDeliveryConfig(runtime.values);
 }
 
 export async function sendVerificationEmail({
@@ -281,7 +278,7 @@ export async function sendVerificationEmail({
   name: string;
   url: string;
 }) {
-  const config = resolveEmailDeliveryConfig(process.env);
+  const config = await getEmailDeliveryConfig();
   const message = buildVerificationEmail({
     from: config.from,
     name,
@@ -304,7 +301,7 @@ export async function sendSuperAdminActivationEmail({
   email: string;
   url: string;
 }) {
-  const config = resolveEmailDeliveryConfig(process.env);
+  const config = await getEmailDeliveryConfig();
   const message = buildSuperAdminActivationEmail({
     from: config.from,
     to: email,
@@ -330,7 +327,7 @@ export async function sendUserInvitationEmail({
   url: string;
   grantsManagementAccess: boolean;
 }) {
-  const config = resolveEmailDeliveryConfig(process.env);
+  const config = await getEmailDeliveryConfig();
   const message = buildUserInvitationEmail({
     from: config.from,
     name,
@@ -348,7 +345,7 @@ export async function sendUserInvitationEmail({
 }
 
 export async function verifyEmailDelivery() {
-  const config = resolveEmailDeliveryConfig(process.env);
+  const config = await getEmailDeliveryConfig();
 
   if (config.transport === "console") {
     return { transport: "console" as const };

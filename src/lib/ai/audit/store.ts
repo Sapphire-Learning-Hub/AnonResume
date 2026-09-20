@@ -4,9 +4,10 @@ import { eq } from "drizzle-orm";
 
 import { aiAuditPayloads, db } from "@/db";
 import {
-  decryptAiCredential,
+  decryptVersionedAiCredential,
   encryptAiCredential,
 } from "@/lib/ai/security/credentials";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 export interface EncryptedAiAuditEvidence {
   encryptedRequest: Buffer;
@@ -55,16 +56,27 @@ export function createEncryptedAiAuditEvidence({
 export function decryptAiAuditEvidence(
   evidence: Pick<
     EncryptedAiAuditEvidence,
-    "encryptedRequest" | "encryptedResponse"
+    "encryptedRequest" | "encryptedResponse" | "encryptionKeyVersion"
   >,
-  encryptionKey: Buffer,
+  credentialKeys: VersionedSecretKeys | Buffer,
 ) {
+  const keys = Buffer.isBuffer(credentialKeys)
+    ? { current: credentialKeys, legacy: credentialKeys }
+    : credentialKeys;
   return {
     request: JSON.parse(
-      decryptAiCredential(evidence.encryptedRequest, encryptionKey),
+      decryptVersionedAiCredential(
+        evidence.encryptedRequest,
+        evidence.encryptionKeyVersion,
+        keys,
+      ),
     ) as unknown,
     response: JSON.parse(
-      decryptAiCredential(evidence.encryptedResponse, encryptionKey),
+      decryptVersionedAiCredential(
+        evidence.encryptedResponse,
+        evidence.encryptionKeyVersion,
+        keys,
+      ),
     ) as unknown,
   };
 }

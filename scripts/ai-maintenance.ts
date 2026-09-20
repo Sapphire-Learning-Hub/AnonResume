@@ -1,21 +1,14 @@
 import { runAiMaintenance } from "@/lib/ai/maintenance";
+import { getRuntimeConfigManager } from "@/lib/config/runtime";
 import { getDatabasePool } from "@/lib/runtime/database";
 
-function maintenanceBatchSize(value: string | undefined) {
-  if (!value) return 100;
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > 1_000) {
-    throw new Error("AI worker batch size must be an integer from 1 to 1000");
-  }
-  return parsed;
-}
+const runtimeManager = getRuntimeConfigManager("ai-worker");
 
 try {
+  await runtimeManager.start();
+  const runtime = await runtimeManager.snapshot();
   const result = await runAiMaintenance({
-    batchSize: maintenanceBatchSize(
-      process.env.AI_WORKER_BATCH_SIZE ??
-        process.env.AI_MAINTENANCE_BATCH_SIZE,
-    ),
+    batchSize: runtime.values.aiWorkerBatchSize,
   });
   const recovery = result.recovery.acquired
     ? `interrupted=${result.recovery.interrupted}, settlementPending=${result.recovery.settlementPending}`
@@ -27,5 +20,6 @@ try {
     `[AnonResume] AI maintenance completed: recovery=${recovery}, retention=${retention}`,
   );
 } finally {
+  await runtimeManager.stop();
   await getDatabasePool().end();
 }

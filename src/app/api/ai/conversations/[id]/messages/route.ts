@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { getOptionalSession } from "@/lib/auth/session";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   AiFeatureUnavailableError,
   createAiErrorResponse,
@@ -34,11 +35,14 @@ export async function POST(
   }
 
   try {
-    const configuration = resolveAiConfiguration(process.env);
-    if (!configuration.enabled || !configuration.credentialsEncryptionKey) {
+    const runtime = await getRuntimeConfig("web");
+    const configuration = resolveAiConfiguration(runtime.values);
+    if (!configuration.enabled) {
       throw new AiFeatureUnavailableError();
     }
-    const worker = await getAiWorkerAvailability();
+    const worker = await getAiWorkerAvailability({
+      pollIntervalMs: runtime.values.aiWorkerPollIntervalMs,
+    });
     if (!worker.available) throw new AiFeatureUnavailableError();
 
     const { id } = await params;

@@ -12,7 +12,9 @@ import { getDatabasePool } from "@/lib/runtime/database";
 import {
   adminCancelPdfExport,
   adminRetryPdfExport,
+  getPdfExportQueueConfig,
 } from "@/lib/pdf/export-queue";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export class AdminManagementConflictError extends Error {
   constructor(message: string) {
@@ -678,7 +680,11 @@ export async function adminCancelExport(actorUserId: string, jobId: string) {
 }
 
 export async function adminRetryExport(actorUserId: string, jobId: string) {
-  const retried = await adminRetryPdfExport(jobId);
+  const runtime = await getRuntimeConfig("web");
+  const retried = await adminRetryPdfExport(
+    jobId,
+    getPdfExportQueueConfig(runtime.values),
+  );
   await writeAdminAuditEvent({
     actorUserId,
     action: "export.retry",

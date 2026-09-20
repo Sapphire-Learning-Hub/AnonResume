@@ -13,6 +13,7 @@ function stubValidProductionEnvironment() {
     DATABASE_URL: "postgresql://anonresume:secret@db.example.com:5432/anonresume",
     BETTER_AUTH_URL: "https://resume.example.com",
     BETTER_AUTH_SECRET: "a".repeat(64),
+    CONFIG_MASTER_KEY: Buffer.alloc(32, 7).toString("base64"),
     SMTP_HOST: "smtp.example.com",
     SMTP_PORT: "587",
     SMTP_SECURE: "false",
@@ -88,6 +89,19 @@ describe("production configuration proxy", () => {
     await expect(crossOrigin.json()).resolves.toEqual({
       error: "invalid_request_origin",
     });
+  });
+
+  it("overwrites the internal pathname header before forwarding", () => {
+    stubValidProductionEnvironment();
+    const response = proxy(
+      new NextRequest("https://resume.example.com/app/manage/system", {
+        headers: { "x-anonresume-pathname": "/attacker-controlled" },
+      }),
+    );
+
+    expect(response.headers.get("x-middleware-request-x-anonresume-pathname")).toBe(
+      "/app/manage/system",
+    );
   });
 
   it("rewrites document requests to the configuration error page", () => {

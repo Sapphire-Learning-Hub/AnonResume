@@ -5,6 +5,7 @@ import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import { listAiAdminQuotas, updateAiAdminQuota } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   MAX_ACTION_REQUEST_BYTES,
   parseLimitedJsonRequest,
@@ -25,6 +26,7 @@ const quotaSchema = z.object({
 export async function GET(request: Request) {
   try {
     await requireAdminApi({ permission: "ai.quotas.manage" });
+    const runtime = await getRuntimeConfig("web");
     const params = new URL(request.url).searchParams;
     const result = await listAiAdminQuotas(
       {
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
         }),
         query: params.get("q") ?? undefined,
       },
-      resolveAiConfiguration(process.env).defaultMonthlyPoints,
+      resolveAiConfiguration(runtime.values).defaultMonthlyPoints,
     );
     return NextResponse.json(result);
   } catch (error) {

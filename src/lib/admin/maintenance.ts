@@ -225,7 +225,7 @@ export async function resetSuperAdminMfa(email: string) {
 
     const url = new URL(
       "/activate",
-      resolveApplicationOriginForBootstrap(process.env),
+      resolveApplicationOriginForBootstrap(),
     );
     url.searchParams.set("token", rawToken);
     await sendSuperAdminActivationEmail({

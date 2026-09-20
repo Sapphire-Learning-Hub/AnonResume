@@ -2,6 +2,7 @@ import { AdminAiQuotas } from "@/components/admin/ai/AdminAiQuotas";
 import { requireAdminPage } from "@/lib/admin/page";
 import { listAiAdminQuotas } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import {
   parsePageRequest,
   readSearchParam,
@@ -15,7 +16,8 @@ export default async function ManagementAiQuotasPage({
 }) {
   await requireAdminPage("ai.quotas.manage");
   const resolved = await searchParams;
-  const configuration = resolveAiConfiguration(process.env);
+  const runtime = await getRuntimeConfig("web");
+  const configuration = resolveAiConfiguration(runtime.values);
   const quotas = await listAiAdminQuotas(
     {
       ...parsePageRequest(resolved),

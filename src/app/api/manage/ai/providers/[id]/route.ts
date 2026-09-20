@@ -6,6 +6,7 @@ import {
   saveAiAdminProvider,
 } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { aiAdminProviderSchema } from "@/lib/ai/admin/validation";
 import {
   MAX_ACTION_REQUEST_BYTES,
@@ -13,15 +14,9 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-function requireProviderConfiguration() {
-  const configuration = resolveAiConfiguration(process.env);
-  if (!configuration.credentialsEncryptionKey) {
-    throw new Error("ai_encryption_key_unavailable");
-  }
-  return {
-    ...configuration,
-    credentialsEncryptionKey: configuration.credentialsEncryptionKey,
-  };
+async function requireProviderConfiguration() {
+  const runtime = await getRuntimeConfig("web");
+  return resolveAiConfiguration(runtime.values);
 }
 
 export async function PATCH(
@@ -38,10 +33,11 @@ export async function PATCH(
     const value = aiAdminProviderSchema.parse(
       await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES),
     );
-    const configuration = requireProviderConfiguration();
+    const configuration = await requireProviderConfiguration();
     const result = await saveAiAdminProvider({
       actorUserId: context.userId,
       providerId: (await params).id,
+      credentialKeys: configuration.credentialKeys,
       encryptionKey: configuration.credentialsEncryptionKey,
       trustedEndpointHostnames: configuration.trustedEndpointHostnames,
       value,

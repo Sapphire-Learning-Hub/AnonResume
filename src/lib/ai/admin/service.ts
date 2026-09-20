@@ -13,9 +13,10 @@ import {
 import { writeAdminAuditEvent, writeAdminAuditEventWithClient } from "@/lib/admin/audit";
 import { decryptAiAuditEvidence } from "@/lib/ai/audit/store";
 import {
-  decryptAiCredential,
+  decryptVersionedAiCredential,
   encryptAiCredential,
 } from "@/lib/ai/security/credentials";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 import { assertSafeAiEndpoint } from "@/lib/ai/security/endpoint-policy";
 import { releaseAiQuota, settleAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -186,6 +187,7 @@ export async function listAiAdminProviders(request: AiAdminListRequest) {
 export async function saveAiAdminProvider(input: {
   actorUserId: string;
   providerId?: string;
+  credentialKeys?: VersionedSecretKeys;
   encryptionKey: Buffer;
   trustedEndpointHostnames?: readonly string[];
   value: AiAdminProviderInput;
@@ -223,9 +225,15 @@ export async function saveAiAdminProvider(input: {
           baseUrl: endpoint.href,
           allowCrossOriginRedirects: input.value.allowCrossOriginRedirects,
           enabled: input.value.enabled,
-          encryptedApiKey: input.value.apiKey
-            ? encryptAiCredential(input.value.apiKey, input.encryptionKey)
-            : undefined,
+          ...(input.value.apiKey
+            ? {
+                encryptedApiKey: encryptAiCredential(
+                  input.value.apiKey,
+                  input.encryptionKey,
+                ),
+                encryptionKeyVersion: 2,
+              }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(aiProviderCredentials.id, providerId));
@@ -247,6 +255,7 @@ export async function saveAiAdminProvider(input: {
           baseUrl: endpoint.href,
           allowCrossOriginRedirects: input.value.allowCrossOriginRedirects,
           encryptedApiKey: encryptAiCredential(input.value.apiKey!, input.encryptionKey),
+          encryptionKeyVersion: 2,
           enabled: input.value.enabled,
         })
         .returning({ id: aiProviderCredentials.id });
@@ -940,6 +949,7 @@ export async function resolveAiAdminSettlement(input: {
 
 export async function getAiAdminAuditEvidence(input: {
   actorUserId: string;
+  credentialKeys?: VersionedSecretKeys;
   runId: string;
   encryptionKey: Buffer;
 }) {
@@ -948,6 +958,7 @@ export async function getAiAdminAuditEvidence(input: {
       runId: aiAuditPayloads.runId,
       encryptedRequest: aiAuditPayloads.encryptedRequest,
       encryptedResponse: aiAuditPayloads.encryptedResponse,
+      encryptionKeyVersion: aiAuditPayloads.encryptionKeyVersion,
       payloadHash: aiAuditPayloads.payloadHash,
       expiresAt: aiAuditPayloads.expiresAt,
     })
@@ -957,17 +968,26 @@ export async function getAiAdminAuditEvidence(input: {
     .orderBy(desc(aiAuditPayloads.createdAt))
     .limit(1);
   if (!row) throw new AiAdminNotFoundError();
+  const keys = input.credentialKeys ?? {
+    current: input.encryptionKey,
+    legacy: input.encryptionKey,
+  };
   const evidence = row.encryptedResponse
     ? decryptAiAuditEvidence(
         {
           encryptedRequest: row.encryptedRequest,
           encryptedResponse: row.encryptedResponse,
+          encryptionKeyVersion: row.encryptionKeyVersion,
         },
-        input.encryptionKey,
+        keys,
       )
     : {
         request: JSON.parse(
-          decryptAiCredential(row.encryptedRequest, input.encryptionKey),
+          decryptVersionedAiCredential(
+            row.encryptedRequest,
+            row.encryptionKeyVersion,
+            keys,
+          ),
         ) as unknown,
         response: null,
       };

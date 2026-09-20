@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import AppError from "@/app/error";
 import NotFound from "@/app/not-found";
 import ConfigurationErrorPage from "@/app/configuration-error/page";
+import ConfigurationRecoveryPage from "@/app/configuration-recovery/page";
 import { I18nProvider } from "@/i18n/I18nProvider";
 import { getMessages } from "@/i18n/messages";
 
@@ -34,6 +35,16 @@ describe("application status pages", () => {
     expect(screen.getByRole("link", { name: "返回工作台" })).toHaveAttribute(
       "href",
       "/app",
+    );
+  });
+
+  it("keeps an administrator recovery path available for managed failures", async () => {
+    render(await ConfigurationRecoveryPage());
+
+    expect(screen.getByRole("heading", { name: "平台配置需要恢复" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "进入管理恢复" })).toHaveAttribute(
+      "href",
+      "/sign-in",
     );
   });
 

@@ -3,8 +3,12 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { ResumePrintShell } from "@/components/resume/ResumePrintShell";
-import { getPdfExportDocumentForWorker } from "@/lib/pdf/export-queue";
+import {
+  getPdfExportDocumentForWorker,
+  getPdfExportQueueConfig,
+} from "@/lib/pdf/export-queue";
 import { PDF_EXPORT_WORKER_COOKIE } from "@/lib/http/request-authorization";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export const metadata: Metadata = {
   robots: {
@@ -25,10 +29,14 @@ export default async function PdfExportPrintPage({
     notFound();
   }
 
-  const job = await getPdfExportDocumentForWorker({
-    jobId: id,
-    workerToken: token,
-  }).catch(() => null);
+  const runtime = await getRuntimeConfig("web");
+  const job = await getPdfExportDocumentForWorker(
+    {
+      jobId: id,
+      workerToken: token,
+    },
+    getPdfExportQueueConfig(runtime.values),
+  ).catch(() => null);
 
   if (!job) {
     notFound();

@@ -14,6 +14,10 @@ import {
   type AdminMessageKey,
 } from "@/i18n/admin-messages";
 import type { AppLocale } from "@/i18n/messages";
+import {
+  getAdminAuditActionMessageKey,
+  getAdminAuditTargetMessageKey,
+} from "@/lib/admin/audit-catalog";
 import type {
   AdminAuditEvent,
   AdminAuditResource,
@@ -22,51 +26,6 @@ import type { PaginationSearchParams } from "@/lib/shared/pagination";
 
 type SerializedAuditEvent = Omit<AdminAuditEvent, "createdAt"> & {
   createdAt: string;
-};
-
-const actionMessageKeys: Record<string, AdminMessageKey> = {
-  "authorization.denied": "audit.action.authorization.denied",
-  "reauthentication.required": "audit.action.reauthentication.required",
-  "role.create": "audit.action.role.create",
-  "role.update": "audit.action.role.update",
-  "role.delete": "audit.action.role.delete",
-  "administrator.set_roles": "audit.action.administrator.set_roles",
-  "administrator.remove": "audit.action.administrator.remove",
-  "user.invite": "audit.action.user.invite",
-  "user.suspend": "audit.action.user.suspend",
-  "user.restore": "audit.action.user.restore",
-  "user.sessions.revoke": "audit.action.user.sessions.revoke",
-  "resume.content.read": "audit.action.resume.content.read",
-  "resume.unpublish": "audit.action.resume.unpublish",
-  "export.cancel": "audit.action.export.cancel",
-  "export.retry": "audit.action.export.retry",
-  "announcement.create": "audit.action.announcement.create",
-  "announcement.update": "audit.action.announcement.update",
-  "announcement.publish": "audit.action.announcement.publish",
-  "announcement.withdraw": "audit.action.announcement.withdraw",
-  "announcement.delete": "audit.action.announcement.delete",
-  "mfa.device.add": "audit.action.mfa.device.add",
-  "mfa.device.remove": "audit.action.mfa.device.remove",
-  "administrator.mfa_reset.request": "audit.action.administrator.mfa_reset.request",
-  "administrator.mfa_reset.cancel": "audit.action.administrator.mfa_reset.cancel",
-  "administrator.mfa_reset.approved": "audit.action.administrator.mfa_reset.approved",
-  "administrator.mfa_reset.rejected": "audit.action.administrator.mfa_reset.rejected",
-  "super_admin.repair": "audit.action.super_admin.repair",
-  "super_admin.mfa_reset": "audit.action.super_admin.mfa_reset",
-};
-
-const targetMessageKeys: Record<string, AdminMessageKey> = {
-  user: "audit.target.user",
-  admin_identity: "audit.target.admin_identity",
-  admin_role: "audit.target.admin_role",
-  resume: "audit.target.resume",
-  pdf_export: "audit.target.pdf_export",
-  announcement: "audit.target.announcement",
-  mfa_device: "audit.target.mfa_device",
-  admin_mfa_reset_request: "audit.target.admin_mfa_reset_request",
-  admin_session: "audit.target.admin_session",
-  permission: "audit.target.permission",
-  super_admin_capability: "audit.target.super_admin_capability",
 };
 
 const fieldMessageKeys: Record<string, AdminMessageKey> = {
@@ -193,12 +152,12 @@ export function AdminAuditLog({
   const [selected, setSelected] = useState<SerializedAuditEvent>();
 
   function actionLabel(action: string) {
-    const key = actionMessageKeys[action];
+    const key = getAdminAuditActionMessageKey(action);
     return key ? t(key) : action;
   }
 
   function targetTypeLabel(type: string) {
-    const key = targetMessageKeys[type];
+    const key = getAdminAuditTargetMessageKey(type);
     return key ? t(key) : type;
   }
 

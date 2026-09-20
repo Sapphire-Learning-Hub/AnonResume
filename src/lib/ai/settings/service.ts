@@ -3,11 +3,12 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { aiModels, aiProviderCredentials, db } from "@/db";
 import { createAiProviderAdapter } from "@/lib/ai/providers/registry";
 import {
-  decryptAiCredential,
+  decryptVersionedAiCredential,
   encryptAiCredential,
   maskAiCredential,
 } from "@/lib/ai/security/credentials";
 import { assertSafeAiEndpoint } from "@/lib/ai/security/endpoint-policy";
+import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 export class PersonalAiResourceNotFoundError extends Error {
   constructor() {
@@ -38,6 +39,18 @@ export interface PersonalAiModelInput {
   supportsToolCalls: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+}
+
+type AiCredentialInput = {
+  credentialKeys?: VersionedSecretKeys;
+  encryptionKey: Buffer;
+};
+
+function credentialKeys(input: AiCredentialInput): VersionedSecretKeys {
+  return input.credentialKeys ?? {
+    current: input.encryptionKey,
+    legacy: input.encryptionKey,
+  };
 }
 
 async function getOwnedProvider(input: { userId: string; providerId: string }) {
@@ -90,14 +103,14 @@ async function getOwnedModel(input: {
 
 export async function listPersonalAiProviders(input: {
   userId: string;
-  encryptionKey: Buffer;
-}) {
+} & AiCredentialInput) {
   const rows = await db
     .select({
       providerId: aiProviderCredentials.id,
       providerName: aiProviderCredentials.displayName,
       baseUrl: aiProviderCredentials.baseUrl,
       encryptedApiKey: aiProviderCredentials.encryptedApiKey,
+      encryptionKeyVersion: aiProviderCredentials.encryptionKeyVersion,
       allowCrossOriginRedirects:
         aiProviderCredentials.allowCrossOriginRedirects,
       providerEnabled: aiProviderCredentials.enabled,
@@ -163,7 +176,11 @@ export async function listPersonalAiProviders(input: {
         baseUrl: row.baseUrl,
         allowCrossOriginRedirects: row.allowCrossOriginRedirects,
         maskedApiKey: maskAiCredential(
-          decryptAiCredential(row.encryptedApiKey, input.encryptionKey),
+          decryptVersionedAiCredential(
+            row.encryptedApiKey,
+            row.encryptionKeyVersion,
+            credentialKeys(input),
+          ),
         ),
         enabled: row.providerEnabled,
         models: [],
@@ -189,10 +206,9 @@ export async function listPersonalAiProviders(input: {
 
 export async function createPersonalAiProvider(input: {
   userId: string;
-  encryptionKey: Buffer;
   trustedEndpointHostnames?: readonly string[];
   value: PersonalAiProviderInput & { apiKey: string };
-}) {
+} & AiCredentialInput) {
   const endpoint = await assertSafeAiEndpoint(
     input.value.baseUrl,
     undefined,
@@ -211,6 +227,7 @@ export async function createPersonalAiProvider(input: {
         input.value.apiKey,
         input.encryptionKey,
       ),
+      encryptionKeyVersion: 2,
     })
     .returning({ id: aiProviderCredentials.id });
   return (await listPersonalAiProviders(input)).find(
@@ -221,10 +238,9 @@ export async function createPersonalAiProvider(input: {
 export async function updatePersonalAiProvider(input: {
   userId: string;
   providerId: string;
-  encryptionKey: Buffer;
   trustedEndpointHostnames?: readonly string[];
   value: PersonalAiProviderInput & { enabled: boolean };
-}) {
+} & AiCredentialInput) {
   const provider = await getOwnedProvider(input);
   const endpoint = await assertSafeAiEndpoint(
     input.value.baseUrl,
@@ -240,9 +256,15 @@ export async function updatePersonalAiProvider(input: {
         allowCrossOriginRedirects:
           input.value.allowCrossOriginRedirects ??
           provider.allowCrossOriginRedirects,
-        encryptedApiKey: input.value.apiKey
-          ? encryptAiCredential(input.value.apiKey, input.encryptionKey)
-          : undefined,
+        ...(input.value.apiKey
+          ? {
+              encryptedApiKey: encryptAiCredential(
+                input.value.apiKey,
+                input.encryptionKey,
+              ),
+              encryptionKeyVersion: 2,
+            }
+          : {}),
         enabled: input.value.enabled,
         updatedAt: new Date(),
       })
@@ -417,9 +439,8 @@ export async function testPersonalAiProvider(input: {
   userId: string;
   providerId: string;
   modelKey: string;
-  encryptionKey: Buffer;
   trustedEndpointHostnames?: readonly string[];
-}) {
+} & AiCredentialInput) {
   const provider = await getOwnedProvider(input);
   const endpoint = await assertSafeAiEndpoint(
     provider.baseUrl,
@@ -431,9 +452,10 @@ export async function testPersonalAiProvider(input: {
   for await (const event of adapter.start(
     {
       endpoint,
-      apiKey: decryptAiCredential(
+      apiKey: decryptVersionedAiCredential(
         provider.encryptedApiKey,
-        input.encryptionKey,
+        provider.encryptionKeyVersion,
+        credentialKeys(input),
       ),
       model: input.modelKey,
       messages: [{ role: "user", content: "Reply with OK." }],

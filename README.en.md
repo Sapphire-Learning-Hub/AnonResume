@@ -27,7 +27,7 @@
   <a href="#contributing">Contributing</a>
 </p>
 
-AnonResume is an open-source resume editor for the web. Organize your experience as naturally as editing a document, see the final layout while you write, start from a template or import existing Markdown, and publish your resume as a public link or PDF.
+AnonResume is an open-source resume editor for the web. Organize your experience as naturally as editing a document, see the final layout while you write, start from a template or import existing Markdown, collaborate with an AI assistant to draft and improve content, and publish your resume as a public link or PDF.
 
 The editor, preview, public page, and PDF output share the same rendering foundation. This keeps the result you export close to what you saw while editing. AnonResume can also be self-hosted, giving operators control over application data and infrastructure.
 
@@ -40,7 +40,8 @@ The editor, preview, public page, and PDF output share the same rendering founda
 | **See the final result as you write**<br />Edit on an A4 canvas with live preview and immediate pagination feedback. | **Start with a genuinely different layout**<br />Choose from templates with distinct structures, then try another look without rewriting your content. |
 | **Fine-tune content and presentation**<br />Adjust sections, columns, fonts, colors, spacing, and icons, including local text colors and per-section title styles. | **Bring an existing Markdown resume**<br />Import Markdown and continue editing, with an additional parser for resumes exported by Mujicv. |
 | **Edit without fear**<br />Keep a bounded version history, inspect changes directly on the rendered resume, and restore the version you need. | **Share and export**<br />Publish a read-only resume link or export through a PDF queue with visible progress, cancellation, and retry support. |
-| **Accounts and administration included**<br />Use email verification, role-based permissions, audit records, account suspension, and security approvals. | **Separate protection for management access**<br />Management mode uses an isolated session and virtual MFA, while the super-admin identity is management-only. |
+| **AI editing assistant**<br />Chat through a resizable streaming sidebar, let AI understand, draft, and improve the resume, and preview every change before applying it. | **Flexible model services**<br />Operators can provide platform models while users may connect compatible personal services, with multi-model, tool-calling, and quota controls. |
+| **Accounts and administration included**<br />Use email verification, role-based permissions, global announcements, audit records, account suspension, and security approvals. | **Separate protection for management access**<br />Management mode uses an isolated session and virtual MFA, while the super-admin identity is management-only. |
 
 The editor is optimized for precise desktop interaction. Mobile users can still access the workbench for supported tasks such as previewing, publishing, and downloading resumes.
 
@@ -61,7 +62,7 @@ bun install
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and provide at least a working PostgreSQL connection, Better Auth URL, and secret. Then initialize the database and install the browser used for PDF export:
+Edit `.env.local` and configure at least `DATABASE_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, and `CONFIG_MASTER_KEY`. Then initialize the database and install the browser used for PDF export:
 
 ```bash
 bun run auth:migrate
@@ -81,7 +82,7 @@ To enable PDF export, start the worker in another terminal:
 bun run worker:pdf
 ```
 
-When AI features are enabled, start the dedicated AI worker as well. It executes model requests, automatically recovers interrupted generation runs, and removes expired audit evidence:
+AI features are disabled by default. After enabling platform models or bring-your-own-model access in the management console, start the dedicated AI worker as well. It executes model requests, automatically recovers interrupted generation runs, and removes expired audit evidence:
 
 ```bash
 bun run worker:ai
@@ -91,18 +92,21 @@ The development server is available at <http://localhost:3000> by default.
 
 ## Configuration
 
-[`.env.example`](./.env.example) is the source of truth for configuration names, safe placeholders, and behavior. Production must explicitly provide every setting marked as required, while optional settings may be omitted. A missing required value, malformed value, or internally inconsistent configuration places the instance in global maintenance mode: pages show a configuration error and operations return HTTP 503 until the deployment is fixed.
+[`.env.example`](./.env.example) lists deployment trust roots, not every runtime setting. The long-lived required values are the database connection, public origin, authentication secret, and configuration master key. Production should supply them through host-level credential facilities such as systemd Credentials instead of storing real values in repository files. The database schema, previous master key, initial super-admin email, and legacy encryption keys are used only for their documented scenarios.
 
-Pay particular attention to the following settings:
+Runtime settings such as SMTP, GitHub OAuth, management sessions, PDF queues, resume history, AI switches, trusted model endpoints, quotas, and worker cadence are maintained in the management console under Platform Configuration. Configuration supports drafts, publishing, history, and rollback. Sensitive values are encrypted and never returned in plaintext. Hot settings apply after publishing, while restart-bound changes identify the affected services.
 
-- `BETTER_AUTH_URL` must be the final public HTTPS origin.
-- SMTP powers email verification and administrator activation. Development also sends real email whenever SMTP is fully configured.
-- `PDF_EXPORT_*` controls concurrency, global queue capacity, per-user limits, retries, leases, and result retention.
-- Anonymous PDF export is disabled by default. Enabling it without an external abuse-control layer is not recommended.
-- `RESUME_VERSION_HISTORY_LIMIT` controls how many snapshots each resume retains.
-- `ANONRESUME_SUPER_ADMIN_EMAIL` and `ADMIN_*` configure the unique super-admin identity, management sessions, and MFA protection.
-- Optional `AI_WORKER_*` settings tune AI worker polling, lease recovery, audit retention cleanup, and batch size.
-- GitHub OAuth is optional. Its client ID and secret must either both be configured or both be omitted.
+New instances create security-safe defaults. Existing installations can import legacy environment settings once:
+
+```bash
+bun run config:import-env --dry-run
+bun run config:import-env --apply
+bun run config:doctor
+```
+
+Remove legacy runtime variables in a later maintenance window only after the import and service state have been verified. When rotating the configuration master key or migrating legacy MFA and AI secrets, follow the compatibility-window instructions in [`.env.example`](./.env.example) and use `config:reencrypt-secrets` instead of editing ciphertext directly.
+
+Missing or malformed bootstrap credentials show the configuration error page and pause ordinary requests. If a published configuration cannot be read safely, the instance enters management recovery mode so authorized administrators can inspect history and prepare a rollback.
 
 Database structures are changed only through Better Auth and Drizzle migrations. Runtime requests never create or repair application tables.
 
@@ -122,6 +126,14 @@ bun run auth:migrate
 bun run db:migrate
 ```
 
+For a first installation or an upgrade from environment-backed settings, import and inspect runtime configuration as described above. Creating the first super-admin also requires explicitly running the following command after providing the one-time `ANONRESUME_SUPER_ADMIN_EMAIL` input:
+
+```bash
+bun run admin:bootstrap
+```
+
+Production must have working SMTP settings before it can deliver the super-admin activation email. A normal `bun run start` never creates or modifies the super-admin identity automatically.
+
 Run the web application, PDF worker, and AI worker as separate services:
 
 ```bash
@@ -130,16 +142,17 @@ bun run worker:pdf
 bun run worker:ai
 ```
 
-All three processes must use the same PostgreSQL database and application configuration. Multiple PDF workers are supported, but `PDF_EXPORT_MAX_CONCURRENCY` is enforced globally through PostgreSQL rather than independently by each worker. AI workers persist jobs and checkpoints in PostgreSQL and coordinate execution and maintenance through database locks, requiring neither Redis nor an external scheduler. `bun run ai:maintenance` remains available for operator diagnostics, but production correctness must not depend on scheduling it.
+All three processes must use the same PostgreSQL database and deployment trust roots, and they read the published platform configuration from the database. Multiple PDF workers are supported, but the PDF concurrency limit is enforced globally through PostgreSQL rather than independently by each worker. AI workers persist jobs and checkpoints in PostgreSQL and coordinate execution and maintenance through database locks, requiring neither Redis nor an external scheduler. `bun run ai:maintenance` remains available for operator diagnostics, but production correctness must not depend on scheduling it.
 
 Production deployments should use a dedicated least-privileged database role and back up resume and version-history data. PDF export jobs contain temporary queue and download data and usually do not require long-term backups.
 
 ## Administration and Security
 
-- The first startup can create one pending super-admin identity. Detecting multiple super-admins blocks management startup and provides a CLI repair path.
+- An explicit bootstrap command creates the single pending super-admin identity. Detecting multiple super-admins blocks management startup and provides a CLI repair path.
 - The super-admin cannot use regular resume features. Regular users may hold multiple management roles and complete an additional MFA challenge before entering management mode.
 - Virtual MFA devices, one-time recovery codes, multiple devices, reauthentication, and approval-based MFA resets for regular administrators are supported.
-- The management console covers users, resumes, exports, roles, system status, security approvals, and audit records.
+- The management console covers users, resumes, exports, roles, announcements, AI models and quotas, platform configuration, system status, security approvals, and audit records.
+- Platform configuration has dedicated permissions, reauthentication for sensitive operations, encrypted storage, version history, and recovery workflows.
 - Audit events retain the operation, resource identifiers, outcome, and change details, showing readable values alongside raw values when possible.
 
 If the only super-admin loses both MFA devices and recovery codes, use `bun run admin:reset-mfa` on the server instead of bypassing the security flow in the database.
@@ -154,10 +167,15 @@ AnonResume is built with Next.js 16, React 19, TypeScript, Ant Design, Tiptap, Z
 | --- | --- |
 | `bun run dev` | Start the development server |
 | `bun run worker:pdf` | Start the PDF export worker |
+| `bun run worker:ai` | Start the AI generation worker |
 | `bun run check` | Run ESLint, style rules, type checks, and the full test suite |
 | `bun run build` | Create a production build |
 | `bun run auth:migrate` | Apply Better Auth database migrations |
 | `bun run db:migrate` | Apply application database migrations |
+| `bun run config:import-env` | Preview or apply a legacy environment configuration import |
+| `bun run config:doctor` | Inspect bootstrap credentials, configuration revisions, and service state |
+| `bun run config:reencrypt-secrets` | Migrate legacy ciphertext or rotate the configuration master key |
+| `bun run admin:bootstrap` | Explicitly create the unique pending super-admin identity |
 | `bun run admin:doctor` | Inspect management-system health |
 | `bun run admin:repair-super-admin` | Repair an invalid multiple-super-admin state |
 | `bun run admin:reset-mfa` | Reset super-admin MFA through the CLI |

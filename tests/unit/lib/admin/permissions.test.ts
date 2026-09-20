@@ -27,6 +27,11 @@ describe("admin permission catalog", () => {
       "ai.audit.sensitive.read",
       "audit.read",
       "system.read",
+      "configuration.read",
+      "configuration.edit",
+      "configuration.publish",
+      "configuration.history",
+      "configuration.rollback",
     ]);
     expect(ADMIN_PERMISSION_KEYS).not.toContain("roles.manage");
     expect(ADMIN_PERMISSION_KEYS).not.toContain("administrators.manage");
@@ -71,6 +76,19 @@ describe("admin permission catalog", () => {
     expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
       "ai.usage.read",
     );
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toEqual(
+      expect.arrayContaining([
+        "configuration.read",
+        "configuration.history",
+      ]),
+    );
+    expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).not.toEqual(
+      expect.arrayContaining([
+        "configuration.edit",
+        "configuration.publish",
+        "configuration.rollback",
+      ]),
+    );
     expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).toContain(
       "announcements.read",
     );
@@ -86,6 +104,11 @@ describe("admin permission catalog", () => {
         "announcements.manage",
         "ai.providers.manage",
         "ai.usage.read",
+        "configuration.read",
+        "configuration.edit",
+        "configuration.publish",
+        "configuration.history",
+        "configuration.rollback",
       ]),
     );
     expect(ADMIN_SYSTEM_ROLES.system_operator.permissions).not.toContain(
@@ -99,6 +122,15 @@ describe("admin permission catalog", () => {
     ]);
     for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
       expect(role.permissions).not.toContain("ai.audit.sensitive.read");
+    }
+    for (const role of [
+      ADMIN_SYSTEM_ROLES.support_operator,
+      ADMIN_SYSTEM_ROLES.content_reviewer,
+      ADMIN_SYSTEM_ROLES.ai_service_manager,
+    ]) {
+      expect(role.permissions.some((permission) =>
+        permission.startsWith("configuration."),
+      )).toBe(false);
     }
   });
 });

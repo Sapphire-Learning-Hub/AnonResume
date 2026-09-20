@@ -13,6 +13,7 @@ import {
   NotificationOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
@@ -24,6 +25,8 @@ import { type ReactNode, useState } from "react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
+import { ConfigurationHealthBanner } from "@/components/config/ConfigurationHealthBanner";
+import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
 import { ManagementModeControl } from "@/components/dashboard/ManagementModeControl";
 import {
   buildAppNavigation,
@@ -372,6 +375,7 @@ const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
   announcements: <NotificationOutlined />,
   approvals: <CheckSquareOutlined />,
   audit: <AuditOutlined />,
+  configuration: <SettingOutlined />,
   dashboard: <DashboardOutlined />,
   exports: <CloudServerOutlined />,
   fonts: <FontSizeOutlined />,
@@ -405,6 +409,7 @@ export function AppShell({
 }: AppShellProps) {
   const { styles } = useStyles();
   const { t } = useI18n();
+  const { configurationHealth } = usePublicRuntimeConfig();
   const pathname = usePathname();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const contentScroll = pathname.startsWith("/app/fonts")
@@ -412,6 +417,27 @@ export function AppShell({
     : "frame";
   const userName = user.name || t("common.userFallback");
   const navigationSections = buildAppNavigation(access, t);
+  const showConfigurationHealth =
+    configurationHealth !== "healthy" &&
+    (configurationHealth !== "recovery_required" || access.mode !== "product");
+  const canManageConfiguration =
+    access.mode === "management" &&
+    (access.kind === "super_admin" ||
+      access.permissions.includes("configuration.read"));
+  const healthMessage = configurationHealth === "restart_required"
+    ? {
+        title: t("system.configurationHealth.restart.title"),
+        description: t("system.configurationHealth.restart.description"),
+      }
+    : configurationHealth === "degraded"
+      ? {
+          title: t("system.configurationHealth.degraded.title"),
+          description: t("system.configurationHealth.degraded.description"),
+        }
+      : {
+          title: t("system.configurationHealth.recovery.title"),
+          description: t("system.configurationHealth.recovery.description"),
+        };
 
   return (
     <main className={styles.shell}>
@@ -563,6 +589,21 @@ export function AppShell({
           data-scroll-mode={contentScroll}
           data-testid="workbench-content-frame"
         >
+          {showConfigurationHealth ? (
+            <ConfigurationHealthBanner
+              action={
+                canManageConfiguration
+                  ? {
+                      href: "/app/manage/configuration",
+                      label: t("system.configurationHealth.action"),
+                    }
+                  : undefined
+              }
+              description={healthMessage.description}
+              health={configurationHealth}
+              title={healthMessage.title}
+            />
+          ) : null}
           {children}
         </div>
       </div>
