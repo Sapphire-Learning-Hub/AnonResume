@@ -24,3 +24,10 @@ export function getSetupSessionCookieOptions(expiresAt: Date) {
     expires: expiresAt,
   };
 }
+
+export function getSetupSessionClearCookieOptions() {
+  return {
+    ...getSetupSessionCookieOptions(new Date(0)),
+    maxAge: 0,
+  };
+}

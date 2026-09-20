@@ -41,6 +41,8 @@ export const adminAuditActionMessageKeys = {
   "configuration.draft.update": "audit.action.configuration.draft.update",
   "configuration.publish": "audit.action.configuration.publish",
   "configuration.rollback": "audit.action.configuration.rollback",
+  "instance.setup.completed": "audit.action.instance.setup.completed",
+  "instance.admin_recovery.completed": "audit.action.instance.adminRecovery.completed",
 } as const satisfies Record<string, AdminMessageKey>;
 
 export const adminAuditTargetMessageKeys = {
@@ -59,6 +61,7 @@ export const adminAuditTargetMessageKeys = {
   ai_model: "audit.target.ai_model",
   ai_run: "audit.target.ai_run",
   configuration_revision: "audit.target.configuration_revision",
+  instance_setup: "audit.target.instance_setup",
 } as const satisfies Record<string, AdminMessageKey>;
 
 export type AdminAuditAction = keyof typeof adminAuditActionMessageKeys;

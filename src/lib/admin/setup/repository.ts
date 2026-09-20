@@ -4,7 +4,7 @@ import { db, instanceSetupState } from "@/db";
 
 import type { InstanceSetupSnapshot, InstanceSetupState } from "./types";
 
-const INSTANCE_SETUP_LOCK = "anonresume:instance-setup";
+export const INSTANCE_SETUP_LOCK = "anonresume:instance-setup";
 
 type InstanceSetupTransaction = Parameters<
   Parameters<typeof db.transaction>[0]
