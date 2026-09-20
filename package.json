@@ -24,6 +24,7 @@
     "auth:migrate": "better-auth migrate --config scripts/auth-migration-config.ts",
     "deploy:migrate": "bun run auth:migrate -- --yes && bun run db:migrate",
     "deploy:bootstrap-admin": "bun run scripts/bootstrap-admin-link.ts",
+    "deploy:setup-deactivate": "bun run scripts/setup-deactivate.ts",
     "deploy:healthcheck": "bun run scripts/healthcheck.ts",
     "admin:doctor": "bun run scripts/admin-doctor.ts",
     "admin:bootstrap": "bun run scripts/admin-bootstrap.ts",

@@ -22,6 +22,9 @@ case "$command" in
   bootstrap-admin)
     exec bun run deploy:bootstrap-admin -- "$@"
     ;;
+  setup-deactivate)
+    exec bun run deploy:setup-deactivate -- "$@"
+    ;;
   config-doctor)
     exec bun run config:doctor -- "$@"
     ;;

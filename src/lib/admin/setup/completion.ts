@@ -87,9 +87,6 @@ export async function beginInstanceSetupAccount(input: SetupAccountInput) {
     }
 
     if (!userId) {
-      if (state.state !== "pending_initialization") {
-        throw new SetupCompletionError();
-      }
       userId = randomUUID();
       await client.query(
         `INSERT INTO "user"
