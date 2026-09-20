@@ -23,6 +23,7 @@ function createStore(
     createPendingIdentity: vi.fn(async () => ({ userId: "super-user" })),
     createSuperAdminPrincipal: vi.fn(async () => undefined),
     createActivationToken: vi.fn(async () => undefined),
+    markInstanceSetupCompleted: vi.fn(async () => undefined),
     ...transaction,
   };
 
@@ -49,7 +50,8 @@ describe("super-admin bootstrap", () => {
   });
 
   it("creates exactly one pending identity and sends its activation link", async () => {
-    const store = createStore();
+    const markInstanceSetupCompleted = vi.fn(async () => undefined);
+    const store = createStore({ markInstanceSetupCompleted });
     const deliverActivation = vi.fn(async () => undefined);
 
     const result = await bootstrapSuperAdmin({
@@ -68,6 +70,7 @@ describe("super-admin bootstrap", () => {
         ),
       }),
     );
+    expect(markInstanceSetupCompleted).toHaveBeenCalledOnce();
   });
 
   it("returns a one-time activation link for an interactive bootstrap command", async () => {

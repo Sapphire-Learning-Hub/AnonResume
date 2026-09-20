@@ -5,7 +5,10 @@ import type { PoolClient } from "pg";
 import { getDatabaseSchemaName } from "@/db";
 
 import { resolveAdminSuperAdminEmail } from "@/lib/admin/configuration";
-import { getInstanceSetupSnapshot } from "@/lib/admin/setup/repository";
+import {
+  getInstanceSetupSnapshot,
+  INSTANCE_SETUP_LOCK,
+} from "@/lib/admin/setup/repository";
 import type { InstanceSetupState } from "@/lib/admin/setup/types";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { sendSuperAdminActivationEmail } from "@/lib/runtime/email";
@@ -47,6 +50,7 @@ export interface AdminBootstrapTransaction {
     tokenHash: string;
     expiresAt: Date;
   }): Promise<void>;
+  markInstanceSetupCompleted(): Promise<void>;
 }
 
 export interface AdminBootstrapStore {
@@ -126,6 +130,22 @@ class PostgresAdminBootstrapTransaction
       [userId, tokenHash, expiresAt],
     );
   }
+
+  async markInstanceSetupCompleted() {
+    const completed = await this.client.query(
+      `UPDATE ${this.schema}.instance_setup_state
+          SET state = 'completed', target_user_id = NULL,
+              recovery_reason = NULL, completed_at = now(), updated_at = now()
+        WHERE slot = 1 AND state = 'pending_initialization'
+        RETURNING slot`,
+    );
+    if (completed.rowCount !== 1) {
+      throw new Error("Instance setup is unavailable for legacy bootstrap");
+    }
+    await this.client.query(`DELETE FROM ${this.schema}.instance_setup_sessions`);
+    await this.client.query(`DELETE FROM ${this.schema}.instance_setup_tokens`);
+    await this.client.query(`DELETE FROM ${this.schema}.instance_setup_claim_limits`);
+  }
 }
 
 export class PostgresAdminBootstrapStore implements AdminBootstrapStore {
@@ -135,6 +155,9 @@ export class PostgresAdminBootstrapStore implements AdminBootstrapStore {
     const client = await getDatabasePool().connect();
     try {
       await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        INSTANCE_SETUP_LOCK,
+      ]);
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         BOOTSTRAP_LOCK,
       ]);
@@ -189,6 +212,7 @@ export async function bootstrapSuperAdmin({
       tokenHash,
       expiresAt: new Date(Date.now() + ACTIVATION_TTL_MS),
     });
+    await transaction.markInstanceSetupCompleted();
 
     const url = new URL("/activate", applicationOrigin);
     url.searchParams.set("token", rawToken);

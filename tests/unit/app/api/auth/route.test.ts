@@ -46,6 +46,20 @@ describe("authentication setup gate", () => {
     expect(mocks.handlerPost).not.toHaveBeenCalled();
   });
 
+  it("blocks auth callbacks while initial setup is pending", async () => {
+    mocks.decision.mockResolvedValue("require_setup");
+
+    const response = await GET(
+      new Request("http://localhost/api/auth/callback/github") as never,
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "instance_setup_required",
+    });
+    expect(mocks.handlerGet).not.toHaveBeenCalled();
+  });
+
   it("preserves auth reads and recovery-mode mutations", async () => {
     mocks.decision.mockResolvedValue("management_recovery");
 
