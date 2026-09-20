@@ -55,6 +55,39 @@ tracked file:
 Do not guess missing inputs. Ask for the non-secret identifier or ask the user
 to configure it outside the repository.
 
+## systemd credential mode
+
+Prefer `LoadCredentialEncrypted` when `systemd-creds` is available. Do not
+upgrade systemd in isolation during an application deployment; an operating
+system upgrade is a separate maintenance operation.
+
+1. Check `systemd-creds has-tpm2`. Use TPM-backed encryption only when support
+   is complete and the operator accepts its recovery requirements. Otherwise
+   use a systemd host key and report that an unencrypted root filesystem does
+   not provide hardware-backed protection against disk theft.
+2. Generate encrypted files with the credential name embedded in each file.
+   If `systemd-creds setup` creates the host key after PID 1 started, run
+   `systemctl daemon-reexec` before testing encrypted credentials.
+3. Switch one credential-bearing maintenance unit as a canary, then one
+   worker, before restarting all runtime services. Confirm the expected names
+   exist under each unit's runtime credentials directory without reading their
+   contents.
+4. Credential list resets and replacements must sort after every existing
+   credential drop-in. Inspect the merged `systemctl cat` order; a file such as
+   `credentials.conf` sorts after `90-*.conf`, so use a later name or update the
+   original drop-in.
+5. Remove plaintext credential sources only after a restart succeeds without
+   them and the configuration doctor passes. Keep an immediate encrypted-file
+   recovery path for the host key.
+
+When `systemd-creds` or `LoadCredentialEncrypted` is unavailable, use
+`LoadCredential` as the compatibility mode. Store sources in a root-owned
+`0700` directory with individual files at `0600`, never in command arguments,
+`Environment=`, or `SetCredential=`. Report that this protects process and log
+boundaries but not secrets at rest, and recommend a supported operating system
+upgrade. Apply the same canary, runtime-directory, doctor, and restart checks
+before considering either mode complete.
+
 ## Deployment workflow
 
 ### 1. Verify the release locally
@@ -219,8 +252,8 @@ For the first deployment that moves an existing installation from environment
 settings and legacy encryption keys, use this order without skipping steps:
 
 1. Create and verify a production backup.
-2. Install encrypted systemd credentials and verify names through unit
-   properties only.
+2. Install the strongest supported systemd credential mode described above
+   and verify names without reading values.
 3. Deploy the dual-read application while retaining the old environment file.
 4. Run schema migrations through credential-bearing oneshot units.
 5. Run `config:import-env --dry-run`, review the names-only plan, then run
