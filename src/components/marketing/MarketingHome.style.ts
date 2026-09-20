@@ -371,6 +371,20 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     letter-spacing: -0.04em;
     line-height: 1.16;
   `,
+  sectionEyebrow: css`
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid ${token.colorPrimaryBorder};
+    border-radius: 999px;
+    background: ${token.colorPrimaryBg};
+    color: ${token.colorPrimary};
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  `,
   sectionLead: css`
     margin: 0;
     color: ${token.colorTextSecondary};
@@ -383,8 +397,10 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     gap: 18px;
   `,
   featureCard: css`
+    display: flex;
     grid-column: span 4;
     min-height: 240px;
+    flex-direction: column;
     padding: 26px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 22px;
@@ -404,6 +420,20 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       grid-column: span 8;
     }
 
+    &[data-ai="true"] {
+      grid-column: 9 / span 4;
+      grid-row: 2 / span 2;
+      min-height: 498px;
+      overflow: hidden;
+      background:
+        radial-gradient(
+          circle at 100% 0,
+          color-mix(in srgb, ${token.colorInfoBg} 82%, transparent),
+          transparent 42%
+        ),
+        ${token.colorBgContainer};
+    }
+
     h3 {
       margin: 22px 0 10px;
       color: ${token.colorTextHeading};
@@ -419,8 +449,14 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     @media (max-width: 860px) {
       grid-column: span 6;
 
-      &[data-wide="true"] {
+      &[data-wide="true"],
+      &[data-ai="true"] {
         grid-column: span 6;
+        grid-row: auto;
+      }
+
+      &[data-ai="true"] {
+        min-height: 420px;
       }
     }
 
@@ -428,8 +464,13 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       grid-column: 1 / -1;
       min-height: auto;
 
-      &[data-wide="true"] {
+      &[data-wide="true"],
+      &[data-ai="true"] {
         grid-column: 1 / -1;
+      }
+
+      &[data-ai="true"] {
+        min-height: auto;
       }
     }
   `,
@@ -456,6 +497,76 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       color: ${token.colorTextSecondary};
       font-size: 12px;
       font-weight: 600;
+    }
+  `,
+  featureAiPreview: css`
+    display: grid;
+    gap: 12px;
+    margin-top: auto;
+    padding-top: 26px;
+  `,
+  featureAiPrompt: css`
+    justify-self: end;
+    max-width: 90%;
+    padding: 10px 12px;
+    border: 1px solid ${token.colorPrimaryBorder};
+    border-radius: 14px 14px 4px;
+    background: ${token.colorPrimaryBg};
+    color: ${token.colorText};
+    font-size: 12px;
+    line-height: 1.55;
+  `,
+  featureAiStatus: css`
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    color: ${token.colorTextSecondary};
+    font-size: 12px;
+
+    svg {
+      color: ${token.colorPrimary};
+    }
+  `,
+  featureAiSuggestion: css`
+    padding: 15px;
+    border: 1px solid ${token.colorPrimaryBorder};
+    border-radius: 16px;
+    background: color-mix(in srgb, ${token.colorBgContainer} 92%, transparent);
+    box-shadow: ${token.boxShadowTertiary};
+
+    > strong {
+      color: ${token.colorTextHeading};
+      font-size: 13px;
+    }
+
+    > p {
+      margin: 10px 0 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    > div {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    span,
+    b {
+      padding: 6px 9px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    span {
+      border: 1px solid ${token.colorBorderSecondary};
+      color: ${token.colorTextSecondary};
+    }
+
+    b {
+      background: ${token.colorPrimary};
+      color: ${token.colorWhite};
     }
   `,
   showcase: css`
@@ -559,7 +670,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   `,
   typeCard: css`
     display: grid;
-    min-height: 220px;
+    min-height: 184px;
     align-content: space-between;
     padding: 24px;
     border: 1px solid ${token.colorBorderSecondary};
@@ -569,7 +680,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     p {
       margin: 0;
       color: ${token.colorTextHeading};
-      font-size: 42px;
+      font-size: 38px;
       line-height: 1.05;
     }
 
@@ -596,9 +707,85 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
   fontDisplay: css`
     font-family: var(--font-playfair-display), var(--font-noto-serif-sc), serif;
   `,
+  openSection: css`
+    background:
+      radial-gradient(
+        circle at 12% 12%,
+        color-mix(in srgb, ${token.colorPrimaryBg} 88%, transparent),
+        transparent 34%
+      ),
+      radial-gradient(
+        circle at 88% 78%,
+        color-mix(in srgb, ${token.colorInfoBg} 78%, transparent),
+        transparent 34%
+      ),
+      ${token.colorBgContainer};
+  `,
+  openIntro: css`
+    display: grid;
+    max-width: 760px;
+    gap: 18px;
+    margin-bottom: 42px;
+  `,
+  openGrid: css`
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+
+    @media (max-width: 920px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 560px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  openCard: css`
+    min-height: 210px;
+    padding: 24px;
+    border: 1px solid color-mix(in srgb, ${token.colorBorderSecondary} 82%, transparent);
+    border-radius: 20px;
+    background: color-mix(in srgb, ${token.colorBgContainer} 88%, transparent);
+    backdrop-filter: blur(12px);
+
+    > span {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 13px;
+      background: ${token.colorPrimaryBg};
+      color: ${token.colorPrimary};
+      font-size: 19px;
+    }
+
+    h3 {
+      margin: 24px 0 9px;
+      color: ${token.colorTextHeading};
+      font-size: 18px;
+    }
+
+    p {
+      margin: 0;
+      color: ${token.colorTextSecondary};
+      line-height: 1.7;
+    }
+  `,
+  openAssurance: css`
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 24px;
+    color: ${token.colorTextSecondary};
+    font-size: 13px;
+
+    svg {
+      color: ${token.colorSuccess};
+    }
+  `,
   steps: css`
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px;
     counter-reset: marketing-step;
 
