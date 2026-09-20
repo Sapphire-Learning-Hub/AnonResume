@@ -7,6 +7,7 @@ const ALLOWED_ENVIRONMENT_READERS = new Set([
   "scripts/admin-bootstrap.ts",
   "scripts/config-import-env.ts",
   "src/lib/config/bootstrap.ts",
+  "src/lib/config/process-environment.ts",
   "src/lib/runtime/release-metadata.ts",
   "src/test/setup.ts",
 ]);

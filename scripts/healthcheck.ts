@@ -1,12 +1,14 @@
+import { readHealthcheckEnvironment } from "@/lib/config/process-environment";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { checkWorkerHealth } from "@/lib/runtime/worker-health";
 
 const target = process.argv[2];
+const environment = readHealthcheckEnvironment();
 
 async function checkWeb() {
-  const port = process.env.PORT?.trim() || "3000";
-  const url = process.env.ANONRESUME_HEALTHCHECK_URL?.trim() ||
+  const port = environment.PORT?.trim() || "3000";
+  const url = environment.ANONRESUME_HEALTHCHECK_URL?.trim() ||
     `http://127.0.0.1:${port}/api/health/ready`;
   const response = await fetch(url, { redirect: "manual" });
   return response.ok;

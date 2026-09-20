@@ -1,12 +1,14 @@
+import { readDeploymentSecretEnvironment } from "@/lib/config/process-environment";
 import { initializeDeploymentSecrets } from "@/lib/runtime/deployment-secrets";
 
-const directory = process.env.ANONRESUME_SECRET_DIR?.trim() ||
+const environment = readDeploymentSecretEnvironment();
+const directory = environment.ANONRESUME_SECRET_DIR?.trim() ||
   "/run/anonresume-secrets";
 const result = await initializeDeploymentSecrets({
   directory,
-  databaseHost: process.env.POSTGRES_HOST?.trim() || "postgres",
-  databaseName: process.env.POSTGRES_DB?.trim() || "anonresume",
-  databaseUser: process.env.POSTGRES_USER?.trim() || "anonresume",
+  databaseHost: environment.POSTGRES_HOST?.trim() || "postgres",
+  databaseName: environment.POSTGRES_DB?.trim() || "anonresume",
+  databaseUser: environment.POSTGRES_USER?.trim() || "anonresume",
 });
 
 console.info(`[AnonResume] Deployment secrets: ${result.state}`);

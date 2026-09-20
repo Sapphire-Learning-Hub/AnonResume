@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hostname as readHostname } from "node:os";
 
+import { readRuntimeIdentityEnvironment } from "@/lib/config/process-environment";
 import type { ConfigConsumer } from "@/lib/config/types";
 
 type RuntimeEnvironment = Record<string, string | undefined>;
@@ -37,7 +38,7 @@ export function resolveRuntimeIdentity(
   role: ConfigConsumer,
   options: RuntimeIdentityOptions = {},
 ): RuntimeIdentity {
-  const environment = options.environment ?? process.env;
+  const environment = options.environment ?? readRuntimeIdentityEnvironment();
   const hostname = options.hostname ?? readHostname;
   const randomSessionId = options.randomSessionId ?? randomUUID;
   const deploymentId = resolveSegment(
