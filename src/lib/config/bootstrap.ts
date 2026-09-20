@@ -6,6 +6,7 @@ type BootstrapEnvironment = Record<string, string | undefined>;
 export interface BootstrapConfigInput {
   environment?: BootstrapEnvironment;
   readCredential?: (name: string) => string | undefined;
+  readSecretFile?: (path: string) => string | undefined;
 }
 
 export interface BootstrapConfigurationStatus {
@@ -29,6 +30,21 @@ export const BOOTSTRAP_CREDENTIAL_NAMES = {
   previousMasterKey: "anonresume.config-master-key-previous",
   superAdminEmail: "anonresume.super-admin-email",
 } as const;
+
+const BOOTSTRAP_ISSUE_NAMES: Record<
+  keyof typeof BOOTSTRAP_CREDENTIAL_NAMES,
+  string
+> = {
+  applicationOrigin: "application_origin",
+  authSecret: "auth_secret",
+  currentMasterKey: "config_master_key",
+  databaseSchema: "database_schema",
+  databaseUrl: "database_url",
+  legacyAdminMfaKey: "legacy_admin_mfa_key",
+  legacyAiCredentialsKey: "legacy_ai_credentials_key",
+  previousMasterKey: "config_master_key_previous",
+  superAdminEmail: "super_admin_email",
+};
 
 export interface BootstrapCredentialInspection {
   name: string;
@@ -78,8 +94,40 @@ function readBootstrapValue(
   const readCredential = input.readCredential ??
     ((credentialName: string) =>
       readSystemdCredential(credentialName, environment));
-  return readCredential(BOOTSTRAP_CREDENTIAL_NAMES[name]) ??
-    environment[environmentKey];
+  const credentialValue = readCredential(BOOTSTRAP_CREDENTIAL_NAMES[name]);
+  const environmentValue = environment[environmentKey];
+  const filePath = environment[`${environmentKey}_FILE`]?.trim();
+  let fileValue: string | undefined;
+
+  if (filePath) {
+    try {
+      fileValue = input.readSecretFile
+        ? input.readSecretFile(filePath)
+        : readFileSync(filePath, "utf8").trimEnd();
+    } catch {
+      throw new BootstrapConfigurationError([
+        `${BOOTSTRAP_ISSUE_NAMES[name]}_file_unreadable`,
+      ]);
+    }
+    if (fileValue === undefined) {
+      throw new BootstrapConfigurationError([
+        `${BOOTSTRAP_ISSUE_NAMES[name]}_file_unreadable`,
+      ]);
+    }
+  }
+
+  const configuredSources = [
+    credentialValue !== undefined,
+    environmentValue !== undefined,
+    Boolean(filePath),
+  ].filter(Boolean).length;
+  if (configuredSources > 1) {
+    throw new BootstrapConfigurationError([
+      `${BOOTSTRAP_ISSUE_NAMES[name]}_sources_conflict`,
+    ]);
+  }
+
+  return credentialValue ?? fileValue ?? environmentValue;
 }
 
 export function readBootstrapDatabaseUrl(input: BootstrapConfigInput = {}) {
@@ -173,13 +221,10 @@ export function readBootstrapConfig(
   input: BootstrapConfigInput = {},
 ): BootstrapConfig {
   const environment = input.environment ?? process.env;
-  const readCredential = input.readCredential ??
-    ((name: string) => readSystemdCredential(name, environment));
   const read = (
     name: keyof typeof BOOTSTRAP_CREDENTIAL_NAMES,
     environmentKey: string,
-  ) => readCredential(BOOTSTRAP_CREDENTIAL_NAMES[name]) ??
-    environment[environmentKey];
+  ) => readBootstrapValue(input, name, environmentKey);
   const production = environment.NODE_ENV === "production";
   const databaseUrl = read("databaseUrl", "DATABASE_URL")?.trim();
   const applicationOrigin = read("applicationOrigin", "BETTER_AUTH_URL")?.trim();
@@ -317,11 +362,21 @@ export function inspectBootstrapCredentials(
   ];
 
   return definitions.map((definition) => {
-    const value = readBootstrapValue(
-      input,
-      definition.key,
-      definition.environmentKey,
-    )?.trim();
+    let value: string | undefined;
+    try {
+      value = readBootstrapValue(
+        input,
+        definition.key,
+        definition.environmentKey,
+      )?.trim();
+    } catch (error) {
+      if (!(error instanceof BootstrapConfigurationError)) throw error;
+      return {
+        name: BOOTSTRAP_CREDENTIAL_NAMES[definition.key],
+        required: definition.required,
+        status: "invalid" as const,
+      };
+    }
     return {
       name: BOOTSTRAP_CREDENTIAL_NAMES[definition.key],
       required: definition.required,

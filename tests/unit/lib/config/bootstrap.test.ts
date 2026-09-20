@@ -1,4 +1,5 @@
 import {
+  inspectBootstrapCredentials,
   readBootstrapConfig,
   validateBootstrapConfiguration,
 } from "@/lib/config/bootstrap";
@@ -20,19 +21,73 @@ function requiredCredentials(
 }
 
 describe("bootstrap configuration provider", () => {
-  it("prefers named credentials over compatibility environment values", () => {
+  it("loads named systemd credentials", () => {
     const credentials = requiredCredentials();
     const result = readBootstrapConfig({
-      environment: {
-        DATABASE_URL: "postgresql://legacy/db",
-        NODE_ENV: "production",
-      },
+      environment: { NODE_ENV: "production" },
       readCredential: (name) => credentials[name],
     });
 
     expect(result.databaseUrl).toBe("postgresql://credential/db");
     expect(result.applicationOrigin).toBe("https://resume.example.com");
     expect(result.currentMasterKey).toEqual(Buffer.alloc(32, 7));
+  });
+
+  it("loads bootstrap values from file-backed secret variables", () => {
+    const credentials = requiredCredentials();
+    delete credentials["anonresume.database-url"];
+
+    const result = readBootstrapConfig({
+      environment: {
+        DATABASE_URL_FILE: "/run/secrets/database-url",
+        NODE_ENV: "production",
+      },
+      readCredential: (name) => credentials[name],
+      readSecretFile: (path) =>
+        path === "/run/secrets/database-url"
+          ? "postgresql://file-secret/db\n"
+          : undefined,
+    });
+
+    expect(result.databaseUrl).toBe("postgresql://file-secret/db");
+  });
+
+  it("rejects ambiguous bootstrap sources instead of silently preferring one", () => {
+    expect(() =>
+      readBootstrapConfig({
+        environment: {
+          DATABASE_URL: "postgresql://environment/db",
+          DATABASE_URL_FILE: "/run/secrets/database-url",
+          NODE_ENV: "production",
+        },
+        readCredential: () => undefined,
+        readSecretFile: () => "postgresql://file-secret/db",
+      }),
+    ).toThrow("database_url_sources_conflict");
+  });
+
+  it("reports an unreadable configured secret file with a stable issue code", () => {
+    expect(() =>
+      readBootstrapConfig({
+        environment: {
+          DATABASE_URL_FILE: "/run/secrets/missing",
+          NODE_ENV: "production",
+        },
+        readCredential: () => undefined,
+        readSecretFile: () => undefined,
+      }),
+    ).toThrow("database_url_file_unreadable");
+
+    expect(
+      inspectBootstrapCredentials({
+        environment: {
+          DATABASE_URL_FILE: "/run/secrets/missing",
+          NODE_ENV: "production",
+        },
+        readCredential: () => undefined,
+        readSecretFile: () => undefined,
+      }).find((credential) => credential.name === "anonresume.database-url"),
+    ).toMatchObject({ status: "invalid" });
   });
 
   it("rejects a missing production master key with a stable issue code", () => {
@@ -98,8 +153,6 @@ describe("bootstrap configuration provider", () => {
     });
     const bootstrapInput = {
       environment: {
-        ANONRESUME_DB_SCHEMA: "legacy_schema",
-        DATABASE_URL: "postgresql://legacy/db",
         NODE_ENV: "production",
       },
       readCredential: (name: string) => credentials[name],
