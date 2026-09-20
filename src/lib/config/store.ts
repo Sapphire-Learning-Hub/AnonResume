@@ -68,6 +68,7 @@ export interface ConfigSnapshot {
 
 export interface ConfigurationFieldState {
   applyMode: ConfigApplyMode;
+  changed: boolean;
   configured: boolean;
   consumers: readonly ConfigConsumer[];
   group: ConfigGroup;
@@ -75,6 +76,10 @@ export interface ConfigurationFieldState {
   public: boolean;
   sensitive: boolean;
   value?: ManagedConfig[ConfigKey];
+}
+
+function valuesEqual(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function revisionView(revision: RevisionRow): ConfigurationRevisionView {
@@ -228,12 +233,16 @@ export async function getConfigurationState(input: {
     throw new ConfigurationStateError();
   }
 
-  const values = await readRevisionValues(draft.id, input.keyring);
+  const [activeValues, values] = await Promise.all([
+    readRevisionValues(active.id, input.keyring),
+    readRevisionValues(draft.id, input.keyring),
+  ]);
   const fields = (Object.keys(CONFIG_REGISTRY) as ConfigKey[]).map((key) => {
     const definition = CONFIG_REGISTRY[key];
     const value = values[key];
     const field: ConfigurationFieldState = {
       applyMode: definition.applyMode,
+      changed: !valuesEqual(activeValues[key], value),
       configured: definition.sensitive ? Boolean(value) : true,
       consumers: definition.consumers,
       group: definition.group,

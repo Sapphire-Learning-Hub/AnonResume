@@ -37,6 +37,7 @@ const initialState = {
   fields: [
     {
       applyMode: "hot" as const,
+      changed: false,
       configured: true,
       consumers: ["web" as const],
       group: "resume" as const,
@@ -47,6 +48,7 @@ const initialState = {
     },
     {
       applyMode: "hot" as const,
+      changed: false,
       configured: true,
       consumers: ["web" as const, "ai-worker" as const],
       group: "ai" as const,
@@ -57,6 +59,7 @@ const initialState = {
     },
     {
       applyMode: "restart" as const,
+      changed: false,
       configured: true,
       consumers: ["web" as const],
       group: "email" as const,
@@ -137,6 +140,31 @@ describe("AdminConfigurationManager", () => {
         },
       ]),
     });
+  });
+
+  it("marks a field with saved draft changes", () => {
+    renderManager({
+      initialState: {
+        ...initialState,
+        fields: initialState.fields.map((field) => ({
+          ...field,
+          changed: field.key === "resumeVersionHistoryLimit",
+        })),
+      },
+    });
+
+    expect(screen.getByText("已变更")).toBeInTheDocument();
+  });
+
+  it("marks a field while its edit is waiting to be saved", () => {
+    renderManager();
+
+    expect(screen.queryByText("已变更")).toBeNull();
+    fireEvent.change(screen.getByLabelText("简历历史版本上限"), {
+      target: { value: "8" },
+    });
+
+    expect(screen.getByText("已变更")).toBeInTheDocument();
   });
 
   it("keeps configured secrets empty until explicit replacement", async () => {

@@ -45,6 +45,7 @@ export function ConfigurationField({
   onChange: (change?: ConfigurationFieldChange) => void;
   text: {
     cancelReplacement: string;
+    changed: string;
     clear: string;
     configured: string;
     hot: string;
@@ -61,6 +62,7 @@ export function ConfigurationField({
   function metadata() {
     return (
       <div className={styles.metadata}>
+        {field.changed || change ? <Tag color="blue">{text.changed}</Tag> : null}
         <Tag color={field.applyMode === "hot" ? "green" : "gold"}>
           {field.applyMode === "hot" ? text.hot : text.restart}
         </Tag>

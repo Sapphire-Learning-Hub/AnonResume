@@ -6,6 +6,7 @@ import {
   adminAuditEvents,
   db,
   systemConfigRevisions,
+  systemConfigRuntimeStates,
   systemConfigValues,
 } from "@/db";
 import {
@@ -33,11 +34,13 @@ describe("configuration administration service", () => {
 
   beforeEach(async () => {
     await db.delete(adminAuditEvents).where(eq(adminAuditEvents.actorUserId, actorUserId));
+    await db.delete(systemConfigRuntimeStates);
     await db.delete(systemConfigRevisions);
   });
 
   afterAll(async () => {
     await db.delete(adminAuditEvents).where(eq(adminAuditEvents.actorUserId, actorUserId));
+    await db.delete(systemConfigRuntimeStates);
     await db.delete(systemConfigRevisions);
     await getDatabasePool().query(`DELETE FROM "user" WHERE id = $1`, [actorUserId]);
   });
@@ -90,6 +93,118 @@ describe("configuration administration service", () => {
         ),
       );
     expect(after[0]?.encryptedValue).toEqual(before[0]?.encryptedValue);
+  });
+
+  it("marks fields whose draft values differ from the active revision", async () => {
+    let state = await getManagedConfiguration({ keyring });
+    expect(state.fields.find((field) =>
+      field.key === "resumeVersionHistoryLimit"
+    )?.changed).toBe(false);
+
+    state = await patchConfigurationDraft({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      changes: [{
+        key: "resumeVersionHistoryLimit",
+        operation: "set",
+        value: 8,
+      }],
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+
+    expect(state.fields.find((field) =>
+      field.key === "resumeVersionHistoryLimit"
+    )?.changed).toBe(true);
+    expect(state.fields.find((field) => field.key === "smtpPort")?.changed)
+      .toBe(false);
+  });
+
+  it("reports restart requirements from live runtime health instead of revision ids", async () => {
+    const state = await getManagedConfiguration({ keyring });
+    const now = new Date();
+    await db.insert(systemConfigRuntimeStates).values([
+      {
+        consumer: "web",
+        desiredRevisionId: state.activeRevision.id,
+        healthState: "healthy",
+        instanceId: `healthy-web-${randomUUID()}`,
+        lastSeenAt: now,
+        loadedHotRevisionId: state.activeRevision.id,
+        loadedRestartRevisionId: null,
+        metadata: {},
+        release: "test",
+        startedAt: now,
+      },
+      {
+        consumer: "ai-worker",
+        desiredRevisionId: state.activeRevision.id,
+        healthState: "restart_required",
+        instanceId: `restart-ai-${randomUUID()}`,
+        lastSeenAt: now,
+        loadedHotRevisionId: state.activeRevision.id,
+        loadedRestartRevisionId: null,
+        metadata: {},
+        release: "test",
+        startedAt: now,
+      },
+      {
+        consumer: "pdf-worker",
+        desiredRevisionId: state.activeRevision.id,
+        healthState: "restart_required",
+        instanceId: `stopped-pdf-${randomUUID()}`,
+        lastSeenAt: now,
+        loadedHotRevisionId: state.activeRevision.id,
+        loadedRestartRevisionId: null,
+        metadata: { stopped: true },
+        release: "test",
+        startedAt: now,
+      },
+    ]);
+
+    const refreshed = await getManagedConfiguration({ keyring });
+
+    expect(refreshed.pendingRestartConsumers).toEqual(["ai-worker"]);
+  });
+
+  it("collapses repeated draft edits into the published revision's net changes", async () => {
+    let state = await getManagedConfiguration({ keyring });
+    state = await patchConfigurationDraft({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      changes: [{ key: "smtpSecure", operation: "set", value: true }],
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+    state = await patchConfigurationDraft({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      changes: [{ key: "smtpSecure", operation: "set", value: false }],
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+    state = await patchConfigurationDraft({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      changes: [{ key: "aiMaxConcurrentRuns", operation: "set", value: 3 }],
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+    await publishManagedConfiguration({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+
+    const history = await listConfigurationHistory({ keyring });
+    const published = history.find((revision) => revision.version === 2);
+
+    expect(published?.changes).toEqual([{
+      after: 3,
+      before: 1,
+      field: "aiMaxConcurrentRuns",
+    }]);
   });
 
   it("rejects clearing a required secret while its feature remains configured", async () => {

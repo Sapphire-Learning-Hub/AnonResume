@@ -106,6 +106,7 @@ const configValueSchema = z.union([
 ]);
 const configFieldSchema = z.object({
   applyMode: z.enum(["hot", "restart"]),
+  changed: z.boolean(),
   configured: z.boolean(),
   consumers: z.array(z.enum(["web", "pdf-worker", "ai-worker"])),
   group: z.enum(["general", "email", "security", "pdf", "resume", "ai"]),

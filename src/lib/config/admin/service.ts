@@ -1,7 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
 import {
-  adminAuditEvents,
   db,
   systemConfigRuntimeStates,
 } from "@/db";
@@ -57,6 +56,38 @@ function resolveKeyring(keyring?: ConfigKeyring) {
   });
 }
 
+function valuesEqual(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function configurationSnapshotChanges(
+  before: ManagedConfig,
+  after: ManagedConfig,
+): ManagedConfigurationHistoryChange[] {
+  const changes: ManagedConfigurationHistoryChange[] = [];
+
+  for (const key of Object.keys(CONFIG_REGISTRY) as ConfigKey[]) {
+    if (valuesEqual(before[key], after[key])) continue;
+
+    if (CONFIG_REGISTRY[key].sensitive) {
+      changes.push({
+        field: key,
+        operation: after[key] ? "set" : "clear",
+        sensitive: true,
+      });
+      continue;
+    }
+
+    changes.push({
+      after: after[key],
+      before: before[key],
+      field: key,
+    });
+  }
+
+  return changes;
+}
+
 async function currentValues(keyring: ConfigKeyring, revisionId: string) {
   return readConfigurationRevisionValues({ keyring, revisionId });
 }
@@ -85,15 +116,22 @@ function secretChanges(changes: ConfigurationDraftPatch["changes"]) {
 }
 
 async function pendingRestartConsumers() {
-  const states = await db.select().from(systemConfigRuntimeStates);
-  return [...new Set(
-    states.flatMap((state) =>
-      state.desiredRevisionId &&
-      state.desiredRevisionId !== state.loadedRestartRevisionId
-        ? [state.consumer]
-        : [],
-    ),
-  )] as ConfigConsumer[];
+  const states = await db
+    .select()
+    .from(systemConfigRuntimeStates)
+    .orderBy(desc(systemConfigRuntimeStates.lastSeenAt));
+  const seen = new Set<ConfigConsumer>();
+  const pending: ConfigConsumer[] = [];
+
+  for (const state of states) {
+    if (state.metadata.stopped === true || seen.has(state.consumer)) continue;
+    seen.add(state.consumer);
+    if (state.healthState === "restart_required") {
+      pending.push(state.consumer);
+    }
+  }
+
+  return pending;
 }
 
 export async function getManagedConfiguration(
@@ -194,68 +232,28 @@ export async function listConfigurationHistory(
   const keyring = resolveKeyring(input.keyring);
   await ensureConfigurationState({ keyring });
   const state = await getConfigurationState({ keyring });
-  const revisionIds = state.history.map((revision) => revision.id);
-  const events = revisionIds.length > 0
-    ? await db
-        .select({
-          metadata: adminAuditEvents.metadata,
-          targetId: adminAuditEvents.targetId,
-        })
-        .from(adminAuditEvents)
-        .where(
-          and(
-            eq(adminAuditEvents.action, "configuration.draft.update"),
-            inArray(adminAuditEvents.targetId, revisionIds),
-          ),
-        )
-    : [];
-  const changesByRevision = new Map<string, ManagedConfigurationHistoryChange[]>();
-  for (const event of events) {
-    if (!event.targetId) continue;
-    const collected = changesByRevision.get(event.targetId) ?? [];
-    const metadata = event.metadata;
-    if (Array.isArray(metadata.changes)) {
-      for (const change of metadata.changes) {
-        if (
-          change &&
-          typeof change === "object" &&
-          !Array.isArray(change) &&
-          typeof (change as Record<string, unknown>).field === "string"
-        ) {
-          const value = change as Record<string, unknown>;
-          collected.push({
-            after: value.after,
-            before: value.before,
-            field: value.field as string,
-          });
-        }
-      }
-    }
-    if (Array.isArray(metadata.secretChanges)) {
-      for (const change of metadata.secretChanges) {
-        if (
-          change &&
-          typeof change === "object" &&
-          !Array.isArray(change)
-        ) {
-          const value = change as Record<string, unknown>;
-          if (
-            typeof value.key === "string" &&
-            (value.operation === "set" || value.operation === "clear")
-          ) {
-            collected.push({
-              field: value.key,
-              operation: value.operation,
-              sensitive: true,
-            });
-          }
-        }
-      }
-    }
-    changesByRevision.set(event.targetId, collected);
-  }
+  const revisionIds = new Set(
+    state.history.flatMap((revision) => [
+      revision.id,
+      ...(revision.baseRevisionId ? [revision.baseRevisionId] : []),
+    ]),
+  );
+  const valuesByRevision = new Map(
+    await Promise.all(
+      [...revisionIds].map(async (revisionId) => [
+        revisionId,
+        await currentValues(keyring, revisionId),
+      ] as const),
+    ),
+  );
+
   return state.history.map((revision) => ({
-    changes: changesByRevision.get(revision.id) ?? [],
+    changes: revision.baseRevisionId
+      ? configurationSnapshotChanges(
+          valuesByRevision.get(revision.baseRevisionId)!,
+          valuesByRevision.get(revision.id)!,
+        )
+      : [],
     createdAt: revision.createdAt.toISOString(),
     createdByUserId: revision.createdByUserId,
     id: revision.id,

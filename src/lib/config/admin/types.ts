@@ -3,6 +3,7 @@ import type { ConfigKey } from "@/lib/config/registry";
 
 export interface ManagedConfigFieldView {
   applyMode: ConfigApplyMode;
+  changed: boolean;
   configured: boolean;
   consumers: readonly ConfigConsumer[];
   group: ConfigGroup;

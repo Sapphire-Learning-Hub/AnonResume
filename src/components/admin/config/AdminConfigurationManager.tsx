@@ -247,6 +247,7 @@ export function AdminConfigurationManager({
                 label={labelFor(field.key)}
                 text={{
                   cancelReplacement: t("common.cancel"),
+                  changed: t("configuration.changed"),
                   clear: t("configuration.clear"),
                   configured: field.configured
                     ? t("configuration.configured")

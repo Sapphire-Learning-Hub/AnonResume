@@ -129,10 +129,25 @@ describe("configuration doctor", () => {
     expect(serialized).not.toContain("ciphertext");
   });
 
+  it("does not require a restart when only hot configuration is newer", () => {
+    const input = healthyInput();
+    for (const runtime of input.runtimes) {
+      runtime.restartVersion = 3;
+    }
+
+    const report = diagnoseConfiguration(input);
+
+    expect(report.status).toBe("healthy");
+    expect(report.exitCode).toBe(0);
+    expect(report.runtimes.every((runtime) => !runtime.pendingRestart)).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
   it("uses a distinct warning state for fallback and pending restart", () => {
     const input = healthyInput();
     input.revisions.activeReadable = false;
     input.revisions.fallbackVersion = 3;
+    input.runtimes[0]!.health = "restart_required";
     input.runtimes[0]!.restartVersion = 3;
 
     const report = diagnoseConfiguration(input);

@@ -38,6 +38,7 @@ const state = {
   fields: [
     {
       applyMode: "restart",
+      changed: false,
       configured: false,
       consumers: ["web"],
       group: "email",
@@ -48,6 +49,7 @@ const state = {
     },
     {
       applyMode: "hot",
+      changed: false,
       configured: true,
       consumers: ["ai-worker"],
       group: "ai",

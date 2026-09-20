@@ -136,15 +136,14 @@ export function diagnoseConfiguration(
 
     const stale = input.now.getTime() - runtime.lastSeenAt.getTime() >
       input.staleAfterMs;
-    const pendingRestart = runtime.desiredVersion !== null &&
-      runtime.desiredVersion !== runtime.restartVersion;
+    const pendingRestart = runtime.health === "restart_required";
     if (stale) errors.push(`runtime_stale:${consumer}`);
     if (runtime.health === "recovery_required") {
       errors.push(`runtime_recovery_required:${consumer}`);
     } else if (runtime.health === "degraded") {
       warnings.push(`runtime_degraded:${consumer}`);
     }
-    if (pendingRestart || runtime.health === "restart_required") {
+    if (pendingRestart) {
       warnings.push(`runtime_restart_required:${consumer}`);
     }
     return {
