@@ -2,6 +2,7 @@ import {
   AdminBootstrapConflictError,
   AdminSingletonViolationError,
   PostgresAdminBootstrapStore,
+  bootstrapSuperAdminForTerminal,
   bootstrapConfiguredSuperAdmin,
   bootstrapSuperAdmin,
   type AdminBootstrapStore,
@@ -66,6 +67,22 @@ describe("super-admin bootstrap", () => {
         ),
       }),
     );
+  });
+
+  it("returns a one-time activation link for an interactive bootstrap command", async () => {
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store: createStore(),
+        email: "owner@example.com",
+        applicationOrigin: "https://resume.example.com",
+      }),
+    ).resolves.toMatchObject({
+      state: "created",
+      userId: "super-user",
+      activationUrl: expect.stringMatching(
+        /^https:\/\/resume\.example\.com\/activate\?token=/,
+      ),
+    });
   });
 
   it("is idempotent when the singleton already exists", async () => {

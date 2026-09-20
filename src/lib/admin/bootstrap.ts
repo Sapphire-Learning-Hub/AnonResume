@@ -206,3 +206,27 @@ export async function bootstrapConfiguredSuperAdmin(
     deliverActivation: sendSuperAdminActivationEmail,
   });
 }
+
+export async function bootstrapSuperAdminForTerminal(input: {
+  store?: AdminBootstrapStore;
+  email: string;
+  applicationOrigin: string;
+}) {
+  let activationUrl: string | undefined;
+  const result = await bootstrapSuperAdmin({
+    store: input.store ?? new PostgresAdminBootstrapStore(),
+    email: input.email,
+    applicationOrigin: input.applicationOrigin,
+    deliverActivation: async ({ url }) => {
+      activationUrl = url;
+    },
+  });
+
+  if (result.state === "created" && !activationUrl) {
+    throw new Error("Super-admin activation URL was not created");
+  }
+
+  return result.state === "created"
+    ? { ...result, activationUrl: activationUrl! }
+    : result;
+}
