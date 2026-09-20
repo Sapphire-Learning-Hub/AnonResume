@@ -47,11 +47,33 @@ The editor is optimized for precise desktop interaction. Mobile users can still 
 
 ## Quick Start
 
-### Requirements
+### Source Requirements
 
 - [Bun](https://bun.sh/) 1.3 or later
 - [PostgreSQL](https://www.postgresql.org/) 14 or later
 - A Chromium runtime for PDF export
+
+### One-command Docker Deployment
+
+With Docker Engine and the Compose plugin installed, prepare the deployment parameters and start the published images:
+
+```bash
+cp compose.env.example compose.env
+# Edit compose.env with an exact release tag, public HTTPS origin, and other deployment values
+docker compose --env-file compose.env pull
+docker compose --env-file compose.env up -d --wait
+```
+
+`ANONRESUME_VERSION` must be an explicit immutable release tag such as `v1.4.0`; do not use `latest`. After the first startup, create the single pending super-admin and receive a one-time activation URL without requiring SMTP:
+
+```bash
+docker compose --env-file compose.env run --rm --no-deps web \
+  bootstrap-admin owner@example.com
+```
+
+Treat the printed activation URL as sensitive and open it through a trusted channel. Application data lives in the `postgres-data` volume, while generated deployment trust roots live in `deployment-secrets`. Back up both: losing the configuration master key may make encrypted platform settings unrecoverable.
+
+The default stack starts one AI worker and one PDF worker with stable instance identities. Every additional worker replica must receive a unique `ANONRESUME_INSTANCE_ID`. When using a registry mirror, authenticate through Docker's credential store and configure the image source without placing registry passwords in `compose.env` or Compose files.
 
 ### Run Locally
 
@@ -111,6 +133,8 @@ Missing or malformed bootstrap credentials show the configuration error page and
 Database structures are changed only through Better Auth and Drizzle migrations. Runtime requests never create or repair application tables.
 
 ## Production Deployment
+
+Docker Compose is the recommended quick-start path for new installations. The source deployment below remains supported when operators need direct process control, systemd Credentials, or integration with an existing host operations model.
 
 Install locked dependencies and create the production build:
 

@@ -1,6 +1,6 @@
 ---
 name: anonresume-deploy
-description: Use when deploying AnonResume to its existing self-hosted systemd production environment or rehearsing its configuration migration.
+description: Use when deploying or upgrading AnonResume in a self-hosted Docker Compose or systemd environment, including configuration migrations and deployment recovery.
 ---
 
 # Deploy AnonResume
@@ -29,6 +29,56 @@ instance-specific addresses in the repository.
   unexpected files.
 - Do not run destructive Git commands or automatically reverse database
   migrations.
+
+## Choose the deployment mode
+
+Determine whether the installation already uses Docker Compose or systemd.
+Preserve that mode unless the user explicitly requests a migration; do not
+silently convert an existing host. Docker deployments use immutable published
+images and named volumes. systemd deployments use an exact Git commit and the
+credential workflow below.
+
+## Docker Compose workflow
+
+1. Resolve an exact release tag. Verify both the core and PDF image manifests,
+   their recorded digests, and the required host architecture before changing
+   the installation. Never deploy `latest` or a floating major/minor tag.
+2. Keep operator values in the ignored `compose.env`. Never print, commit, or
+   copy its contents into chat. Back up PostgreSQL and the
+   `deployment-secrets` volume before an upgrade; loss of the configuration
+   master key can make encrypted configuration unrecoverable.
+3. Pull and start the release with:
+
+   ```sh
+   docker compose --env-file compose.env pull
+   docker compose --env-file compose.env up -d --wait
+   ```
+
+   The migration service is a required one-shot dependency. Stop if it fails;
+   never start the application against a partially migrated database.
+4. Verify `docker compose ps`, `/api/health/live`, `/api/health/ready`, sanitized
+   Web and worker logs, and fresh stable worker heartbeats. The default stack
+   runs one AI Worker and one PDF Worker. Every extra replica requires a unique
+   `ANONRESUME_INSTANCE_ID`.
+5. On first installation, create the pending super-admin with:
+
+   ```sh
+   docker compose --env-file compose.env run --rm --no-deps web \
+     bootstrap-admin <email>
+   ```
+
+   Treat the emitted activation URL as a secret and never include it in logs or
+   reports.
+6. Roll back application images only after proving the previous release is
+   compatible with the migrated schema. Never roll back the schema
+   automatically.
+
+If the default registry is unavailable, an operator-configured registry mirror
+is an acceptable transport fallback. Authenticate interactively or with
+`--password-stdin` into Docker's credential store. Never put registry
+credentials in repository files, Compose values, command arguments, copied
+logs, or chat. Mirror path conventions are registry-specific; verify the
+resolved image digest still matches the approved release.
 
 ## Runtime inputs
 
@@ -88,7 +138,7 @@ boundaries but not secrets at rest, and recommend a supported operating system
 upgrade. Apply the same canary, runtime-directory, doctor, and restart checks
 before considering either mode complete.
 
-## Deployment workflow
+## systemd deployment workflow
 
 ### 1. Verify the release locally
 

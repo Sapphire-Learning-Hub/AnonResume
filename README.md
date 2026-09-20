@@ -47,11 +47,33 @@ AnonResume 是一款开源的在线简历编辑器。你可以像编辑文档一
 
 ## 快速开始
 
-### 环境要求
+### 源码运行环境
 
 - [Bun](https://bun.sh/) 1.3 或更高版本
 - [PostgreSQL](https://www.postgresql.org/) 14 或更高版本
 - 用于 PDF 导出的 Chromium 运行环境
+
+### Docker 一键部署
+
+服务器安装 Docker Engine 与 Compose 插件后，只需准备部署参数并启动已发布镜像：
+
+```bash
+cp compose.env.example compose.env
+# 编辑 compose.env：填写固定版本标签、公开 HTTPS 地址等部署参数
+docker compose --env-file compose.env pull
+docker compose --env-file compose.env up -d --wait
+```
+
+`ANONRESUME_VERSION` 必须使用明确且不可变的发行标签，例如 `v1.4.0`，不要使用 `latest`。首次启动后，可在不依赖 SMTP 的情况下创建唯一的待激活超管，并从终端取得一次性激活链接：
+
+```bash
+docker compose --env-file compose.env run --rm --no-deps web \
+  bootstrap-admin owner@example.com
+```
+
+将输出的激活链接视为敏感信息并通过可信渠道打开。业务数据保存在 `postgres-data` 卷，自动生成的部署信任根保存在 `deployment-secrets` 卷；两者都应备份，丢失配置主密钥可能导致已加密的平台配置无法恢复。
+
+默认编排各启动一个 AI Worker 和 PDF Worker，并为它们提供稳定实例标识。扩容 Worker 时，每个副本必须设置唯一的 `ANONRESUME_INSTANCE_ID`。如需使用镜像代理，请通过 Docker 凭据存储登录并配置镜像来源，不要把仓库密码写入 `compose.env` 或 Compose 文件。
 
 ### 本地运行
 
@@ -111,6 +133,8 @@ bun run config:doctor
 数据库结构只通过 Better Auth 与 Drizzle 迁移更新，应用请求不会在运行时创建或修复表结构。
 
 ## 生产部署
+
+Docker Compose 是新实例的推荐快速部署方式；需要直接控制主机进程、systemd Credentials 或现有运维体系时，也可以继续使用下述源码部署方式。
 
 安装锁定依赖并完成生产构建：
 
