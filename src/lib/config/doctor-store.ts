@@ -52,7 +52,7 @@ export async function readConfigurationDoctorInput(input: {
   const runtimes: ConfigurationDoctorRuntimeInput[] = [];
 
   for (const row of runtimeRows) {
-    if (seenConsumers.has(row.consumer) || row.metadata.stopped === true) {
+    if (seenConsumers.has(row.consumer) || row.status === "stopped") {
       continue;
     }
     seenConsumers.add(row.consumer);

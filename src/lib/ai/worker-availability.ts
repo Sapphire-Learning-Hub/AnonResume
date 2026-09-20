@@ -24,6 +24,7 @@ export async function getAiWorkerAvailability(options: {
         SELECT 1
         FROM ${workerHeartbeats}
         WHERE ${workerHeartbeats.workerType} = 'ai-runtime'
+          AND ${workerHeartbeats.status} = 'running'
           AND ${workerHeartbeats.lastSeenAt} >= ${staleBefore}
       )
       OR EXISTS (

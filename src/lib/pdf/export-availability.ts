@@ -19,6 +19,7 @@ export async function getPdfExportWorkerAvailability(options: {
         SELECT 1
         FROM ${workerHeartbeats}
         WHERE ${workerHeartbeats.workerType} = 'pdf-export'
+          AND ${workerHeartbeats.status} = 'running'
           AND ${workerHeartbeats.lastSeenAt} >= ${staleBefore}
       )
       OR EXISTS (

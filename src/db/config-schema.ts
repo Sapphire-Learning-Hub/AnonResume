@@ -25,6 +25,7 @@ export type SystemConfigHealthState =
   | "restart_required"
   | "degraded"
   | "recovery_required";
+export type RuntimeInstanceStatus = "running" | "stopped";
 
 const schemaName = getDatabaseSchemaName();
 
@@ -112,6 +113,7 @@ export const systemConfigValues =
 
 const runtimeStateColumns = {
   instanceId: text("instance_id").primaryKey(),
+  sessionId: text("session_id").notNull(),
   consumer: text("consumer").$type<ConfigConsumer>().notNull(),
   release: text("release").notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
@@ -124,6 +126,11 @@ const runtimeStateColumns = {
     .notNull()
     .default("healthy"),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  status: text("status")
+    .$type<RuntimeInstanceStatus>()
+    .notNull()
+    .default("running"),
+  stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   lastError: text("last_error"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
 };
@@ -141,6 +148,10 @@ export const systemConfigRuntimeStates =
           check(
             "system_config_runtime_states_health_check",
             sql`${table.healthState} IN ('healthy', 'restart_required', 'degraded', 'recovery_required')`,
+          ),
+          check(
+            "system_config_runtime_states_status_check",
+            sql`${table.status} IN ('running', 'stopped')`,
           ),
           index("system_config_runtime_states_consumer_seen_idx").on(
             table.consumer,
@@ -179,6 +190,10 @@ export const systemConfigRuntimeStates =
           check(
             "system_config_runtime_states_health_check",
             sql`${table.healthState} IN ('healthy', 'restart_required', 'degraded', 'recovery_required')`,
+          ),
+          check(
+            "system_config_runtime_states_status_check",
+            sql`${table.status} IN ('running', 'stopped')`,
           ),
           index("system_config_runtime_states_consumer_seen_idx").on(
             table.consumer,

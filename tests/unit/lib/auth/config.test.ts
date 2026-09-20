@@ -35,6 +35,7 @@ function runtimeValues(overrides: Record<string, unknown> = {}) {
     health: "healthy",
     hotRevisionId: "revision-1",
     instanceId: "web-test",
+    sessionId: "web-test-session",
     lastError: null,
     restartRevisionId: "revision-1",
     values: {

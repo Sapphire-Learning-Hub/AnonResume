@@ -23,6 +23,7 @@ import {
   type ConfigSnapshot,
 } from "@/lib/config/store";
 import type { ConfigConsumer } from "@/lib/config/types";
+import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
@@ -34,6 +35,7 @@ export interface RuntimeConfigSnapshot {
   health: ManagedConfigurationHealthState;
   hotRevisionId: string | null;
   instanceId: string;
+  sessionId: string;
   lastError: string | null;
   restartRevisionId: string | null;
   values: Readonly<ManagedConfig>;
@@ -42,6 +44,7 @@ export interface RuntimeConfigSnapshot {
 interface RuntimeConfigManagerOptions {
   consumer: ConfigConsumer;
   instanceId?: string;
+  sessionId?: string;
   keyring: ConfigKeyring;
   notifier?: ConfigurationNotifier;
   now?: () => Date;
@@ -100,6 +103,7 @@ function mergeHotValues(
 export class RuntimeConfigManager {
   private readonly consumer: ConfigConsumer;
   private readonly instanceId: string;
+  private readonly sessionId: string;
   private readonly keyring: ConfigKeyring;
   private readonly notifier: ConfigurationNotifier;
   private readonly now: () => Date;
@@ -116,6 +120,7 @@ export class RuntimeConfigManager {
   constructor(options: RuntimeConfigManagerOptions) {
     this.consumer = options.consumer;
     this.instanceId = options.instanceId ?? randomUUID();
+    this.sessionId = options.sessionId ?? randomUUID();
     this.keyring = options.keyring;
     this.notifier = options.notifier ?? new PostgresConfigurationNotifier();
     this.now = options.now ?? (() => new Date());
@@ -183,6 +188,7 @@ export class RuntimeConfigManager {
       }) as ManagedConfigurationHealthState,
       hotRevisionId: resolved.id,
       instanceId: this.instanceId,
+      sessionId: this.sessionId,
       lastError: resolved.lastError,
       restartRevisionId: resolved.id,
       values: resolved.values,
@@ -224,6 +230,7 @@ export class RuntimeConfigManager {
           }) as ManagedConfigurationHealthState,
           hotRevisionId: resolved.id,
           instanceId: this.instanceId,
+          sessionId: this.sessionId,
           lastError: null,
           restartRevisionId: this.current!.restartRevisionId,
           values: mergeHotValues(resolved.values, this.restartValues!),
@@ -246,6 +253,7 @@ export class RuntimeConfigManager {
       .insert(systemConfigRuntimeStates)
       .values({
         instanceId: this.instanceId,
+        sessionId: this.sessionId,
         consumer: this.consumer,
         release: this.release,
         startedAt: this.startedAt,
@@ -255,6 +263,8 @@ export class RuntimeConfigManager {
         fallbackRevisionId: state.fallbackRevisionId,
         healthState: state.health,
         lastSeenAt: this.now(),
+        status: metadata.stopped ? "stopped" : "running",
+        stoppedAt: metadata.stopped ? this.now() : null,
         lastError: state.lastError,
         metadata: {
           configurationPollIntervalMs: this.pollIntervalMs,
@@ -264,14 +274,18 @@ export class RuntimeConfigManager {
       .onConflictDoUpdate({
         target: systemConfigRuntimeStates.instanceId,
         set: {
+          sessionId: this.sessionId,
           consumer: this.consumer,
           release: this.release,
+          startedAt: this.startedAt,
           desiredRevisionId: state.desiredRevisionId,
           loadedHotRevisionId: state.hotRevisionId,
           loadedRestartRevisionId: state.restartRevisionId,
           fallbackRevisionId: state.fallbackRevisionId,
           healthState: state.health,
           lastSeenAt: this.now(),
+          status: metadata.stopped ? "stopped" : "running",
+          stoppedAt: metadata.stopped ? this.now() : null,
           lastError: state.lastError,
           metadata: {
             configurationPollIntervalMs: this.pollIntervalMs,
@@ -294,8 +308,11 @@ export function getRuntimeConfigManager(consumer: ConfigConsumer = "web") {
   if (existing) return existing;
 
   const bootstrap = readBootstrapConfig();
+  const identity = resolveRuntimeIdentity(consumer);
   const manager = new RuntimeConfigManager({
     consumer,
+    instanceId: identity.stableId,
+    sessionId: identity.sessionId,
     keyring: createConfigKeyring({
       current: bootstrap.currentMasterKey,
       previous: bootstrap.previousMasterKey,

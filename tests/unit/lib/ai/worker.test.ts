@@ -17,6 +17,7 @@ function createOperations(
       acquired: true,
       deletedEvidence: 0,
     }),
+    markStopped: vi.fn().mockResolvedValue(undefined),
     recordHeartbeat: vi.fn().mockResolvedValue(undefined),
     executeRun: vi.fn().mockResolvedValue(undefined),
     recoverExpiredRuns: vi.fn().mockResolvedValue({
@@ -43,6 +44,7 @@ function runtimeManager(overrides: Record<string, unknown> = {}) {
       health: "healthy" as const,
       hotRevisionId: "revision-1",
       instanceId: "ai-worker-test-runtime",
+      sessionId: "ai-worker-test-session",
       lastError: null,
       restartRevisionId: "revision-1",
       values,
@@ -124,6 +126,7 @@ describe("AI worker", () => {
       operations,
       signal: controller.signal,
       workerId: "ai-worker-test",
+      sessionId: "session-heartbeat",
     });
 
     expect(operations.recordHeartbeat).toHaveBeenCalledWith(
@@ -134,6 +137,7 @@ describe("AI worker", () => {
           restartRevisionId: "revision-1",
         }),
         workerId: "ai-worker-test",
+        sessionId: "session-heartbeat",
         workerType: "ai-runtime",
       }),
     );
@@ -168,10 +172,11 @@ describe("AI worker", () => {
       operations,
       signal: controller.signal,
       workerId: "ai-worker-execution",
+      sessionId: "session-execution",
     });
 
     expect(operations.claimQueuedRuns).toHaveBeenCalledWith({
-      workerId: "ai-worker-execution",
+      workerId: "ai-worker-execution/session-execution",
       limit: 1,
       leaseSeconds: 90,
       credentialKeys: {
@@ -281,6 +286,7 @@ describe("AI worker", () => {
       health: "healthy" as const,
       hotRevisionId: "revision-1",
       instanceId: "ai-worker-disable-runtime",
+      sessionId: "ai-worker-disable-session",
       lastError: null,
       restartRevisionId: "revision-1",
       values: initialValues,

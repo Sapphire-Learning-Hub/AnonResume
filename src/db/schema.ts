@@ -664,10 +664,13 @@ export const adminAuditEvents =
 
 const workerHeartbeatColumns = {
   workerId: text("worker_id").primaryKey(),
+  sessionId: text("session_id").notNull(),
   workerType: text("worker_type").notNull(),
   release: text("release"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("running"),
+  stoppedAt: timestamp("stopped_at", { withTimezone: true }),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull(),
 };
 
@@ -678,6 +681,10 @@ export const workerHeartbeats =
           table.workerType,
           table.lastSeenAt,
         ),
+        check(
+          "worker_heartbeats_status_check",
+          sql`${table.status} IN ('running', 'stopped')`,
+        ),
       ])
     : pgSchema(schemaName).table(
         "worker_heartbeats",
@@ -686,6 +693,10 @@ export const workerHeartbeats =
           index("worker_heartbeats_type_seen_idx").on(
             table.workerType,
             table.lastSeenAt,
+          ),
+          check(
+            "worker_heartbeats_status_check",
+            sql`${table.status} IN ('running', 'stopped')`,
           ),
         ],
       );

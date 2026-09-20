@@ -124,7 +124,7 @@ async function pendingRestartConsumers() {
   const pending: ConfigConsumer[] = [];
 
   for (const state of states) {
-    if (state.metadata.stopped === true || seen.has(state.consumer)) continue;
+    if (state.status === "stopped" || seen.has(state.consumer)) continue;
     seen.add(state.consumer);
     if (state.healthState === "restart_required") {
       pending.push(state.consumer);
