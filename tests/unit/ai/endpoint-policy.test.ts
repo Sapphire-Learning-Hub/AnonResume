@@ -30,6 +30,7 @@ describe("AI endpoint policy", () => {
       { address: "93.184.216.34", family: 4 },
       { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
     ]);
+    expect(resolved.trustedProxyResolution).toBe(false);
   });
 
   it.each([
@@ -86,5 +87,13 @@ describe("AI endpoint policy", () => {
         new Set(["ark.cn-beijing.volces.com"]),
       ),
     ).rejects.toThrow("unsafe_ai_endpoint");
+
+    await expect(
+      resolveSafeAiEndpoint(
+        "https://ark.cn-beijing.volces.com/api/v3",
+        fakeIpResolver,
+        new Set(["ark.cn-beijing.volces.com"]),
+      ),
+    ).resolves.toMatchObject({ trustedProxyResolution: true });
   });
 });

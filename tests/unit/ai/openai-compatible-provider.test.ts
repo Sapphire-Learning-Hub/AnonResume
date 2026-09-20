@@ -271,6 +271,42 @@ describe("OpenAI-compatible provider adapter", () => {
     });
   });
 
+  it("uses the system transport only for explicitly trusted proxy fake IPs", async () => {
+    const pinnedFetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      void _input;
+      void _init;
+      throw new Error("pinned transport must not handle a trusted proxy fake IP");
+    });
+    const trustedProxyFetch = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => {
+        void _input;
+        void _init;
+        return streamResponse([
+          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+          "data: [DONE]\n\n",
+        ]);
+      },
+    );
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: async () => [{ address: "198.18.3.253", family: 4 }],
+      fetchImpl: pinnedFetch,
+      trustedProxyFetchImpl: trustedProxyFetch,
+    });
+    const events = [];
+
+    for await (const event of adapter.start(
+      providerRequest({ trustedEndpointHostnames: ["models.example.com"] }),
+      new AbortController().signal,
+    )) {
+      events.push(event);
+    }
+
+    expect(pinnedFetch).not.toHaveBeenCalled();
+    expect(trustedProxyFetch).toHaveBeenCalledOnce();
+    expect(trustedProxyFetch.mock.calls[0]?.[1]).not.toHaveProperty("dispatcher");
+    expect(events).toContainEqual({ type: "text_delta", delta: "ok" });
+  });
+
   it("does not send proposal tools to text-only models", async () => {
     let body: Record<string, unknown> | undefined;
     const adapter = createOpenAiCompatibleAdapter({

@@ -3,7 +3,7 @@ import {
   buildConnector,
   fetch as undiciFetch,
   type Dispatcher,
-} from "undici";
+} from "undici/index.js";
 
 import {
   resolveSafeAiEndpoint,
@@ -41,6 +41,7 @@ interface OpenAiChunk {
 
 interface OpenAiCompatibleAdapterOptions {
   fetchImpl?: typeof fetch;
+  trustedProxyFetchImpl?: typeof fetch;
   resolver?: AiDnsResolver;
   maxRedirects?: number;
   maxResponseBytes?: number;
@@ -116,47 +117,62 @@ function serializeMessages(request: AiProviderRequest) {
   });
 }
 
-async function* readSseData(response: Response, maxResponseBytes: number) {
+async function* readSseData(
+  response: Response,
+  maxResponseBytes: number,
+  signal: AbortSignal,
+) {
   if (!response.body) throw new AiProviderError("invalid_response");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let receivedBytes = 0;
+  let rejectAborted: ((reason: AiProviderError) => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAborted = reject;
+  });
+  const abort = () => rejectAborted?.(new AiProviderError("aborted"));
+  signal.addEventListener("abort", abort, { once: true });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    receivedBytes += value?.byteLength ?? 0;
-    if (receivedBytes > maxResponseBytes) {
-      throw new AiProviderError("invalid_response");
-    }
-    buffer += decoder.decode(value, { stream: !done }).replaceAll("\r\n", "\n");
-    if (buffer.length > MAX_SSE_EVENT_BYTES && !buffer.includes("\n\n")) {
-      throw new AiProviderError("invalid_response");
+  try {
+    if (signal.aborted) abort();
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), aborted]);
+      receivedBytes += value?.byteLength ?? 0;
+      if (receivedBytes > maxResponseBytes) {
+        throw new AiProviderError("invalid_response");
+      }
+      buffer += decoder.decode(value, { stream: !done }).replaceAll("\r\n", "\n");
+      if (buffer.length > MAX_SSE_EVENT_BYTES && !buffer.includes("\n\n")) {
+        throw new AiProviderError("invalid_response");
+      }
+
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const data = rawEvent
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (data) yield data;
+        boundary = buffer.indexOf("\n\n");
+      }
+
+      if (done) break;
     }
 
-    let boundary = buffer.indexOf("\n\n");
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      const data = rawEvent
+    if (buffer.trim()) {
+      const data = buffer
         .split("\n")
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trimStart())
         .join("\n");
       if (data) yield data;
-      boundary = buffer.indexOf("\n\n");
     }
-
-    if (done) break;
-  }
-
-  if (buffer.trim()) {
-    const data = buffer
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trimStart())
-      .join("\n");
-    if (data) yield data;
+  } finally {
+    signal.removeEventListener("abort", abort);
   }
 }
 
@@ -196,6 +212,7 @@ function createPinnedDispatcher({
 
 async function fetchWithValidatedRedirects({
   fetchImpl,
+  trustedProxyFetchImpl,
   resolver,
   request,
   signal,
@@ -204,6 +221,7 @@ async function fetchWithValidatedRedirects({
   requestTimeoutMs,
 }: {
   fetchImpl: typeof fetch;
+  trustedProxyFetchImpl: typeof fetch;
   resolver?: AiDnsResolver;
   request: AiProviderRequest;
   signal: AbortSignal;
@@ -241,28 +259,34 @@ async function fetchWithValidatedRedirects({
       trustedProxyHostnames,
     );
     target = resolved.endpoint;
-    const dispatcher = createPinnedDispatcher({
-      hostname: target.hostname,
-      addresses: resolved.addresses,
-      maxResponseBytes,
-      requestTimeoutMs,
-    });
+    const dispatcher = resolved.trustedProxyResolution
+      ? undefined
+      : createPinnedDispatcher({
+          hostname: target.hostname,
+          addresses: resolved.addresses,
+          maxResponseBytes,
+          requestTimeoutMs,
+        });
+    const transport = resolved.trustedProxyResolution
+      ? trustedProxyFetchImpl
+      : fetchImpl;
+    const fetchOptions: RequestInit & { dispatcher?: Dispatcher } = {
+      method: "POST",
+      headers: {
+        accept: "text/event-stream",
+        authorization: `Bearer ${request.apiKey}`,
+        "content-type": "application/json",
+      },
+      body,
+      redirect: "manual",
+      signal,
+    };
+    if (dispatcher) fetchOptions.dispatcher = dispatcher;
     let response: Response;
     try {
-      response = await fetchImpl(target, {
-        method: "POST",
-        headers: {
-          accept: "text/event-stream",
-          authorization: `Bearer ${request.apiKey}`,
-          "content-type": "application/json",
-        },
-        body,
-        redirect: "manual",
-        signal,
-        dispatcher,
-      } as RequestInit);
+      response = await transport(target, fetchOptions);
     } catch (error) {
-      await dispatcher.close().catch(() => undefined);
+      await dispatcher?.destroy().catch(() => undefined);
       if (signal.aborted) throw new AiProviderError("aborted");
       if (error instanceof DOMException && error.name === "TimeoutError") {
         throw new AiProviderError("timeout");
@@ -273,7 +297,7 @@ async function fetchWithValidatedRedirects({
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location || redirectCount === maxRedirects) {
-        await dispatcher.close().catch(() => undefined);
+        await dispatcher?.destroy().catch(() => undefined);
         throw new AiProviderError("invalid_response");
       }
       let redirectTarget: URL;
@@ -281,11 +305,11 @@ async function fetchWithValidatedRedirects({
         redirectTarget = new URL(location, target);
       } catch {
         await response.body?.cancel().catch(() => undefined);
-        await dispatcher.close().catch(() => undefined);
+        await dispatcher?.destroy().catch(() => undefined);
         throw new AiProviderError("invalid_response");
       }
       await response.body?.cancel().catch(() => undefined);
-      await dispatcher.close().catch(() => undefined);
+      await dispatcher?.destroy().catch(() => undefined);
       if (
         redirectTarget.origin !== target.origin &&
         !request.allowCrossOriginRedirects
@@ -306,6 +330,7 @@ export function createOpenAiCompatibleAdapter(
   options: OpenAiCompatibleAdapterOptions = {},
 ): AiProviderAdapter {
   const fetchImpl = options.fetchImpl ?? (undiciFetch as unknown as typeof fetch);
+  const trustedProxyFetchImpl = options.trustedProxyFetchImpl ?? globalThis.fetch;
   const maxRedirects = options.maxRedirects ?? 2;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
@@ -319,6 +344,7 @@ export function createOpenAiCompatibleAdapter(
       try {
         const fetched = await fetchWithValidatedRedirects({
           fetchImpl,
+          trustedProxyFetchImpl,
           resolver: options.resolver,
           request,
           signal: requestSignal,
@@ -350,7 +376,11 @@ export function createOpenAiCompatibleAdapter(
       let toolCallFinishEventExcerpt: string | undefined;
       let firstChunkLogged = false;
       let firstUnhandledDeltaLogged = false;
-      for await (const data of readSseData(response, maxResponseBytes)) {
+      for await (const data of readSseData(
+        response,
+        maxResponseBytes,
+        requestSignal,
+      )) {
         if (data === "[DONE]") break;
 
         let chunk: OpenAiChunk;
@@ -508,7 +538,7 @@ export function createOpenAiCompatibleAdapter(
         }
         throw error;
       } finally {
-        await dispatcher?.close().catch(() => undefined);
+        await dispatcher?.destroy().catch(() => undefined);
       }
     },
   };
