@@ -6,22 +6,28 @@ import {
 describe("worker instance lock", () => {
   it("allows only one live process to own a stable worker identity", async () => {
     let release!: () => void;
+    let markAcquired!: () => void;
     const mayFinish = new Promise<void>((resolve) => {
       release = resolve;
     });
+    const acquired = new Promise<void>((resolve) => {
+      markAcquired = resolve;
+    });
     const first = withWorkerInstanceLock(
       "default/ai-worker/lock-test",
-      async () => mayFinish,
+      async () => {
+        markAcquired();
+        return mayFinish;
+      },
     );
 
-    await vi.waitFor(async () => {
-      await expect(
-        withWorkerInstanceLock(
-          "default/ai-worker/lock-test",
-          async () => undefined,
-        ),
-      ).rejects.toBeInstanceOf(WorkerInstanceAlreadyRunningError);
-    });
+    await acquired;
+    await expect(
+      withWorkerInstanceLock(
+        "default/ai-worker/lock-test",
+        async () => undefined,
+      ),
+    ).rejects.toBeInstanceOf(WorkerInstanceAlreadyRunningError);
 
     release();
     await first;

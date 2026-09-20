@@ -113,6 +113,8 @@ export const useAdminSetupStyles = createStyles(({ token, css }) => ({
     overflow-wrap: anywhere;
   `,
   notice: css`
-    margin-bottom: 18px;
+    && {
+      margin-bottom: 18px;
+    }
   `,
 }));

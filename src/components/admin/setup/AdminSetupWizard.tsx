@@ -150,8 +150,8 @@ export function AdminSetupWizard({ initialMode }: { initialMode: SetupMode }) {
             <Alert
               className={styles.notice}
               description={t("setup.sessionExpiredDescription")}
-              message={t("setup.sessionExpiredTitle")}
               showIcon
+              title={t("setup.sessionExpiredTitle")}
               type="warning"
             />
           ) : null}
@@ -189,7 +189,10 @@ export function AdminSetupWizard({ initialMode }: { initialMode: SetupMode }) {
               codes={recovery.codes}
               continueLabel={t("setup.goToSignIn")}
               email={recovery.email}
-              onContinue={() => router.replace("/sign-in")}
+              onContinue={() => {
+                router.replace("/sign-in");
+                router.refresh();
+              }}
             />
           ) : null}
         </div>

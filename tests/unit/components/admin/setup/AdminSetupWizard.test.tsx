@@ -110,6 +110,7 @@ describe("AdminSetupWizard", () => {
     expect(screen.getByRole("button", { name: "打印恢复码" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "前往登录" }));
     expect(router.replace).toHaveBeenCalledWith("/sign-in");
+    expect(router.refresh).toHaveBeenCalledOnce();
   });
 
   it("returns to code entry when a restart invalidates the session", async () => {
