@@ -64,14 +64,15 @@ docker compose --env-file compose.env pull
 docker compose --env-file compose.env up -d --wait
 ```
 
-`ANONRESUME_VERSION` 必须使用明确且不可变的发行标签，例如 `v1.4.0`，不要使用 `latest`。首次启动后，可在不依赖 SMTP 的情况下创建唯一的待激活超管，并从终端取得一次性激活链接：
+`ANONRESUME_VERSION` 必须使用明确且不可变的发行标签，例如 `v1.4.0`，不要使用 `latest`。首次启动时，Web 容器会在启动日志中输出一次性初始化码：
 
 ```bash
-docker compose --env-file compose.env run --rm --no-deps web \
-  bootstrap-admin owner@example.com
+docker compose --env-file compose.env logs web
 ```
 
-将输出的激活链接视为敏感信息并通过可信渠道打开。业务数据保存在 `postgres-data` 卷，自动生成的部署信任根保存在 `deployment-secrets` 卷；两者都应备份，丢失配置主密钥可能导致已加密的平台配置无法恢复。
+将初始化码视为密码，不要写入工单、聊天或部署报告。访问公开地址的 `/setup`，填写初始化码后设置用户名、邮箱、密码和 MFA；首次初始化不依赖 SMTP。完成后保存一次性恢复码，并确认 `/api/health/ready` 仍返回 `200` 且 `setupRequired` 为 `false`。
+
+业务数据保存在 `postgres-data` 卷，自动生成的部署信任根保存在 `deployment-secrets` 卷；两者都应备份，丢失配置主密钥可能导致已加密的平台配置无法恢复。
 
 默认编排各启动一个 AI Worker 和 PDF Worker，并为它们提供稳定实例标识。扩容 Worker 时，每个副本必须设置唯一的 `ANONRESUME_INSTANCE_ID`。如需使用镜像代理，请通过 Docker 凭据存储登录并配置镜像来源，不要把仓库密码写入 `compose.env` 或 Compose 文件。
 
@@ -97,6 +98,8 @@ bunx playwright install chromium
 ```bash
 bun run dev
 ```
+
+首次启动时，从当前终端读取初始化码并访问 <http://localhost:3000/setup> 完成超级管理员与 MFA 设置。初始化码不会写入 URL，完成初始化后再次启动不会再输出新码。
 
 如需使用 PDF 导出，请在另一个终端启动 Worker：
 
@@ -150,13 +153,13 @@ bun run auth:migrate
 bun run db:migrate
 ```
 
-首次安装或从旧环境变量配置升级时，先按上一节导入并检查运行配置。首次创建超管还需要在提供一次性 `ANONRESUME_SUPER_ADMIN_EMAIL` 后显式执行：
+首次安装或从旧环境变量配置升级时，先按上一节导入并检查运行配置。启动 Web 服务后，从受保护的服务日志中读取一次性初始化码：
 
 ```bash
-bun run admin:bootstrap
+journalctl -u anonresume-web.service -b --no-pager
 ```
 
-生产环境必须先配置可用的 SMTP，才能发送超管激活邮件。正常的 `bun run start` 不会自动创建或修改超管身份。
+请按实际部署替换 Web 单元名。访问公开地址的 `/setup` 完成超级管理员、密码、MFA 和恢复码设置。首次初始化不需要 SMTP；初始化完成后，后续 Web 重启不会再输出初始化码。旧的 `admin:bootstrap` 与容器 `bootstrap-admin` 入口仅保留一个版本的兼容期并已弃用，不能用于已完成初始化或正在恢复的实例。
 
 分别运行 Web 服务、PDF Worker 和 AI Worker：
 
@@ -172,14 +175,14 @@ bun run worker:ai
 
 ## 管理与安全
 
-- 系统通过显式引导命令创建唯一的待激活超管；检测到多个超管会阻止管理服务继续运行，并提供 CLI 修复工具。
+- 新实例通过 Web 启动日志中的一次性初始化码进入 `/setup`，创建唯一超管并强制绑定 MFA；检测到多个超管会阻止恢复操作，并提供 CLI 修复工具。
 - 超管账号不具备普通简历功能。普通用户可以拥有一个或多个管理角色，并在进入管理模式时进行额外 MFA 验证。
 - 支持虚拟 MFA 设备、一次性恢复码、多设备绑定、重新认证和普通管理员 MFA 重置审批。
 - 管理端提供用户、简历、导出队列、角色权限、公告、AI 模型与额度、平台配置、系统状态、安全审批和审计管理。
 - 平台配置具有独立权限、敏感操作再认证、加密存储、版本历史和恢复流程。
 - 审计记录保留操作类型、资源标识、结果和变更详情，并在可用时同时展示可读值与原始值。
 
-如果唯一超管同时丢失 MFA 设备和恢复码，请在服务器上使用 `bun run admin:reset-mfa`，不要通过数据库手工绕过安全流程。
+如果唯一超管的登录凭据和全部恢复方式均不可用，应先备份数据库和部署信任根，再由具有完整主机权限的操作员执行 `bun run deploy:setup-deactivate -- --reason <原因> --confirm <部署ID>`，随后重启 Web 并通过新的 `/setup` 流程恢复。该命令会立即撤销超管产品会话、撤销全部管理会话并冻结管理功能，必须在明确授权后使用；不要通过数据库手工改状态。仅丢失 MFA 时仍可使用现有的审批或 `admin:reset-mfa` 兼容流程。
 
 ## 技术栈
 
@@ -199,7 +202,8 @@ AnonResume 使用 Next.js 16、React 19、TypeScript、Ant Design、Tiptap、Zus
 | `bun run config:import-env` | 预览或执行旧环境变量配置导入 |
 | `bun run config:doctor` | 检查引导凭据、配置版本和服务加载状态 |
 | `bun run config:reencrypt-secrets` | 迁移旧版密文或轮换配置主密钥 |
-| `bun run admin:bootstrap` | 显式创建唯一的待激活超管 |
+| `bun run deploy:setup-deactivate` | 经授权将实例切换为超级管理员恢复模式 |
+| `bun run admin:bootstrap` | 已弃用的旧版超管引导兼容入口 |
 | `bun run admin:doctor` | 检查管理系统状态 |
 | `bun run admin:repair-super-admin` | 修复多超管异常状态 |
 | `bun run admin:reset-mfa` | 通过 CLI 重置超管 MFA |

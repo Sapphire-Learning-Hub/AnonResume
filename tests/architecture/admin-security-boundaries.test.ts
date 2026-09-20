@@ -81,7 +81,7 @@ describe("admin security architecture", () => {
     expect(requestBoundary).toContain('sameSite: "strict"');
   });
 
-  it("keeps production bootstrap explicit while preserving development convenience", () => {
+  it("keeps legacy bootstrap explicit and out of normal startup", () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(root, "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
@@ -90,9 +90,7 @@ describe("admin security architecture", () => {
       "bun run scripts/admin-bootstrap.ts",
     );
     expect(packageJson.scripts?.start).toBe("next start");
-    expect(packageJson.scripts?.dev).toBe(
-      "bun run scripts/admin-bootstrap.ts development && next dev",
-    );
+    expect(packageJson.scripts?.dev).toBe("next dev");
     const bootstrapScript = readFileSync(
       resolve(root, "scripts/admin-bootstrap.ts"),
       "utf8",

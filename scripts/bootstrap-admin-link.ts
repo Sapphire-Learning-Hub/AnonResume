@@ -1,5 +1,6 @@
 import {
   bootstrapSuperAdminForTerminal,
+  LEGACY_BOOTSTRAP_WARNING,
 } from "@/lib/admin/bootstrap";
 import { isValidAdminEmail } from "@/lib/admin/configuration";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
@@ -11,6 +12,7 @@ if (!isValidAdminEmail(email)) {
 }
 
 try {
+  console.warn(LEGACY_BOOTSTRAP_WARNING);
   const bootstrap = readBootstrapConfig();
   const result = await bootstrapSuperAdminForTerminal({
     email: email!,
@@ -19,6 +21,10 @@ try {
 
   if (result.state === "existing") {
     console.info("A super-admin is already active; no activation link was created.");
+  } else if (result.state === "unavailable") {
+    console.info(
+      "Legacy bootstrap is unavailable for the current instance setup state. Use /setup or the authorized setup-deactivate recovery flow.",
+    );
   } else {
     console.info(result.activationUrl);
   }

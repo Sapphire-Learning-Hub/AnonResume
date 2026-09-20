@@ -5,12 +5,19 @@ import type { PoolClient } from "pg";
 import { getDatabaseSchemaName } from "@/db";
 
 import { resolveAdminSuperAdminEmail } from "@/lib/admin/configuration";
+import { getInstanceSetupSnapshot } from "@/lib/admin/setup/repository";
+import type { InstanceSetupState } from "@/lib/admin/setup/types";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { sendSuperAdminActivationEmail } from "@/lib/runtime/email";
 import { resolveApplicationOriginForBootstrap } from "@/lib/runtime/configuration";
 
 const BOOTSTRAP_LOCK = "anonresume:super-admin-bootstrap";
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+export const LEGACY_BOOTSTRAP_WARNING =
+  "[AnonResume] Deprecated: terminal super-admin bootstrap is retained for one compatibility release. Use the startup code and /setup instead.";
+
+type InspectSetupState = () => Promise<{ state: InstanceSetupState }>;
 
 export class AdminSingletonViolationError extends Error {
   constructor(public readonly userIds: string[]) {
@@ -193,10 +200,19 @@ export async function bootstrapSuperAdmin({
 
 export async function bootstrapConfiguredSuperAdmin(
   environment: NodeJS.ProcessEnv,
+  inspectSetupState: InspectSetupState = getInstanceSetupSnapshot,
 ) {
   const email = resolveAdminSuperAdminEmail(environment);
   if (!email) {
     return { state: "skipped" as const };
+  }
+
+  const setup = await inspectSetupState();
+  if (setup.state !== "pending_initialization") {
+    return {
+      state: "unavailable" as const,
+      setupState: setup.state,
+    };
   }
 
   return bootstrapSuperAdmin({
@@ -211,7 +227,16 @@ export async function bootstrapSuperAdminForTerminal(input: {
   store?: AdminBootstrapStore;
   email: string;
   applicationOrigin: string;
+  inspectSetupState?: InspectSetupState;
 }) {
+  const setup = await (input.inspectSetupState ?? getInstanceSetupSnapshot)();
+  if (setup.state !== "pending_initialization") {
+    return {
+      state: "unavailable" as const,
+      setupState: setup.state,
+    };
+  }
+
   let activationUrl: string | undefined;
   const result = await bootstrapSuperAdmin({
     store: input.store ?? new PostgresAdminBootstrapStore(),

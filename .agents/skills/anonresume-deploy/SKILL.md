@@ -57,18 +57,17 @@ credential workflow below.
    The migration service is a required one-shot dependency. Stop if it fails;
    never start the application against a partially migrated database.
 4. Verify `docker compose ps`, `/api/health/live`, `/api/health/ready`, sanitized
-   Web and worker logs, and fresh stable worker heartbeats. The default stack
+   Web and worker logs, and fresh stable worker heartbeats. Read the readiness
+   `setupRequired` field and `/api/setup/status` to distinguish a fresh setup,
+   completed instance, and authorized administrator recovery. The default stack
    runs one AI Worker and one PDF Worker. Every extra replica requires a unique
    `ANONRESUME_INSTANCE_ID`.
-5. On first installation, create the pending super-admin with:
-
-   ```sh
-   docker compose --env-file compose.env run --rm --no-deps web \
-     bootstrap-admin <email>
-   ```
-
-   Treat the emitted activation URL as a secret and never include it in logs or
-   reports.
+5. On a fresh or recovery instance, tell the operator to retrieve the delimited
+   setup code directly from the Web container startup log and complete `/setup`.
+   Never paste, quote, summarize, or copy the code into tool output, task
+   updates, reports, shell history, or chat. SMTP is not required. After the
+   operator completes setup, restart Web once and verify readiness reports
+   `setupRequired: false` and no new setup-code log line is emitted.
 6. Roll back application images only after proving the previous release is
    compatible with the migrated schema. Never roll back the schema
    automatically.
@@ -215,7 +214,7 @@ anonresume.config-master-key-previous     optional during rotation
 anonresume.database-schema               optional
 anonresume.legacy-admin-mfa-key           migration window only
 anonresume.legacy-ai-credentials-key      migration window only
-anonresume.super-admin-email              first initialization only
+anonresume.super-admin-email              deprecated bootstrap compatibility only
 ```
 
 The first four identifiers are required by Web, PDF Worker, AI Worker, and
@@ -285,6 +284,11 @@ Verify all of the following with fresh output:
   successful final response.
 - Recent Web, PDF Worker, and AI Worker journals contain startup messages and
   no new configuration, database, schema, or runtime errors.
+- Readiness returns HTTP `200`; inspect its non-secret `setupRequired` value.
+  For a fresh or authorized recovery instance, direct the operator to retrieve
+  the setup code from the Web journal and complete `/setup` without copying the
+  code into Codex output. For a completed instance, restart Web and verify the
+  new journal segment contains no setup-code line.
 - A fresh `ai-runtime` heartbeat exists for the deployed release after the
   AI Worker starts. Do not infer AI Worker health from systemd state alone.
 - The credential-bearing doctor oneshot runs `bun run config:doctor --json`.
@@ -321,6 +325,31 @@ settings and legacy encryption keys, use this order without skipping steps:
 If any required oneshot context is absent, stop. Never emulate it by placing
 credential values in command arguments, SSH input, temporary shell files, or
 exported environment variables.
+
+## Super-admin recovery
+
+`setup-deactivate` is a root-trust recovery operation, not a routine deployment
+step. It freezes every management route, revokes all management sessions and
+the target super-admin's product sessions, and remains active until `/setup`
+completes. Run it only after the user explicitly authorizes this exact recovery
+and confirms a current PostgreSQL plus deployment-secrets backup.
+
+- For Compose, run the image's `setup-deactivate` entrypoint with a meaningful
+  `--reason` and exact `--confirm <deployment-id>`, then restart only Web so it
+  issues a recovery code.
+- For systemd, run `bun run deploy:setup-deactivate` only through a dedicated
+  credential-bearing oneshot unit with the same trust roots as Web. Do not put
+  credentials in SSH commands or environment exports. Restart Web after the
+  oneshot succeeds.
+- Never read or reproduce the recovery code in task output. The operator reads
+  it directly from the protected Web startup log and completes `/setup`.
+- Verify ordinary product routes remain available, management routes are
+  blocked before completion, and readiness stays HTTP `200` with
+  `setupRequired: true`. After completion, verify management sign-in, a fresh
+  Web restart without a setup-code line, and `setupRequired: false`.
+- There is no casual cancellation. Do not modify setup state directly in the
+  database. Use the existing integrity repair workflow if multiple active
+  super-admins cause the command to refuse.
 
 ## Failure handling
 

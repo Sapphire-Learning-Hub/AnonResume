@@ -64,14 +64,15 @@ docker compose --env-file compose.env pull
 docker compose --env-file compose.env up -d --wait
 ```
 
-`ANONRESUME_VERSION` must be an explicit immutable release tag such as `v1.4.0`; do not use `latest`. After the first startup, create the single pending super-admin and receive a one-time activation URL without requiring SMTP:
+`ANONRESUME_VERSION` must be an explicit immutable release tag such as `v1.4.0`; do not use `latest`. On first startup, the Web container writes a one-time setup code to its startup log:
 
 ```bash
-docker compose --env-file compose.env run --rm --no-deps web \
-  bootstrap-admin owner@example.com
+docker compose --env-file compose.env logs web
 ```
 
-Treat the printed activation URL as sensitive and open it through a trusted channel. Application data lives in the `postgres-data` volume, while generated deployment trust roots live in `deployment-secrets`. Back up both: losing the configuration master key may make encrypted platform settings unrecoverable.
+Treat the setup code like a password and never place it in tickets, chat, or deployment reports. Open `/setup` on the public origin and use the code to configure the username, email, password, and MFA. SMTP is not required for first setup. Save the one-time recovery codes, then confirm `/api/health/ready` still returns `200` with `setupRequired` set to `false`.
+
+Application data lives in the `postgres-data` volume, while generated deployment trust roots live in `deployment-secrets`. Back up both: losing the configuration master key may make encrypted platform settings unrecoverable.
 
 The default stack starts one AI worker and one PDF worker with stable instance identities. Every additional worker replica must receive a unique `ANONRESUME_INSTANCE_ID`. When using a registry mirror, authenticate through Docker's credential store and configure the image source without placing registry passwords in `compose.env` or Compose files.
 
@@ -97,6 +98,8 @@ Start the web application:
 ```bash
 bun run dev
 ```
+
+On first startup, read the setup code from this terminal and open <http://localhost:3000/setup> to configure the super-admin and MFA. The code is never placed in the URL, and completed instances do not print a new code on restart.
 
 To enable PDF export, start the worker in another terminal:
 
@@ -150,13 +153,13 @@ bun run auth:migrate
 bun run db:migrate
 ```
 
-For a first installation or an upgrade from environment-backed settings, import and inspect runtime configuration as described above. Creating the first super-admin also requires explicitly running the following command after providing the one-time `ANONRESUME_SUPER_ADMIN_EMAIL` input:
+For a first installation or an upgrade from environment-backed settings, import and inspect runtime configuration as described above. After starting the Web service, read its one-time setup code from the protected service journal:
 
 ```bash
-bun run admin:bootstrap
+journalctl -u anonresume-web.service -b --no-pager
 ```
 
-Production must have working SMTP settings before it can deliver the super-admin activation email. A normal `bun run start` never creates or modifies the super-admin identity automatically.
+Replace the Web unit name to match the installation. Open `/setup` on the public origin to configure the super-admin, password, MFA, and recovery codes. SMTP is not required for first setup, and later Web restarts stop printing setup codes after completion. The legacy `admin:bootstrap` and container `bootstrap-admin` commands remain for one compatibility release only; they cannot operate on completed or recovery-mode instances.
 
 Run the web application, PDF worker, and AI worker as separate services:
 
@@ -172,14 +175,14 @@ Production deployments should use a dedicated least-privileged database role and
 
 ## Administration and Security
 
-- An explicit bootstrap command creates the single pending super-admin identity. Detecting multiple super-admins blocks management startup and provides a CLI repair path.
+- New instances use the one-time Web startup code at `/setup` to create the single super-admin and bind MFA. Detecting multiple super-admins blocks recovery and provides a CLI repair path.
 - The super-admin cannot use regular resume features. Regular users may hold multiple management roles and complete an additional MFA challenge before entering management mode.
 - Virtual MFA devices, one-time recovery codes, multiple devices, reauthentication, and approval-based MFA resets for regular administrators are supported.
 - The management console covers users, resumes, exports, roles, announcements, AI models and quotas, platform configuration, system status, security approvals, and audit records.
 - Platform configuration has dedicated permissions, reauthentication for sensitive operations, encrypted storage, version history, and recovery workflows.
 - Audit events retain the operation, resource identifiers, outcome, and change details, showing readable values alongside raw values when possible.
 
-If the only super-admin loses both MFA devices and recovery codes, use `bun run admin:reset-mfa` on the server instead of bypassing the security flow in the database.
+If the only super-admin loses sign-in credentials and every recovery method, first back up PostgreSQL and deployment trust roots. An operator with full host access may then run `bun run deploy:setup-deactivate -- --reason <reason> --confirm <deployment-id>`, restart Web, and complete the new `/setup` recovery flow. This immediately revokes the super-admin's product sessions, revokes every management session, and freezes management access, so it requires explicit authorization. Do not bypass the state in the database. Existing approval or `admin:reset-mfa` compatibility flows remain appropriate when only MFA is lost.
 
 ## Technology
 
@@ -199,7 +202,8 @@ AnonResume is built with Next.js 16, React 19, TypeScript, Ant Design, Tiptap, Z
 | `bun run config:import-env` | Preview or apply a legacy environment configuration import |
 | `bun run config:doctor` | Inspect bootstrap credentials, configuration revisions, and service state |
 | `bun run config:reencrypt-secrets` | Migrate legacy ciphertext or rotate the configuration master key |
-| `bun run admin:bootstrap` | Explicitly create the unique pending super-admin identity |
+| `bun run deploy:setup-deactivate` | Enter authorized super-admin recovery mode |
+| `bun run admin:bootstrap` | Deprecated legacy super-admin bootstrap compatibility entrypoint |
 | `bun run admin:doctor` | Inspect management-system health |
 | `bun run admin:repair-super-admin` | Repair an invalid multiple-super-admin state |
 | `bun run admin:reset-mfa` | Reset super-admin MFA through the CLI |

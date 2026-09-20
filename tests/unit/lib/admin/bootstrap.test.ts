@@ -2,6 +2,7 @@ import {
   AdminBootstrapConflictError,
   AdminSingletonViolationError,
   PostgresAdminBootstrapStore,
+  LEGACY_BOOTSTRAP_WARNING,
   bootstrapSuperAdminForTerminal,
   bootstrapConfiguredSuperAdmin,
   bootstrapSuperAdmin,
@@ -42,7 +43,7 @@ describe("super-admin bootstrap", () => {
         NODE_ENV: "development",
         ANONRESUME_SUPER_ADMIN_EMAIL: "owner@example.com",
         BETTER_AUTH_URL: "http://localhost:3000",
-      }),
+      }, async () => ({ state: "pending_initialization" })),
     ).resolves.toMatchObject({ state: "created", userId: "super-user" });
     expect(lock).toHaveBeenCalledOnce();
   });
@@ -75,6 +76,7 @@ describe("super-admin bootstrap", () => {
         store: createStore(),
         email: "owner@example.com",
         applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "pending_initialization" }),
       }),
     ).resolves.toMatchObject({
       state: "created",
@@ -83,6 +85,47 @@ describe("super-admin bootstrap", () => {
         /^https:\/\/resume\.example\.com\/activate\?token=/,
       ),
     });
+  });
+
+  it("deprecates terminal bootstrap in favor of browser setup", () => {
+    expect(LEGACY_BOOTSTRAP_WARNING.toLowerCase()).toContain("deprecated");
+    expect(LEGACY_BOOTSTRAP_WARNING).toContain("/setup");
+  });
+
+  it("does not create activation material after setup is completed", async () => {
+    const store = createStore();
+    const withBootstrapLock = vi.spyOn(store, "withBootstrapLock");
+
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store,
+        email: "owner@example.com",
+        applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "completed" }),
+      }),
+    ).resolves.toEqual({
+      state: "unavailable",
+      setupState: "completed",
+    });
+    expect(withBootstrapLock).not.toHaveBeenCalled();
+  });
+
+  it("does not bypass an administrator recovery identity", async () => {
+    const store = createStore();
+    const withBootstrapLock = vi.spyOn(store, "withBootstrapLock");
+
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store,
+        email: "replacement@example.com",
+        applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "pending_admin_recovery" }),
+      }),
+    ).resolves.toEqual({
+      state: "unavailable",
+      setupState: "pending_admin_recovery",
+    });
+    expect(withBootstrapLock).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the singleton already exists", async () => {
