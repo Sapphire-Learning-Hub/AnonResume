@@ -40,6 +40,13 @@ jobs:
         run: |
           curl --fail --silent http://127.0.0.1:13000/api/health/live
           curl --fail --silent http://127.0.0.1:13000/api/health/ready
+      - name: Verify PDF browser
+        run: >-
+          docker run --rm --entrypoint bun anonresume-pdf-ci:ci -e
+          'import { chromium } from "playwright";
+          const browser = await chromium.launch({ headless: true });
+          console.log(await browser.version());
+          await browser.close();'
       - name: Scan core image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -101,7 +108,7 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
+            type=raw,value=${{ github.ref_name }}
             type=sha,format=long
       - name: Build and publish image
         uses: docker/build-push-action@v7
