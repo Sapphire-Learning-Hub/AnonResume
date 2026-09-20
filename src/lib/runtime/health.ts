@@ -1,11 +1,13 @@
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
+import { inspectPublicSetupStatus } from "@/lib/admin/setup/session";
 
 interface ReadinessDependencies {
   validateBootstrap: typeof validateBootstrapConfiguration;
   checkDatabase: () => Promise<void>;
   loadRuntime: () => Promise<{ health: string }>;
+  loadSetupStatus: typeof inspectPublicSetupStatus;
 }
 
 const defaultDependencies: ReadinessDependencies = {
@@ -16,11 +18,15 @@ const defaultDependencies: ReadinessDependencies = {
   async loadRuntime() {
     return getRuntimeConfig("web");
   },
+  loadSetupStatus: inspectPublicSetupStatus,
 };
 
 export async function checkApplicationReadiness(
   dependencies: ReadinessDependencies = defaultDependencies,
-): Promise<{ ready: true } | { ready: false; reason: string }> {
+): Promise<
+  | { ready: true; setupRequired: boolean }
+  | { ready: false; reason: string }
+> {
   const bootstrap = dependencies.validateBootstrap();
   if (!bootstrap.valid) {
     return { ready: false, reason: "bootstrap_invalid" };
@@ -32,7 +38,8 @@ export async function checkApplicationReadiness(
     if (runtime.health === "recovery_required") {
       return { ready: false, reason: "configuration_unavailable" };
     }
-    return { ready: true };
+    const setup = await dependencies.loadSetupStatus();
+    return { ready: true, setupRequired: setup.required };
   } catch {
     return { ready: false, reason: "core_unavailable" };
   }

@@ -13,6 +13,7 @@ describe("application readiness", () => {
         }),
         checkDatabase,
         loadRuntime,
+        loadSetupStatus: vi.fn(),
       }),
     ).resolves.toEqual({ ready: false, reason: "bootstrap_invalid" });
     expect(checkDatabase).not.toHaveBeenCalled();
@@ -25,8 +26,9 @@ describe("application readiness", () => {
         validateBootstrap: () => ({ valid: true, issues: [] }),
         checkDatabase: vi.fn().mockResolvedValue(undefined),
         loadRuntime: vi.fn().mockResolvedValue({ health: "healthy" }),
+        loadSetupStatus: vi.fn().mockResolvedValue({ required: false }),
       }),
-    ).resolves.toEqual({ ready: true });
+    ).resolves.toEqual({ ready: true, setupRequired: false });
   });
 
   it("keeps optional integration configuration out of the readiness contract", async () => {
@@ -35,8 +37,23 @@ describe("application readiness", () => {
         validateBootstrap: () => ({ valid: true, issues: [] }),
         checkDatabase: vi.fn().mockResolvedValue(undefined),
         loadRuntime: vi.fn().mockResolvedValue({ health: "degraded" }),
+        loadSetupStatus: vi.fn().mockResolvedValue({ required: false }),
       }),
-    ).resolves.toEqual({ ready: true });
+    ).resolves.toEqual({ ready: true, setupRequired: false });
+  });
+
+  it("reports pending setup without failing technical readiness", async () => {
+    await expect(
+      checkApplicationReadiness({
+        validateBootstrap: () => ({ valid: true, issues: [] }),
+        checkDatabase: vi.fn().mockResolvedValue(undefined),
+        loadRuntime: vi.fn().mockResolvedValue({ health: "healthy" }),
+        loadSetupStatus: vi.fn().mockResolvedValue({
+          required: true,
+          mode: "initialization",
+        }),
+      }),
+    ).resolves.toEqual({ ready: true, setupRequired: true });
   });
 
   it("returns a generic unavailable reason when core state cannot be read", async () => {
@@ -45,6 +62,7 @@ describe("application readiness", () => {
         validateBootstrap: () => ({ valid: true, issues: [] }),
         checkDatabase: vi.fn().mockResolvedValue(undefined),
         loadRuntime: vi.fn().mockRejectedValue(new Error("secret detail")),
+        loadSetupStatus: vi.fn(),
       }),
     ).resolves.toEqual({ ready: false, reason: "core_unavailable" });
   });

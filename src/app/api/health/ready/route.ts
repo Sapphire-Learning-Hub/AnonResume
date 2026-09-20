@@ -6,7 +6,7 @@ export async function GET() {
   const readiness = await checkApplicationReadiness();
   return NextResponse.json(
     readiness.ready
-      ? { status: "ready" }
+      ? { status: "ready", setupRequired: readiness.setupRequired }
       : { status: "unavailable", reason: readiness.reason },
     {
       status: readiness.ready ? 200 : 503,
