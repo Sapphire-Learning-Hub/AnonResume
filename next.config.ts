@@ -5,6 +5,7 @@ import { resolveReleaseMetadata } from "./src/lib/runtime/release-metadata";
 const release = resolveReleaseMetadata();
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   env: {
     ANONRESUME_BUILD_COMMIT: release.commit ?? "",
     ANONRESUME_BUILD_TAG: release.tag,

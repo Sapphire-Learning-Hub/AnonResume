@@ -34,7 +34,6 @@ import {
   resolveApplicationOriginForBootstrap,
   validateBootstrapConfiguration,
 } from "@/lib/runtime/configuration";
-import { getRuntimeConfig } from "@/lib/config/runtime";
 import { UI_FONT_FAMILY } from "@/styles/ui-font";
 import { AppThemeProvider } from "@/theme/AppThemeProvider";
 import { getAppThemeCssVariables } from "@/theme/app-palette";
@@ -118,6 +117,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   let runtimeUnavailable = false;
   if (pathname) {
     try {
+      const { getRuntimeConfig } = await import("@/lib/config/runtime");
       const runtime = await getRuntimeConfig("web");
       publicRuntimeConfig = {
         configurationHealth: runtime.health,

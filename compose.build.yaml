@@ -1,0 +1,21 @@
+services:
+  secrets-init:
+    build: &core-build
+      context: .
+      target: core-runtime
+      args:
+        ANONRESUME_BUILD_COMMIT: ${ANONRESUME_BUILD_COMMIT:-local}
+        ANONRESUME_BUILD_TAG: ${ANONRESUME_BUILD_TAG:-development}
+  migrate:
+    build: *core-build
+  web:
+    build: *core-build
+  ai-worker:
+    build: *core-build
+  pdf-worker:
+    build:
+      context: .
+      target: pdf-runtime
+      args:
+        ANONRESUME_BUILD_COMMIT: ${ANONRESUME_BUILD_COMMIT:-local}
+        ANONRESUME_BUILD_TAG: ${ANONRESUME_BUILD_TAG:-development}

@@ -31,6 +31,6 @@ it("keeps local package script entrypoints valid", async () => {
     "bun run scripts/config-doctor.ts",
   );
   expect(manifest.scripts?.["auth:migrate"]).toBe(
-    "bunx @better-auth/cli migrate --config scripts/auth-migration-config.ts",
+    "better-auth migrate --config scripts/auth-migration-config.ts",
   );
 });

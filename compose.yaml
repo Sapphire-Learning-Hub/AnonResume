@@ -1,0 +1,134 @@
+name: anonresume
+
+x-core-image: &core-image
+  image: ${ANONRESUME_IMAGE:-ghcr.io/sapphire-learning-hub/anonresume}:${ANONRESUME_VERSION:?Set ANONRESUME_VERSION to an immutable release tag}
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL to the public HTTPS origin}
+  DATABASE_URL_FILE: /run/anonresume-secrets/database-url
+  BETTER_AUTH_SECRET_FILE: /run/anonresume-secrets/auth-secret
+  CONFIG_MASTER_KEY_FILE: /run/anonresume-secrets/config-master-key
+  ANONRESUME_DEPLOYMENT_ID: ${ANONRESUME_DEPLOYMENT_ID:-production}
+
+x-app-security: &app-security
+  init: true
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m
+    - /app/.next/cache:rw,noexec,nosuid,size=256m
+
+services:
+  secrets-init:
+    <<: *core-image
+    command: init-secrets
+    user: "0:0"
+    environment:
+      ANONRESUME_SECRET_DIR: /run/anonresume-secrets
+      POSTGRES_DB: ${POSTGRES_DB:-anonresume}
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-anonresume}
+    volumes:
+      - deployment-secrets:/run/anonresume-secrets
+    restart: "no"
+
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-anonresume}
+      POSTGRES_PASSWORD_FILE: /run/anonresume-secrets/database-password
+      POSTGRES_USER: ${POSTGRES_USER:-anonresume}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - deployment-secrets:/run/anonresume-secrets:ro
+    restart: unless-stopped
+
+  migrate:
+    <<: [*core-image, *app-security]
+    command: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-environment
+      ANONRESUME_INSTANCE_ID: migrate-1
+    volumes:
+      - deployment-secrets:/run/anonresume-secrets:ro
+    restart: "no"
+
+  web:
+    <<: [*core-image, *app-security]
+    command: web
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      ANONRESUME_INSTANCE_ID: web-1
+    healthcheck:
+      test: ["CMD", "anonresume", "healthcheck", "web"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    ports:
+      - "${ANONRESUME_PORT:-3000}:3000"
+    volumes:
+      - deployment-secrets:/run/anonresume-secrets:ro
+    restart: unless-stopped
+
+  ai-worker:
+    <<: [*core-image, *app-security]
+    command: ai-worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      ANONRESUME_INSTANCE_ID: ai-1
+    healthcheck:
+      test: ["CMD", "anonresume", "healthcheck", "ai-worker"]
+      interval: 20s
+      timeout: 10s
+      retries: 4
+      start_period: 20s
+    volumes:
+      - deployment-secrets:/run/anonresume-secrets:ro
+    restart: unless-stopped
+
+  pdf-worker:
+    <<: *app-security
+    image: ${ANONRESUME_PDF_IMAGE:-ghcr.io/sapphire-learning-hub/anonresume-pdf}:${ANONRESUME_VERSION:?Set ANONRESUME_VERSION to an immutable release tag}
+    command: pdf-worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      ANONRESUME_INSTANCE_ID: pdf-1
+    healthcheck:
+      test: ["CMD", "anonresume", "healthcheck", "pdf-worker"]
+      interval: 20s
+      timeout: 10s
+      retries: 4
+      start_period: 20s
+    shm_size: 1gb
+    volumes:
+      - deployment-secrets:/run/anonresume-secrets:ro
+    restart: unless-stopped
+
+volumes:
+  deployment-secrets:
+  postgres-data:
