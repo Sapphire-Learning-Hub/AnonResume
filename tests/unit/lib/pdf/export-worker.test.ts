@@ -42,6 +42,7 @@ describe("PDF export worker", () => {
         health: "healthy" as const,
         hotRevisionId: "revision-1",
         instanceId: "pdf-worker-test-runtime",
+        sessionId: "pdf-worker-test-session",
         lastError: null,
         restartRevisionId: "revision-1",
         values,
@@ -189,6 +190,7 @@ describe("PDF export worker", () => {
       health: "healthy" as const,
       hotRevisionId: "revision-1",
       instanceId: "pdf-worker-hot-refresh-runtime",
+      sessionId: "pdf-worker-hot-refresh-session",
       lastError: null,
       restartRevisionId: "revision-1",
       values: initialValues,
@@ -240,6 +242,7 @@ describe("PDF export worker", () => {
     const worker = runPdfExportWorker({
       signal: controller.signal,
       workerId: "hot-refresh-worker",
+      sessionId: "hot-refresh-session",
       appOrigin: "https://resume.example.com",
       runtimeManager: runtime,
       processJob,
@@ -280,6 +283,7 @@ describe("PDF export worker", () => {
         hotRevisionId: "revision-2",
         restartRevisionId: "revision-1",
       });
+      expect(heartbeat?.sessionId).toBe("hot-refresh-session");
     });
     expect(processJob).toHaveBeenCalledTimes(1);
     await expect(

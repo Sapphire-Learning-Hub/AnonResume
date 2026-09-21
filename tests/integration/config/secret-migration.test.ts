@@ -265,6 +265,7 @@ describe("legacy secret re-encryption", () => {
 
     await db.insert(workerHeartbeats).values({
       workerId,
+      sessionId: workerId,
       workerType: "ai-runtime",
       release: "test",
       startedAt: new Date(),

@@ -2,6 +2,8 @@ import {
   AdminBootstrapConflictError,
   AdminSingletonViolationError,
   PostgresAdminBootstrapStore,
+  LEGACY_BOOTSTRAP_WARNING,
+  bootstrapSuperAdminForTerminal,
   bootstrapConfiguredSuperAdmin,
   bootstrapSuperAdmin,
   type AdminBootstrapStore,
@@ -21,6 +23,7 @@ function createStore(
     createPendingIdentity: vi.fn(async () => ({ userId: "super-user" })),
     createSuperAdminPrincipal: vi.fn(async () => undefined),
     createActivationToken: vi.fn(async () => undefined),
+    markInstanceSetupCompleted: vi.fn(async () => undefined),
     ...transaction,
   };
 
@@ -41,13 +44,14 @@ describe("super-admin bootstrap", () => {
         NODE_ENV: "development",
         ANONRESUME_SUPER_ADMIN_EMAIL: "owner@example.com",
         BETTER_AUTH_URL: "http://localhost:3000",
-      }),
+      }, async () => ({ state: "pending_initialization" })),
     ).resolves.toMatchObject({ state: "created", userId: "super-user" });
     expect(lock).toHaveBeenCalledOnce();
   });
 
   it("creates exactly one pending identity and sends its activation link", async () => {
-    const store = createStore();
+    const markInstanceSetupCompleted = vi.fn(async () => undefined);
+    const store = createStore({ markInstanceSetupCompleted });
     const deliverActivation = vi.fn(async () => undefined);
 
     const result = await bootstrapSuperAdmin({
@@ -66,6 +70,65 @@ describe("super-admin bootstrap", () => {
         ),
       }),
     );
+    expect(markInstanceSetupCompleted).toHaveBeenCalledOnce();
+  });
+
+  it("returns a one-time activation link for an interactive bootstrap command", async () => {
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store: createStore(),
+        email: "owner@example.com",
+        applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "pending_initialization" }),
+      }),
+    ).resolves.toMatchObject({
+      state: "created",
+      userId: "super-user",
+      activationUrl: expect.stringMatching(
+        /^https:\/\/resume\.example\.com\/activate\?token=/,
+      ),
+    });
+  });
+
+  it("deprecates terminal bootstrap in favor of browser setup", () => {
+    expect(LEGACY_BOOTSTRAP_WARNING.toLowerCase()).toContain("deprecated");
+    expect(LEGACY_BOOTSTRAP_WARNING).toContain("/setup");
+  });
+
+  it("does not create activation material after setup is completed", async () => {
+    const store = createStore();
+    const withBootstrapLock = vi.spyOn(store, "withBootstrapLock");
+
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store,
+        email: "owner@example.com",
+        applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "completed" }),
+      }),
+    ).resolves.toEqual({
+      state: "unavailable",
+      setupState: "completed",
+    });
+    expect(withBootstrapLock).not.toHaveBeenCalled();
+  });
+
+  it("does not bypass an administrator recovery identity", async () => {
+    const store = createStore();
+    const withBootstrapLock = vi.spyOn(store, "withBootstrapLock");
+
+    await expect(
+      bootstrapSuperAdminForTerminal({
+        store,
+        email: "replacement@example.com",
+        applicationOrigin: "https://resume.example.com",
+        inspectSetupState: async () => ({ state: "pending_admin_recovery" }),
+      }),
+    ).resolves.toEqual({
+      state: "unavailable",
+      setupState: "pending_admin_recovery",
+    });
+    expect(withBootstrapLock).not.toHaveBeenCalled();
   });
 
   it("is idempotent when the singleton already exists", async () => {

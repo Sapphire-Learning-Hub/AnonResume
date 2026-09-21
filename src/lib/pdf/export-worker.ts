@@ -1,6 +1,3 @@
-import { hostname } from "node:os";
-import { randomUUID } from "node:crypto";
-
 import {
   claimPdfExportJobs,
   createPdfExportWorkerToken,
@@ -18,11 +15,15 @@ import {
 import { exportResumePdf } from "@/lib/pdf/render";
 import { PDF_EXPORT_WORKER_COOKIE } from "@/lib/http/request-authorization";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
+import { createLeaseOwner } from "@/lib/runtime/instance-identity";
 import {
   resolveApplicationOriginForBootstrap,
   validateBootstrapConfiguration,
 } from "@/lib/runtime/configuration";
-import { recordWorkerHeartbeat } from "@/lib/runtime/worker-heartbeat";
+import {
+  markWorkerStopped,
+  recordWorkerHeartbeat,
+} from "@/lib/runtime/worker-heartbeat";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;
@@ -146,6 +147,7 @@ export async function processPdfExportJob(
 export async function runPdfExportWorker(options?: {
   signal?: AbortSignal;
   workerId?: string;
+  sessionId?: string;
   appOrigin?: string;
   runtimeManager?: PdfRuntimeManager;
   processJob?: typeof processPdfExportJob;
@@ -162,8 +164,10 @@ export async function runPdfExportWorker(options?: {
   const runtime =
     options?.runtimeManager ?? getRuntimeConfigManager("pdf-worker");
   await runtime.start();
-  const workerId =
-    options?.workerId ?? `${hostname()}:${process.pid}:${randomUUID()}`;
+  const initialSnapshot = await runtime.snapshot();
+  const workerId = options?.workerId ?? initialSnapshot.instanceId;
+  const sessionId = options?.sessionId ?? initialSnapshot.sessionId ?? workerId;
+  const leaseOwner = createLeaseOwner({ stableId: workerId, sessionId });
   const appOrigin =
     options?.appOrigin ?? resolveApplicationOriginForBootstrap();
   let lastCleanupAt = 0;
@@ -180,6 +184,7 @@ export async function runPdfExportWorker(options?: {
 
     await recordWorkerHeartbeat({
       workerId,
+      sessionId,
       workerType: "pdf-export",
       release,
       startedAt,
@@ -203,7 +208,7 @@ export async function runPdfExportWorker(options?: {
     }
 
     const jobs = await claimPdfExportJobs({
-      workerId,
+      workerId: leaseOwner,
       configuration: config,
     });
 
@@ -214,7 +219,7 @@ export async function runPdfExportWorker(options?: {
 
     for (const job of jobs) {
       const processing = processJob(job, {
-        workerId,
+        workerId: leaseOwner,
         appOrigin,
         configuration: config,
       }).finally(() => activeJobs.delete(processing));
@@ -223,4 +228,5 @@ export async function runPdfExportWorker(options?: {
   }
 
   await Promise.allSettled(activeJobs);
+  await markWorkerStopped({ workerId, sessionId });
 }

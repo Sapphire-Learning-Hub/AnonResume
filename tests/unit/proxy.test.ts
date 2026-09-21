@@ -68,6 +68,30 @@ describe("production configuration proxy", () => {
     expect(sameOrigin.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("rejects cross-origin and originless setup mutations", async () => {
+    const crossOrigin = proxy(
+      new NextRequest("https://resume.example.com/api/setup/claim", {
+        method: "POST",
+        headers: { origin: "https://attacker.example" },
+      }),
+    );
+    const originless = proxy(
+      new NextRequest("https://resume.example.com/api/setup/claim", {
+        method: "POST",
+      }),
+    );
+    const sameOrigin = proxy(
+      new NextRequest("https://resume.example.com/api/setup/claim", {
+        method: "POST",
+        headers: { origin: "https://resume.example.com" },
+      }),
+    );
+
+    expect(crossOrigin.status).toBe(403);
+    expect(originless.status).toBe(403);
+    expect(sameOrigin.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("uses the configured public origin behind a CDN", async () => {
     stubValidProductionEnvironment();
 

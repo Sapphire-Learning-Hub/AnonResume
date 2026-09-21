@@ -12,6 +12,10 @@ import { writeAdminAuditEvent } from "@/lib/admin/audit";
 import { resolveAdminSecurityConfiguration } from "@/lib/admin/configuration";
 import type { AdminPermission } from "@/lib/admin/permissions";
 import { getAdminRequestContext } from "@/lib/admin/request";
+import {
+  AdminSetupAccessError,
+  requireManagementSetupCompleted,
+} from "@/lib/admin/setup/access";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 
 export async function requireAdminApi(input: {
@@ -21,6 +25,7 @@ export async function requireAdminApi(input: {
   allowRecoveryRequired?: boolean;
   recoveryMfaEnrollment?: boolean;
 }) {
+  await requireManagementSetupCompleted();
   const context = await getAdminRequestContext();
   if (
     context.recoveryRequired &&
@@ -76,6 +81,12 @@ export async function requireAdminApi(input: {
 }
 
 export function adminApiErrorResponse(error: unknown) {
+  if (error instanceof AdminSetupAccessError) {
+    return NextResponse.json(
+      { error: error.code },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   if (error instanceof AdminAuthenticationError) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

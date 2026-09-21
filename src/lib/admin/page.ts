@@ -8,13 +8,18 @@ import {
   requireAdminPermission,
 } from "@/lib/admin/authorization";
 import { getAdminRequestContext } from "@/lib/admin/request";
+import {
+  AdminSetupAccessError,
+  requireManagementSetupCompleted,
+} from "@/lib/admin/setup/access";
 import { getAdminAccessForUser } from "@/lib/admin/store";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
 
 export function resolveAdminPageFailureDestination(
-  reason: "forbidden" | "recovery" | "unauthenticated",
+  reason: "forbidden" | "instance_recovery" | "recovery" | "unauthenticated",
   productAccess: boolean,
 ) {
+  if (reason === "instance_recovery") return "/setup";
   if (reason === "recovery") return "/app/manage/security";
   if (reason === "forbidden") return "/app/manage/forbidden";
   return productAccess ? "/app" : "/sign-in";
@@ -32,6 +37,7 @@ export async function requireAdminPage(
   options: { allowRecoveryRequired?: boolean } = {},
 ) {
   try {
+    await requireManagementSetupCompleted();
     const context = await getAdminRequestContext();
     if (context.recoveryRequired && !options.allowRecoveryRequired) {
       throw new AdminMfaRecoveryRequiredError();
@@ -39,6 +45,9 @@ export async function requireAdminPage(
     if (permission) requireAdminPermission(context, permission);
     return context;
   } catch (error) {
+    if (error instanceof AdminSetupAccessError) {
+      redirect(resolveAdminPageFailureDestination("instance_recovery", false));
+    }
     if (error instanceof AdminAuthenticationError) {
       redirect(
         resolveAdminPageFailureDestination(

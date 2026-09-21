@@ -1,6 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { hostname } from "node:os";
-
 import {
   runAiRecoveryMaintenance,
   runAiRetentionMaintenance,
@@ -20,7 +17,11 @@ import {
   type RuntimeConfigManager,
 } from "@/lib/config/runtime";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
-import { recordWorkerHeartbeat } from "@/lib/runtime/worker-heartbeat";
+import { createLeaseOwner } from "@/lib/runtime/instance-identity";
+import {
+  markWorkerStopped,
+  recordWorkerHeartbeat,
+} from "@/lib/runtime/worker-heartbeat";
 
 export interface AiWorkerConfiguration {
   batchSize: number;
@@ -31,6 +32,7 @@ export interface AiWorkerConfiguration {
 
 export interface AiWorkerOperations {
   claimQueuedRuns: typeof claimQueuedAiRuns;
+  markStopped: typeof markWorkerStopped;
   recordHeartbeat: typeof recordWorkerHeartbeat;
   recoverExpiredRuns: typeof runAiRecoveryMaintenance;
   deleteExpiredAuditEvidence: typeof runAiRetentionMaintenance;
@@ -81,6 +83,7 @@ function waitForNextPoll(ms: number, signal?: AbortSignal) {
 export async function runAiWorker(options: {
   signal?: AbortSignal;
   workerId?: string;
+  sessionId?: string;
   encryptionKey?: Buffer;
   credentialKeys?: VersionedSecretKeys;
   runtimeManager?: AiRuntimeManager;
@@ -92,16 +95,19 @@ export async function runAiWorker(options: {
   const runtime =
     options.runtimeManager ?? getRuntimeConfigManager("ai-worker");
   await runtime.start();
+  const initialSnapshot = await runtime.snapshot();
   const credentialKeys = options.credentialKeys ??
     (options.encryptionKey
       ? { current: options.encryptionKey, legacy: options.encryptionKey }
       : getAiCredentialSecretKeys());
   const encryptionKey = credentialKeys.current;
-  const workerId =
-    options.workerId ?? `${hostname()}:${process.pid}:${randomUUID()}`;
+  const workerId = options.workerId ?? initialSnapshot.instanceId;
+  const sessionId = options.sessionId ?? initialSnapshot.sessionId ?? workerId;
+  const leaseOwner = createLeaseOwner({ stableId: workerId, sessionId });
   const operations = options.operations ?? {
     claimQueuedRuns: claimQueuedAiRuns,
     deleteExpiredAuditEvidence: runAiRetentionMaintenance,
+    markStopped: markWorkerStopped,
     recordHeartbeat: recordWorkerHeartbeat,
     recoverExpiredRuns: runAiRecoveryMaintenance,
     async executeRun(prepared: ClaimedAiRun, signal?: AbortSignal) {
@@ -139,6 +145,7 @@ export async function runAiWorker(options: {
     try {
       await operations.recordHeartbeat({
         workerId,
+        sessionId,
         workerType: "ai-runtime",
         release,
         startedAt,
@@ -149,6 +156,7 @@ export async function runAiWorker(options: {
           desiredRevisionId: snapshot.desiredRevisionId,
           enabled: aiConfiguration.enabled,
           hotRevisionId: snapshot.hotRevisionId,
+          pollIntervalMs: configuration.pollIntervalMs,
           recoveryIntervalMs: configuration.recoveryIntervalMs,
           restartRevisionId: snapshot.restartRevisionId,
           retentionIntervalMs: configuration.retentionIntervalMs,
@@ -199,7 +207,7 @@ export async function runAiWorker(options: {
     ) {
       try {
         const [prepared] = await operations.claimQueuedRuns({
-          workerId,
+          workerId: leaseOwner,
           limit: 1,
           leaseSeconds: aiConfiguration.runLeaseSeconds,
           credentialKeys,
@@ -237,6 +245,12 @@ export async function runAiWorker(options: {
   }
 
   await activeExecution;
+
+  try {
+    await operations.markStopped({ workerId, sessionId });
+  } catch (error) {
+    logger.error("[AnonResume] AI worker stop heartbeat failed", error);
+  }
 
   logger.info(`[AnonResume] AI worker stopped: ${workerId}`);
 }

@@ -107,9 +107,9 @@ describe("admin paginated queries", () => {
     );
     await pool.query(
       `INSERT INTO ${schema}.worker_heartbeats
-        (worker_id, worker_type, release, started_at, last_seen_at, metadata)
-       VALUES ($1, 'pdf', 'test', now(), now(), '{}'::jsonb)`,
-      [`${marker}-worker`],
+        (worker_id, session_id, worker_type, release, started_at, last_seen_at, metadata)
+       VALUES ($1, $2, 'pdf', 'test', now(), now(), '{}'::jsonb)`,
+      [`${marker}-worker`, `${marker}-session`],
     );
   });
 
@@ -273,11 +273,12 @@ describe("admin paginated queries", () => {
     const instanceId = `${marker}-config-runtime`;
     await pool.query(
       `INSERT INTO ${schema}.system_config_runtime_states
-        (instance_id, consumer, release, started_at, health_state,
+        (instance_id, session_id, consumer, release, started_at, health_state,
          last_seen_at, last_error, metadata)
-       VALUES ($1, 'web', 'test-release', now(), 'degraded', now(), $2, $3::jsonb)`,
+       VALUES ($1, $2, 'web', 'test-release', now(), 'degraded', now(), $3, $4::jsonb)`,
       [
         instanceId,
+        `${marker}-config-session`,
         "connection to secret.internal.example failed",
         JSON.stringify({ configurationPollIntervalMs: 60_000 }),
       ],

@@ -1,0 +1,16 @@
+.git
+.github
+.next
+.anonresume
+.env*
+!.env.example
+compose.env
+node_modules
+coverage
+docs
+output
+playwright-report
+test-results
+tmp
+*.log
+.DS_Store

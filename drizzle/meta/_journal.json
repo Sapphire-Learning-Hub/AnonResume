@@ -190,6 +190,20 @@
       "when": 1789835849356,
       "tag": "0026_clammy_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789918480053,
+      "tag": "0027_tricky_nekra",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789928115896,
+      "tag": "0028_super_admin_web_setup",
+      "breakpoints": true
     }
   ]
 }

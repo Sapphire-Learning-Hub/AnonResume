@@ -1,6 +1,8 @@
 import { getTableColumns } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
+import * as adminSchema from "@/db/schema";
+
 import {
   accountRestrictions,
   adminActivationTokens,
@@ -18,6 +20,77 @@ import {
 } from "@/db/schema";
 
 describe("admin database schema", () => {
+  it("stores explicit instance setup state, claims and rate limits", () => {
+    expect(Object.keys(getTableColumns(adminSchema.instanceSetupState))).toEqual([
+      "slot",
+      "state",
+      "targetUserId",
+      "recoveryReason",
+      "completedAt",
+      "createdAt",
+      "updatedAt",
+    ]);
+    expect(Object.keys(getTableColumns(adminSchema.instanceSetupTokens))).toEqual([
+      "id",
+      "sourceInstanceId",
+      "generation",
+      "tokenHash",
+      "expiresAt",
+      "createdAt",
+    ]);
+    expect(Object.keys(getTableColumns(adminSchema.instanceSetupSessions))).toEqual([
+      "id",
+      "tokenHash",
+      "generation",
+      "expiresAt",
+      "createdAt",
+    ]);
+    expect(
+      Object.keys(getTableColumns(adminSchema.instanceSetupClaimLimits)),
+    ).toEqual([
+      "sourceHash",
+      "failedAttempts",
+      "windowStartedAt",
+      "expiresAt",
+      "updatedAt",
+    ]);
+
+    const stateConfig = getTableConfig(adminSchema.instanceSetupState);
+    expect(stateConfig.checks.map((constraint) => constraint.name)).toEqual(
+      expect.arrayContaining([
+        "instance_setup_state_slot_check",
+        "instance_setup_state_value_check",
+      ]),
+    );
+    expect(
+      getTableConfig(adminSchema.instanceSetupTokens).indexes.map(
+        (index) => index.config.name,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "instance_setup_tokens_source_unique",
+        "instance_setup_tokens_hash_unique",
+        "instance_setup_tokens_expiry_idx",
+      ]),
+    );
+    expect(
+      getTableConfig(adminSchema.instanceSetupSessions).indexes.map(
+        (index) => index.config.name,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        "instance_setup_sessions_hash_unique",
+        "instance_setup_sessions_generation_idx",
+        "instance_setup_sessions_expiry_idx",
+      ]),
+    );
+    expect(
+      getTableConfig(adminSchema.instanceSetupClaimLimits).indexes.map(
+        (index) => index.config.name,
+      ),
+    ).toContain("instance_setup_claim_limits_expiry_idx");
+  });
+
   it("enforces the singleton super-admin slot in the database", () => {
     const config = getTableConfig(adminPrincipals);
 

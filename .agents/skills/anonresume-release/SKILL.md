@@ -126,10 +126,16 @@ After the release Pull Request is merged:
    `git tag -v vX.Y.Z`.
 4. Push only the tag. Verify the dereferenced remote tag and `origin/main`
    resolve to the same release commit.
-5. Publish with `gh release create vX.Y.Z --verify-tag`, the title
+5. Wait for the tag-triggered Container Images workflow. Require both core and
+   PDF manifests to contain `linux/amd64` and `linux/arm64`, record their
+   immutable digests, and verify the published SBOM and provenance
+   attestations. If this workflow fails, stop and report it; never move or
+   delete the published tag.
+6. Publish with `gh release create vX.Y.Z --verify-tag`, the title
    `AnonResume vX.Y.Z`, and the approved notes.
-6. Read the Release back with `gh release view` and verify its title, tag, public
+7. Read the Release back with `gh release view` and verify its title, tag, public
    status, body, and URL. Confirm the worktree is clean.
 
 Report the release commit, signed tag verification, push results, public Release
-URL, local verification outcome, and any residual risk. Do not claim deployment.
+URL, core and PDF image digests, local verification outcome, and any residual
+risk. Do not claim deployment.

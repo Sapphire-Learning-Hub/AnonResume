@@ -115,6 +115,57 @@ describe("runtime configuration snapshots", () => {
     await runtime.stop();
   });
 
+  it("reuses one stable runtime row across process sessions", async () => {
+    const instanceId = "default/web/runtime-restart-test";
+    const firstStartedAt = new Date("2026-09-20T00:00:00.000Z");
+    const secondStartedAt = new Date("2026-09-20T01:00:00.000Z");
+    const first = new RuntimeConfigManager({
+      consumer: "web",
+      instanceId,
+      sessionId: "session-1",
+      keyring,
+      notifier: new FakeNotifier(),
+      now: () => firstStartedAt,
+      release: "test-release",
+    });
+
+    await first.start();
+    await first.stop();
+
+    const stopped = await db.query.systemConfigRuntimeStates.findFirst({
+      where: eq(systemConfigRuntimeStates.instanceId, instanceId),
+    });
+    expect(stopped).toMatchObject({
+      sessionId: "session-1",
+      status: "stopped",
+      stoppedAt: firstStartedAt,
+    });
+
+    const second = new RuntimeConfigManager({
+      consumer: "web",
+      instanceId,
+      sessionId: "session-2",
+      keyring,
+      notifier: new FakeNotifier(),
+      now: () => secondStartedAt,
+      release: "test-release",
+    });
+    await second.start();
+
+    const states = await db
+      .select()
+      .from(systemConfigRuntimeStates)
+      .where(eq(systemConfigRuntimeStates.instanceId, instanceId));
+    expect(states).toHaveLength(1);
+    expect(states[0]).toMatchObject({
+      sessionId: "session-2",
+      startedAt: secondStartedAt,
+      status: "running",
+      stoppedAt: null,
+    });
+    await second.stop();
+  });
+
   it("keeps restart values at their startup revision", async () => {
     const notifier = new FakeNotifier();
     const runtime = manager(notifier);

@@ -20,6 +20,7 @@ import "./globals.css";
 import "@/styles/print.css";
 
 import { I18nProvider } from "@/i18n/I18nProvider";
+import { AdminSetupWizard } from "@/components/admin/setup/AdminSetupWizard";
 import { SystemStatePage } from "@/components/system/SystemStatePage";
 import ConfigurationRecoveryPage from "@/app/configuration-recovery/page";
 import {
@@ -34,11 +35,11 @@ import {
   resolveApplicationOriginForBootstrap,
   validateBootstrapConfiguration,
 } from "@/lib/runtime/configuration";
-import { getRuntimeConfig } from "@/lib/config/runtime";
 import { UI_FONT_FAMILY } from "@/styles/ui-font";
 import { AppThemeProvider } from "@/theme/AppThemeProvider";
 import { getAppThemeCssVariables } from "@/theme/app-palette";
 import { getRequestAppTheme } from "@/theme/server";
+import { getSetupAccessDecision } from "@/lib/admin/setup/access";
 
 import StyleRegistry from "./StyleRegistry";
 
@@ -118,6 +119,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   let runtimeUnavailable = false;
   if (pathname) {
     try {
+      const { getRuntimeConfig } = await import("@/lib/config/runtime");
       const runtime = await getRuntimeConfig("web");
       publicRuntimeConfig = {
         configurationHealth: runtime.health,
@@ -131,10 +133,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       };
     }
   }
-  const recoveryRequired =
-    !recoveryAllowed &&
-    (runtimeUnavailable ||
-      publicRuntimeConfig.configurationHealth === "recovery_required");
+  const configurationRecoveryActive =
+    runtimeUnavailable ||
+    publicRuntimeConfig.configurationHealth === "recovery_required";
+  const recoveryRequired = !recoveryAllowed && configurationRecoveryActive;
 
   if (recoveryRequired) {
     return (
@@ -153,6 +155,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       </html>
     );
   }
+
+  const setupAccess = configurationRecoveryActive
+    ? "allow"
+    : await getSetupAccessDecision(pathname ?? "/");
+  const setupGate = setupAccess === "require_setup"
+    ? <AdminSetupWizard initialMode="initialization" />
+    : setupAccess === "management_recovery"
+      ? <AdminSetupWizard initialMode="recovery" />
+      : null;
 
   return (
     <html
@@ -176,8 +187,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               initialResolvedMode={initialTheme.resolvedMode}
             >
               <StyleRegistry>
-                {children}
-                <GlobalFloatingActions />
+                {setupGate ?? children}
+                {setupGate ? null : <GlobalFloatingActions />}
               </StyleRegistry>
             </AppThemeProvider>
           </PublicRuntimeConfigProvider>

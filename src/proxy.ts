@@ -16,7 +16,8 @@ export function proxy(request: NextRequest) {
 
   if (configuration.valid) {
     if (
-      request.nextUrl.pathname.startsWith("/api/manage/") &&
+      (request.nextUrl.pathname.startsWith("/api/manage/") ||
+        request.nextUrl.pathname.startsWith("/api/setup/")) &&
       !["GET", "HEAD", "OPTIONS"].includes(request.method)
     ) {
       const origin = request.headers.get("origin");

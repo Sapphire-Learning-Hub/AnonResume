@@ -1,4 +1,7 @@
-import { bootstrapConfiguredSuperAdmin } from "@/lib/admin/bootstrap";
+import {
+  bootstrapConfiguredSuperAdmin,
+  LEGACY_BOOTSTRAP_WARNING,
+} from "@/lib/admin/bootstrap";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { closeEmailTransporter } from "@/lib/runtime/email";
 import { validateRuntimeConfiguration } from "@/lib/runtime/configuration";
@@ -28,6 +31,9 @@ if (!configuration.valid) {
 } else {
   try {
     const result = await bootstrapConfiguredSuperAdmin(environment);
+    if (result.state !== "skipped") {
+      console.warn(LEGACY_BOOTSTRAP_WARNING);
+    }
     console.info(`[AnonResume] Admin bootstrap state: ${result.state}`);
   } finally {
     closeEmailTransporter();

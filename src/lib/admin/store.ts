@@ -374,11 +374,13 @@ export async function beginAdminMfaEnrollment({
   email,
   name,
   requireNoVerifiedDevices = false,
+  allowTemporaryDeviceLimitOverflow = false,
 }: {
   userId: string;
   email: string;
   name: string;
   requireNoVerifiedDevices?: boolean;
+  allowTemporaryDeviceLimitOverflow?: boolean;
 }) {
   const enrollment = createAdminTotpEnrollment(email);
   const secretKeys = getAdminMfaSecretKeys();
@@ -406,7 +408,10 @@ export async function beginAdminMfaEnrollment({
         "A verified management MFA device already exists",
       );
     }
-    if (verifiedDeviceCount >= MAX_ADMIN_MFA_DEVICES) {
+    if (
+      verifiedDeviceCount >= MAX_ADMIN_MFA_DEVICES &&
+      !allowTemporaryDeviceLimitOverflow
+    ) {
       throw new AdminMfaDeviceLimitError();
     }
     await client.query(
@@ -551,120 +556,161 @@ export async function verifyAdminMfaEnrollment({
   requireNoVerifiedDevices?: boolean;
   now?: Date;
 }) {
-  const config = await getAdminSecurityConfiguration();
-  const secretKeys = getAdminMfaSecretKeys();
-  const schema = quoteIdentifier(getDatabaseSchemaName());
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    const security = await lockAdminMfaSecurityState({
+    const recoveryCodes = await verifyAdminMfaEnrollmentWithClient({
       client,
-      schema,
       userId,
+      deviceId,
+      token,
+      requireNoVerifiedDevices,
       now,
     });
-    if (requireNoVerifiedDevices) {
-      const verifiedDeviceResult = await client.query<{ count: string }>(
-        `SELECT count(*)::text AS count
-           FROM ${schema}.admin_mfa_devices
-          WHERE user_id = $1 AND verified_at IS NOT NULL`,
-        [userId],
-      );
-      if (Number(verifiedDeviceResult.rows[0]?.count) !== 0) {
-        throw new AdminMfaDeviceConflictError(
-          "A verified management MFA device already exists",
-        );
-      }
-    }
-    const deviceResult = await client.query<{
-      encryptedSecret: string;
-      encryptionIv: string;
-      encryptionTag: string;
-      keyVersion: number;
-    }>(
-      `SELECT encrypted_secret AS "encryptedSecret",
-              encryption_iv AS "encryptionIv", encryption_tag AS "encryptionTag",
-              key_version AS "keyVersion"
-         FROM ${schema}.admin_mfa_devices
-        WHERE id = $1 AND user_id = $2 AND verified_at IS NULL
-        FOR UPDATE`,
-      [deviceId, userId],
-    );
-    const device = deviceResult.rows[0];
-    const step = device
-      ? verifyAdminTotp({
-          secret: decryptVersionedAdminMfaSecret(
-            device,
-            device.keyVersion,
-            secretKeys,
-          ),
-          token,
-          timestamp: now.getTime(),
-        })
-      : null;
-    if (step === null) {
-      const lockedUntil = await recordAdminMfaFailure({
-        client,
-        schema,
-        userId,
-        failedAttempts: security.failedAttempts,
-        maxMfaFailures: config.maxMfaFailures,
-        mfaLockSeconds: config.mfaLockSeconds,
-        now,
-      });
-      await client.query("COMMIT");
-      if (lockedUntil) throw new AdminMfaLockedError(lockedUntil);
-      throw new AdminMfaVerificationError();
-    }
-
-    const recoveryCodes = generateAdminRecoveryCodes();
-    const updated = await client.query(
-      `UPDATE ${schema}.admin_mfa_devices
-          SET verified_at = $3, last_accepted_step = $4, last_used_at = $3
-        WHERE id = $1 AND user_id = $2 AND verified_at IS NULL
-        RETURNING id`,
-      [deviceId, userId, now, step],
-    );
-    if (updated.rowCount !== 1) throw new AdminMfaVerificationError();
-
-    const countResult = await client.query<{ count: string }>(
-      `SELECT count(*)::text AS count FROM ${schema}.admin_mfa_devices
-        WHERE user_id = $1 AND verified_at IS NOT NULL`,
-      [userId],
-    );
-    const shouldRegenerateRecoveryCodes =
-      Number(countResult.rows[0]?.count) === 1 ||
-      security.recoveryRequired;
-    if (shouldRegenerateRecoveryCodes) {
-      await client.query(
-        `DELETE FROM ${schema}.admin_recovery_codes WHERE user_id = $1`,
-        [userId],
-      );
-      for (const recoveryCode of recoveryCodes) {
-        await client.query(
-          `INSERT INTO ${schema}.admin_recovery_codes (user_id, code_hash)
-           VALUES ($1, $2)`,
-          [userId, recoveryCode.codeHash],
-        );
-      }
-      await client.query(
-        `UPDATE ${schema}.admin_security_states
-            SET recovery_required = false, updated_at = $2
-          WHERE user_id = $1`,
-        [userId, now],
-      );
-    }
-    await clearAdminMfaFailures({ client, schema, userId, now });
     await client.query("COMMIT");
-    return shouldRegenerateRecoveryCodes
-      ? recoveryCodes.map((code) => code.rawCode)
-      : [];
+    return recoveryCodes;
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (
+      error instanceof AdminMfaVerificationError ||
+      error instanceof AdminMfaLockedError
+    ) {
+      await client.query("COMMIT").catch(() => undefined);
+    } else {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
     throw error;
   } finally {
     client.release();
   }
+}
+
+export async function verifyAdminMfaEnrollmentWithClient({
+  client,
+  userId,
+  deviceId,
+  token,
+  requireNoVerifiedDevices = false,
+  replaceExistingDevices = false,
+  now = new Date(),
+}: {
+  client: PoolClient;
+  userId: string;
+  deviceId: string;
+  token: string;
+  requireNoVerifiedDevices?: boolean;
+  replaceExistingDevices?: boolean;
+  now?: Date;
+}) {
+  const config = await getAdminSecurityConfiguration();
+  const secretKeys = getAdminMfaSecretKeys();
+  const schema = quoteIdentifier(getDatabaseSchemaName());
+  const security = await lockAdminMfaSecurityState({
+    client,
+    schema,
+    userId,
+    now,
+  });
+  if (requireNoVerifiedDevices) {
+    const verifiedDeviceResult = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+         FROM ${schema}.admin_mfa_devices
+        WHERE user_id = $1 AND verified_at IS NOT NULL`,
+      [userId],
+    );
+    if (Number(verifiedDeviceResult.rows[0]?.count) !== 0) {
+      throw new AdminMfaDeviceConflictError(
+        "A verified management MFA device already exists",
+      );
+    }
+  }
+  const deviceResult = await client.query<{
+    encryptedSecret: string;
+    encryptionIv: string;
+    encryptionTag: string;
+    keyVersion: number;
+  }>(
+    `SELECT encrypted_secret AS "encryptedSecret",
+            encryption_iv AS "encryptionIv", encryption_tag AS "encryptionTag",
+            key_version AS "keyVersion"
+       FROM ${schema}.admin_mfa_devices
+      WHERE id = $1 AND user_id = $2 AND verified_at IS NULL
+      FOR UPDATE`,
+    [deviceId, userId],
+  );
+  const device = deviceResult.rows[0];
+  const step = device
+    ? verifyAdminTotp({
+        secret: decryptVersionedAdminMfaSecret(
+          device,
+          device.keyVersion,
+          secretKeys,
+        ),
+        token,
+        timestamp: now.getTime(),
+      })
+    : null;
+  if (step === null) {
+    const lockedUntil = await recordAdminMfaFailure({
+      client,
+      schema,
+      userId,
+      failedAttempts: security.failedAttempts,
+      maxMfaFailures: config.maxMfaFailures,
+      mfaLockSeconds: config.mfaLockSeconds,
+      now,
+    });
+    if (lockedUntil) throw new AdminMfaLockedError(lockedUntil);
+    throw new AdminMfaVerificationError();
+  }
+
+  const recoveryCodes = generateAdminRecoveryCodes();
+  const updated = await client.query(
+    `UPDATE ${schema}.admin_mfa_devices
+        SET verified_at = $3, last_accepted_step = $4, last_used_at = $3
+      WHERE id = $1 AND user_id = $2 AND verified_at IS NULL
+      RETURNING id`,
+    [deviceId, userId, now, step],
+  );
+  if (updated.rowCount !== 1) throw new AdminMfaVerificationError();
+
+  if (replaceExistingDevices) {
+    await client.query(
+      `DELETE FROM ${schema}.admin_mfa_devices
+        WHERE user_id = $1 AND id <> $2`,
+      [userId, deviceId],
+    );
+  }
+
+  const countResult = await client.query<{ count: string }>(
+    `SELECT count(*)::text AS count FROM ${schema}.admin_mfa_devices
+      WHERE user_id = $1 AND verified_at IS NOT NULL`,
+    [userId],
+  );
+  const shouldRegenerateRecoveryCodes =
+    Number(countResult.rows[0]?.count) === 1 || security.recoveryRequired;
+  if (shouldRegenerateRecoveryCodes) {
+    await client.query(
+      `DELETE FROM ${schema}.admin_recovery_codes WHERE user_id = $1`,
+      [userId],
+    );
+    for (const recoveryCode of recoveryCodes) {
+      await client.query(
+        `INSERT INTO ${schema}.admin_recovery_codes (user_id, code_hash)
+         VALUES ($1, $2)`,
+        [userId, recoveryCode.codeHash],
+      );
+    }
+    await client.query(
+      `UPDATE ${schema}.admin_security_states
+          SET recovery_required = false, updated_at = $2
+        WHERE user_id = $1`,
+      [userId, now],
+    );
+  }
+  await clearAdminMfaFailures({ client, schema, userId, now });
+  return shouldRegenerateRecoveryCodes
+    ? recoveryCodes.map((code) => code.rawCode)
+    : [];
 }
 
 export async function consumeAdminRecoveryCode(

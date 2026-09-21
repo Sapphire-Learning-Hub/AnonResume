@@ -81,7 +81,7 @@ describe("admin security architecture", () => {
     expect(requestBoundary).toContain('sameSite: "strict"');
   });
 
-  it("keeps production bootstrap explicit while preserving development convenience", () => {
+  it("keeps legacy bootstrap explicit and out of normal startup", () => {
     const packageJson = JSON.parse(
       readFileSync(resolve(root, "package.json"), "utf8"),
     ) as { scripts?: Record<string, string> };
@@ -90,14 +90,27 @@ describe("admin security architecture", () => {
       "bun run scripts/admin-bootstrap.ts",
     );
     expect(packageJson.scripts?.start).toBe("next start");
-    expect(packageJson.scripts?.dev).toBe(
-      "bun run scripts/admin-bootstrap.ts development && next dev",
-    );
+    expect(packageJson.scripts?.dev).toBe("next dev");
     const bootstrapScript = readFileSync(
       resolve(root, "scripts/admin-bootstrap.ts"),
       "utf8",
     );
     expect(bootstrapScript).toContain("bootstrapConfiguredSuperAdmin");
     expect(bootstrapScript).toContain("closeEmailTransporter");
+  });
+
+  it("keeps the super-admin setup browser journey isolated and secret-free", () => {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(root, "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+    const playwrightConfig = resolve(root, "playwright.config.ts");
+    const setupJourney = resolve(root, "tests/e2e/super-admin-setup.spec.ts");
+
+    expect(packageJson.scripts?.["test:e2e"]).toBe("playwright test");
+    expect(existsSync(playwrightConfig)).toBe(true);
+    expect(existsSync(setupJourney)).toBe(true);
+
+    const source = readFileSync(setupJourney, "utf8");
+    expect(source).not.toMatch(/setup-code|AAAA-BBBB-CCCC-DDDD-EEEE/);
   });
 });
