@@ -60,7 +60,6 @@ describe("AdminSetupWizard", () => {
     expect(
       screen.getByRole("heading", { name: "恢复超级管理员访问" }),
     ).toBeVisible();
-    expect(screen.getByText(/保留原有账号和业务数据/)).toBeVisible();
   });
 
   it("shows MFA details, recovery actions, and navigates to sign in", async () => {
@@ -103,9 +102,7 @@ describe("AdminSetupWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "完成初始化" }));
 
-    expect(
-      await screen.findByText("AAAA-BBBB-CCCC-DDDD-EEEE"),
-    ).toBeVisible();
+    expect(await screen.findByText("AAAA-BBBB-CCCC-DDDD-EEEE")).toBeVisible();
     expect(screen.getByRole("button", { name: "下载恢复码" })).toBeVisible();
     expect(screen.getByRole("button", { name: "打印恢复码" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "前往登录" }));

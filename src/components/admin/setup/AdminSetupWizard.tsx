@@ -6,7 +6,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { AdminRecoveryCodesPanel } from "@/components/admin/AdminRecoveryCodesPanel";
-import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
+import { AuthExperienceShell } from "@/components/auth/AuthExperienceShell";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import {
   createAdminTranslator,
@@ -48,9 +48,6 @@ export function AdminSetupWizard({ initialMode }: { initialMode: SetupMode }) {
   const title = mode === "initialization"
     ? t("setup.initializationTitle")
     : t("setup.recoveryTitle");
-  const description = mode === "initialization"
-    ? t("setup.initializationDescription")
-    : t("setup.recoveryDescription");
 
   async function claim(code: string) {
     setPending(true);
@@ -135,68 +132,59 @@ export function AdminSetupWizard({ initialMode }: { initialMode: SetupMode }) {
   }
 
   return (
-    <main className={styles.page}>
-      <section className={styles.introduction}>
-        <AnonResumeLogo className={styles.logo} loading="eager" variant="lockup" />
-        <div className={styles.introductionCopy}>
-          <p className={styles.eyebrow}>{t("setup.eyebrow")}</p>
+    <main className="auth-page-shell">
+      <AuthExperienceShell>
+        <div className={styles.introduction}>
           <h1 className={styles.heroTitle}>{title}</h1>
-          <p className={styles.heroDescription}>{description}</p>
         </div>
-      </section>
-      <section className={styles.workspace}>
-        <div className={styles.panel}>
-          {sessionExpired ? (
-            <Alert
-              className={styles.notice}
-              description={t("setup.sessionExpiredDescription")}
-              showIcon
-              title={t("setup.sessionExpiredTitle")}
-              type="warning"
+        {sessionExpired ? (
+          <Alert
+            className={styles.notice}
+            description={t("setup.sessionExpiredDescription")}
+            showIcon
+            title={t("setup.sessionExpiredTitle")}
+            type="warning"
+          />
+        ) : null}
+        {step === "claim" ? (
+          <>
+            <p className={styles.description}>{t("setup.claimDescription")}</p>
+            <AdminSetupClaim onSubmit={claim} pending={pending} />
+          </>
+        ) : null}
+        {step === "account" ? (
+          <>
+            <h2 className={styles.title}>{t("setup.accountTitle")}</h2>
+            <AdminSetupAccount
+              onPasswordMismatch={() => toast.error(t("setup.passwordMismatch"))}
+              onSubmit={beginAccount}
+              pending={pending}
             />
-          ) : null}
-          {step === "claim" ? (
-            <>
-              <h2 className={styles.title}>{t("setup.claimTitle")}</h2>
-              <p className={styles.description}>{t("setup.claimDescription")}</p>
-              <AdminSetupClaim onSubmit={claim} pending={pending} />
-            </>
-          ) : null}
-          {step === "account" ? (
-            <>
-              <h2 className={styles.title}>{t("setup.accountTitle")}</h2>
-              <p className={styles.description}>{t("setup.accountDescription")}</p>
-              <AdminSetupAccount
-                onPasswordMismatch={() => toast.error(t("setup.passwordMismatch"))}
-                onSubmit={beginAccount}
-                pending={pending}
-              />
-            </>
-          ) : null}
-          {step === "mfa" && enrollment ? (
-            <>
-              <h2 className={styles.title}>{t("setup.mfaTitle")}</h2>
-              <p className={styles.description}>{t("setup.mfaDescription")}</p>
-              <AdminSetupMfa
-                enrollment={enrollment}
-                onSubmit={complete}
-                pending={pending}
-              />
-            </>
-          ) : null}
-          {step === "recovery_codes" && recovery ? (
-            <AdminRecoveryCodesPanel
-              codes={recovery.codes}
-              continueLabel={t("setup.goToSignIn")}
-              email={recovery.email}
-              onContinue={() => {
-                router.replace("/sign-in");
-                router.refresh();
-              }}
+          </>
+        ) : null}
+        {step === "mfa" && enrollment ? (
+          <>
+            <h2 className={styles.title}>{t("setup.mfaTitle")}</h2>
+            <p className={styles.description}>{t("setup.mfaDescription")}</p>
+            <AdminSetupMfa
+              enrollment={enrollment}
+              onSubmit={complete}
+              pending={pending}
             />
-          ) : null}
-        </div>
-      </section>
+          </>
+        ) : null}
+        {step === "recovery_codes" && recovery ? (
+          <AdminRecoveryCodesPanel
+            codes={recovery.codes}
+            continueLabel={t("setup.goToSignIn")}
+            email={recovery.email}
+            onContinue={() => {
+              router.replace("/sign-in");
+              router.refresh();
+            }}
+          />
+        ) : null}
+      </AuthExperienceShell>
     </main>
   );
 }
