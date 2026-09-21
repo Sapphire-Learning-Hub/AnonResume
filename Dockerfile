@@ -2,6 +2,10 @@ ARG BUN_VERSION=1.3.14
 FROM oven/bun:${BUN_VERSION}-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 COPY package.json bun.lock ./
@@ -9,7 +13,7 @@ RUN bun install --frozen-lockfile
 
 FROM base AS production-dependencies
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile --production --omit=peer
 
 FROM dependencies AS builder
 ARG ANONRESUME_BUILD_COMMIT=""

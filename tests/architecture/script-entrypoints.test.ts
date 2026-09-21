@@ -2,6 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 interface PackageManifest {
+  dependencies?: Record<string, string>;
   scripts?: Record<string, string>;
 }
 
@@ -34,6 +35,7 @@ it("keeps local package script entrypoints valid", async () => {
     "bun run scripts/setup-deactivate.ts",
   );
   expect(manifest.scripts?.["auth:migrate"]).toBe(
-    "better-auth migrate --config scripts/auth-migration-config.ts",
+    "bun run scripts/auth-migrate.ts",
   );
+  expect(manifest.dependencies?.["@better-auth/cli"]).toBeUndefined();
 });

@@ -22,7 +22,7 @@
     "worker:ai": "bun run scripts/ai-worker.ts",
     "worker:pdf": "bun run scripts/pdf-worker.ts",
     "ai:maintenance": "bun run scripts/ai-maintenance.ts",
-    "auth:migrate": "better-auth migrate --config scripts/auth-migration-config.ts",
+    "auth:migrate": "bun run scripts/auth-migrate.ts",
     "deploy:migrate": "bun run auth:migrate -- --yes && bun run db:migrate",
     "deploy:bootstrap-admin": "bun run scripts/bootstrap-admin-link.ts",
     "deploy:setup-deactivate": "bun run scripts/setup-deactivate.ts",
@@ -34,7 +34,6 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
-    "@better-auth/cli": "1.4.21",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

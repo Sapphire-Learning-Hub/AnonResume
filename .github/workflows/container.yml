@@ -63,9 +63,13 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL
           exit-code: "1"
-      - name: Show service logs
+      - name: Show non-sensitive service logs
         if: failure()
-        run: docker compose -f compose.yaml -f compose.build.yaml logs --no-color
+        run: >-
+          docker compose
+          -f compose.yaml
+          -f compose.build.yaml
+          logs --no-color postgres migrate ai-worker pdf-worker
       - name: Stop deployment
         if: always()
         run: docker compose -f compose.yaml -f compose.build.yaml down --volumes --remove-orphans
