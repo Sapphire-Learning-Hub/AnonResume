@@ -156,6 +156,7 @@ export async function runAiWorker(options: {
           desiredRevisionId: snapshot.desiredRevisionId,
           enabled: aiConfiguration.enabled,
           hotRevisionId: snapshot.hotRevisionId,
+          pollIntervalMs: configuration.pollIntervalMs,
           recoveryIntervalMs: configuration.recoveryIntervalMs,
           restartRevisionId: snapshot.restartRevisionId,
           retentionIntervalMs: configuration.retentionIntervalMs,

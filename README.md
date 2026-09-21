@@ -73,6 +73,7 @@ docker compose --env-file compose.env logs web
 将初始化码视为密码，不要写入工单、聊天或部署报告。访问公开地址的 `/setup`，填写初始化码后设置用户名、邮箱、密码和 MFA；首次初始化不依赖 SMTP。完成后保存一次性恢复码，并确认 `/api/health/ready` 仍返回 `200` 且 `setupRequired` 为 `false`。
 
 业务数据保存在 `postgres-data` 卷，自动生成的部署信任根保存在 `deployment-secrets` 卷；两者都应备份，丢失配置主密钥可能导致已加密的平台配置无法恢复。
+`POSTGRES_DB` 与 `POSTGRES_USER` 只用于首次初始化持久化卷，已有部署不可直接修改这两个值。
 
 默认编排各启动一个 AI Worker 和 PDF Worker，并为它们提供稳定实例标识。扩容 Worker 时，每个副本必须设置唯一的 `ANONRESUME_INSTANCE_ID`。如需使用镜像代理，请通过 Docker 凭据存储登录并配置镜像来源，不要把仓库密码写入 `compose.env` 或 Compose 文件。
 

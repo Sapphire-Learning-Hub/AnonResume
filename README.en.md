@@ -73,6 +73,7 @@ docker compose --env-file compose.env logs web
 Treat the setup code like a password and never place it in tickets, chat, or deployment reports. Open `/setup` on the public origin and use the code to configure the username, email, password, and MFA. SMTP is not required for first setup. Save the one-time recovery codes, then confirm `/api/health/ready` still returns `200` with `setupRequired` set to `false`.
 
 Application data lives in the `postgres-data` volume, while generated deployment trust roots live in `deployment-secrets`. Back up both: losing the configuration master key may make encrypted platform settings unrecoverable.
+`POSTGRES_DB` and `POSTGRES_USER` initialize the persistent volumes and must not be changed directly on an existing deployment.
 
 The default stack starts one AI worker and one PDF worker with stable instance identities. Every additional worker replica must receive a unique `ANONRESUME_INSTANCE_ID`. When using a registry mirror, authenticate through Docker's credential store and configure the image source without placing registry passwords in `compose.env` or Compose files.
 

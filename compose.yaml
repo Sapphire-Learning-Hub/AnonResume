@@ -24,7 +24,7 @@ x-app-security: &app-security
 
 services:
   secrets-init:
-    <<: *core-image
+    <<: [*core-image, *app-security]
     command: init-secrets
     user: "0:0"
     environment:
@@ -106,6 +106,7 @@ services:
       start_period: 20s
     volumes:
       - deployment-secrets:/run/anonresume-secrets:ro
+    stop_grace_period: 2m
     restart: unless-stopped
 
   pdf-worker:
@@ -127,6 +128,7 @@ services:
     shm_size: 1gb
     volumes:
       - deployment-secrets:/run/anonresume-secrets:ro
+    stop_grace_period: 2m
     restart: unless-stopped
 
 volumes:

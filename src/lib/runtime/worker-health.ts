@@ -4,6 +4,20 @@ import { db, workerHeartbeats } from "@/db";
 
 const DEFAULT_STALE_AFTER_MS = 60_000;
 
+function getHeartbeatStaleAfterMs(
+  heartbeat: { metadata: Record<string, unknown> },
+  workerType: "ai-runtime" | "pdf-export",
+) {
+  if (workerType !== "ai-runtime") return DEFAULT_STALE_AFTER_MS;
+
+  const pollIntervalMs = heartbeat.metadata.pollIntervalMs;
+  if (typeof pollIntervalMs !== "number" || !Number.isFinite(pollIntervalMs)) {
+    return DEFAULT_STALE_AFTER_MS;
+  }
+
+  return Math.max(DEFAULT_STALE_AFTER_MS, pollIntervalMs * 2 + 5_000);
+}
+
 export async function checkWorkerHealth(input: {
   workerId: string;
   workerType: "ai-runtime" | "pdf-export";
@@ -22,7 +36,8 @@ export async function checkWorkerHealth(input: {
   }
 
   const now = input.now ?? new Date();
-  const staleAfterMs = input.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const staleAfterMs = input.staleAfterMs ??
+    getHeartbeatStaleAfterMs(heartbeat, input.workerType);
   if (now.getTime() - heartbeat.lastSeenAt.getTime() > staleAfterMs) {
     return { healthy: false, reason: "heartbeat_stale" };
   }

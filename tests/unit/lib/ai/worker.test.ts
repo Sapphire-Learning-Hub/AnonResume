@@ -134,6 +134,7 @@ describe("AI worker", () => {
         metadata: expect.objectContaining({
           desiredRevisionId: "revision-1",
           hotRevisionId: "revision-1",
+          pollIntervalMs: 1_000,
           restartRevisionId: "revision-1",
         }),
         workerId: "ai-worker-test",

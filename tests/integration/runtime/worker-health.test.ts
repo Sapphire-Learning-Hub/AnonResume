@@ -35,4 +35,30 @@ describe("worker health check", () => {
       checkWorkerHealth({ workerId, workerType: "ai-runtime", now }),
     ).resolves.toEqual({ healthy: false, reason: "not_running" });
   });
+
+  it("allows a complete configured AI polling interval before becoming stale", async () => {
+    await recordWorkerHeartbeat({
+      workerId,
+      sessionId: "session-1",
+      workerType: "ai-runtime",
+      startedAt: now,
+      now,
+      metadata: { pollIntervalMs: 60_000 },
+    });
+
+    await expect(
+      checkWorkerHealth({
+        workerId,
+        workerType: "ai-runtime",
+        now: new Date(now.getTime() + 120_000),
+      }),
+    ).resolves.toEqual({ healthy: true });
+    await expect(
+      checkWorkerHealth({
+        workerId,
+        workerType: "ai-runtime",
+        now: new Date(now.getTime() + 126_000),
+      }),
+    ).resolves.toEqual({ healthy: false, reason: "heartbeat_stale" });
+  });
 });

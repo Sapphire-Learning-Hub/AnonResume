@@ -59,4 +59,21 @@ describe("deployment secret initialization", () => {
       initializeDeploymentSecrets({ directory }),
     ).rejects.toThrow("partially initialized");
   });
+
+  it("escapes custom database identifiers in the generated connection URL", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "anonresume-secrets-"));
+    await initializeDeploymentSecrets({
+      directory,
+      databaseName: "resume/data",
+      databaseUser: "resume@example.com",
+      randomBytes: (size) => Buffer.alloc(size, 7),
+    });
+
+    const databaseUrl = await readFile(
+      join(directory, DEPLOYMENT_SECRET_FILES.databaseUrl),
+      "utf8",
+    );
+    expect(databaseUrl).toContain("postgresql://resume%40example.com:");
+    expect(databaseUrl).toContain("@postgres:5432/resume%2Fdata");
+  });
 });
