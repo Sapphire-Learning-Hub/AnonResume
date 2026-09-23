@@ -56,8 +56,11 @@ export async function acceptUserInvitation(input: {
     id: string;
     inviterUserId: string;
     invitedEmail: string;
+    legacyInvitedUserId: string | null;
   }>(
-    `SELECT id, inviter_user_id AS "inviterUserId", invited_email AS "invitedEmail"
+    `SELECT id, inviter_user_id AS "inviterUserId",
+            invited_email AS "invitedEmail",
+            legacy_invited_user_id AS "legacyInvitedUserId"
        FROM ${schema}.user_invitations WHERE token_hash = $1 LIMIT 1`,
     [tokenHash],
   );
@@ -66,6 +69,7 @@ export async function acceptUserInvitation(input: {
 
   const passwordHash = await hashPassword(input.password);
   const client = await getDatabasePool().connect();
+  let committed = false;
   try {
     await client.query("BEGIN");
     await lockInvitationScope(
@@ -82,11 +86,30 @@ export async function acceptUserInvitation(input: {
       [invitationCandidate.id, tokenHash, now],
     );
     if (locked.rowCount !== 1) throw new InvalidUserInvitationError();
-    const existing = await client.query(
-      `SELECT id FROM "user" WHERE lower(email) = $1 LIMIT 1`,
+    const existing = await client.query<{
+      emailVerified: boolean;
+      hasCredential: boolean;
+      id: string;
+    }>(
+      `SELECT identity.id,
+              identity."emailVerified" AS "emailVerified",
+              EXISTS (
+                SELECT 1 FROM "account"
+                 WHERE "userId" = identity.id AND "providerId" = 'credential'
+              ) AS "hasCredential"
+         FROM "user" AS identity
+        WHERE lower(identity.email) = $1
+        LIMIT 1`,
       [invitationCandidate.invitedEmail],
     );
-    if (existing.rowCount) {
+    const existingIdentity = existing.rows[0];
+    const isLegacyPlaceholder = Boolean(
+      existingIdentity &&
+      invitationCandidate.legacyInvitedUserId === existingIdentity.id &&
+      !existingIdentity.emailVerified &&
+      !existingIdentity.hasCredential,
+    );
+    if (existingIdentity && !isLegacyPlaceholder) {
       await client.query(
         `UPDATE ${schema}.user_invitations
             SET invalidated_at = $2,
@@ -98,16 +121,26 @@ export async function acceptUserInvitation(input: {
         [invitationCandidate.invitedEmail, now],
       );
       await client.query("COMMIT");
+      committed = true;
       throw new InvalidUserInvitationError();
     }
 
-    const userId = randomUUID();
-    await client.query(
-      `INSERT INTO "user"
-        (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, true, NULL, $4, $4)`,
-      [userId, input.name.trim(), invitationCandidate.invitedEmail, now],
-    );
+    const userId = existingIdentity?.id ?? randomUUID();
+    if (isLegacyPlaceholder) {
+      await client.query(
+        `UPDATE "user"
+            SET name = $2, "emailVerified" = true, "updatedAt" = $3
+          WHERE id = $1`,
+        [userId, input.name.trim(), now],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO "user"
+          (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, true, NULL, $4, $4)`,
+        [userId, input.name.trim(), invitationCandidate.invitedEmail, now],
+      );
+    }
     await client.query(
       `INSERT INTO "account"
         (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt", issuer)
@@ -134,9 +167,12 @@ export async function acceptUserInvitation(input: {
       [invitationCandidate.invitedEmail, invitationCandidate.id, now],
     );
     await client.query("COMMIT");
+    committed = true;
     return { email: invitationCandidate.invitedEmail, userId };
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
+    if (!committed) {
+      await client.query("ROLLBACK").catch(() => undefined);
+    }
     if ((error as { code?: string }).code === "23505") {
       throw new InvalidUserInvitationError();
     }

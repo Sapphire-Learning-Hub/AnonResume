@@ -10,6 +10,7 @@ export default async function InvitationsPage() {
     <UserInvitationManager
       initialData={{
         ...data,
+        now: new Date().toISOString(),
         items: data.items.map((item) => ({
           ...item,
           createdAt: item.createdAt.toISOString(),

@@ -17,7 +17,12 @@ describe("UserInvitationManager", () => {
   });
 
   it("shows usage and sends only the entered email", async () => {
-    render(<UserInvitationManager initialData={{ activeCount: 2, limit: 5, items: [] }} />);
+    render(<UserInvitationManager initialData={{
+      activeCount: 2,
+      limit: 5,
+      now: "2026-09-24T00:00:00.000Z",
+      items: [],
+    }} />);
 
     expect(screen.getByText("2 / 5")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("受邀邮箱"), {
@@ -38,6 +43,7 @@ describe("UserInvitationManager", () => {
     render(<UserInvitationManager initialData={{
       activeCount: 1,
       limit: 5,
+      now: "2026-09-24T00:00:00.000Z",
       items: [
         {
           id: "pending",

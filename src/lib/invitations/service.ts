@@ -207,11 +207,30 @@ export async function resendUserInvitation(input: {
     if (now.getTime() < nextAllowedAt.getTime()) {
       throw new InvitationResendTooSoonError(nextAllowedAt);
     }
-    const existingUser = await client.query(
-      `SELECT id FROM "user" WHERE lower(email) = $1 LIMIT 1`,
+    const existingUser = await client.query<{
+      emailVerified: boolean;
+      hasCredential: boolean;
+      id: string;
+    }>(
+      `SELECT identity.id,
+              identity."emailVerified" AS "emailVerified",
+              EXISTS (
+                SELECT 1 FROM "account"
+                 WHERE "userId" = identity.id AND "providerId" = 'credential'
+              ) AS "hasCredential"
+         FROM "user" AS identity
+        WHERE lower(identity.email) = $1
+        LIMIT 1`,
       [invitedEmail],
     );
-    if (existingUser.rowCount) {
+    const existingIdentity = existingUser.rows[0];
+    const isLegacyPlaceholder = Boolean(
+      existingIdentity &&
+      invitation.legacyInvitedUserId === existingIdentity.id &&
+      !existingIdentity.emailVerified &&
+      !existingIdentity.hasCredential,
+    );
+    if (existingIdentity && !isLegacyPlaceholder) {
       await client.query(
         `UPDATE ${schema}.user_invitations
             SET invalidated_at = $2,

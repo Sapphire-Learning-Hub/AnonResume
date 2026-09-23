@@ -22,6 +22,7 @@ export type SerializedInvitation = {
 export type InvitationPageData = {
   activeCount: number;
   limit: number;
+  now: string;
   items: SerializedInvitation[];
 };
 
@@ -114,6 +115,7 @@ export function UserInvitationManager({ initialData }: { initialData: Invitation
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [pendingAction, setPendingAction] = useState<string>();
+  const now = new Date(initialData.now).getTime();
 
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
@@ -218,7 +220,7 @@ export function UserInvitationManager({ initialData }: { initialData: Invitation
         <div className={styles.list}>
           {initialData.items.map((invitation) => {
             const actionable = invitation.status === "pending" || invitation.status === "expired";
-            const resendAvailable = actionable && Date.now() >= new Date(invitation.nextResendAt).getTime();
+            const resendAvailable = actionable && now >= new Date(invitation.nextResendAt).getTime();
             return (
               <article className={styles.row} key={invitation.id}>
                 <div>
