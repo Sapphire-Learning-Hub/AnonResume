@@ -43,6 +43,14 @@ interface UserInvitationEmailInput {
   grantsManagementAccess: boolean;
 }
 
+interface ProductInvitationEmailInput {
+  from: string;
+  inviterName: string;
+  replacesPreviousLink: boolean;
+  to: string;
+  url: string;
+}
+
 declare global {
   var __anonResumeEmailTransporter: Transporter | undefined;
   var __anonResumeEmailTransporterFingerprint: string | undefined;
@@ -231,6 +239,54 @@ export function buildUserInvitationEmail({
   };
 }
 
+export function buildProductInvitationEmail({
+  from,
+  inviterName,
+  replacesPreviousLink,
+  to,
+  url,
+}: ProductInvitationEmailInput) {
+  const safeInviterName = escapeHtml(inviterName || "一位 AnonResume 用户");
+  const safeUrl = escapeHtml(url);
+  const safeLogoUrl = escapeHtml(
+    new URL("/brand/anonresume-lockup.png", url).toString(),
+  );
+  const replacementNotice = replacesPreviousLink
+    ? "这是该邀请的最新链接，此前收到的链接已失效。"
+    : "";
+
+  return {
+    from,
+    to,
+    subject: "你收到了 AnonResume 邀请",
+    text: [
+      `${inviterName || "一位 AnonResume 用户"} 邀请你使用 AnonResume。`,
+      "",
+      "请在 7 天内打开下面的链接接受邀请并创建账号：",
+      url,
+      "",
+      replacementNotice,
+      "若你不认识邀请人，请忽略这封邮件。",
+    ].filter(Boolean).join("\n"),
+    html: `<!doctype html>
+<html lang="zh-CN">
+  <body style="margin:0;background:#f7f3f5;color:#261d22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+      <div style="border:1px solid #eadfe4;border-radius:22px;background:#ffffff;padding:34px;box-shadow:0 12px 34px rgba(78,45,61,.08);">
+        <img src="${safeLogoUrl}" alt="AnonResume" width="210" height="55" style="display:block;width:210px;max-width:70%;height:auto;margin:0 0 24px;border:0;" />
+        <h1 style="margin:0 0 14px;font-size:25px;line-height:1.3;">加入 AnonResume</h1>
+        <p style="margin:0 0 12px;line-height:1.7;">${safeInviterName} 邀请你使用 AnonResume。</p>
+        <p style="margin:0 0 24px;color:#6f6068;line-height:1.7;">请在 7 天内接受邀请并创建账号。${escapeHtml(replacementNotice)}</p>
+        <a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#d73b72;color:#ffffff;padding:12px 22px;text-decoration:none;font-weight:700;">接受邀请</a>
+        <p style="margin:28px 0 8px;color:#8a7c83;font-size:13px;line-height:1.6;">如果按钮无法打开，请复制以下地址：</p>
+        <p style="margin:0;word-break:break-all;color:#6f6068;font-size:13px;line-height:1.6;">${safeUrl}</p>
+      </div>
+    </div>
+  </body>
+</html>`,
+  };
+}
+
 function getSmtpTransporter(config: Extract<EmailDeliveryConfig, { transport: "smtp" }>) {
   const fingerprint = createHash("sha256")
     .update(JSON.stringify(config))
@@ -338,6 +394,34 @@ export async function sendUserInvitationEmail({
 
   if (config.transport === "console") {
     console.info(`[AnonResume] Invitation URL for ${email}: ${url}`);
+    return;
+  }
+
+  await getSmtpTransporter(config).sendMail(message);
+}
+
+export async function sendProductInvitationEmail({
+  email,
+  inviterName,
+  replacesPreviousLink,
+  url,
+}: {
+  email: string;
+  inviterName: string;
+  replacesPreviousLink: boolean;
+  url: string;
+}) {
+  const config = await getEmailDeliveryConfig();
+  const message = buildProductInvitationEmail({
+    from: config.from,
+    inviterName,
+    replacesPreviousLink,
+    to: email,
+    url,
+  });
+
+  if (config.transport === "console") {
+    console.info(`[AnonResume] Product invitation URL for ${email}: ${url}`);
     return;
   }
 
