@@ -15,12 +15,14 @@ export function AdminUserActions({
   userId,
   userName,
   suspended,
+  canResendInvitation,
   canSuspend,
   canRevokeSessions,
 }: {
   userId: string;
   userName: string;
   suspended: boolean;
+  canResendInvitation: boolean;
   canSuspend: boolean;
   canRevokeSessions: boolean;
 }) {
@@ -35,8 +37,12 @@ export function AdminUserActions({
   const [pending, setPending] = useState(false);
   const [deferred, setDeferred] = useState<(() => Promise<void>) | null>(null);
   const [revokeOpen, setRevokeOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
 
-  async function run(request: () => Promise<Response>) {
+  async function run(
+    request: () => Promise<Response>,
+    successMessage = t("common.operationComplete"),
+  ) {
     setPending(true);
     try {
       const response = await request();
@@ -47,8 +53,9 @@ export function AdminUserActions({
       }
       if (!response.ok) throw new Error(t("common.operationFailed"));
       setSuspendOpen(false);
+      setResendOpen(false);
       setReason("");
-      toast.success(t("common.operationComplete"));
+      toast.success(successMessage);
       router.refresh();
     } catch {
       toast.error(t("users.operationFailed"));
@@ -79,6 +86,13 @@ export function AdminUserActions({
   return (
     <>
       <AdminTableActions>
+        {canResendInvitation ? (
+          <Button
+            loading={pending}
+            onClick={() => setResendOpen(true)}
+            type="link"
+          >{t("invite.resend")}</Button>
+        ) : null}
         {canSuspend ? (
           suspended ? (
             <Button
@@ -98,6 +112,22 @@ export function AdminUserActions({
           >{t("users.revokeSessions")}</Button>
         ) : null}
       </AdminTableActions>
+      <ActionConfirmationModal
+        cancelText={t("common.cancel")}
+        confirmText={t("invite.resendConfirm")}
+        danger={false}
+        description={t("invite.resendDescription", { user: userName })}
+        onCancel={() => setResendOpen(false)}
+        onConfirm={() => {
+          void run(
+            () => fetch(`/api/manage/users/${userId}/invitation`, { method: "POST" }),
+            t("invite.resent"),
+          );
+        }}
+        open={resendOpen}
+        pending={pending}
+        title={t("invite.resendTitle")}
+      />
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ danger: true, disabled: !reason.trim(), loading: pending }}
