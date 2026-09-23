@@ -241,7 +241,15 @@ const useStyles = createStyles(({ token, css }) => ({
 
 type SettingsSection = "general" | "appearance" | "about";
 
-export function LocaleSwitcher() {
+export function LocaleSwitcher({
+  className,
+  onActivate,
+  presentation = "icon",
+}: {
+  className?: string;
+  onActivate?: () => void;
+  presentation?: "icon" | "menu";
+} = {}) {
   const { styles, cx } = useStyles();
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("general");
@@ -274,17 +282,36 @@ export function LocaleSwitcher() {
 
   return (
     <div
-      data-interface-settings-trigger="inline"
+      data-interface-settings-trigger={presentation}
       data-print-chrome="screen"
     >
-      <Tooltip title={t("common.interfaceSettings")}>
+      {presentation === "icon" ? (
+        <Tooltip title={t("common.interfaceSettings")}>
+          <Button
+            aria-label={t("common.openInterfaceSettings")}
+            className={className}
+            icon={<SettingOutlined aria-hidden="true" />}
+            type="text"
+            onClick={() => {
+              onActivate?.();
+              setOpen(true);
+            }}
+          />
+        </Tooltip>
+      ) : (
         <Button
           aria-label={t("common.openInterfaceSettings")}
-          icon={<SettingOutlined />}
+          className={className}
+          icon={<SettingOutlined aria-hidden="true" />}
           type="text"
-          onClick={() => setOpen(true)}
-        />
-      </Tooltip>
+          onClick={() => {
+            onActivate?.();
+            setOpen(true);
+          }}
+        >
+          {t("common.interfaceSettings")}
+        </Button>
+      )}
       <Modal
         centered
         className={styles.settingsModal}

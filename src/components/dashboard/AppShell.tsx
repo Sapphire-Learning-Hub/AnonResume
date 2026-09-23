@@ -22,18 +22,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
-import { SignOutButton } from "@/components/auth/SignOutButton";
 import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { ConfigurationHealthBanner } from "@/components/config/ConfigurationHealthBanner";
 import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
-import { ManagementModeControl } from "@/components/dashboard/ManagementModeControl";
 import {
   buildAppNavigation,
   type AppNavigationIcon,
 } from "@/components/dashboard/app-navigation";
+import { WorkbenchAccountMenu } from "@/components/dashboard/WorkbenchAccountMenu";
 import { useI18n } from "@/i18n/I18nProvider";
-import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
@@ -52,7 +50,7 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
   topbar: css`
     display: grid;
-    grid-template-columns: auto minmax(160px, 900px) minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(160px, 900px) minmax(0, 1fr);
     align-items: center;
     min-height: 56px;
     gap: 20px;
@@ -90,41 +88,6 @@ const useStyles = createStyles(({ token, css }) => ({
       width: 126px;
     }
   `,
-  account: css`
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    min-width: 0;
-    gap: 10px;
-    grid-column: 4;
-
-    .ant-btn {
-      height: 32px;
-    }
-
-    @media (max-width: 720px) {
-      flex: 1;
-      grid-column: 2;
-      grid-row: 1;
-    }
-  `,
-  userSummary: css`
-    overflow: hidden;
-    max-width: 440px;
-    color: ${token.colorTextSecondary};
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    @media (max-width: 720px) {
-      margin-left: auto;
-      max-width: 128px;
-    }
-
-    @media (max-width: 480px) {
-      display: none;
-    }
-  `,
   workspace: css`
     display: grid;
     grid-template-columns: 273px minmax(0, 1fr);
@@ -155,6 +118,8 @@ const useStyles = createStyles(({ token, css }) => ({
     background: ${token.colorBgLayout};
 
     @media (max-width: 720px) {
+      align-items: center;
+      flex-direction: row;
       padding: 8px;
       border-bottom: 1px solid ${token.colorBorderSecondary};
     }
@@ -196,12 +161,20 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
   navigation: css`
     display: grid;
+    align-content: start;
+    min-height: 0;
+    flex: 1;
     gap: 14px;
+    overflow-x: hidden;
+    overflow-y: auto;
 
     @media (max-width: 720px) {
       display: flex;
       align-items: center;
+      min-width: 0;
       gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
   `,
   navigationSection: css`
@@ -457,28 +430,6 @@ export function AppShell({
             />
           </div>
         ) : null}
-        <div className={styles.account}>
-          <span className={styles.userSummary}>
-            {access.mode !== "product" && access.kind === "super_admin"
-              ? t("management.superAdmin")
-              : t("dashboard.signedInAs", {
-                  name: userName,
-                  email: user.email,
-                })}
-          </span>
-          <LocaleSwitcher />
-          {access.mode === "product" && access.canEnterManagement ? (
-            <ManagementModeControl
-              email={user.email}
-              enrollmentRequired={access.mfaEnrollmentRequired}
-              state="available"
-            />
-          ) : null}
-          {access.mode === "management" && access.productAccess ? (
-            <ManagementModeControl state="active" />
-          ) : null}
-          <SignOutButton />
-        </div>
       </header>
 
       <div
@@ -582,6 +533,12 @@ export function AppShell({
               </section>
             ))}
           </nav>
+          <WorkbenchAccountMenu
+            access={access}
+            collapsed={isSidebarCollapsed}
+            email={user.email}
+            name={userName}
+          />
         </aside>
 
         <div

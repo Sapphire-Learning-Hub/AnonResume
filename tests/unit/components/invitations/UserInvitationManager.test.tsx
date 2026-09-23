@@ -17,7 +17,8 @@ describe("UserInvitationManager", () => {
   });
 
   it("shows usage and sends only the entered email", async () => {
-    render(<UserInvitationManager initialData={{
+    const onChange = vi.fn();
+    render(<UserInvitationManager onChange={onChange} initialData={{
       activeCount: 2,
       limit: 5,
       now: "2026-09-24T00:00:00.000Z",
@@ -37,10 +38,11 @@ describe("UserInvitationManager", () => {
         body: JSON.stringify({ email: "new@example.com" }),
       }),
     ));
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
   });
 
   it("offers actions only while an invitation remains actionable", () => {
-    render(<UserInvitationManager initialData={{
+    render(<UserInvitationManager onChange={vi.fn()} initialData={{
       activeCount: 1,
       limit: 5,
       now: "2026-09-24T00:00:00.000Z",

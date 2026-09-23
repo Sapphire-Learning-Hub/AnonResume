@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import { AppShell } from "@/components/dashboard/AppShell";
@@ -56,16 +56,60 @@ describe("AppShell", () => {
     );
   });
 
-  it("places interface settings beside the signed-in user", () => {
+  it("places account controls in the sidebar footer", async () => {
     renderShell();
 
-    const settingsButton = screen.getByRole("button", {
-      name: "打开界面设置",
-    });
-    expect(settingsButton.closest("header")).not.toBeNull();
-    expect(settingsButton.parentElement?.parentElement).toContainElement(
-      screen.getByText(/测试用户/),
+    const accountFooter = screen.getByTestId("workbench-account-footer");
+    expect(accountFooter.closest("aside")).not.toBeNull();
+
+    fireEvent.click(
+      within(accountFooter).getByRole("button", {
+        name: /测试用户.*user@example.com/,
+      }),
     );
+
+    expect(
+      await screen.findByRole("button", { name: "打开界面设置" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText("测试用户").every((element) => !element.closest("header")),
+    ).toBe(true);
+  });
+
+  it("opens invitations from the account menu instead of the sidebar", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ activeCount: 0, limit: 5, items: [] })),
+    );
+    renderShell();
+
+    expect(screen.queryByRole("link", { name: "邀请用户" })).toBeNull();
+    const accountButton = within(screen.getByTestId("workbench-account-footer"))
+      .getByRole("button", { name: /测试用户.*user@example.com/ });
+    fireEvent.click(accountButton);
+    fireEvent.click(await screen.findByRole("button", { name: "邀请用户" }));
+
+    const invitationDialog = await screen.findByRole("dialog");
+    expect(within(invitationDialog).getByText("邀请用户")).toBeInTheDocument();
+    expect(await screen.findByText("0 / 5")).toBeInTheDocument();
+    expect(accountButton).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(within(invitationDialog).getByRole("button", { name: "Close" }));
+    expect(accountButton).toHaveAttribute("aria-expanded", "false");
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/invitations",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("closes the account menu while keeping interface settings open", async () => {
+    renderShell();
+    const accountButton = within(screen.getByTestId("workbench-account-footer"))
+      .getByRole("button", { name: /测试用户.*user@example.com/ });
+    fireEvent.click(accountButton);
+    expect(accountButton).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(await screen.findByRole("button", { name: "打开界面设置" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(accountButton).toHaveAttribute("aria-expanded", "false");
   });
 
   it("places announcements in the top bar beside the brand", () => {
