@@ -13,7 +13,7 @@ export async function POST(
 ) {
   try {
     const context = await requireAdminApi({
-      permission: "users.invite",
+      superAdminOnly: true,
       recentMfa: true,
     });
     const result = await resendUserInvitation({

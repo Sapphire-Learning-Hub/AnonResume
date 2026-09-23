@@ -10,7 +10,6 @@ describe("admin permission catalog", () => {
     expect(ADMIN_PERMISSION_KEYS).toEqual([
       "overview.read",
       "users.read",
-      "users.invite",
       "users.suspend",
       "users.sessions.revoke",
       "resumes.metadata.read",
@@ -66,9 +65,6 @@ describe("admin permission catalog", () => {
 
     expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).not.toContain(
       "resumes.content.read",
-    );
-    expect(ADMIN_SYSTEM_ROLES.support_operator.permissions).not.toContain(
-      "users.invite",
     );
     expect(ADMIN_SYSTEM_ROLES.read_only_auditor.permissions).toContain(
       "announcements.read",

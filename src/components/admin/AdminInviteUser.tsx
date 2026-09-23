@@ -10,11 +10,7 @@ import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
-export function AdminInviteUser({
-  canAssignRole,
-}: {
-  canAssignRole: boolean;
-}) {
+export function AdminInviteUser() {
   const { locale } = useI18n();
   const t = createAdminTranslator(locale);
   const router = useRouter();
@@ -73,7 +69,10 @@ export function AdminInviteUser({
     <>
       <Button onClick={() => setOpen(true)} type="primary">{t("invite.open")}</Button>
       <Modal
-        okButtonProps={{ disabled: !name.trim() || !email.trim(), loading: pending }}
+        okButtonProps={{
+          disabled: !name.trim() || !email.trim() || roleIds.length === 0,
+          loading: pending,
+        }}
         okText={t("invite.send")}
         onCancel={() => setOpen(false)}
         onOk={submit}
@@ -83,16 +82,14 @@ export function AdminInviteUser({
         <div className="admin-dialog-form">
           <Input maxLength={80} onChange={(event) => setName(event.target.value)} placeholder={t("invite.name")} value={name} />
           <Input maxLength={254} onChange={(event) => setEmail(event.target.value)} placeholder={t("invite.email")} type="email" value={email} />
-          {canAssignRole ? (
-            <AdminPagedSelect
-              allowClear
-              endpoint="/api/manage/roles"
-              mode="multiple"
-              onChange={setRoleIds}
-              placeholder={t("invite.role")}
-              value={roleIds}
-            />
-          ) : null}
+          <AdminPagedSelect
+            allowClear
+            endpoint="/api/manage/roles"
+            mode="multiple"
+            onChange={setRoleIds}
+            placeholder={t("invite.role")}
+            value={roleIds}
+          />
         </div>
       </Modal>
       <Modal
