@@ -90,6 +90,7 @@ export default async function ManagementUsersPage({
             user.createdAt.toLocaleString(locale),
             user.principalKind === "super_admin" ? "-" : (
               <AdminUserActions
+                canResendInvitation={canInvite && canOperateTarget && user.invitationPending}
                 canRevokeSessions={canOperateTarget && (context.kind === "super_admin" || context.permissions.includes("users.sessions.revoke"))}
                 canSuspend={canOperateTarget && (context.kind === "super_admin" || context.permissions.includes("users.suspend"))}
                 key="actions"

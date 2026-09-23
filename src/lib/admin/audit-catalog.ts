@@ -9,6 +9,7 @@ export const adminAuditActionMessageKeys = {
   "administrator.set_roles": "audit.action.administrator.set_roles",
   "administrator.remove": "audit.action.administrator.remove",
   "user.invite": "audit.action.user.invite",
+  "user.invite.resend": "audit.action.user.invite.resend",
   "user.suspend": "audit.action.user.suspend",
   "user.restore": "audit.action.user.restore",
   "user.sessions.revoke": "audit.action.user.sessions.revoke",

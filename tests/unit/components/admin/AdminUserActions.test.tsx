@@ -26,6 +26,7 @@ describe("AdminUserActions", () => {
 
     render(
       <AdminUserActions
+        canResendInvitation={false}
         canRevokeSessions
         canSuspend={false}
         suspended={false}
@@ -44,6 +45,36 @@ describe("AdminUserActions", () => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/manage/users/user-1/sessions",
         { method: "DELETE" },
+      );
+    });
+  });
+
+  it("confirms before resending a pending invitation", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 200 }),
+    );
+
+    render(
+      <AdminUserActions
+        canResendInvitation
+        canRevokeSessions={false}
+        canSuspend={false}
+        suspended={false}
+        userId="user-2"
+        userName="Bob"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "重发邀请" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "重发邀请邮件" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认重发" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/manage/users/user-2/invitation",
+        { method: "POST" },
       );
     });
   });

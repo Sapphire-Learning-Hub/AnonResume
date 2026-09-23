@@ -428,6 +428,7 @@ export async function listAdminUsers(request: AdminListRequest) {
     name: string;
     email: string;
     emailVerified: boolean;
+    invitationPending: boolean;
     createdAt: Date;
     resumes: number;
     principalKind: string | null;
@@ -438,6 +439,16 @@ export async function listAdminUsers(request: AdminListRequest) {
     `SELECT count(*)::text AS total FROM "user" AS identity ${search.clause}`,
     `SELECT identity.id, identity.name, identity.email,
       identity."emailVerified", identity."createdAt",
+      (NOT identity."emailVerified"
+       AND invitation.purpose IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM "account"
+          WHERE "userId" = identity.id AND "providerId" = 'credential'
+       )
+       AND (
+         (invitation.purpose = 'product_user' AND principal.user_id IS NULL)
+         OR (invitation.purpose = 'delegated_admin' AND principal.kind = 'delegated_admin')
+       )) AS "invitationPending",
       (SELECT count(*)::int FROM ${schema}.resumes AS resume
         WHERE resume.user_id = identity.id) AS resumes,
       principal.kind AS "principalKind",
@@ -447,6 +458,14 @@ export async function listAdminUsers(request: AdminListRequest) {
     FROM "user" AS identity
     LEFT JOIN ${schema}.admin_principals AS principal
       ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
+    LEFT JOIN LATERAL (
+      SELECT token.purpose
+        FROM ${schema}.admin_activation_tokens AS token
+       WHERE token.user_id = identity.id
+         AND token.purpose IN ('product_user', 'delegated_admin')
+       ORDER BY token.created_at DESC, token.id DESC
+       LIMIT 1
+    ) AS invitation ON true
     LEFT JOIN LATERAL (
       SELECT jsonb_agg(
         jsonb_build_object(

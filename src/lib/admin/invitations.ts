@@ -12,12 +12,22 @@ import { sendUserInvitationEmail } from "@/lib/runtime/email";
 import { resolveApplicationOriginForBootstrap } from "@/lib/runtime/configuration";
 
 const INVITATION_TTL_MS = 24 * 60 * 60 * 1000;
+type InvitationPurpose = "product_user" | "delegated_admin";
 
 export class AdminInvitationConflictError extends Error {}
 export class AdminInvitationNotFoundError extends Error {}
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+function createInvitationUrl(rawToken: string) {
+  const url = new URL(
+    "/activate",
+    resolveApplicationOriginForBootstrap(),
+  );
+  url.searchParams.set("token", rawToken);
+  return url.toString();
 }
 
 export async function inviteUser(input: {
@@ -130,15 +140,10 @@ export async function inviteUser(input: {
       },
     });
 
-    const url = new URL(
-      "/activate",
-      resolveApplicationOriginForBootstrap(),
-    );
-    url.searchParams.set("token", rawToken);
     await (input.deliverInvitation ?? sendUserInvitationEmail)({
       email,
       name,
-      url: url.toString(),
+      url: createInvitationUrl(rawToken),
       grantsManagementAccess: roleIds.length > 0,
     });
     await client.query("COMMIT");
@@ -148,6 +153,123 @@ export async function inviteUser(input: {
     if ((error as { code?: string }).code === "23505") {
       throw new AdminInvitationConflictError("The invitation conflicts with an existing account");
     }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function resendUserInvitation(input: {
+  actorUserId: string;
+  actorKind: "super_admin" | "delegated_admin";
+  userId: string;
+  deliverInvitation?: typeof sendUserInvitationEmail;
+}) {
+  const schema = quoteIdentifier(getDatabaseSchemaName());
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext('admin-invite-user:' || $1))",
+      [input.userId],
+    );
+    const invitationResult = await client.query<{
+      purpose: InvitationPurpose;
+    }>(
+      `SELECT purpose
+         FROM ${schema}.admin_activation_tokens
+        WHERE user_id = $1
+          AND purpose IN ('product_user', 'delegated_admin')
+        ORDER BY created_at DESC, id DESC
+        FOR UPDATE`,
+      [input.userId],
+    );
+    const purpose = invitationResult.rows[0]?.purpose ?? null;
+    const targetResult = await client.query<{
+      email: string;
+      emailVerified: boolean;
+      hasCredential: boolean;
+      name: string;
+      principalKind: "super_admin" | "delegated_admin" | null;
+    }>(
+      `SELECT identity.name, identity.email,
+              identity."emailVerified" AS "emailVerified",
+              principal.kind AS "principalKind",
+              EXISTS (
+                SELECT 1 FROM "account"
+                 WHERE "userId" = identity.id AND "providerId" = 'credential'
+              ) AS "hasCredential"
+         FROM "user" AS identity
+         LEFT JOIN ${schema}.admin_principals AS principal
+           ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
+        WHERE identity.id = $1
+        FOR UPDATE OF identity`,
+      [input.userId],
+    );
+    const target = targetResult.rows[0];
+    if (!target) throw new AdminInvitationNotFoundError();
+
+    const validInvitationIdentity =
+      purpose === "product_user"
+        ? target.principalKind === null
+        : purpose === "delegated_admin" &&
+          target.principalKind === "delegated_admin";
+    if (
+      target.emailVerified ||
+      target.hasCredential ||
+      !validInvitationIdentity ||
+      (input.actorKind !== "super_admin" &&
+        purpose === "delegated_admin")
+    ) {
+      throw new AdminInvitationConflictError(
+        "The account does not have a resendable invitation",
+      );
+    }
+
+    const rawToken = randomBytes(32).toString("base64url");
+    await client.query(
+      `UPDATE ${schema}.admin_activation_tokens
+          SET consumed_at = now()
+        WHERE user_id = $1
+          AND purpose IN ('product_user', 'delegated_admin')
+          AND consumed_at IS NULL`,
+      [input.userId],
+    );
+    await client.query(
+      `INSERT INTO ${schema}.admin_activation_tokens
+        (user_id, purpose, token_hash, expires_at)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        input.userId,
+        purpose,
+        hashAdminSecret(rawToken),
+        new Date(Date.now() + INVITATION_TTL_MS),
+      ],
+    );
+    await writeAdminAuditEventWithClient(client, {
+      actorUserId: input.actorUserId,
+      action: "user.invite.resend",
+      targetType: "user",
+      targetId: input.userId,
+      outcome: "success",
+      metadata: {
+        grantsManagementAccess: purpose === "delegated_admin",
+        targetSnapshot: {
+          label: target.name,
+          description: target.email,
+        },
+      },
+    });
+    await (input.deliverInvitation ?? sendUserInvitationEmail)({
+      email: target.email,
+      name: target.name,
+      url: createInvitationUrl(rawToken),
+      grantsManagementAccess: purpose === "delegated_admin",
+    });
+    await client.query("COMMIT");
+    return { userId: input.userId };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
     throw error;
   } finally {
     client.release();

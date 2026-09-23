@@ -11,6 +11,7 @@ import {
 import {
   AdminInvitationConflictError,
   inviteUser,
+  resendUserInvitation,
 } from "@/lib/admin/invitations";
 import { getDatabasePool } from "@/lib/runtime/database";
 
@@ -179,6 +180,138 @@ describe("administrative user invitations", () => {
         name: "Forbidden",
         email: `forbidden-${randomUUID()}@example.com`,
         roleIds,
+        deliverInvitation: vi.fn(),
+      }),
+    ).rejects.toBeInstanceOf(AdminInvitationConflictError);
+  });
+
+  it("replaces an expired invitation without changing the invited account or roles", async () => {
+    let originalActivationUrl = "";
+    const email = `resend-admin-${randomUUID()}@example.com`;
+    const invited = await inviteUser({
+      actorUserId,
+      actorKind: "super_admin",
+      name: "Resent administrator",
+      email,
+      roleIds,
+      deliverInvitation: async ({ url }) => {
+        originalActivationUrl = url;
+      },
+    });
+    createdUserIds.push(invited.userId);
+    const originalToken = new URL(originalActivationUrl).searchParams.get("token")!;
+    await getDatabasePool().query(
+      `UPDATE ${schema}.admin_activation_tokens
+          SET expires_at = now() - interval '1 minute'
+        WHERE user_id = $1`,
+      [invited.userId],
+    );
+
+    let resentActivationUrl = "";
+    await resendUserInvitation({
+      actorUserId,
+      actorKind: "super_admin",
+      userId: invited.userId,
+      deliverInvitation: async ({ url }) => {
+        resentActivationUrl = url;
+      },
+    });
+
+    const resentToken = new URL(resentActivationUrl).searchParams.get("token")!;
+    expect(resentToken).not.toBe(originalToken);
+    await expect(inspectAdminActivation(originalToken)).rejects.toThrow();
+    await expect(inspectAdminActivation(resentToken)).resolves.toMatchObject({
+      email,
+      purpose: "delegated_admin",
+      requiresMfa: true,
+    });
+    const assignments = await getDatabasePool().query<{ role_id: string }>(
+      `SELECT role_id::text FROM ${schema}.admin_assignments
+        WHERE user_id = $1 ORDER BY role_id`,
+      [invited.userId],
+    );
+    expect(assignments.rows.map((row) => row.role_id)).toEqual(
+      [...roleIds].sort(),
+    );
+  });
+
+  it("keeps the current invitation usable when redelivery fails", async () => {
+    let activationUrl = "";
+    const email = `resend-failure-${randomUUID()}@example.com`;
+    const invited = await inviteUser({
+      actorUserId,
+      actorKind: "delegated_admin",
+      name: "Delivery failure",
+      email,
+      deliverInvitation: async ({ url }) => {
+        activationUrl = url;
+      },
+    });
+    createdUserIds.push(invited.userId);
+    const token = new URL(activationUrl).searchParams.get("token")!;
+
+    await expect(
+      resendUserInvitation({
+        actorUserId,
+        actorKind: "delegated_admin",
+        userId: invited.userId,
+        deliverInvitation: async () => {
+          throw new Error("mail unavailable");
+        },
+      }),
+    ).rejects.toThrow("mail unavailable");
+    await expect(inspectAdminActivation(token)).resolves.toMatchObject({
+      email,
+      purpose: "product_user",
+    });
+  });
+
+  it("rejects resending an activated invitation", async () => {
+    let activationUrl = "";
+    const email = `resend-activated-${randomUUID()}@example.com`;
+    const invited = await inviteUser({
+      actorUserId,
+      actorKind: "delegated_admin",
+      name: "Activated user",
+      email,
+      deliverInvitation: async ({ url }) => {
+        activationUrl = url;
+      },
+    });
+    createdUserIds.push(invited.userId);
+    const token = new URL(activationUrl).searchParams.get("token")!;
+    await startAdminActivation({
+      token,
+      password: "activated-invitation-password",
+      deviceName: "unused",
+    });
+
+    await expect(
+      resendUserInvitation({
+        actorUserId,
+        actorKind: "super_admin",
+        userId: invited.userId,
+        deliverInvitation: vi.fn(),
+      }),
+    ).rejects.toBeInstanceOf(AdminInvitationConflictError);
+  });
+
+  it("does not let a delegated administrator resend a management invitation", async () => {
+    const invited = await inviteUser({
+      actorUserId,
+      actorKind: "super_admin",
+      name: "Protected administrator",
+      email: `protected-admin-${randomUUID()}@example.com`,
+      roleIds,
+      deliverInvitation: vi.fn(),
+    });
+    createdUserIds.push(invited.userId);
+
+    await expect(
+      resendUserInvitation({
+        actorUserId,
+        actorKind: "delegated_admin",
+        userId: invited.userId,
         deliverInvitation: vi.fn(),
       }),
     ).rejects.toBeInstanceOf(AdminInvitationConflictError);

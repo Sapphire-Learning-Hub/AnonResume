@@ -31,12 +31,13 @@ describe("admin paginated queries", () => {
     for (const [index, userId] of userIds.entries()) {
       await pool.query(
         `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, true, $4, $4)`,
+         VALUES ($1, $2, $3, $5, $4, $4)`,
         [
           userId,
           `${marker} User ${index}`,
           `${marker}-${index}@example.com`,
           new Date(Date.UTC(2026, 0, index + 1)),
+          index !== 2,
         ],
       );
       await pool.query(
@@ -81,6 +82,12 @@ describe("admin paginated queries", () => {
       [userIds[0], roleIds[0], roleIds[1]],
     );
     await pool.query(
+      `INSERT INTO ${schema}.admin_activation_tokens
+        (user_id, purpose, token_hash, expires_at)
+       VALUES ($1, 'product_user', $2, now() - interval '1 hour')`,
+      [userIds[2], `${marker}-expired-invitation`],
+    );
+    await pool.query(
       `INSERT INTO ${schema}.pdf_export_jobs
         (resume_user_id, resume_id, requester_user_id, access_token_hash, document, filename)
        VALUES ($1, $2, $1, 'pagination-token', $3, $4)`,
@@ -119,6 +126,10 @@ describe("admin paginated queries", () => {
     await pool.query(`DELETE FROM ${schema}.admin_audit_events WHERE action = $1`, [`${marker}.action`]);
     await pool.query(`DELETE FROM ${schema}.pdf_export_jobs WHERE filename = $1`, [`${marker}.pdf`]);
     await pool.query(
+      `DELETE FROM ${schema}.admin_activation_tokens WHERE user_id = ANY($1::text[])`,
+      [userIds],
+    );
+    await pool.query(
       `DELETE FROM ${schema}.admin_assignments WHERE role_id = ANY($1::uuid[])`,
       [roleIds],
     );
@@ -141,6 +152,21 @@ describe("admin paginated queries", () => {
     expect(result).toMatchObject({ page: 2, pageSize: 2, total: 3, totalPages: 2 });
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.roles).toHaveLength(2);
+  });
+
+  it("marks only unactivated accounts created through the invitation flow", async () => {
+    const result = await listAdminUsers({
+      page: 1,
+      pageSize: 20,
+      query: marker,
+    });
+
+    expect(
+      result.items.find((user) => user.id === userIds[2])?.invitationPending,
+    ).toBe(true);
+    expect(
+      result.items.find((user) => user.id === userIds[1])?.invitationPending,
+    ).toBe(false);
   });
 
   it("returns pagination metadata for every management list", async () => {
