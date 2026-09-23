@@ -4,6 +4,7 @@ import { getDatabasePool } from "@/lib/runtime/database";
 
 import { aiDatabaseTables } from "./ai-schema";
 import { configDatabaseTables } from "./config-schema";
+import { invitationDatabaseTables } from "./invitation-schema";
 
 import {
   accountRestrictions,
@@ -45,6 +46,7 @@ export {
   systemConfigRuntimeStates,
   systemConfigValues,
 } from "./config-schema";
+export { userInvitations } from "./invitation-schema";
 export {
   accountRestrictions,
   adminActivationTokens,
@@ -72,6 +74,7 @@ export const db = drizzle({
   schema: {
     ...aiDatabaseTables,
     ...configDatabaseTables,
+    ...invitationDatabaseTables,
     accountRestrictions,
     resumes,
     resumeVersions,

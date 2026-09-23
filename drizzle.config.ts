@@ -45,6 +45,7 @@ export default defineConfig({
     "./src/db/schema.ts",
     "./src/db/ai-schema.ts",
     "./src/db/config-schema.ts",
+    "./src/db/invitation-schema.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",
