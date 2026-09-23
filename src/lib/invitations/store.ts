@@ -69,6 +69,16 @@ export async function lockInvitationScope(
   );
 }
 
+export async function lockInvitationEmail(
+  client: PoolClient,
+  invitedEmail: string,
+) {
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtext('user-invite-email:' || $1))",
+    [invitedEmail],
+  );
+}
+
 export function deriveInvitationStatus(
   row: InvitationRow,
   now: Date,

@@ -9,6 +9,7 @@ import {
   verifyAdminMfaEnrollment,
 } from "@/lib/admin/store";
 import { hashAdminSecret } from "@/lib/admin/crypto";
+import { lockInvitationScope } from "@/lib/invitations/store";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 export class AdminActivationError extends Error {
@@ -81,6 +82,25 @@ async function completeProductUserActivation(input: {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
+    const migratedInvitation = await client.query<{
+      id: string;
+      inviterUserId: string;
+      invitedEmail: string;
+    }>(
+      `SELECT id, inviter_user_id AS "inviterUserId", invited_email AS "invitedEmail"
+         FROM ${schema}.user_invitations
+        WHERE legacy_invited_user_id = $1
+          AND accepted_at IS NULL AND revoked_at IS NULL AND invalidated_at IS NULL
+        LIMIT 1`,
+      [input.userId],
+    );
+    if (migratedInvitation.rows[0]) {
+      await lockInvitationScope(
+        client,
+        migratedInvitation.rows[0].inviterUserId,
+        migratedInvitation.rows[0].invitedEmail,
+      );
+    }
     const consumed = await client.query(
       `UPDATE ${schema}.admin_activation_tokens
           SET consumed_at = now()
@@ -102,6 +122,31 @@ async function completeProductUserActivation(input: {
         WHERE id = $1`,
       [input.userId],
     );
+    if (migratedInvitation.rows[0]) {
+      const acceptedAt = new Date();
+      await client.query(
+        `UPDATE ${schema}.user_invitations
+            SET accepted_by_user_id = $2, accepted_at = $3,
+                token_hash = NULL, updated_at = $3
+          WHERE id = $1
+            AND accepted_at IS NULL AND revoked_at IS NULL AND invalidated_at IS NULL`,
+        [migratedInvitation.rows[0].id, input.userId, acceptedAt],
+      );
+      await client.query(
+        `UPDATE ${schema}.user_invitations
+            SET invalidated_at = $3,
+                invalidation_reason = 'accepted_via_other_invitation',
+                token_hash = NULL,
+                updated_at = $3
+          WHERE invited_email = $1 AND id <> $2
+            AND accepted_at IS NULL AND revoked_at IS NULL AND invalidated_at IS NULL`,
+        [
+          migratedInvitation.rows[0].invitedEmail,
+          migratedInvitation.rows[0].id,
+          acceptedAt,
+        ],
+      );
+    }
     await client.query("COMMIT");
     return { completed: true as const };
   } catch (error) {

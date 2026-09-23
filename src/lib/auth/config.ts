@@ -7,6 +7,7 @@ import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { sendVerificationEmail } from "@/lib/runtime/email";
+import { invalidateInvitationsForIndependentRegistration } from "@/lib/invitations/registration";
 
 function createAuth(configuration: {
   applicationOrigin: string;
@@ -28,6 +29,18 @@ function createAuth(configuration: {
     baseURL: configuration.applicationOrigin,
     secret: configuration.authSecret,
     database: getDatabasePool(),
+    databaseHooks: {
+      user: {
+        create: {
+          after: async (user) => {
+            await invalidateInvitationsForIndependentRegistration(
+              user.email,
+              user.id,
+            );
+          },
+        },
+      },
+    },
     emailVerification: {
       sendVerificationEmail: async ({ user, url }) => {
         after(() =>
