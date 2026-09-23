@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
     options,
   })),
   getRuntimeConfig: vi.fn(),
+  invalidateInvitations: vi.fn(),
 }));
 
 vi.mock("better-auth", () => ({ betterAuth: mocks.betterAuth }));
@@ -11,6 +12,9 @@ vi.mock("better-auth/next-js", () => ({ nextCookies: () => "next-cookies" }));
 vi.mock("next/server", () => ({ after: vi.fn() }));
 vi.mock("@/lib/runtime/database", () => ({ getDatabasePool: () => "database" }));
 vi.mock("@/lib/runtime/email", () => ({ sendVerificationEmail: vi.fn() }));
+vi.mock("@/lib/invitations/registration", () => ({
+  invalidateInvitationsForIndependentRegistration: mocks.invalidateInvitations,
+}));
 vi.mock("@/lib/config/bootstrap", () => ({
   readBootstrapConfig: () => ({
     applicationOrigin: "https://resume.example.com",
@@ -82,5 +86,24 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(restarted).not.toBe(first);
     expect(mocks.betterAuth).toHaveBeenCalledTimes(2);
     expect(await isGitHubAuthEnabled()).toBe(false);
+  });
+
+  it("invalidates pending invitations after an independent user registration", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      databaseHooks: {
+        user: { create: { after: (user: { email: string; id: string }) => Promise<void> } };
+      };
+    };
+
+    await options.databaseHooks.user.create.after({
+      email: "new@example.com",
+      id: "user-1",
+    });
+
+    expect(mocks.invalidateInvitations).toHaveBeenCalledWith(
+      "new@example.com",
+      "user-1",
+    );
   });
 });

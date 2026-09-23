@@ -22,13 +22,13 @@ describe("management invitation resend route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireAdmin.mockResolvedValue({
-      kind: "delegated_admin",
+      kind: "super_admin",
       userId: "admin-1",
     });
     mocks.resendInvitation.mockResolvedValue({ userId: "user-1" });
   });
 
-  it("requires invitation permission and recent MFA before resending", async () => {
+  it("requires super-admin access and recent MFA before resending", async () => {
     const response = await POST(
       new Request("http://localhost/api/manage/users/user-1/invitation", {
         method: "POST",
@@ -38,11 +38,11 @@ describe("management invitation resend route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.requireAdmin).toHaveBeenCalledWith({
-      permission: "users.invite",
+      superAdminOnly: true,
       recentMfa: true,
     });
     expect(mocks.resendInvitation).toHaveBeenCalledWith({
-      actorKind: "delegated_admin",
+      actorKind: "super_admin",
       actorUserId: "admin-1",
       userId: "user-1",
     });

@@ -11,21 +11,18 @@ import {
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.email().max(254),
-  roleIds: z.array(z.uuid()).max(50).default([]),
+  roleIds: z.array(z.uuid()).min(1).max(50),
 });
 
 export async function POST(request: Request) {
   try {
     const context = await requireAdminApi({
-      permission: "users.invite",
+      superAdminOnly: true,
       recentMfa: true,
     });
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json({ error: "invalid_request" }, { status: 400 });
-    }
-    if (parsed.data.roleIds.length > 0 && context.kind !== "super_admin") {
-      return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     const result = await inviteUser({
       actorUserId: context.userId,

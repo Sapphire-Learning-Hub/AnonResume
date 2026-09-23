@@ -1,4 +1,5 @@
 import {
+  buildProductInvitationEmail,
   buildVerificationEmail,
   closeEmailTransporter,
   resolveEmailDeliveryConfig,
@@ -88,6 +89,25 @@ describe("email delivery configuration", () => {
     expect(() => resolveEmailDeliveryConfig(managedConfig(), "production")).toThrow(
       "SMTP configuration is required in production",
     );
+  });
+});
+
+describe("product invitation email", () => {
+  it("identifies the inviter and explains link validity without exposing their email", () => {
+    const message = buildProductInvitationEmail({
+      from: "AnonResume <mailer@example.com>",
+      inviterName: "邀请人 <A>",
+      replacesPreviousLink: true,
+      to: "recipient@example.com",
+      url: "https://resume.example.com/accept-invitation?token=secret",
+    });
+
+    expect(message.subject).toBe("你收到了 AnonResume 邀请");
+    expect(message.text).toContain("邀请人 <A>");
+    expect(message.text).toContain("7 天");
+    expect(message.text).toContain("最新链接");
+    expect(message.text).not.toContain("mailer@example.com");
+    expect(message.html).toContain("邀请人 &lt;A&gt;");
   });
 });
 

@@ -32,14 +32,12 @@ export default async function ManagementUsersPage({
   });
   const locale = await getRequestLocale();
   const t = createAdminTranslator(locale);
-  const canInvite =
-    context.kind === "super_admin" ||
-    context.permissions.includes("users.invite");
+  const canInviteAdministrator = context.kind === "super_admin";
   return (
     <AdminPage
       actions={
-        canInvite ? (
-          <AdminInviteUser canAssignRole={context.kind === "super_admin"} />
+        canInviteAdministrator ? (
+          <AdminInviteUser />
         ) : null
       }
       title={t("nav.users")}
@@ -90,7 +88,7 @@ export default async function ManagementUsersPage({
             user.createdAt.toLocaleString(locale),
             user.principalKind === "super_admin" ? "-" : (
               <AdminUserActions
-                canResendInvitation={canInvite && canOperateTarget && user.invitationPending}
+                canResendInvitation={canInviteAdministrator && canOperateTarget && user.invitationPending}
                 canRevokeSessions={canOperateTarget && (context.kind === "super_admin" || context.permissions.includes("users.sessions.revoke"))}
                 canSuspend={canOperateTarget && (context.kind === "super_admin" || context.permissions.includes("users.suspend"))}
                 key="actions"

@@ -1,7 +1,6 @@
 export const ADMIN_PERMISSION_KEYS = [
   "overview.read",
   "users.read",
-  "users.invite",
   "users.suspend",
   "users.sessions.revoke",
   "resumes.metadata.read",

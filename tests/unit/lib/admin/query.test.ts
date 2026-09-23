@@ -154,7 +154,7 @@ describe("admin paginated queries", () => {
     expect(result.items[0]?.roles).toHaveLength(2);
   });
 
-  it("marks only unactivated accounts created through the invitation flow", async () => {
+  it("does not expose legacy product invitations as management invitations", async () => {
     const result = await listAdminUsers({
       page: 1,
       pageSize: 20,
@@ -163,7 +163,7 @@ describe("admin paginated queries", () => {
 
     expect(
       result.items.find((user) => user.id === userIds[2])?.invitationPending,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       result.items.find((user) => user.id === userIds[1])?.invitationPending,
     ).toBe(false);

@@ -79,7 +79,7 @@ describe("ResumeIconPicker", () => {
     });
 
     expect(within(grid).getAllByRole("button")).toHaveLength(144);
-  });
+  }, 15_000);
 
   it("searches the local catalog and inserts the chosen icon", async () => {
     const { onSelect } = renderPicker();

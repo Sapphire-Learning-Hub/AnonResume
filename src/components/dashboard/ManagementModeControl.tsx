@@ -1,5 +1,6 @@
 "use client";
 
+import { SwapOutlined } from "@ant-design/icons";
 import { Button, Modal, Spin } from "antd";
 import { createStyles } from "antd-style";
 import { useRouter } from "next/navigation";
@@ -29,12 +30,16 @@ const useStyles = createStyles(({ css }) => ({
 }));
 
 export function ManagementModeControl({
+  buttonClassName,
   email = "",
   enrollmentRequired = false,
+  onActivate,
   state,
 }: {
+  buttonClassName?: string;
   email?: string;
   enrollmentRequired?: boolean;
+  onActivate?: () => void;
   state: "active" | "available";
 }) {
   const { styles } = useStyles();
@@ -50,6 +55,7 @@ export function ManagementModeControl({
   const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   async function openManagementMode() {
+    onActivate?.();
     setEnrollment(null);
     setEnrollmentCode("");
     setRecoveryCodes(null);
@@ -123,6 +129,7 @@ export function ManagementModeControl({
   }
 
   async function exitManagementMode() {
+    onActivate?.();
     setPending(true);
     try {
       await fetch("/api/manage/session", { method: "DELETE" });
@@ -135,7 +142,13 @@ export function ManagementModeControl({
 
   if (state === "active") {
     return (
-      <Button loading={pending} onClick={exitManagementMode}>
+      <Button
+        className={buttonClassName}
+        icon={<SwapOutlined aria-hidden="true" />}
+        loading={pending}
+        onClick={exitManagementMode}
+        type="text"
+      >
         {t("management.exit")}
       </Button>
     );
@@ -143,7 +156,14 @@ export function ManagementModeControl({
 
   return (
     <>
-      <Button onClick={openManagementMode}>{t("management.enter")}</Button>
+      <Button
+        className={buttonClassName}
+        icon={<SwapOutlined aria-hidden="true" />}
+        onClick={openManagementMode}
+        type="text"
+      >
+        {t("management.enter")}
+      </Button>
       <Modal
         closable={!pending && !recoveryCodes}
         destroyOnHidden

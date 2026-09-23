@@ -440,15 +440,12 @@ export async function listAdminUsers(request: AdminListRequest) {
     `SELECT identity.id, identity.name, identity.email,
       identity."emailVerified", identity."createdAt",
       (NOT identity."emailVerified"
-       AND invitation.purpose IS NOT NULL
+       AND coalesce(invitation.purpose = 'delegated_admin', false)
        AND NOT EXISTS (
          SELECT 1 FROM "account"
           WHERE "userId" = identity.id AND "providerId" = 'credential'
        )
-       AND (
-         (invitation.purpose = 'product_user' AND principal.user_id IS NULL)
-         OR (invitation.purpose = 'delegated_admin' AND principal.kind = 'delegated_admin')
-       )) AS "invitationPending",
+       AND principal.kind = 'delegated_admin') AS "invitationPending",
       (SELECT count(*)::int FROM ${schema}.resumes AS resume
         WHERE resume.user_id = identity.id) AS resumes,
       principal.kind AS "principalKind",
@@ -462,7 +459,7 @@ export async function listAdminUsers(request: AdminListRequest) {
       SELECT token.purpose
         FROM ${schema}.admin_activation_tokens AS token
        WHERE token.user_id = identity.id
-         AND token.purpose IN ('product_user', 'delegated_admin')
+         AND token.purpose = 'delegated_admin'
        ORDER BY token.created_at DESC, token.id DESC
        LIMIT 1
     ) AS invitation ON true

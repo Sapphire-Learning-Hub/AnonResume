@@ -154,7 +154,6 @@ interface PendingConfirmation {
 const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "overview.read": "permission.overview.read",
   "users.read": "permission.users.read",
-  "users.invite": "permission.users.invite",
   "users.suspend": "permission.users.suspend",
   "users.sessions.revoke": "permission.users.sessions.revoke",
   "resumes.metadata.read": "permission.resumes.metadata.read",
@@ -190,7 +189,6 @@ const permissionGroups: Array<{
     label: "roles.permissionGroup.users",
     permissions: [
       "users.read",
-      "users.invite",
       "users.suspend",
       "users.sessions.revoke",
     ],
