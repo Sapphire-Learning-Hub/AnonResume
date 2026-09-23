@@ -177,6 +177,12 @@ export function buildAppNavigation(
           id: "ai-settings",
           label: translate("ai.settings.navigation"),
         },
+        {
+          href: "/app/invitations",
+          icon: "users",
+          id: "invitations",
+          label: translate("invitations.navigation"),
+        },
       ],
     });
   }

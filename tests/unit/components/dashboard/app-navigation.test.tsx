@@ -14,7 +14,7 @@ describe("app navigation", () => {
   it("shows only product links to product users and dormant administrators", () => {
     const expected = [{
       id: "product",
-      items: ["/app", "/app/fonts", "/app/ai"],
+      items: ["/app", "/app/fonts", "/app/ai", "/app/invitations"],
     }];
 
     expect(
@@ -49,7 +49,7 @@ describe("app navigation", () => {
         productAccess: true,
       }),
     ).toEqual([
-      { id: "product", items: ["/app", "/app/fonts", "/app/ai"] },
+      { id: "product", items: ["/app", "/app/fonts", "/app/ai", "/app/invitations"] },
       {
         id: "management",
         items: [
@@ -138,7 +138,7 @@ describe("app navigation", () => {
         productAccess: true,
       }),
     ).toEqual([
-      { id: "product", items: ["/app", "/app/fonts", "/app/ai"] },
+      { id: "product", items: ["/app", "/app/fonts", "/app/ai", "/app/invitations"] },
       { id: "management", items: ["/app/manage/security"] },
     ]);
   });
