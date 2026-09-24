@@ -233,6 +233,15 @@ export async function isManagementOnlyIdentity(userId: string) {
   return access?.kind === "super_admin";
 }
 
+export async function isSuperAdminPrincipal(userId: string) {
+  const rows = await db
+    .select({ kind: adminPrincipals.kind })
+    .from(adminPrincipals)
+    .where(eq(adminPrincipals.userId, userId))
+    .limit(1);
+  return rows[0]?.kind === "super_admin";
+}
+
 export async function isAccountSuspended(userId: string) {
   const rows = await db
     .select({ suspendedUntil: accountRestrictions.suspendedUntil })

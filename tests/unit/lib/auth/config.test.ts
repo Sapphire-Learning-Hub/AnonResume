@@ -5,17 +5,26 @@ const mocks = vi.hoisted(() => ({
   })),
   getRuntimeConfig: vi.fn(),
   invalidateInvitations: vi.fn(),
+  isSuperAdminPrincipal: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
 }));
 
 vi.mock("better-auth", () => ({ betterAuth: mocks.betterAuth }));
 vi.mock("better-auth/next-js", () => ({ nextCookies: () => "next-cookies" }));
 vi.mock("next/server", () => ({ after: vi.fn() }));
 vi.mock("@/lib/runtime/database", () => ({ getDatabasePool: () => "database" }));
-vi.mock("@/lib/runtime/email", () => ({ sendVerificationEmail: vi.fn() }));
+vi.mock("@/lib/runtime/email", () => ({
+  sendVerificationEmail: vi.fn(),
+  sendPasswordResetEmail: mocks.sendPasswordResetEmail,
+}));
+vi.mock("@/lib/admin/store", () => ({
+  isSuperAdminPrincipal: mocks.isSuperAdminPrincipal,
+}));
 vi.mock("@/lib/invitations/registration", () => ({
   invalidateInvitationsForIndependentRegistration: mocks.invalidateInvitations,
 }));
 vi.mock("@/lib/config/bootstrap", () => ({
+  getBootstrapNodeEnvironment: () => process.env.NODE_ENV,
   readBootstrapConfig: () => ({
     applicationOrigin: "https://resume.example.com",
     authSecret: "a".repeat(32),
@@ -58,6 +67,7 @@ describe("restart-scoped Better Auth configuration", () => {
       __anonResumeAuthPromise?: Promise<unknown>;
     }).__anonResumeAuthPromise;
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues());
+    mocks.isSuperAdminPrincipal.mockResolvedValue(false);
   });
 
   it("creates one auth instance for concurrent callers", async () => {
@@ -88,6 +98,26 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(await isGitHubAuthEnabled()).toBe(false);
   });
 
+  it("rebuilds the auth instance when its module hot reloads in development", async () => {
+    const first = await getAuth();
+    mocks.getRuntimeConfig.mockResolvedValue(runtimeValues({
+      githubClientId: "",
+      githubClientSecret: "",
+    }));
+    vi.stubEnv("NODE_ENV", "development");
+    vi.resetModules();
+
+    try {
+      const { getAuth: getReloadedAuth } = await import("@/lib/auth/config");
+      const second = await getReloadedAuth();
+
+      expect(second).not.toBe(first);
+      expect(mocks.betterAuth).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("invalidates pending invitations after an independent user registration", async () => {
     await getAuth();
     const options = mocks.betterAuth.mock.calls[0]![0] as {
@@ -105,5 +135,50 @@ describe("restart-scoped Better Auth configuration", () => {
       "new@example.com",
       "user-1",
     );
+  });
+
+  it("sends recovery links to ordinary users and delegated administrators", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      emailAndPassword: {
+        sendResetPassword: (input: {
+          user: { id: string; email: string; name: string };
+          url: string;
+        }) => Promise<void>;
+        revokeSessionsOnPasswordReset: boolean;
+      };
+    };
+
+    await options.emailAndPassword.sendResetPassword({
+      user: { id: "user-1", email: "user@example.com", name: "User" },
+      url: "https://resume.example.com/api/auth/reset-password/token",
+    });
+
+    expect(mocks.sendPasswordResetEmail).toHaveBeenCalledWith({
+      email: "user@example.com",
+      name: "User",
+      url: "https://resume.example.com/api/auth/reset-password/token",
+    });
+    expect(options.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it("does not deliver self-service recovery links to the super administrator", async () => {
+    mocks.isSuperAdminPrincipal.mockResolvedValue(true);
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      emailAndPassword: {
+        sendResetPassword: (input: {
+          user: { id: string; email: string; name: string };
+          url: string;
+        }) => Promise<void>;
+      };
+    };
+
+    await options.emailAndPassword.sendResetPassword({
+      user: { id: "super-admin", email: "admin@example.com", name: "Admin" },
+      url: "https://resume.example.com/api/auth/reset-password/token",
+    });
+
+    expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 });

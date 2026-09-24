@@ -2,11 +2,18 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { after } from "next/server";
 
-import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { isSuperAdminPrincipal } from "@/lib/admin/store";
+import {
+  getBootstrapNodeEnvironment,
+  readBootstrapConfig,
+} from "@/lib/config/bootstrap";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
 import { getDatabasePool } from "@/lib/runtime/database";
-import { sendVerificationEmail } from "@/lib/runtime/email";
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "@/lib/runtime/email";
 import { invalidateInvitationsForIndependentRegistration } from "@/lib/invitations/registration";
 
 function createAuth(configuration: {
@@ -58,6 +65,16 @@ function createAuth(configuration: {
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: true,
+      resetPasswordTokenExpiresIn: 3600,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => {
+        if (await isSuperAdminPrincipal(user.id)) return;
+        await sendPasswordResetEmail({
+          email: user.email,
+          name: user.name,
+          url,
+        });
+      },
     },
     rateLimit: {
       enabled: true,
@@ -72,6 +89,10 @@ let githubAuthEnabled = false;
 
 declare global {
   var __anonResumeAuthPromise: Promise<AuthInstance> | undefined;
+}
+
+if (getBootstrapNodeEnvironment() === "development") {
+  globalThis.__anonResumeAuthPromise = undefined;
 }
 
 async function createAuthFromRuntimeConfig() {

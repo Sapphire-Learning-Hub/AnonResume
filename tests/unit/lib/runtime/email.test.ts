@@ -1,5 +1,6 @@
 import {
   buildProductInvitationEmail,
+  buildPasswordResetEmail,
   buildVerificationEmail,
   closeEmailTransporter,
   resolveEmailDeliveryConfig,
@@ -131,5 +132,20 @@ describe("verification email", () => {
     );
     expect(message.html).toContain('alt="AnonResume"');
     expect(message.html).not.toContain(">AnonResume</div>");
+  });
+});
+
+describe("password recovery email", () => {
+  it("includes the one-time link in text and escapes it in HTML", () => {
+    const message = buildPasswordResetEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "<User>",
+      to: "user@example.com",
+      url: "https://resume.example.com/api/auth/reset-password/token?callbackURL=%2Freset-password&lang=zh",
+    });
+
+    expect(message.text).toContain("callbackURL=%2Freset-password&lang=zh");
+    expect(message.html).toContain("&lt;User&gt;");
+    expect(message.html).toContain("callbackURL=%2Freset-password&amp;lang=zh");
   });
 });
