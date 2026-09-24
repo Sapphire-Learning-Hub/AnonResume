@@ -65,6 +65,19 @@ const useStyles = createStyles(({ token, css }) => ({
       color: ${token.colorPrimary};
     }
   `,
+  forgotPassword: css`
+    && {
+      justify-self: end;
+      height: auto;
+      padding: 0;
+      color: ${token.colorTextSecondary};
+      font-size: 13px;
+    }
+
+    &&:hover {
+      color: ${token.colorPrimary};
+    }
+  `,
   disabledProviderAction: css`
     display: block;
     width: 100%;
@@ -167,7 +180,7 @@ const useStyles = createStyles(({ token, css }) => ({
   `,
 }));
 
-type AuthMode = "sign-in" | "sign-up";
+type AuthMode = "sign-in" | "sign-up" | "recover";
 
 const verificationFailureCodes = new Set([
   "INVALID_TOKEN",
@@ -191,6 +204,7 @@ const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   PASSWORD_TOO_LONG: "auth.passwordTooLong",
   PASSWORD_TOO_SHORT: "auth.passwordTooShort",
   PROVIDER_NOT_FOUND: "auth.socialSignInUnavailable",
+  RESET_PASSWORD_DISABLED: "auth.passwordResetUnavailable",
   TOO_MANY_REQUESTS: "auth.rateLimited",
 };
 
@@ -239,6 +253,7 @@ export function AuthPanel({
   const [resendSeconds, setResendSeconds] = useState(0);
   const [isPending, setIsPending] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [recoveryRequested, setRecoveryRequested] = useState(false);
   const pageErrorMessage =
     verificationError === "ACCOUNT_SUSPENDED"
       ? t("auth.accountSuspended")
@@ -281,6 +296,25 @@ export function AuthPanel({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === "recover") {
+      setIsPending(true);
+      try {
+        const result = await authClient.requestPasswordReset({
+          email,
+          redirectTo: "/reset-password",
+        });
+        if (result.error) {
+          toast.error(getAuthFeedbackMessage(result.error, t));
+          return;
+        }
+        setRecoveryRequested(true);
+      } catch (error) {
+        toast.error(getAuthFeedbackMessage(error, t));
+      } finally {
+        setIsPending(false);
+      }
+      return;
+    }
     if (mode === "sign-up" && password !== confirmPassword) {
       toast.error(t("auth.passwordMismatch"));
       return;
@@ -388,7 +422,26 @@ export function AuthPanel({
 
   return (
     <AuthExperienceShell announcements={announcements}>
-          {mode === "sign-up" && verificationEmail ? (
+          {mode === "recover" && recoveryRequested ? (
+            <div className={styles.verificationState}>
+              <h1 className={styles.verificationTitle}>
+                {t("auth.recoverySent")}
+              </h1>
+              <p className={styles.verificationDescription}>
+                {t("auth.recoverySentDescription")}
+              </p>
+              <Button
+                className={styles.verificationBack}
+                type="text"
+                onClick={() => {
+                  setMode("sign-in");
+                  setRecoveryRequested(false);
+                }}
+              >
+                {t("auth.backToSignIn")}
+              </Button>
+            </div>
+          ) : mode === "sign-up" && verificationEmail ? (
             <div className={styles.verificationState}>
               <div
                 className={styles.verificationStatusIcon}
@@ -473,10 +526,16 @@ export function AuthPanel({
                 <h1 className={styles.heading}>
                   {mode === "sign-up"
                     ? t("auth.signUpHeading")
-                    : t("auth.heading")}
+                    : mode === "recover"
+                      ? t("auth.recoveryHeading")
+                      : t("auth.heading")}
                 </h1>
                 <p className={styles.lead}>
-                  {mode === "sign-up" ? t("auth.signUpLead") : t("auth.lead")}
+                  {mode === "sign-up"
+                    ? t("auth.signUpLead")
+                    : mode === "recover"
+                      ? t("auth.recoveryLead")
+                      : t("auth.lead")}
                 </p>
               </div>
               <form
@@ -503,16 +562,18 @@ export function AuthPanel({
                   autoComplete="email"
                   required
                 />
-                <Input.Password
-                  data-testid="auth-password-input"
-                  placeholder={t("common.password")}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete={
-                    mode === "sign-up" ? "new-password" : "current-password"
-                  }
-                  required
-                />
+                {mode !== "recover" ? (
+                  <Input.Password
+                    data-testid="auth-password-input"
+                    placeholder={t("common.password")}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    autoComplete={
+                      mode === "sign-up" ? "new-password" : "current-password"
+                    }
+                    required
+                  />
+                ) : null}
                 {mode === "sign-up" ? (
                   <Input.Password
                     data-testid="auth-confirm-password-input"
@@ -537,6 +598,15 @@ export function AuthPanel({
                       : t("auth.resendVerification")}
                   </Button>
                 ) : null}
+                {mode === "sign-in" ? (
+                  <Button
+                    className={styles.forgotPassword}
+                    type="text"
+                    onClick={() => setMode("recover")}
+                  >
+                    {t("auth.forgotPassword")}
+                  </Button>
+                ) : null}
                 <Button
                   data-testid="auth-submit"
                   type="primary"
@@ -544,52 +614,64 @@ export function AuthPanel({
                   loading={isPending}
                   block
                 >
-                  {mode === "sign-up"
-                    ? t("common.createAccount")
-                    : t("common.signIn")}
+                  {mode === "recover"
+                    ? t("auth.sendRecoveryLink")
+                    : mode === "sign-up"
+                      ? t("common.createAccount")
+                      : t("common.signIn")}
                 </Button>
               </form>
 
-              <div className={styles.providerSection}>
-                <Divider className={styles.divider}>{t("common.or")}</Divider>
-
-                {githubEnabled ? (
-                  <Button
-                    className={styles.providerButton}
-                    icon={<GithubOutlined />}
-                    onClick={handleGitHubSignIn}
-                    loading={isPending}
-                    block
-                  >
-                    {t("common.continueWithGitHub")}
-                  </Button>
-                ) : (
-                  <Tooltip title={t("auth.githubDisabled")}>
-                    <span className={styles.disabledProviderAction}>
-                      <Button icon={<GithubOutlined />} disabled block>
-                        {t("common.continueWithGitHub")}
-                      </Button>
-                    </span>
-                  </Tooltip>
-                )}
-
+              {mode === "recover" ? (
                 <Button
                   className={styles.modeSwitch}
-                  data-testid={
-                    mode === "sign-up"
-                      ? "auth-switch-sign-in"
-                      : "auth-switch-sign-up"
-                  }
                   type="text"
-                  onClick={() =>
-                    setMode(mode === "sign-up" ? "sign-in" : "sign-up")
-                  }
+                  onClick={() => setMode("sign-in")}
                 >
-                  {mode === "sign-up"
-                    ? `${t("auth.haveAccount")} ${t("common.signIn")}`
-                    : `${t("auth.noAccount")} ${t("common.createAccount")}`}
+                  {t("auth.backToSignIn")}
                 </Button>
-              </div>
+              ) : (
+                <div className={styles.providerSection}>
+                  <Divider className={styles.divider}>{t("common.or")}</Divider>
+
+                  {githubEnabled ? (
+                    <Button
+                      className={styles.providerButton}
+                      icon={<GithubOutlined />}
+                      onClick={handleGitHubSignIn}
+                      loading={isPending}
+                      block
+                    >
+                      {t("common.continueWithGitHub")}
+                    </Button>
+                  ) : (
+                    <Tooltip title={t("auth.githubDisabled")}>
+                      <span className={styles.disabledProviderAction}>
+                        <Button icon={<GithubOutlined />} disabled block>
+                          {t("common.continueWithGitHub")}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  )}
+
+                  <Button
+                    className={styles.modeSwitch}
+                    data-testid={
+                      mode === "sign-up"
+                        ? "auth-switch-sign-in"
+                        : "auth-switch-sign-up"
+                    }
+                    type="text"
+                    onClick={() =>
+                      setMode(mode === "sign-up" ? "sign-in" : "sign-up")
+                    }
+                  >
+                    {mode === "sign-up"
+                      ? `${t("auth.haveAccount")} ${t("common.signIn")}`
+                      : `${t("auth.noAccount")} ${t("common.createAccount")}`}
+                  </Button>
+                </div>
+              )}
             </>
           )}
     </AuthExperienceShell>

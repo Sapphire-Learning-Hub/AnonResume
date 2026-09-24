@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const authMocks = vi.hoisted(() => ({
   sendVerificationEmail: vi.fn(),
+  requestPasswordReset: vi.fn(),
+  resetPassword: vi.fn(),
   signInEmail: vi.fn(),
   signInSocial: vi.fn(),
   signUpEmail: vi.fn(),
@@ -23,6 +25,8 @@ const feedbackMocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/client", () => ({
   authClient: {
     sendVerificationEmail: authMocks.sendVerificationEmail,
+    requestPasswordReset: authMocks.requestPasswordReset,
+    resetPassword: authMocks.resetPassword,
     signIn: {
       email: authMocks.signInEmail,
       social: authMocks.signInSocial,
@@ -52,6 +56,7 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 }));
 
 import { AuthPanel } from "@/components/auth/AuthPanel";
+import { PasswordResetPanel } from "@/components/auth/PasswordResetPanel";
 
 function fillEmailPasswordForm() {
   fireEvent.change(screen.getByTestId("auth-email-input"), {
@@ -210,6 +215,50 @@ describe("AuthPanel email verification", () => {
     );
   });
 
+  it("requests recovery without revealing whether an email belongs to an account", async () => {
+    authMocks.requestPasswordReset.mockResolvedValue({
+      data: { status: true },
+      error: null,
+    });
+    render(<AuthPanel githubEnabled={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "忘记密码" }));
+    fireEvent.change(screen.getByTestId("auth-email-input"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("auth-submit"));
+
+    expect(await screen.findByText(/如果该邮箱已注册/)).toBeInTheDocument();
+    expect(screen.queryByTestId("auth-email-input")).not.toBeInTheDocument();
+    expect(authMocks.requestPasswordReset).toHaveBeenCalledWith({
+      email: "user@example.com",
+      redirectTo: "/reset-password",
+    });
+  });
+
+  it("explains when password recovery has not loaded on the server", async () => {
+    authMocks.requestPasswordReset.mockResolvedValue({
+      data: null,
+      error: {
+        code: "RESET_PASSWORD_DISABLED",
+        message: "Reset password isn't enabled",
+        status: 400,
+      },
+    });
+    render(<AuthPanel githubEnabled={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "忘记密码" }));
+    fireEvent.change(screen.getByTestId("auth-email-input"), {
+      target: { value: "user@example.com" },
+    });
+    fireEvent.click(screen.getByTestId("auth-submit"));
+
+    await waitFor(() => {
+      expect(feedbackMocks.toastError).toHaveBeenCalledWith(
+        "密码找回暂不可用，请稍后重试或联系管理员。",
+      );
+    });
+  });
+
   it.each(["INVALID_TOKEN", "TOKEN_EXPIRED"])(
     "explains the %s verification failure",
     (verificationError) => {
@@ -239,5 +288,67 @@ describe("AuthPanel email verification", () => {
     expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
       expect.objectContaining({ title: "该账户已被停用，请联系管理员。" }),
     );
+  });
+});
+
+describe("PasswordResetPanel", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("replaces a valid token with a new password and clears the link from browser history", async () => {
+    authMocks.resetPassword.mockResolvedValue({
+      data: { status: true },
+      error: null,
+    });
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    render(<PasswordResetPanel token="one-time-token" />);
+
+    fireEvent.change(screen.getByTestId("reset-password-input"), {
+      target: { value: "new-strong-password" },
+    });
+    fireEvent.change(screen.getByTestId("reset-confirm-password-input"), {
+      target: { value: "new-strong-password" },
+    });
+    fireEvent.click(screen.getByTestId("reset-submit"));
+
+    expect(await screen.findByText(/密码已重置/)).toBeInTheDocument();
+    expect(authMocks.resetPassword).toHaveBeenCalledWith({
+      newPassword: "new-strong-password",
+      token: "one-time-token",
+    });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/reset-password");
+    replaceState.mockRestore();
+  });
+
+  it("rejects mismatched passwords before submitting", () => {
+    render(<PasswordResetPanel token="one-time-token" />);
+    fireEvent.change(screen.getByTestId("reset-password-input"), {
+      target: { value: "new-strong-password" },
+    });
+    fireEvent.change(screen.getByTestId("reset-confirm-password-input"), {
+      target: { value: "different-password" },
+    });
+    fireEvent.click(screen.getByTestId("reset-submit"));
+
+    expect(authMocks.resetPassword).not.toHaveBeenCalled();
+  });
+
+  it("removes an expired reset token from the URL", async () => {
+    authMocks.resetPassword.mockResolvedValue({
+      data: null,
+      error: { code: "INVALID_TOKEN", message: "Invalid token", status: 400 },
+    });
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    render(<PasswordResetPanel token="expired-token" />);
+    fireEvent.change(screen.getByTestId("reset-password-input"), {
+      target: { value: "new-strong-password" },
+    });
+    fireEvent.change(screen.getByTestId("reset-confirm-password-input"), {
+      target: { value: "new-strong-password" },
+    });
+    fireEvent.click(screen.getByTestId("reset-submit"));
+
+    expect(await screen.findByText(/重置链接无效或已过期/)).toBeInTheDocument();
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/reset-password");
+    replaceState.mockRestore();
   });
 });

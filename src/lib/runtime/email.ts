@@ -29,6 +29,8 @@ interface VerificationEmailInput {
   url: string;
 }
 
+type PasswordResetEmailInput = VerificationEmailInput;
+
 interface SuperAdminActivationEmailInput {
   from: string;
   to: string;
@@ -144,6 +146,49 @@ export function buildVerificationEmail({
         <p style="margin:0 0 12px;line-height:1.7;">${safeName}，你好。</p>
         <p style="margin:0 0 24px;color:#6f6068;line-height:1.7;">点击下面的按钮完成邮箱验证。验证链接将在一段时间后失效。</p>
         <a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#d73b72;color:#ffffff;padding:12px 22px;text-decoration:none;font-weight:700;">验证邮箱</a>
+        <p style="margin:28px 0 8px;color:#8a7c83;font-size:13px;line-height:1.6;">如果按钮无法打开，请复制以下地址：</p>
+        <p style="margin:0;word-break:break-all;color:#6f6068;font-size:13px;line-height:1.6;">${safeUrl}</p>
+      </div>
+    </div>
+  </body>
+</html>`,
+  };
+}
+
+export function buildPasswordResetEmail({
+  from,
+  name,
+  to,
+  url,
+}: PasswordResetEmailInput) {
+  const safeName = escapeHtml(name || "AnonResume 用户");
+  const safeUrl = escapeHtml(url);
+  const safeLogoUrl = escapeHtml(
+    new URL("/brand/anonresume-lockup.png", url).toString(),
+  );
+
+  return {
+    from,
+    to,
+    subject: "重置你的 AnonResume 密码",
+    text: [
+      `${name || "你好"}，`,
+      "",
+      "请在一小时内打开下面的链接重置密码：",
+      url,
+      "",
+      "如果不是你发起的请求，请忽略这封邮件。",
+    ].join("\n"),
+    html: `<!doctype html>
+<html lang="zh-CN">
+  <body style="margin:0;background:#f7f3f5;color:#261d22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+      <div style="border:1px solid #eadfe4;border-radius:22px;background:#ffffff;padding:34px;box-shadow:0 12px 34px rgba(78,45,61,.08);">
+        <img src="${safeLogoUrl}" alt="AnonResume" width="210" height="55" style="display:block;width:210px;max-width:70%;height:auto;margin:0 0 24px;border:0;" />
+        <h1 style="margin:0 0 14px;font-size:25px;line-height:1.3;">重置密码</h1>
+        <p style="margin:0 0 12px;line-height:1.7;">${safeName}，你好。</p>
+        <p style="margin:0 0 24px;color:#6f6068;line-height:1.7;">点击下面的按钮设置新密码。链接将在一小时后失效。</p>
+        <a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#d73b72;color:#ffffff;padding:12px 22px;text-decoration:none;font-weight:700;">设置新密码</a>
         <p style="margin:28px 0 8px;color:#8a7c83;font-size:13px;line-height:1.6;">如果按钮无法打开，请复制以下地址：</p>
         <p style="margin:0;word-break:break-all;color:#6f6068;font-size:13px;line-height:1.6;">${safeUrl}</p>
       </div>
@@ -344,6 +389,31 @@ export async function sendVerificationEmail({
 
   if (config.transport === "console") {
     console.info(`[AnonResume] Verification URL for ${email}: ${url}`);
+    return;
+  }
+
+  await getSmtpTransporter(config).sendMail(message);
+}
+
+export async function sendPasswordResetEmail({
+  email,
+  name,
+  url,
+}: {
+  email: string;
+  name: string;
+  url: string;
+}) {
+  const config = await getEmailDeliveryConfig();
+  const message = buildPasswordResetEmail({
+    from: config.from,
+    name,
+    to: email,
+    url,
+  });
+
+  if (config.transport === "console") {
+    console.info(`[AnonResume] Password reset URL for ${email}: ${url}`);
     return;
   }
 
