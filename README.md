@@ -64,7 +64,7 @@ docker compose --env-file compose.env pull
 docker compose --env-file compose.env up -d --wait
 ```
 
-`ANONRESUME_VERSION` 必须使用明确且不可变的发行标签，例如 `v1.4.0`，不要使用 `latest`。首次启动时，Web 容器会在启动日志中输出一次性初始化码：
+`ANONRESUME_VERSION` 必须使用明确且不可变的发行标签，例如 `v1.5.0`，不要使用 `latest`。首次启动时，Web 容器会在启动日志中输出一次性初始化码：
 
 ```bash
 docker compose --env-file compose.env logs web
