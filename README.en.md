@@ -64,7 +64,7 @@ docker compose --env-file compose.env pull
 docker compose --env-file compose.env up -d --wait
 ```
 
-`ANONRESUME_VERSION` must be an explicit immutable release tag such as `v1.4.0`; do not use `latest`. On first startup, the Web container writes a one-time setup code to its startup log:
+`ANONRESUME_VERSION` must be an explicit immutable release tag such as `v1.5.0`; do not use `latest`. On first startup, the Web container writes a one-time setup code to its startup log:
 
 ```bash
 docker compose --env-file compose.env logs web
