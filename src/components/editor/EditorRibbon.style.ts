@@ -2,8 +2,9 @@
 
 import { createStyles } from "antd-style";
 
-const RIBBON_CONTROL_HEIGHT = 28;
+const RIBBON_CONTROL_HEIGHT = 30;
 const RIBBON_CONTROL_RADIUS = 6;
+const RIBBON_COMMAND_HEIGHT = 92;
 
 export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
   ribbon: css`
@@ -204,6 +205,16 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
       background: color-mix(in srgb, ${token.colorPrimary} 8%, ${token.colorBgContainer});
     }
 
+    &[data-contextual="true"] {
+      color: ${token.colorPrimary};
+      border-radius: ${RIBBON_CONTROL_RADIUS}px ${RIBBON_CONTROL_RADIUS}px 0 0;
+      background: color-mix(in srgb, ${token.colorPrimary} 5%, ${token.colorBgContainer});
+    }
+
+    &[data-contextual="true"][aria-selected="true"] {
+      background: color-mix(in srgb, ${token.colorPrimary} 13%, ${token.colorBgContainer});
+    }
+
     &[aria-selected="true"]::after {
       position: absolute;
       right: 12px;
@@ -227,7 +238,7 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
   `,
   commandViewport: css`
     min-width: 0;
-    height: 58px;
+    height: ${RIBBON_COMMAND_HEIGHT}px;
     overflow-x: auto;
     overflow-y: hidden;
     background: color-mix(in srgb, ${token.colorBgLayout} 34%, ${token.colorBgContainer});
@@ -241,16 +252,16 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     display: flex;
     align-items: stretch;
     min-width: max-content;
-    height: 58px;
-    padding: 5px 10px 4px;
+    height: ${RIBBON_COMMAND_HEIGHT}px;
+    padding: 6px 10px 4px;
   `,
   commandGroup: css`
     position: relative;
     display: flex;
     align-items: flex-start;
     min-width: 0;
-    height: 49px;
-    padding: 0 12px 14px;
+    height: 82px;
+    padding: 0 12px 16px;
     border-right: 1px solid ${token.colorBorderSecondary};
 
     &:first-child {
@@ -264,7 +275,7 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
   commandBody: css`
     display: flex;
     align-items: center;
-    height: 32px;
+    height: 62px;
     gap: 4px;
   `,
   commandLabel: css`
@@ -286,8 +297,8 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     align-items: flex-start;
     box-sizing: border-box;
     min-width: 0;
-    height: 49px;
-    padding: 0 12px 14px;
+    height: 82px;
+    padding: 0 12px 16px;
     border-right: 1px solid ${token.colorBorderSecondary};
 
     &:first-child {
@@ -324,7 +335,7 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     display: flex;
     align-items: center;
     min-width: max-content;
-    height: 32px;
+    height: 62px;
     gap: 4px;
   `,
   propertyGroupLabel: css`

@@ -11,6 +11,7 @@ const richTextMarkSchema = z.discriminatedUnion("type", [
     attrs: z
       .object({
         href: z.string().min(1).optional(),
+        title: z.string().min(1).optional(),
       })
       .optional(),
   }),

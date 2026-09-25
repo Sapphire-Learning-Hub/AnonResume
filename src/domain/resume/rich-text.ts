@@ -62,14 +62,17 @@ function sanitizeRuntimeRichTextContent(content: unknown): unknown {
               const href = normalizeLinkHref(
                 isRecord(mark.attrs) ? mark.attrs.href : undefined,
               );
+              const title = normalizeLinkHref(
+                isRecord(mark.attrs) ? mark.attrs.title : undefined,
+              );
 
               return href
                 ? [
                     {
                       ...mark,
                       attrs: {
-                        ...(isRecord(mark.attrs) ? mark.attrs : {}),
                         href,
+                        ...(title ? { title } : {}),
                       },
                     },
                   ]
@@ -120,7 +123,13 @@ export function normalizeRichTextContent(content: unknown): RichTextContent {
             }
 
             return mark.attrs?.href
-              ? { type: "link", attrs: { href: mark.attrs.href } }
+              ? {
+                  type: "link",
+                  attrs: {
+                    href: mark.attrs.href,
+                    ...(mark.attrs.title ? { title: mark.attrs.title } : {}),
+                  },
+                }
               : { type: "link" };
           }),
         };

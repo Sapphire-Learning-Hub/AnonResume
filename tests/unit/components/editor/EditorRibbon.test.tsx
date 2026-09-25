@@ -8,9 +8,9 @@ import {
 const tabs = [
   { key: "home" as const, label: "开始" },
   { key: "insert" as const, label: "插入" },
+  { key: "design" as const, label: "设计" },
   { key: "layout" as const, label: "布局" },
   { key: "document" as const, label: "文档" },
-  { key: "properties" as const, label: "属性" },
 ];
 
 describe("EditorRibbon", () => {

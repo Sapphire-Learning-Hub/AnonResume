@@ -113,6 +113,39 @@ describe("normalizeRichTextContent", () => {
     });
   });
 
+  it("preserves a link screen tip without persisting editor-only attributes", () => {
+    const normalized = normalizeRichTextContent({
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [{
+          type: "text",
+          text: "作品集",
+          marks: [{
+            type: "link",
+            attrs: {
+              href: "https://example.com/portfolio",
+              title: "查看作品集",
+              target: "_blank",
+            },
+          }],
+        }],
+      }],
+    });
+
+    expect(normalized.content[0]?.content[0]).toEqual({
+      type: "text",
+      text: "作品集",
+      marks: [{
+        type: "link",
+        attrs: {
+          href: "https://example.com/portfolio",
+          title: "查看作品集",
+        },
+      }],
+    });
+  });
+
   it("preserves non-empty custom links before they become link marks", () => {
     expect(normalizeLinkHref("my-resume-app://portfolio/42")).toBe(
       "my-resume-app://portfolio/42",

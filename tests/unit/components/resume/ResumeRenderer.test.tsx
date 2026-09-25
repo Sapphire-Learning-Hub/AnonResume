@@ -54,6 +54,42 @@ describe("ResumeRenderer", () => {
   });
 
   it.each(["view", "print"] as const)(
+    "keeps document links and their section destination in %s output",
+    (mode) => {
+      const resume = createDefaultResumeDocument();
+      const target = resume.sections[1]!;
+      resume.sections[0]!.blocks[0] = {
+        ...resume.sections[0]!.blocks[0],
+        type: "text",
+        content: {
+          type: "doc",
+          content: [{
+            type: "paragraph",
+            content: [{
+              type: "text",
+              text: "查看下一部分",
+              marks: [{
+                type: "link",
+                attrs: {
+                  href: `#resume-section-${target.id}`,
+                  title: "跳转到下一部分",
+                },
+              }],
+            }],
+          }],
+        },
+      };
+
+      const { container } = render(<ResumeRenderer document={resume} mode={mode} />);
+      const link = screen.getByRole("link", { name: "查看下一部分" });
+
+      expect(link).toHaveAttribute("href", `#resume-section-${target.id}`);
+      expect(link).toHaveAttribute("title", "跳转到下一部分");
+      expect(container.querySelectorAll(`#resume-section-${target.id}`)).toHaveLength(1);
+    },
+  );
+
+  it.each(["view", "print"] as const)(
     "renders a per-section title color in %s output",
     (mode) => {
       const document = createDefaultResumeDocument();

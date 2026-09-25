@@ -67,6 +67,121 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     gap: 4px;
     min-width: max-content;
   `,
+  ribbonCommandStack: css`
+    display: grid;
+    align-content: center;
+    gap: 3px;
+  `,
+  ribbonCommandRow: css`
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  `,
+  ribbonPresetGrid: css`
+    display: grid;
+    grid-auto-columns: max-content;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(2, 30px);
+    gap: 3px 5px;
+    min-width: max-content;
+  `,
+  ribbonFormatButton: css`
+    &&& {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      min-width: 30px;
+      height: 30px;
+      padding: 0;
+      border-color: transparent;
+      color: ${token.colorText};
+      box-shadow: none;
+
+      &:hover:not(:disabled) {
+        border-color: ${token.colorBorder};
+        background: ${token.colorFillTertiary};
+      }
+
+      &[aria-pressed="true"] {
+        border-color: ${token.colorPrimaryBorder};
+        background: ${token.colorPrimaryBg};
+        color: ${token.colorPrimaryText};
+      }
+
+      &:focus-visible {
+        outline: 2px solid ${token.colorPrimary};
+        outline-offset: 1px;
+      }
+    }
+  `,
+  ribbonModeButton: css`
+    &&& {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-width: 106px;
+      height: 30px;
+      gap: 7px;
+      padding: 0 8px;
+      border-color: transparent;
+      box-shadow: none;
+
+      &[aria-pressed="true"] {
+        border-color: ${token.colorPrimaryBorder};
+        background: ${token.colorPrimaryBg};
+        color: ${token.colorPrimaryText};
+      }
+    }
+  `,
+  ribbonLargeButton: css`
+    &&& {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 66px;
+      max-width: 104px;
+      height: 62px;
+      gap: 4px;
+      padding: 5px 9px;
+      border-color: transparent;
+      background: transparent;
+      color: ${token.colorText};
+      font-size: 11px;
+      line-height: 1.15;
+      white-space: normal;
+      box-shadow: none;
+
+      &:hover:not(:disabled) {
+        border-color: ${token.colorBorder};
+        background: ${token.colorFillTertiary};
+      }
+
+      .anticon {
+        font-size: 20px;
+      }
+    }
+  `,
+  ribbonSmallCommand: css`
+    &&& {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      height: 30px;
+      gap: 6px;
+      padding: 0 8px;
+      border-color: transparent;
+      background: transparent;
+      color: ${token.colorText};
+      box-shadow: none;
+
+      &:hover:not(:disabled) {
+        border-color: ${token.colorBorder};
+        background: ${token.colorFillTertiary};
+      }
+    }
+  `,
   ribbonColorControl: css`
     box-sizing: border-box;
     display: flex;
@@ -78,11 +193,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     border: 1px solid ${token.colorBorder};
     border-radius: 6px;
     background: ${token.colorBgContainer};
-  `,
-  linkInput: css`
-    && {
-      width: clamp(220px, 28vw, 320px);
-    }
   `,
   versionHistoryModal: css`
     display: grid;
@@ -365,12 +475,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     transform-origin: top center;
     transition: transform 160ms ease;
     margin: 0 auto;
-  `,
-  ribbonPropertyPanel: css`
-    display: flex;
-    align-items: center;
-    min-width: max-content;
-    height: 49px;
   `,
   inspectorControlGrid: css`
     display: flex;
