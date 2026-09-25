@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 
 import type { RichTextContent } from "@/domain/resume/schema";
@@ -537,6 +538,73 @@ describe("TiptapTextBlockEditor", () => {
         linkHref: "",
       }),
     );
+  });
+
+  it("inserts a new link with display text at the caret without replacing the block", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const onChange = vi.fn();
+
+    render(<TiptapTextBlockEditor ref={ref} content={initialContent} onChange={onChange} />);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    expect(ref.current?.prepareLink()).toMatchObject({ text: "", href: "" });
+    act(() => {
+      ref.current?.applyCommand({
+        type: "upsertLink",
+        text: "作品集",
+        href: "https://example.com/portfolio",
+        title: "查看作品集",
+      });
+    });
+
+    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    expect(editor).toHaveTextContent("Shared renderer baseline");
+    expect(within(editor).getByRole("link", { name: "作品集" })).toHaveAttribute(
+      "href",
+      "https://example.com/portfolio",
+    );
+    expect(within(editor).getByRole("link", { name: "作品集" })).toHaveAttribute(
+      "title",
+      "查看作品集",
+    );
+  });
+
+  it("edits an existing link's display text and target without duplicating it", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const content: RichTextContent = {
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [{
+          type: "text",
+          text: "旧名称",
+          marks: [{ type: "link", attrs: { href: "https://old.example.com" } }],
+        }],
+      }],
+    };
+
+    render(<TiptapTextBlockEditor ref={ref} content={content} onChange={vi.fn()} />);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    expect(ref.current?.prepareLink()).toMatchObject({
+      text: "旧名称",
+      href: "https://old.example.com",
+    });
+    act(() => {
+      ref.current?.applyCommand({
+        type: "upsertLink",
+        text: "新名称",
+        href: "mailto:team@example.com",
+      });
+    });
+
+    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    expect(within(editor).getByRole("link", { name: "新名称" })).toHaveAttribute(
+      "href",
+      "mailto:team@example.com",
+    );
+    expect(within(editor).queryByText("旧名称")).not.toBeInTheDocument();
+    expect(within(editor).getAllByRole("link")).toHaveLength(1);
   });
 
   it("inserts a structured resume icon at the current caret", async () => {

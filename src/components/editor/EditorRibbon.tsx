@@ -1,14 +1,14 @@
 "use client";
 
 import { Button } from "antd";
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { WorkspaceBackIcon } from "@/components/ui/InlineIcons";
 
 import { useEditorRibbonStyles } from "./EditorRibbon.style";
 
-export type EditorRibbonTab = "home" | "insert" | "layout" | "document" | "properties";
+export type EditorRibbonTab = "home" | "insert" | "design" | "layout" | "document" | "context";
 
 export type EditorRibbonTabItem = {
   key: EditorRibbonTab;
@@ -20,6 +20,7 @@ export type EditorRibbonGroup = {
   key: string;
   label: string;
   content: ReactNode;
+  embedded?: boolean;
 };
 
 function wheelDistance(event: WheelEvent, viewportWidth: number) {
@@ -64,11 +65,7 @@ export function EditorRibbonPropertyGroup({
   const { styles } = useEditorRibbonStyles();
 
   return (
-    <section
-      aria-label={label}
-      className={styles.propertyGroup}
-      role="group"
-    >
+    <section aria-label={label} className={styles.propertyGroup} role="group">
       <div className={styles.propertyGroupBody}>{children}</div>
       <span className={styles.propertyGroupLabel}>{label}</span>
     </section>
@@ -87,7 +84,6 @@ export function EditorRibbon({
   backHref,
   backLabel,
   commandGroups,
-  contextualContent,
   documentActions,
   documentName,
   documentNameLabel,
@@ -103,7 +99,6 @@ export function EditorRibbon({
   backHref: string;
   backLabel: string;
   commandGroups: EditorRibbonGroup[];
-  contextualContent?: ReactNode;
   documentActions: ReactNode;
   documentName: string;
   documentNameLabel: string;
@@ -202,6 +197,7 @@ export function EditorRibbon({
               aria-controls="editor-ribbon-command-panel"
               aria-selected={tab.key === activeTab}
               className={styles.tab}
+              data-contextual={tab.key === "context" ? "true" : undefined}
               id={`editor-ribbon-tab-${tab.key}`}
               key={tab.key}
               role="tab"
@@ -225,8 +221,9 @@ export function EditorRibbon({
           id="editor-ribbon-command-panel"
           role="tabpanel"
         >
-          {contextualContent ??
-            commandGroups.map((group) => (
+          {commandGroups.map((group) => group.embedded ? (
+            <Fragment key={group.key}>{group.content}</Fragment>
+          ) : (
               <section className={styles.commandGroup} key={group.key}>
                 <div className={styles.commandBody}>{group.content}</div>
                 <span className={styles.commandLabel}>{group.label}</span>

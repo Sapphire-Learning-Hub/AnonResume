@@ -54,6 +54,7 @@ import type {
   RichTextContent,
   TextBlock,
 } from "@/domain/resume/schema";
+import { getResumeSectionAnchorId } from "@/domain/resume/section-links";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getResumeStyleVariables } from "@/styles/resume-style-vars";
 
@@ -212,7 +213,7 @@ function applyMarks(
         }
 
         return (
-          <a key={key} href={mark.attrs.href}>
+          <a key={key} href={mark.attrs.href} title={mark.attrs.title}>
             {current}
           </a>
         );
@@ -2010,6 +2011,7 @@ function renderResumeSection(
     textEditorRef?: ResumeRendererProps["textEditorRef"];
     onTextEditorFormattingStateChange?: ResumeRendererProps["onTextEditorFormattingStateChange"];
     instanceKey: string;
+    anchorId?: string;
   },
 ) {
   const renderWholeTopLevelBlocks = context.sectionLayout.blocks.every(
@@ -2033,6 +2035,7 @@ function renderResumeSection(
       <section
         className={context.styles.section}
         style={getSectionContainerStyle(section)}
+        id={context.anchorId}
         data-resume-section-id={section.id}
         data-testid={`resume-section-${section.id}`}
       >
@@ -2175,6 +2178,19 @@ export function ResumeRenderer({
   const isLayoutCurrent = paginationReady && measuredLayoutKey === layoutInputKey;
   const resolvedPageLayouts = isLayoutCurrent ? pageLayouts : measurementLayout;
   const printReady = isLayoutCurrent;
+  const firstPageBySectionId = useMemo(() => {
+    const firstPages = new Map<string, number>();
+
+    for (const page of resolvedPageLayouts) {
+      for (const section of page.sections) {
+        if (!firstPages.has(section.sectionId)) {
+          firstPages.set(section.sectionId, page.index);
+        }
+      }
+    }
+
+    return firstPages;
+  }, [resolvedPageLayouts]);
 
   useEffect(() => {
     onPageCountChange?.(resolvedPageLayouts.length);
@@ -2313,6 +2329,9 @@ export function ResumeRenderer({
                     textEditorRef,
                     onTextEditorFormattingStateChange,
                     instanceKey: `page-${page.index}-${sectionLayout.sectionId}-${sectionIndex}`,
+                    anchorId: firstPageBySectionId.get(section.id) === page.index
+                      ? getResumeSectionAnchorId(section.id)
+                      : undefined,
                   });
                 })}
               </div>

@@ -13,7 +13,6 @@ import {
 import {
   Button,
   Checkbox,
-  Input,
   Modal,
   Pagination,
   Popconfirm,
@@ -23,6 +22,22 @@ import {
   Tag,
   Tooltip,
 } from "antd";
+import {
+  AlignCenterOutlined,
+  AlignLeftOutlined,
+  AlignRightOutlined,
+  AppstoreAddOutlined,
+  BoldOutlined,
+  FileAddOutlined,
+  FileTextOutlined,
+  ItalicOutlined,
+  LinkOutlined,
+  PlusSquareOutlined,
+  ReloadOutlined,
+  StrikethroughOutlined,
+  TagOutlined,
+  UnderlineOutlined,
+} from "@ant-design/icons";
 import { useRouter } from "next/navigation";
 import { useStore } from "zustand";
 
@@ -47,6 +62,11 @@ import {
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
+import {
+  ResumeLinkDialog,
+  type ResumeLinkDraft,
+} from "@/components/editor/link/ResumeLinkDialog";
+import { getContextRibbonKind } from "@/components/editor/ribbon/context-tab";
 import { ResumeDocumentDiffModal } from "@/components/editor/ResumeDocumentDiffModal";
 import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPrompt";
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
@@ -74,11 +94,13 @@ import type {
   TiptapTextBlockEditorFormatState,
   TiptapTextBlockEditorHandle,
 } from "@/components/resume/TiptapTextBlockEditor";
+import { ResumeLinkDialogContext } from "@/components/resume/TiptapTextBlockEditor";
 import {
   createRichTextFromPlainText,
   findBlockByPath,
   findTextBlock,
   getBlockSiblingPosition,
+  getPlainTextFromRichText,
 } from "@/domain/resume/operations";
 import { listBlockPresets } from "@/domain/resume/block-presets";
 import { listSectionPresets } from "@/domain/resume/presets";
@@ -568,10 +590,7 @@ export function ResumeEditorShell({
       linkHref: "",
     },
   });
-  const [selectedLinkUrlState, setSelectedLinkUrlState] = useState({
-    selectionKey: "",
-    value: "",
-  });
+  const [linkDialogDraft, setLinkDialogDraft] = useState<ResumeLinkDraft>();
   const [publishedSlug, setPublishedSlug] = useState(publicSlug);
   const [publicLinkCopied, setPublicLinkCopied] = useState(false);
   const [publicationBusy, setPublicationBusy] = useState(false);
@@ -592,6 +611,8 @@ export function ResumeEditorShell({
     "effect",
   );
   const [activeRibbonTab, setActiveRibbonTab] = useState<EditorRibbonTab>("home");
+  const [lastPermanentRibbonTab, setLastPermanentRibbonTab] =
+    useState<Exclude<EditorRibbonTab, "context">>("home");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [versionSnapshots, setVersionSnapshots] = useState<ResumeVersionSnapshotSummary[]>([]);
@@ -845,6 +866,27 @@ export function ResumeEditorShell({
     selectedBlock?.type === "badges" ? selectedBlock : undefined;
   const selectedStructuralBlock =
     selectedBlock && selectedBlock.type !== "text" ? selectedBlock : undefined;
+  const contextRibbonKind = getContextRibbonKind(selection, selectedBlock?.type);
+  const effectiveRibbonTab =
+    activeRibbonTab === "context" && !contextRibbonKind
+      ? lastPermanentRibbonTab
+      : activeRibbonTab;
+
+  useEffect(() => {
+    if (activeRibbonTab !== "context" || contextRibbonKind) return;
+
+    window.document.getElementById(`editor-ribbon-tab-${lastPermanentRibbonTab}`)?.focus();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setActiveRibbonTab(lastPermanentRibbonTab);
+    });
+    return () => { cancelled = true; };
+  }, [activeRibbonTab, contextRibbonKind, lastPermanentRibbonTab]);
+
+  function selectRibbonTab(tab: EditorRibbonTab) {
+    if (tab !== "context") setLastPermanentRibbonTab(tab);
+    setActiveRibbonTab(tab);
+  }
   const selectedBadgeItem =
     selectedBadgeBlock?.type === "badges" && selection.badgeItemId
       ? selectedBadgeBlock.items.find((item) => item.id === selection.badgeItemId)
@@ -874,16 +916,11 @@ export function ResumeEditorShell({
     },
     [selection.blockPath, selection.richTextField, selection.sectionId],
   );
-  const selectedLinkUrl = getFirstLinkHref(selectedRichTextContent);
   const initialFormattingState = getInitialFormattingState(selectedRichTextContent);
   const resolvedFormattingState =
     selectionKey && selectionKey === textEditorFormattingState.selectionKey
       ? textEditorFormattingState.value
       : initialFormattingState;
-  const resolvedLinkUrl =
-    selectionKey && selectionKey === selectedLinkUrlState.selectionKey
-      ? selectedLinkUrlState.value
-      : resolvedFormattingState.linkHref || selectedLinkUrl;
   const matchingVisualPresetId = getMatchingResumeVisualPresetId(document);
   const fontPresets = listResumeFontPresets();
   const selectedBlockPosition =
@@ -899,6 +936,12 @@ export function ResumeEditorShell({
 
   function runTextEditorCommand(command: TiptapTextBlockEditorCommand) {
     return textEditorRef.current?.applyCommand(command);
+  }
+
+  function openLinkDialog() {
+    const draft = textEditorRef.current?.prepareLink();
+
+    if (draft) setLinkDialogDraft(draft);
   }
 
   function updateSelectedTextBlockStyle(
@@ -1407,54 +1450,8 @@ export function ResumeEditorShell({
     }
   }
 
-  const inspectorContent = selectedSectionTitle && selectedSection ? (
+  const selectedContextContent = selectedSectionTitle && selectedSection ? (
     <>
-      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionTitleStyle")}>
-        <div className={styles.inspectorControlGrid}>
-          <div className={styles.ribbonControlGroup}>
-            <span className={styles.inspectorControlLabel}>
-              {t("editor.sectionTitleColor")}
-            </span>
-            <PaletteColorPicker
-              allowClear
-              className={styles.ribbonColorControl}
-              label={t("editor.sectionTitleColor")}
-              paletteLabel={t("common.colorPalette")}
-              value={selectedSection.titleStyle?.color ?? ""}
-              placeholder={document.settings.theme.accent}
-              onChange={setSelectedSectionTitleColor}
-              onClear={() => setSelectedSectionTitleColor(undefined)}
-            />
-            <Button
-              disabled={!selectedSection.titleStyle?.color}
-              onClick={() => setSelectedSectionTitleColor(undefined)}
-            >
-              {t("editor.inheritGlobalAccent")}
-            </Button>
-          </div>
-          <div className={styles.inspectorControlRow} data-field-size="compact">
-            <span className={styles.inspectorControlLabel}>
-              {t("editor.sectionTitleFontSize")}
-            </span>
-            <DraftInput
-              aria-label={t("editor.sectionTitleFontSize")}
-              min={8}
-              max={72}
-              type="number"
-              value={selectedSection.titleStyle?.fontSize?.toString() ?? ""}
-              placeholder="24"
-              parseValue={parsePositiveNumber}
-              onValidValueChange={setSelectedSectionTitleFontSize}
-            />
-          </div>
-          <Button
-            disabled={!selectedSection.titleStyle?.fontSize}
-            onClick={() => setSelectedSectionTitleFontSize(undefined)}
-          >
-            {t("editor.restoreDefaultTitleSize")}
-          </Button>
-        </div>
-      </EditorRibbonPropertyGroup>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.sectionActions")}>
         <div className={styles.panelActionRow}>
         <Button
@@ -1512,80 +1509,6 @@ export function ResumeEditorShell({
     </>
   ) : selectedTextBlock && selection.blockPath ? (
     <>
-      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.textStyle")}>
-        <div className={styles.inspectorControlGrid}>
-          <div className={styles.inspectorControlRow} data-field-size="compact">
-          <span className={styles.inspectorControlLabel}>{t("editor.fontSize")}</span>
-          <DraftInput
-            aria-label={t("editor.fontSize")}
-            type="number"
-            value={selectedTextBlock.style?.fontSize?.toString() ?? ""}
-            parseValue={parsePositiveNumber}
-            onValidValueChange={(fontSize) =>
-              updateSelectedTextBlockStyle({ fontSize })
-            }
-          />
-        </div>
-        <div className={styles.inspectorControlRow} data-field-size="compact">
-          <span className={styles.inspectorControlLabel}>{t("editor.fontWeight")}</span>
-          <DraftInput
-            aria-label={t("editor.fontWeight")}
-            type="number"
-            value={selectedTextBlock.style?.fontWeight?.toString() ?? ""}
-            parseValue={parsePositiveNumber}
-            onValidValueChange={(fontWeight) =>
-              updateSelectedTextBlockStyle({ fontWeight })
-            }
-          />
-        </div>
-        <div className={styles.inspectorControlRow} data-field-size="compact">
-          <span className={styles.inspectorControlLabel}>{t("editor.lineHeight")}</span>
-          <DraftInput
-            aria-label={t("editor.lineHeight")}
-            inputMode="decimal"
-            value={selectedTextBlock.style?.lineHeight?.toString() ?? ""}
-            parseValue={parseCommittedPositiveDecimal}
-            onValidValueChange={(lineHeight) =>
-              updateSelectedTextBlockStyle({ lineHeight })
-            }
-          />
-        </div>
-        <div className={styles.inspectorControlRow} data-field-size="color">
-          <span className={styles.inspectorControlLabel}>{t("editor.textColor")}</span>
-          <PaletteColorPicker
-            className={styles.colorControl}
-            label={t("editor.textColor")}
-            paletteLabel={t("common.colorPalette")}
-            value={selectedTextBlock.style?.color ?? ""}
-            placeholder="#0f172a"
-            onChange={setSelectedTextBlockColor}
-          />
-        </div>
-        <div className={styles.inspectorControlRow} data-field-size="auto">
-          <span className={styles.inspectorControlLabel}>{t("editor.align")}</span>
-          <div className={styles.alignButtonRow}>
-            <Button
-              type={selectedTextBlock.style?.align === "left" ? "primary" : "default"}
-              onClick={() => updateSelectedTextBlockStyle({ align: "left" })}
-            >
-              {t("editor.alignLeft")}
-            </Button>
-            <Button
-              type={selectedTextBlock.style?.align === "center" ? "primary" : "default"}
-              onClick={() => updateSelectedTextBlockStyle({ align: "center" })}
-            >
-              {t("editor.alignCenter")}
-            </Button>
-            <Button
-              type={selectedTextBlock.style?.align === "right" ? "primary" : "default"}
-              onClick={() => updateSelectedTextBlockStyle({ align: "right" })}
-            >
-              {t("editor.alignRight")}
-            </Button>
-          </div>
-          </div>
-        </div>
-      </EditorRibbonPropertyGroup>
       {selectedSection ? (
         <EditorRibbonPropertyGroup label={t("editor.ribbon.property.contentActions")}>
           <div className={styles.panelActionRow}>
@@ -2208,7 +2131,9 @@ export function ResumeEditorShell({
         </div>
       </EditorRibbonPropertyGroup>
     </>
-  ) : (
+  ) : null;
+
+  const documentDesignContent = (
     <>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.basic")}>
         <div className={styles.documentPropertyPair}>
@@ -2414,7 +2339,11 @@ export function ResumeEditorShell({
         </div>
       </EditorRibbonPropertyGroup>
 
-      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.margins")}>
+    </>
+  );
+
+  const pageMarginContent = (
+    <EditorRibbonPropertyGroup label={t("editor.ribbon.property.margins")}>
         <div className={styles.documentMarginGrid}>
           <div className={styles.inspectorControlRow} data-field-size="compact">
             <span className={styles.inspectorControlLabel}>{t("common.pageMarginTop")}</span>
@@ -2457,8 +2386,7 @@ export function ResumeEditorShell({
             />
           </div>
         </div>
-      </EditorRibbonPropertyGroup>
-    </>
+    </EditorRibbonPropertyGroup>
   );
 
   const ribbonTabs: EditorRibbonTabItem[] = [
@@ -2473,6 +2401,11 @@ export function ResumeEditorShell({
       icon: <InsertIcon size={15} />,
     },
     {
+      key: "design",
+      label: t("editor.ribbon.tab.design"),
+      icon: <PropertiesIcon size={15} />,
+    },
+    {
       key: "layout",
       label: t("editor.ribbon.tab.layout"),
       icon: <LayoutIcon size={15} />,
@@ -2482,11 +2415,12 @@ export function ResumeEditorShell({
       label: t("editor.ribbon.tab.document"),
       icon: <DocumentIcon size={15} />,
     },
-    {
-      key: "properties",
-      label: t("editor.ribbon.tab.properties"),
-      icon: <PropertiesIcon size={15} />,
-    },
+    ...(contextRibbonKind
+      ? [{
+          key: "context" as const,
+          label: t(`editor.ribbon.tab.context.${contextRibbonKind}`),
+        }]
+      : []),
   ];
 
   const quickActions = (
@@ -2607,24 +2541,28 @@ export function ResumeEditorShell({
   );
 
   const ribbonCommandGroups: EditorRibbonGroup[] = (() => {
-    switch (activeRibbonTab) {
+    switch (effectiveRibbonTab) {
       case "home":
         return [
           {
             key: "mode",
             label: t("editor.ribbon.group.mode"),
             content: (
-              <div className={styles.ribbonControlGroup}>
+              <div className={styles.ribbonCommandStack}>
                 <Button
+                  aria-label={t("editor.contentEditing")}
                   aria-pressed={activeEditSurfaceMode === "content"}
-                  type={activeEditSurfaceMode === "content" ? "primary" : "default"}
+                  className={styles.ribbonModeButton}
+                  icon={<FileTextOutlined />}
                   onClick={() => handleEditSurfaceModeChange("content")}
                 >
                   {t("editor.contentEditing")}
                 </Button>
                 <Button
+                  aria-label={t("editor.layoutSorting")}
                   aria-pressed={activeEditSurfaceMode === "layout"}
-                  type={activeEditSurfaceMode === "layout" ? "primary" : "default"}
+                  className={styles.ribbonModeButton}
+                  icon={<AppstoreAddOutlined />}
                   onClick={() => handleEditSurfaceModeChange("layout")}
                 >
                   {t("editor.layoutSorting")}
@@ -2636,126 +2574,155 @@ export function ResumeEditorShell({
             key: "text",
             label: t("editor.ribbon.group.text"),
             content: (
-              <div className={styles.ribbonControlGroup}>
-                <Button
-                  disabled={textToolsDisabled}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => setIconPickerOpen(true)}
-                >
-                  {t("editor.iconLibrary.open")}
-                </Button>
-                <Button
-                  aria-pressed={resolvedFormattingState.bold}
-                  disabled={textToolsDisabled}
-                  type={resolvedFormattingState.bold ? "primary" : "default"}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => runTextEditorCommand({ type: "toggleBold" })}
-                >
-                  {t("editor.bold")}
-                </Button>
-                <Button
-                  aria-pressed={resolvedFormattingState.italic}
-                  disabled={textToolsDisabled}
-                  type={resolvedFormattingState.italic ? "primary" : "default"}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => runTextEditorCommand({ type: "toggleItalic" })}
-                >
-                  {t("editor.italic")}
-                </Button>
-                <Button
-                  aria-pressed={resolvedFormattingState.underline}
-                  disabled={textToolsDisabled}
-                  type={resolvedFormattingState.underline ? "primary" : "default"}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => runTextEditorCommand({ type: "toggleUnderline" })}
-                >
-                  {t("editor.underline")}
-                </Button>
-                <Button
-                  aria-pressed={resolvedFormattingState.strike}
-                  disabled={textToolsDisabled}
-                  type={resolvedFormattingState.strike ? "primary" : "default"}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => runTextEditorCommand({ type: "toggleStrike" })}
-                >
-                  {t("editor.strike")}
-                </Button>
-                <Button
-                  aria-pressed={resolvedFormattingState.tag}
-                  disabled={textToolsDisabled}
-                  type={resolvedFormattingState.tag ? "primary" : "default"}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => runTextEditorCommand({ type: "toggleTag" })}
-                >
-                  {t("editor.inlineTag")}
-                </Button>
-                <PaletteColorPicker
-                  allowClear={Boolean(selectedSectionTitle)}
-                  className={styles.ribbonColorControl}
-                  disabled={!selectedTextBlock && !selectedSectionTitle}
-                  label={
-                    selectedSectionTitle
-                      ? t("editor.sectionTitleColor")
-                      : t("editor.textColor")
-                  }
-                  paletteLabel={t("common.colorPalette")}
-                  value={
-                    selectedSectionTitle
-                      ? selectedSection?.titleStyle?.color ?? ""
-                      : selectedTextBlock?.style?.color ?? ""
-                  }
-                  placeholder={
-                    selectedSectionTitle
-                      ? document.settings.theme.accent
-                      : document.settings.theme.textColor
-                  }
-                  onChange={(color) =>
-                    selectedSectionTitle
-                      ? setSelectedSectionTitleColor(color)
-                      : setSelectedTextBlockColor(color)
-                  }
-                  onClear={() => setSelectedSectionTitleColor(undefined)}
-                />
-                <Input
-                  aria-label={t("editor.link")}
-                  className={styles.linkInput}
-                  disabled={textToolsDisabled}
-                  placeholder={t("editor.linkPlaceholder")}
-                  value={resolvedLinkUrl}
-                  onChange={(event) =>
-                    setSelectedLinkUrlState({
-                      selectionKey,
-                      value: event.target.value,
-                    })
-                  }
-                />
-                <Button
-                  disabled={textToolsDisabled}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => {
-                    const href = resolvedLinkUrl.trim();
-
-                    if (!href) return;
-
-                    setSelectedLinkUrlState({ selectionKey, value: href });
-                    runTextEditorCommand({ type: "setLink", href });
-                  }}
-                >
-                  {t("editor.applyLink")}
-                </Button>
-                <Button
-                  disabled={textToolsDisabled}
-                  onMouseDown={preventToolbarMouseDown}
-                  onClick={() => {
-                    setSelectedLinkUrlState({ selectionKey, value: "" });
-                    runTextEditorCommand({ type: "unsetLink" });
-                  }}
-                >
-                  {t("editor.clearLink")}
-                </Button>
+              <div className={styles.ribbonCommandStack}>
+                <div className={styles.ribbonCommandRow}>
+                  {([
+                    ["bold", "toggleBold", "editor.bold", "editor.boldShortcut", BoldOutlined],
+                    ["italic", "toggleItalic", "editor.italic", "editor.italicShortcut", ItalicOutlined],
+                    ["underline", "toggleUnderline", "editor.underline", "editor.underlineShortcut", UnderlineOutlined],
+                    ["strike", "toggleStrike", "editor.strike", "editor.strikeShortcut", StrikethroughOutlined],
+                    ["tag", "toggleTag", "editor.inlineTag", "editor.inlineTagShortcut", TagOutlined],
+                  ] as const).map(([state, command, label, shortcut, Icon]) => (
+                    <Tooltip key={state} title={t(shortcut)}>
+                      <Button
+                        aria-label={t(label)}
+                        aria-pressed={resolvedFormattingState[state]}
+                        className={styles.ribbonFormatButton}
+                        disabled={textToolsDisabled}
+                        onMouseDown={preventToolbarMouseDown}
+                        onClick={() => runTextEditorCommand({ type: command })}
+                      >
+                        <Icon />
+                      </Button>
+                    </Tooltip>
+                  ))}
+                </div>
+                <div className={styles.ribbonCommandRow}>
+                  <PaletteColorPicker
+                    allowClear={Boolean(selectedSectionTitle)}
+                    className={styles.ribbonColorControl}
+                    disabled={textToolsDisabled}
+                    label={
+                      selectedSectionTitle
+                        ? t("editor.sectionTitleColor")
+                        : t("editor.textColor")
+                    }
+                    paletteLabel={t("common.colorPalette")}
+                    value={
+                      selectedSectionTitle
+                        ? selectedSection?.titleStyle?.color ?? ""
+                        : selectedTextBlock?.style?.color ?? ""
+                    }
+                    placeholder={
+                      selectedSectionTitle
+                        ? document.settings.theme.accent
+                        : document.settings.theme.textColor
+                    }
+                    onChange={(color) =>
+                      selectedSectionTitle
+                        ? setSelectedSectionTitleColor(color)
+                        : setSelectedTextBlockColor(color)
+                    }
+                    onClear={() => setSelectedSectionTitleColor(undefined)}
+                  />
+                  <Button
+                    aria-label={t("editor.iconLibrary.open")}
+                    className={styles.ribbonSmallCommand}
+                    disabled={textToolsDisabled}
+                    icon={<AppstoreAddOutlined />}
+                    onMouseDown={preventToolbarMouseDown}
+                    onClick={() => setIconPickerOpen(true)}
+                  >
+                    {t("editor.iconLibrary.open")}
+                  </Button>
+                </div>
               </div>
             ),
           },
+          ...(!textToolsDisabled && (selectedTextBlock || selectedSectionTitle)
+            ? [{
+                key: "block-format",
+                label: selectedSectionTitle
+                  ? t("editor.ribbon.property.sectionTitleStyle")
+                  : t("editor.ribbon.property.textStyle"),
+                content: (
+                  <div className={styles.ribbonCommandStack}>
+                    <div className={styles.ribbonCommandRow}>
+                      <div className={styles.inspectorControlRow} data-field-size="compact">
+                        <span className={styles.inspectorControlLabel}>
+                          {selectedSectionTitle ? t("editor.sectionTitleFontSize") : t("editor.fontSize")}
+                        </span>
+                        <DraftInput
+                          aria-label={selectedSectionTitle ? t("editor.sectionTitleFontSize") : t("editor.fontSize")}
+                          min={selectedSectionTitle ? 8 : undefined}
+                          max={selectedSectionTitle ? 72 : undefined}
+                          type="number"
+                          value={selectedSectionTitle
+                            ? selectedSection?.titleStyle?.fontSize?.toString() ?? ""
+                            : selectedTextBlock?.style?.fontSize?.toString() ?? ""}
+                          parseValue={parsePositiveNumber}
+                          onValidValueChange={(fontSize) => selectedSectionTitle
+                            ? setSelectedSectionTitleFontSize(fontSize)
+                            : updateSelectedTextBlockStyle({ fontSize })}
+                        />
+                      </div>
+                      {selectedSectionTitle ? (
+                        <Button
+                          className={styles.ribbonSmallCommand}
+                          disabled={!selectedSection?.titleStyle?.fontSize}
+                          onClick={() => setSelectedSectionTitleFontSize(undefined)}
+                        >
+                          {t("editor.restoreDefaultTitleSize")}
+                        </Button>
+                      ) : (
+                        <>
+                          <div className={styles.inspectorControlRow} data-field-size="compact">
+                            <span className={styles.inspectorControlLabel}>{t("editor.fontWeight")}</span>
+                            <DraftInput
+                              aria-label={t("editor.fontWeight")}
+                              type="number"
+                              value={selectedTextBlock?.style?.fontWeight?.toString() ?? ""}
+                              parseValue={parsePositiveNumber}
+                              onValidValueChange={(fontWeight) => updateSelectedTextBlockStyle({ fontWeight })}
+                            />
+                          </div>
+                          <div className={styles.inspectorControlRow} data-field-size="compact">
+                            <span className={styles.inspectorControlLabel}>{t("editor.lineHeight")}</span>
+                            <DraftInput
+                              aria-label={t("editor.lineHeight")}
+                              inputMode="decimal"
+                              value={selectedTextBlock?.style?.lineHeight?.toString() ?? ""}
+                              parseValue={parseCommittedPositiveDecimal}
+                              onValidValueChange={(lineHeight) => updateSelectedTextBlockStyle({ lineHeight })}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {selectedTextBlock ? (
+                      <div className={styles.ribbonCommandRow}>
+                        {([
+                          ["left", AlignLeftOutlined, "editor.alignLeft"],
+                          ["center", AlignCenterOutlined, "editor.alignCenter"],
+                          ["right", AlignRightOutlined, "editor.alignRight"],
+                        ] as const).map(([align, Icon, label]) => (
+                          <Tooltip key={align} title={t(label)}>
+                            <Button
+                              aria-label={t(label)}
+                              aria-pressed={selectedTextBlock.style?.align === align}
+                              className={styles.ribbonFormatButton}
+                              icon={<Icon />}
+                              onMouseDown={preventToolbarMouseDown}
+                              onClick={() => updateSelectedTextBlockStyle({ align })}
+                            />
+                          </Tooltip>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+              }]
+            : []),
         ];
       case "insert":
         return [
@@ -2764,17 +2731,27 @@ export function ResumeEditorShell({
             label: t("editor.ribbon.group.section"),
             content: (
               <div className={styles.ribbonControlGroup}>
-                <Button type="primary" onClick={() => store.getState().addSection()}>
+                <Button
+                  aria-label={t("editor.addSection")}
+                  className={styles.ribbonLargeButton}
+                  icon={<FileAddOutlined />}
+                  onClick={() => store.getState().addSection()}
+                >
                   {t("editor.addSection")}
                 </Button>
-                {quickInsertPresets.map((preset) => (
-                  <Button
-                    key={preset.id}
-                    onClick={() => store.getState().addSection(preset.id)}
-                  >
-                    {t("editor.addSectionPreset", { label: preset.label })}
-                  </Button>
-                ))}
+                <div className={styles.ribbonPresetGrid}>
+                  {quickInsertPresets.map((preset) => (
+                    <Button
+                      aria-label={t("editor.addSectionPreset", { label: preset.label })}
+                      className={styles.ribbonSmallCommand}
+                      icon={<PlusSquareOutlined />}
+                      key={preset.id}
+                      onClick={() => store.getState().addSection(preset.id)}
+                    >
+                      {t("editor.addSectionPreset", { label: preset.label })}
+                    </Button>
+                  ))}
+                </div>
               </div>
             ),
           },
@@ -2782,10 +2759,13 @@ export function ResumeEditorShell({
             key: "content",
             label: t("editor.ribbon.group.content"),
             content: (
-              <div className={styles.ribbonControlGroup}>
+              <div className={styles.ribbonPresetGrid}>
                 {listBlockPresets(locale).map((preset) => (
                   <Button
+                    aria-label={t(preset.labelKey)}
+                    className={styles.ribbonSmallCommand}
                     disabled={activeEditSurfaceMode !== "content" || !selectedSection}
+                    icon={<PlusSquareOutlined />}
                     key={preset.id}
                     onClick={() => {
                       if (!selectedSection) return;
@@ -2802,18 +2782,43 @@ export function ResumeEditorShell({
               </div>
             ),
           },
+          {
+            key: "link",
+            label: t("editor.ribbon.group.link"),
+            content: (
+              <Button
+                aria-label={t("editor.link")}
+                className={styles.ribbonLargeButton}
+                disabled={textToolsDisabled}
+                icon={<LinkOutlined />}
+                onMouseDown={preventToolbarMouseDown}
+                onClick={openLinkDialog}
+              >
+                {t("editor.link")}
+              </Button>
+            ),
+          },
         ];
+      case "design":
+        return [{
+          key: "document-design",
+          label: t("editor.ribbon.tab.design"),
+          content: documentDesignContent,
+          embedded: true,
+        }];
       case "layout":
         return [
           {
             key: "page",
             label: t("editor.ribbon.group.page"),
             content: (
-              <div className={styles.ribbonControlGroup}>
+              <div className={styles.ribbonCommandStack}>
                 <Tooltip title={t("editor.printSafeAreaTooltip")}>
                   <Button
+                    aria-label={t("editor.printSafeArea")}
                     aria-pressed={showPrintSafeArea}
-                    type={showPrintSafeArea ? "primary" : "default"}
+                    className={styles.ribbonModeButton}
+                    icon={<FileTextOutlined />}
                     onClick={() => setShowPrintSafeArea((current) => !current)}
                   >
                     {t("editor.printSafeArea")}
@@ -2822,6 +2827,8 @@ export function ResumeEditorShell({
                 <Tooltip title={t("editor.refreshPaginationTooltip")}>
                   <Button
                     aria-label={t("editor.refreshPagination")}
+                    className={styles.ribbonModeButton}
+                    icon={<ReloadOutlined />}
                     loading={!paginationReady}
                     onClick={() => {
                       setPaginationReady(false);
@@ -2834,6 +2841,12 @@ export function ResumeEditorShell({
               </div>
             ),
           },
+          {
+            key: "margins",
+            label: t("editor.ribbon.property.margins"),
+            content: pageMarginContent,
+            embedded: true,
+          },
         ];
       case "document":
         return [
@@ -2842,14 +2855,6 @@ export function ResumeEditorShell({
             label: t("editor.ribbon.group.document"),
             content: (
               <div className={styles.ribbonControlGroup}>
-                <Button
-                  onClick={() => {
-                    store.getState().setSelection({});
-                    setActiveRibbonTab("properties");
-                  }}
-                >
-                  {t("editor.documentProperties")}
-                </Button>
                 <ResumeSummaryEditor
                   initialSummary={resumeSummary}
                   resumeId={resumeId}
@@ -2889,26 +2894,26 @@ export function ResumeEditorShell({
               ]
             : []),
         ];
-      case "properties":
-        return [];
+      case "context":
+        return selectedContextContent && contextRibbonKind
+          ? [{
+              key: "selection",
+              label: t(`editor.ribbon.tab.context.${contextRibbonKind}`),
+              content: selectedContextContent,
+              embedded: true,
+            }]
+          : [];
     }
   })();
-
-  const ribbonPropertyContent = (
-    <section className={styles.ribbonPropertyPanel} data-testid="editor-ribbon-property-panel">
-      {inspectorContent}
-    </section>
-  );
 
   return (
     <div className={styles.editorWorkspace}>
       <main className={styles.shell} data-testid="resume-editor-shell">
       <EditorRibbon
-        activeTab={activeRibbonTab}
+        activeTab={effectiveRibbonTab}
         backHref="/app"
         backLabel={t("common.back")}
         commandGroups={ribbonCommandGroups}
-        contextualContent={activeRibbonTab === "properties" ? ribbonPropertyContent : undefined}
         documentActions={documentActions}
         documentName={resumeName}
         documentNameLabel={t("editor.resumeTitle")}
@@ -2928,8 +2933,39 @@ export function ResumeEditorShell({
         tabs={ribbonTabs}
         tablistLabel={t("editor.ribbon.label")}
         onDocumentNameChange={(title) => updateDocumentMeta({ title })}
-        onTabChange={setActiveRibbonTab}
+        onTabChange={selectRibbonTab}
       />
+
+      {linkDialogDraft ? (
+        <ResumeLinkDialog
+          initial={linkDialogDraft}
+          sections={document.sections
+            .filter((section) => section.visible)
+            .map((section) => ({
+              id: section.id,
+              title: section.title
+                ? getPlainTextFromRichText(section.title)
+                : t("editor.unknown"),
+            }))}
+          onApply={(draft) => {
+            const applied = runTextEditorCommand({
+              type: "upsertLink",
+              text: draft.text,
+              href: draft.href,
+              title: draft.title,
+            });
+
+            if (applied) setLinkDialogDraft(undefined);
+
+            return Boolean(applied);
+          }}
+          onCancel={() => setLinkDialogDraft(undefined)}
+          onRemove={() => {
+            runTextEditorCommand({ type: "unsetLink" });
+            setLinkDialogDraft(undefined);
+          }}
+        />
+      ) : null}
 
       <EditorShortcutPanel
         open={shortcutPanelOpen}
@@ -3183,6 +3219,14 @@ export function ResumeEditorShell({
           <div
             ref={canvasViewportRef}
             className={styles.canvasViewport}
+            onClick={(event) => {
+              if (
+                event.target instanceof Element &&
+                !event.target.closest("[data-resume-section-id]")
+              ) {
+                store.getState().setSelection({});
+              }
+            }}
             onScroll={handleCanvasViewportScroll}
           >
             <div
@@ -3201,49 +3245,51 @@ export function ResumeEditorShell({
                   onPaginationReadyChange={setPaginationReady}
                 />
               ) : (
-                <ResumeRenderer
-                  document={canvasDocument}
-                  mode="edit"
-                  editSurfaceMode={activeEditSurfaceMode}
-                  paginationRevision={paginationRevision}
-                  showPrintSafeArea={showPrintSafeArea}
-                  zoom={zoom}
-                  selection={selection}
-                  onSelectBlock={(nextSelection) =>
-                    store.getState().setSelection(nextSelection)
-                  }
-                  onChangeSectionTitle={(params) =>
-                    store.getState().updateSectionTitle(params)
-                  }
-                  onChangeTextBlock={(params) =>
-                    store.getState().updateTextBlockContent(params)
-                  }
-                  onMoveBlock={(params) => store.getState().moveBlock(params)}
-                  textEditorRef={textEditorRef}
-                  onTextEditorFormattingStateChange={(state) =>
-                    setTextEditorFormattingState((current) => {
-                      if (
-                        current.selectionKey === selectionKey &&
-                        current.value.bold === state.bold &&
-                        current.value.italic === state.italic &&
-                        current.value.underline === state.underline &&
-                        current.value.strike === state.strike &&
-                        current.value.tag === state.tag &&
-                        current.value.textColor === state.textColor &&
-                        current.value.linkHref === state.linkHref
-                      ) {
-                        return current;
-                      }
+                <ResumeLinkDialogContext.Provider value={setLinkDialogDraft}>
+                  <ResumeRenderer
+                    document={canvasDocument}
+                    mode="edit"
+                    editSurfaceMode={activeEditSurfaceMode}
+                    paginationRevision={paginationRevision}
+                    showPrintSafeArea={showPrintSafeArea}
+                    zoom={zoom}
+                    selection={selection}
+                    onSelectBlock={(nextSelection) =>
+                      store.getState().setSelection(nextSelection)
+                    }
+                    onChangeSectionTitle={(params) =>
+                      store.getState().updateSectionTitle(params)
+                    }
+                    onChangeTextBlock={(params) =>
+                      store.getState().updateTextBlockContent(params)
+                    }
+                    onMoveBlock={(params) => store.getState().moveBlock(params)}
+                    textEditorRef={textEditorRef}
+                    onTextEditorFormattingStateChange={(state) =>
+                      setTextEditorFormattingState((current) => {
+                        if (
+                          current.selectionKey === selectionKey &&
+                          current.value.bold === state.bold &&
+                          current.value.italic === state.italic &&
+                          current.value.underline === state.underline &&
+                          current.value.strike === state.strike &&
+                          current.value.tag === state.tag &&
+                          current.value.textColor === state.textColor &&
+                          current.value.linkHref === state.linkHref
+                        ) {
+                          return current;
+                        }
 
-                      return {
-                        selectionKey,
-                        value: state,
-                      };
-                    })
-                  }
-                  onPageCountChange={handlePageCountChange}
-                  onPaginationReadyChange={setPaginationReady}
-                />
+                        return {
+                          selectionKey,
+                          value: state,
+                        };
+                      })
+                    }
+                    onPageCountChange={handlePageCountChange}
+                    onPaginationReadyChange={setPaginationReady}
+                  />
+                </ResumeLinkDialogContext.Provider>
               )}
             </div>
           </div>

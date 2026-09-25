@@ -89,16 +89,17 @@ function exactSpacedLabel(text: string) {
 }
 
 function getInspectorPanel() {
-  const propertiesTab = screen.getByRole("tab", { name: "属性" });
+  const propertiesTab = screen.queryByRole("tab", { name: /格式$/ })
+    ?? screen.getByRole("tab", { name: "设计" });
 
   if (propertiesTab.getAttribute("aria-selected") !== "true") {
     fireEvent.click(propertiesTab);
   }
 
-  return screen.getByTestId("editor-ribbon-property-panel");
+  return screen.getByRole("tabpanel");
 }
 
-function openRibbonTab(name: "开始" | "插入" | "布局" | "文档" | "属性") {
+function openRibbonTab(name: "开始" | "插入" | "设计" | "布局" | "文档") {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
@@ -150,6 +151,54 @@ describe("ResumeEditorShell", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("keeps the current ribbon tab when a contextual text tab appears", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    expect(screen.getByRole("tab", { name: "插入" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "文本块格式" })).toBeInTheDocument();
+  });
+
+  it("updates contextual commands for the new selection and returns to the last permanent tab", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.click(screen.getByRole("tab", { name: "文本块格式" }));
+    expect(screen.getByRole("button", { name: spacedLabel("复制内容") })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    expect(screen.getByRole("tab", { name: "区块格式" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByRole("button", { name: spacedLabel("复制内容") })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId("resume-canvas-zoom"));
+    expect(screen.queryByRole("tab", { name: "区块格式" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "插入" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: "插入" })).toHaveFocus();
   });
 
   it("labels the AI assistant entry in the document bar", () => {
@@ -834,7 +883,7 @@ describe("ResumeEditorShell", () => {
     expect(screen.queryByText("Manrope")).not.toBeInTheDocument();
   });
 
-  it("opens document properties from the document tab and clears contextual selection", () => {
+  it("keeps document design available without clearing contextual selection", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -843,18 +892,18 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    openRibbonTab("开始");
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "文本样式" }),
+      within(screen.getByRole("tabpanel")).getByText("文本样式"),
     ).toBeInTheDocument();
-    openRibbonTab("文档");
-    fireEvent.click(screen.getByRole("button", { name: "文档属性" }));
+    openRibbonTab("设计");
+    const propertyPanel = screen.getByRole("tabpanel");
 
-    const propertyPanel = getInspectorPanel();
-
-    expect(screen.getByRole("tab", { name: "属性" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "设计" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
+    expect(screen.getByRole("tab", { name: "文本块格式" })).toBeInTheDocument();
     expect(within(propertyPanel).queryByRole("heading")).not.toBeInTheDocument();
     expect(
       within(propertyPanel).queryByRole("button", { name: "文档设置" }),
@@ -888,18 +937,21 @@ describe("ResumeEditorShell", () => {
     fireEvent.change(within(dialog).getByLabelText("基础行高"), {
       target: { value: "1.8" },
     });
-    fireEvent.change(within(dialog).getByLabelText("页面上边距"), {
+    openRibbonTab("布局");
+    const layoutPanel = screen.getByRole("tabpanel");
+    fireEvent.change(within(layoutPanel).getByLabelText("页面上边距"), {
       target: { value: "40" },
     });
-    fireEvent.change(within(dialog).getByLabelText("页面右边距"), {
+    fireEvent.change(within(layoutPanel).getByLabelText("页面右边距"), {
       target: { value: "36" },
     });
-    fireEvent.change(within(dialog).getByLabelText("页面下边距"), {
+    fireEvent.change(within(layoutPanel).getByLabelText("页面下边距"), {
       target: { value: "28" },
     });
-    fireEvent.change(within(dialog).getByLabelText("页面左边距"), {
+    fireEvent.change(within(layoutPanel).getByLabelText("页面左边距"), {
       target: { value: "24" },
     });
+    openRibbonTab("设计");
 
     const templateLanguage = within(dialog).getByRole("combobox", {
       name: "模板语言",
@@ -952,7 +1004,8 @@ describe("ResumeEditorShell", () => {
     );
     expect(within(dialog).getByLabelText("基础字号")).toHaveValue(13);
     expect(within(dialog).getByLabelText("基础行高")).toHaveValue("1.35");
-    expect(within(dialog).getByLabelText("页面上边距")).toHaveValue(24);
+    openRibbonTab("布局");
+    expect(within(screen.getByRole("tabpanel")).getByLabelText("页面上边距")).toHaveValue(24);
     expect(screen.getByRole("article")).toHaveStyle({
       "--resume-page-padding": "24px 28px 24px 28px",
     });
@@ -1611,7 +1664,7 @@ describe("ResumeEditorShell", () => {
     const canvas = screen.getByRole("article");
     const title = within(canvas).getByText("个人简介");
     fireEvent.click(title.closest("button")!);
-    openRibbonTab("属性");
+    openRibbonTab("开始");
 
     const sizeInput = screen.getByLabelText("区块标题字号");
     expect(sizeInput).toHaveValue(28);
@@ -1638,8 +1691,9 @@ describe("ResumeEditorShell", () => {
     expect(editor.tagName).toBe("DIV");
     expect(editor).toHaveAttribute("contenteditable", "true");
     expect(editor).toHaveTextContent("共享渲染器基础");
-    const dialog = getInspectorPanel();
-    expect(within(dialog).getByRole("group", { name: "文本样式" })).toBeInTheDocument();
+    openRibbonTab("开始");
+    const dialog = screen.getByRole("tabpanel");
+    expect(within(dialog).getByText("文本样式")).toBeInTheDocument();
     expect(within(dialog).queryByText("Block 类型")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("Block 路径")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("block-profile-summary")).not.toBeInTheDocument();
@@ -1672,7 +1726,7 @@ describe("ResumeEditorShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("updates the selected text block styles from the inspector", () => {
+  it("updates the selected text block styles from Home", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -1681,7 +1735,7 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    const dialog = getInspectorPanel();
+    const dialog = screen.getByRole("tabpanel", { name: "开始" });
 
     fireEvent.change(within(dialog).getByLabelText("字号"), {
       target: { value: "24" },
@@ -1800,8 +1854,10 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
 
-    expect(within(dialog).getByLabelText("文本颜色调色板")).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText("文本颜色")).not.toBeInTheDocument();
+    openRibbonTab("开始");
+    const textPanel = screen.getByRole("tabpanel");
+    expect(within(textPanel).getByLabelText("文本颜色调色板")).toBeInTheDocument();
+    expect(within(textPanel).queryByLabelText("文本颜色")).not.toBeInTheDocument();
   });
 
   it("allows decimal line-height input without dropping the trailing decimal point", () => {
@@ -1813,7 +1869,7 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    const dialog = getInspectorPanel();
+    const dialog = screen.getByRole("tabpanel", { name: "开始" });
     const lineHeightInput = within(dialog).getByLabelText("行高");
 
     fireEvent.change(lineHeightInput, {
@@ -1849,9 +1905,9 @@ describe("ResumeEditorShell", () => {
       "aria-disabled",
       "true",
     );
-    expect(screen.getByRole("textbox", { name: "链接" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: spacedLabel("应用链接") })).toBeDisabled();
-    expect(screen.getByRole("button", { name: spacedLabel("清除链接") })).toBeDisabled();
+    openRibbonTab("插入");
+    expect(screen.getByRole("button", { name: "链接" })).toBeDisabled();
+    expect(screen.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
   });
 
   it("enables rich text toolbar controls when a text block is selected", () => {
@@ -1872,9 +1928,9 @@ describe("ResumeEditorShell", () => {
       "aria-disabled",
       "false",
     );
-    expect(screen.getByRole("textbox", { name: "链接" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("应用链接") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("清除链接") })).toBeEnabled();
+    openRibbonTab("插入");
+    expect(screen.getByRole("button", { name: "链接" })).toBeEnabled();
+    expect(screen.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
     expect(within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
   });
 
@@ -2113,9 +2169,123 @@ describe("ResumeEditorShell", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("textbox", { name: "链接" })).toHaveValue(
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    expect(screen.getByRole("textbox", { name: "地址" })).toHaveValue(
       "https://example.com",
     );
+    expect(screen.getByRole("textbox", { name: "显示文字" })).toHaveValue(
+      "共享渲染器基础",
+    );
+  });
+
+  it("edits an existing text link from the Insert ribbon", () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections[0].blocks[0] = {
+      ...initialDocument.sections[0].blocks[0],
+      type: "text",
+      content: richText("共享渲染器基础", [
+        { type: "link", attrs: { href: "https://example.com" } },
+      ]),
+    };
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "显示文字" }), {
+      target: { value: "联系我" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "电子邮件" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "电子邮件地址" }), {
+      target: { value: "hello@example.com" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "主题" }), {
+      target: { value: "简历咨询" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("确定") }));
+
+    expect(
+      within(screen.getByRole("textbox", { name: "文本块编辑器" })).getByRole("link", { name: "联系我" }),
+    ).toHaveAttribute("href", "mailto:hello@example.com?subject=%E7%AE%80%E5%8E%86%E5%92%A8%E8%AF%A2");
+  });
+
+  it("can remove an existing link from the link dialog", () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections[0].blocks[0] = {
+      ...initialDocument.sections[0].blocks[0],
+      type: "text",
+      content: richText("共享渲染器基础", [
+        { type: "link", attrs: { href: "https://example.com" } },
+      ]),
+    };
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("清除链接") }));
+
+    expect(
+      within(screen.getByRole("textbox", { name: "文本块编辑器" })).queryByRole("link"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("inserts a section link that points to a resume section", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "显示文字" }), {
+      target: { value: "跳到工作经历" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "简历内位置" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", {
+      name: "经历",
+    }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("确定") }));
+
+    expect(
+      within(screen.getByRole("textbox", { name: "文本块编辑器" })).getByRole("link", {
+        name: "跳到工作经历",
+      }),
+    ).toHaveAttribute("href", "#resume-section-section-experience");
+  });
+
+  it("opens the same link dialog with the editor shortcut", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "文本块编辑器" }), {
+      key: "k",
+      metaKey: true,
+    });
+
+    expect(screen.getByRole("dialog", { name: "插入超链接" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "显示文字" })).toBeInTheDocument();
   });
 
   it("switches the canvas into layout sort mode and reveals drag handles", () => {
@@ -2128,9 +2298,8 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "文本样式" }),
+      within(screen.getByRole("tabpanel", { name: "开始" })).getByText("文本样式"),
     ).toBeInTheDocument();
-    openRibbonTab("开始");
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
 
@@ -2143,9 +2312,9 @@ describe("ResumeEditorShell", () => {
       "true",
     );
     expect(screen.queryByRole("textbox", { name: "文本块编辑器" })).not.toBeInTheDocument();
-    expect(
-      within(getInspectorPanel()).queryByRole("button", { name: spacedLabel("加粗") }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toBeDisabled();
+    expect(within(screen.getByRole("tabpanel", { name: "开始" })).queryByText("文本样式"))
+      .not.toBeInTheDocument();
     expect(
       screen.getAllByRole("button", {
         name: /拖动/,
@@ -2369,8 +2538,9 @@ describe("ResumeEditorShell", () => {
       }),
     );
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "文本样式" }),
+      within(screen.getByRole("tabpanel", { name: "开始" })).getByText("文本样式"),
     ).toBeInTheDocument();
+    getInspectorPanel();
     fireEvent.click(screen.getByRole("button", { name: "上移 Block" }));
 
     const movedBlock = screen.getByRole("textbox", {

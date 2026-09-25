@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  createContext,
   forwardRef,
+  useContext,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -90,12 +92,24 @@ export type TiptapTextBlockEditorCommand =
   | { type: "setTextColor"; color: string }
   | { type: "unsetTextColor" }
   | { type: "setLink"; href: string }
+  | { type: "upsertLink"; text: string; href: string; title?: string }
   | { type: "unsetLink" }
   | { type: "insertIcon"; iconId: string };
 
 export interface TiptapTextBlockEditorHandle {
   applyCommand: (command: TiptapTextBlockEditorCommand) => boolean;
+  prepareLink: () => TiptapLinkContext | undefined;
 }
+
+export interface TiptapLinkContext {
+  text: string;
+  href: string;
+  title: string;
+}
+
+export const ResumeLinkDialogContext = createContext<
+  ((context: TiptapLinkContext) => void) | undefined
+>(undefined);
 
 export interface TiptapTextBlockEditorFormatState {
   bold: boolean;
@@ -124,6 +138,42 @@ type TextSelectionRange = {
   from: number;
   to: number;
 };
+
+function prepareLinkForEditor(
+  editor: Editor,
+  linkSelectionRef: { current: TextSelectionRange | null },
+): TiptapLinkContext {
+  let hasLink = editor.isActive("link");
+
+  if (editor.state.selection.empty && hasLink) {
+    editor.commands.extendMarkRange("link");
+  } else if (editor.state.selection.empty) {
+    const { from, $from } = editor.state.selection;
+    const adjacent = [
+      { node: $from.nodeAfter, from },
+      { node: $from.nodeBefore, from: from - ($from.nodeBefore?.nodeSize ?? 0) },
+    ].find(({ node }) => node?.marks.some((mark) => mark.type.name === "link"));
+
+    if (adjacent?.node) {
+      editor.commands.setTextSelection({
+        from: adjacent.from,
+        to: adjacent.from + adjacent.node.nodeSize,
+      });
+      hasLink = true;
+    }
+  }
+
+  const { from, to } = editor.state.selection;
+  const attributes = hasLink ? editor.getAttributes("link") : {};
+
+  linkSelectionRef.current = { from, to };
+
+  return {
+    text: editor.state.doc.textBetween(from, to, " "),
+    href: typeof attributes.href === "string" ? attributes.href : "",
+    title: typeof attributes.title === "string" ? attributes.title : "",
+  };
+}
 
 interface TiptapTextBlockEditorProps {
   ariaLabel?: string;
@@ -251,6 +301,7 @@ export const TiptapTextBlockEditor = forwardRef<
   wrapperClassName,
 }, ref) {
   const { styles } = useTiptapTextBlockEditorStyles();
+  const openLinkDialog = useContext(ResumeLinkDialogContext);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [linkDraft, setLinkDraft] = useState("");
@@ -273,7 +324,19 @@ export const TiptapTextBlockEditor = forwardRef<
         link: false,
         orderedList: false,
       }),
-      Link.configure({
+      Link.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            title: {
+              default: null,
+              parseHTML: (element) => element.getAttribute("title"),
+              renderHTML: (attributes) =>
+                attributes.title ? { title: attributes.title } : {},
+            },
+          };
+        },
+      }).configure({
         autolink: false,
         linkOnPaste: false,
         openOnClick: false,
@@ -292,6 +355,12 @@ export const TiptapTextBlockEditor = forwardRef<
       handleKeyDown: (_view, event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
           event.preventDefault();
+
+          if (openLinkDialog && editor) {
+            openLinkDialog(prepareLinkForEditor(editor, linkSelectionRef));
+            return true;
+          }
+
           const { empty, from, to } = _view.state.selection;
           linkSelectionRef.current = empty ? null : { from, to };
           setLinkDraft("");
@@ -310,6 +379,7 @@ export const TiptapTextBlockEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
+      prepareLink: () => editor ? prepareLinkForEditor(editor, linkSelectionRef) : undefined,
       applyCommand: (command) => {
         if (!editor) {
           return false;
@@ -351,8 +421,41 @@ export const TiptapTextBlockEditor = forwardRef<
 
             return href ? preparedChain.setLink({ href }).run() : false;
           }
+          case "upsertLink": {
+            const href = normalizeLinkHref(command.href);
+            const text = command.text.trim();
+
+            if (!href || !text) return false;
+
+            const range = linkSelectionRef.current ?? editor.state.selection;
+            const originalText = editor.state.doc.textBetween(range.from, range.to, " ");
+            let linkChain = editor.chain().focus(undefined, { scrollIntoView: false });
+
+            if (originalText !== text) {
+              linkChain = linkChain.insertContentAt(range, text);
+            }
+
+            const applied = linkChain
+              .setTextSelection({ from: range.from, to: range.from + text.length })
+              .setLink({
+                href,
+                title: command.title?.trim() || null,
+              })
+              .run();
+
+            if (applied) linkSelectionRef.current = null;
+
+            return applied;
+          }
           case "unsetLink":
-            return preparedChain.unsetLink().run();
+          {
+            const range = linkSelectionRef.current;
+            const result = (range ? chain.setTextSelection(range) : preparedChain)
+              .unsetLink()
+              .run();
+            linkSelectionRef.current = null;
+            return result;
+          }
         }
       },
     }),
@@ -485,6 +588,11 @@ export const TiptapTextBlockEditor = forwardRef<
 
   function openLinkPopover() {
     if (!editor) return;
+
+    if (openLinkDialog) {
+      openLinkDialog(prepareLinkForEditor(editor, linkSelectionRef));
+      return;
+    }
 
     const { empty, from, to } = editor.state.selection;
     linkSelectionRef.current = empty ? null : { from, to };
