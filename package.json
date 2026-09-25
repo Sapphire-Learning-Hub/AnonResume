@@ -1,6 +1,6 @@
 {
   "name": "anonresume",
-  "version": "1.5.0",
+  "version": "1.6.0-beta.1",
   "license": "AGPL-3.0-or-later",
   "private": true,
   "scripts": {
