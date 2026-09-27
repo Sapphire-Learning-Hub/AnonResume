@@ -296,8 +296,9 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     cursor: pointer;
     font-family: inherit;
   `,
-  selectedBadge: css`
-    outline: 2px solid rgba(15, 98, 254, 0.42);
-    outline-offset: 2px;
+  badgeEditor: css`
+    cursor: text;
+    font-family: inherit;
+    outline: 0;
   `,
 }));

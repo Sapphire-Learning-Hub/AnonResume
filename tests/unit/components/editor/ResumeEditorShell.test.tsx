@@ -1720,9 +1720,9 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(within(insertPanel).getByRole("button", { name: spacedLabel("标签") }));
 
-    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "标签文本" })).toHaveTextContent("新标签");
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "标签内容" }),
+      within(getInspectorPanel()).getByRole("group", { name: "标签操作" }),
     ).toBeInTheDocument();
   });
 
@@ -1756,7 +1756,7 @@ describe("ResumeEditorShell", () => {
     });
   });
 
-  it("edits badge text from the inspector without replacing the canvas chip", () => {
+  it("edits a badge directly on the canvas while keeping structural actions in the ribbon", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -1766,28 +1766,31 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
 
+    const badgeInput = screen.getByRole("textbox", { name: "标签文本" });
     const dialog = getInspectorPanel();
 
-    expect(within(dialog).getByRole("group", { name: "标签内容" })).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("标签文本")).toHaveValue("Next.js");
+    expect(badgeInput).toHaveFocus();
+    expect(badgeInput).toHaveTextContent("Next.js");
+    expect(within(dialog).queryByRole("group", { name: "标签内容" })).not.toBeInTheDocument();
 
-    fireEvent.change(within(dialog).getByLabelText("标签文本"), {
-      target: { value: "TypeScript" },
-    });
+    badgeInput.textContent = "TypeScript";
+    fireEvent.input(badgeInput);
+    fireEvent.blur(badgeInput);
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 React" }));
 
     expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "编辑标签 Next.js" })).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "新增标签" }));
 
-    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "标签文本" })).toHaveTextContent("新标签");
 
     fireEvent.click(within(dialog).getByRole("button", { name: "删除标签" }));
 
     expect(screen.queryByRole("button", { name: "编辑标签 新标签" })).not.toBeInTheDocument();
   });
 
-  it("allows clearing badge text before typing its replacement", () => {
+  it("allows a temporarily empty badge and removes it when editing ends", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -1797,15 +1800,80 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
 
-    const badgeInput = within(getInspectorPanel()).getByLabelText("标签文本");
+    const badgeInput = screen.getByRole("textbox", { name: "标签文本" });
 
-    fireEvent.change(badgeInput, { target: { value: "" } });
-    expect(badgeInput).toHaveValue("");
+    badgeInput.textContent = "";
+    fireEvent.input(badgeInput);
+    expect(badgeInput).toBeEmptyDOMElement();
+    expect(screen.getByRole("button", { name: "编辑标签 React" })).toBeInTheDocument();
 
-    fireEvent.change(badgeInput, { target: { value: "TypeScript" } });
+    fireEvent.blur(badgeInput);
 
-    expect(badgeInput).toHaveValue("TypeScript");
+    expect(screen.queryByRole("button", { name: "编辑标签 Next.js" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "标签文本" })).toHaveTextContent("React");
+  });
+
+  it("keeps badge edits when selecting a different badge without an explicit blur", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+    const badgeEditor = screen.getByRole("textbox", { name: "标签文本" });
+    badgeEditor.textContent = "TypeScript";
+    fireEvent.input(badgeEditor);
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 React" }));
+
     expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "标签文本" })).toHaveTextContent("React");
+  });
+
+  it("commits repeated edits to the same selected badge", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+    const badgeEditor = screen.getByRole("textbox", { name: "标签文本" });
+    badgeEditor.textContent = "TypeScript";
+    fireEvent.input(badgeEditor);
+    fireEvent.blur(badgeEditor);
+
+    expect(badgeEditor).toBeInTheDocument();
+    badgeEditor.textContent = "Kotlin";
+    fireEvent.input(badgeEditor);
+    fireEvent.blur(badgeEditor);
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 React" }));
+
+    expect(screen.getByRole("button", { name: "编辑标签 Kotlin" })).toBeInTheDocument();
+  });
+
+  it("removes the badge block when its final badge is cleared", () => {
+    const initialDocument = createDefaultResumeDocument();
+    const badges = initialDocument.sections[0]?.blocks[2];
+
+    if (badges?.type !== "badges") {
+      throw new Error("Expected profile stack to remain a badge block.");
+    }
+
+    badges.items = [badges.items[0]!];
+    render(<ResumeEditorShell resumeId="resume-demo" initialDocument={initialDocument} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
+    const badgeInput = screen.getByRole("textbox", { name: "标签文本" });
+    badgeInput.textContent = "";
+    fireEvent.input(badgeInput);
+    fireEvent.blur(badgeInput);
+
+    expect(screen.queryByRole("textbox", { name: "标签文本" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "编辑标签 Next.js" })).not.toBeInTheDocument();
+    expect(screen.queryByText("标签操作")).not.toBeInTheDocument();
   });
 
   it("provides a palette for every editable color field", () => {
