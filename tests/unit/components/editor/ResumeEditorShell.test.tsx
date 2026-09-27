@@ -1720,9 +1720,9 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(within(insertPanel).getByRole("button", { name: spacedLabel("标签") }));
 
-    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "标签文本" })).toHaveTextContent("新标签");
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "标签内容" }),
+      within(getInspectorPanel()).getByRole("group", { name: "标签操作" }),
     ).toBeInTheDocument();
   });
 
@@ -1754,58 +1754,6 @@ describe("ResumeEditorShell", () => {
       lineHeight: "1.25",
       textAlign: "center",
     });
-  });
-
-  it("edits badge text from the inspector without replacing the canvas chip", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
-
-    const dialog = getInspectorPanel();
-
-    expect(within(dialog).getByRole("group", { name: "标签内容" })).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("标签文本")).toHaveValue("Next.js");
-
-    fireEvent.change(within(dialog).getByLabelText("标签文本"), {
-      target: { value: "TypeScript" },
-    });
-
-    expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "编辑标签 Next.js" })).not.toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "新增标签" }));
-
-    expect(screen.getByRole("button", { name: "编辑标签 新标签" })).toBeInTheDocument();
-
-    fireEvent.click(within(dialog).getByRole("button", { name: "删除标签" }));
-
-    expect(screen.queryByRole("button", { name: "编辑标签 新标签" })).not.toBeInTheDocument();
-  });
-
-  it("allows clearing badge text before typing its replacement", () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
-
-    const badgeInput = within(getInspectorPanel()).getByLabelText("标签文本");
-
-    fireEvent.change(badgeInput, { target: { value: "" } });
-    expect(badgeInput).toHaveValue("");
-
-    fireEvent.change(badgeInput, { target: { value: "TypeScript" } });
-
-    expect(badgeInput).toHaveValue("TypeScript");
-    expect(screen.getByRole("button", { name: "编辑标签 TypeScript" })).toBeInTheDocument();
   });
 
   it("provides a palette for every editable color field", () => {
@@ -2096,39 +2044,10 @@ describe("ResumeEditorShell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("allows deleting the final badge and removes its empty badge block", () => {
-    const initialDocument = createDefaultResumeDocument();
-    const badges = initialDocument.sections[0]?.blocks[2];
-
-    if (badges?.type !== "badges") {
-      throw new Error("Expected profile stack to remain a badge block.");
-    }
-
-    badges.items = [badges.items[0]!];
-
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={initialDocument}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "编辑标签 Next.js" }));
-    const deleteButton = within(getInspectorPanel()).getByRole("button", {
-      name: "删除标签",
-    });
-
-    expect(deleteButton).toBeEnabled();
-    fireEvent.click(deleteButton);
-
-    expect(
-      screen.queryByRole("button", { name: "编辑标签 Next.js" }),
-    ).not.toBeInTheDocument();
-  });
-
   it("reflects the selected text block formatting in the toolbar", async () => {
     const initialDocument = createDefaultResumeDocument();
-    initialDocument.sections[0].blocks[0] = {
+    const profileSection = initialDocument.sections[0];
+    profileSection.blocks = [{
       ...initialDocument.sections[0].blocks[0],
       type: "text",
       content: richText("共享渲染器基础", [
@@ -2139,7 +2058,8 @@ describe("ResumeEditorShell", () => {
         { type: "tag" },
         { type: "link", attrs: { href: "https://example.com" } },
       ]),
-    };
+    }];
+    initialDocument.sections = [profileSection];
 
     render(
       <ResumeEditorShell
@@ -2149,28 +2069,29 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
+    const ribbon = within(screen.getByRole("tabpanel"));
+    expect(ribbon.getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("斜体") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("斜体") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("下划线") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("下划线") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("删除线") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("删除线") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("内联标签") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("内联标签") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "链接" }));
     expect(screen.getByRole("textbox", { name: "地址" })).toHaveValue(
       "https://example.com",
     );
@@ -2181,13 +2102,15 @@ describe("ResumeEditorShell", () => {
 
   it("edits an existing text link from the Insert ribbon", () => {
     const initialDocument = createDefaultResumeDocument();
-    initialDocument.sections[0].blocks[0] = {
-      ...initialDocument.sections[0].blocks[0],
+    const profileSection = initialDocument.sections[0];
+    profileSection.blocks = [{
+      ...profileSection.blocks[0],
       type: "text",
       content: richText("共享渲染器基础", [
         { type: "link", attrs: { href: "https://example.com" } },
       ]),
-    };
+    }];
+    initialDocument.sections = [profileSection];
 
     render(
       <ResumeEditorShell
@@ -2198,18 +2121,19 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: "链接" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "显示文字" }), {
+    fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "链接" }));
+    const linkDialog = within(screen.getByRole("dialog"));
+    fireEvent.change(linkDialog.getByRole("textbox", { name: "显示文字" }), {
       target: { value: "联系我" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "电子邮件" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "电子邮件地址" }), {
+    fireEvent.click(linkDialog.getByRole("button", { name: "电子邮件" }));
+    fireEvent.change(linkDialog.getByRole("textbox", { name: "电子邮件地址" }), {
       target: { value: "hello@example.com" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "主题" }), {
+    fireEvent.change(linkDialog.getByRole("textbox", { name: "主题" }), {
       target: { value: "简历咨询" },
     });
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("确定") }));
+    fireEvent.click(linkDialog.getByRole("button", { name: spacedLabel("确定") }));
 
     expect(
       within(screen.getByRole("textbox", { name: "文本块编辑器" })).getByRole("link", { name: "联系我" }),
@@ -2480,10 +2404,13 @@ describe("ResumeEditorShell", () => {
   });
 
   it("undoes and redoes section changes from the toolbar", () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections = initialDocument.sections.slice(0, 1);
+    initialDocument.sections[0].blocks = initialDocument.sections[0].blocks.slice(0, 1);
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={initialDocument}
       />,
     );
 

@@ -1004,6 +1004,57 @@ export function ResumeEditorShell({
     });
   }
 
+  function commitBadgeItem({
+    sectionId,
+    blockPath,
+    itemId,
+    text,
+  }: {
+    sectionId: string;
+    blockPath: string[];
+    itemId: string;
+    text: string;
+  }) {
+    const current = store.getState();
+    const section = current.document.sections.find((item) => item.id === sectionId);
+    const block = section ? findBlockByPath(section.blocks, blockPath) : undefined;
+
+    if (block?.type !== "badges") return;
+
+    const itemIndex = block.items.findIndex((item) => item.id === itemId);
+    if (itemIndex < 0) return;
+
+    const nextText = text.trim();
+    if (!nextText) {
+      if (block.items.length === 1) {
+        current.deleteBlock({ sectionId, blockPath });
+        return;
+      }
+
+      const items = block.items.filter((item) => item.id !== itemId);
+      current.updateBadgeItems({ sectionId, blockPath, items });
+      if (current.selection.badgeItemId === itemId) {
+        const fallback = items[itemIndex] ?? items[itemIndex - 1];
+        current.setSelection(
+          fallback
+            ? { sectionId, blockPath, badgeItemId: fallback.id }
+            : { sectionId, blockPath },
+        );
+      }
+      return;
+    }
+
+    if (block.items[itemIndex]?.text !== nextText) {
+      current.updateBadgeItems({
+        sectionId,
+        blockPath,
+        items: block.items.map((item) =>
+          item.id === itemId ? { ...item, text: nextText } : item,
+        ),
+      });
+    }
+  }
+
   function updateSelectedBlockSettings(
     settings: Parameters<ResumeEditorStoreState["updateBlockSettings"]>[0]["settings"],
   ) {
@@ -1614,25 +1665,6 @@ export function ResumeEditorShell({
     </>
   ) : selectedBadgeBlock?.type === "badges" && selectedBadgeItem && selection.blockPath ? (
     <>
-      <EditorRibbonPropertyGroup label={t("editor.ribbon.property.badgeContent")}>
-        <div className={styles.inspectorControlGrid}>
-        <div className={styles.inspectorControlRow} data-field-size="medium">
-          <span className={styles.inspectorControlLabel}>{t("editor.badgeText")}</span>
-          <DraftInput
-            aria-label={t("editor.badgeText")}
-            value={selectedBadgeItem.text}
-            parseValue={(text) => (text.trim() ? text : undefined)}
-            onValidValueChange={(text) =>
-              updateSelectedBadgeItems(
-                selectedBadgeBlock.items.map((item) =>
-                  item.id === selectedBadgeItem.id ? { ...item, text } : item,
-                ),
-              )
-            }
-          />
-        </div>
-        </div>
-      </EditorRibbonPropertyGroup>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.badgeActions")}>
         <div className={styles.panelActionRow}>
         <Button
@@ -3263,6 +3295,7 @@ export function ResumeEditorShell({
                     onChangeTextBlock={(params) =>
                       store.getState().updateTextBlockContent(params)
                     }
+                    onCommitBadgeItem={commitBadgeItem}
                     onMoveBlock={(params) => store.getState().moveBlock(params)}
                     textEditorRef={textEditorRef}
                     onTextEditorFormattingStateChange={(state) =>

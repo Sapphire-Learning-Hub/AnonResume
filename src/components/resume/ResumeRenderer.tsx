@@ -19,6 +19,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -100,6 +102,12 @@ export interface ResumeRendererProps {
     blockPath: string[];
     content: RichTextContent;
   }) => void;
+  onCommitBadgeItem?: (params: {
+    sectionId: string;
+    blockPath: string[];
+    itemId: string;
+    text: string;
+  }) => void;
   onMoveBlock?: (params: {
     sectionId: string;
     blockPath: string[];
@@ -115,6 +123,7 @@ export interface ResumeRendererProps {
 
 type ResumeRendererStyles = ReturnType<typeof useResumeRendererStyles>["styles"];
 type Translator = ReturnType<typeof useI18n>["t"];
+const BadgeEditContext = createContext<ResumeRendererProps["onCommitBadgeItem"]>(undefined);
 type SortableBlockAxis = "vertical" | "horizontal" | "grid";
 const A4_PAGE_HEIGHT_PX = (297 / 25.4) * 96;
 const DEFAULT_SECTION_GAP_PX = 20;
@@ -996,6 +1005,110 @@ function renderListBlock(
   );
 }
 
+function EditableBadge({
+  item,
+  sectionId,
+  blockPath,
+  styles,
+  t,
+}: {
+  item: BadgeBlock["items"][number];
+  sectionId: string;
+  blockPath: string[];
+  styles: ResumeRendererStyles;
+  t: Translator;
+}) {
+  const onCommit = useContext(BadgeEditContext);
+  const [target] = useState(() => ({ sectionId, blockPath, itemId: item.id }));
+  const editorRef = useRef<HTMLSpanElement>(null);
+  const draftRef = useRef(item.text);
+  const lastCommittedRef = useRef(item.text);
+  const commitRef = useRef(onCommit);
+
+  useLayoutEffect(() => {
+    commitRef.current = onCommit;
+  }, [onCommit]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    editor?.focus();
+    if (editor) {
+      const selection = window.getSelection();
+      const range = window.document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
+    return () => {
+      if (draftRef.current !== lastCommittedRef.current) {
+        lastCommittedRef.current = draftRef.current;
+        commitRef.current?.({
+          sectionId: target.sectionId,
+          blockPath: target.blockPath,
+          itemId: target.itemId,
+          text: draftRef.current,
+        });
+      }
+    };
+  }, [target]);
+
+  function commit() {
+    if (draftRef.current !== lastCommittedRef.current) {
+      lastCommittedRef.current = draftRef.current;
+      commitRef.current?.({
+        sectionId: target.sectionId,
+        blockPath: target.blockPath,
+        itemId: target.itemId,
+        text: draftRef.current,
+      });
+    }
+  }
+
+  return (
+    <span
+      ref={editorRef}
+      aria-label={t("editor.badgeText")}
+      className={`${styles.badge} ${styles.badgeEditor}`}
+      contentEditable="plaintext-only"
+      role="textbox"
+      suppressContentEditableWarning
+      onInput={(event) => {
+        draftRef.current = event.currentTarget.textContent ?? "";
+      }}
+      onPaste={(event) => {
+        event.preventDefault();
+        const selection = window.getSelection();
+        if (!selection?.rangeCount || !event.currentTarget.contains(selection.anchorNode)) {
+          return;
+        }
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const text = event.clipboardData.getData("text/plain").replace(/\s*\r?\n\s*/g, " ");
+        const node = window.document.createTextNode(text);
+        range.insertNode(node);
+        range.setStartAfter(node);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        draftRef.current = event.currentTarget.textContent ?? "";
+      }}
+      onDrop={(event) => event.preventDefault()}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (!event.nativeEvent.isComposing &&
+            (event.key === "Enter" || event.key === "Escape")) {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+    >
+      {item.text}
+    </span>
+  );
+}
+
 function renderBadgeBlock(
   block: BadgeBlock,
   context: {
@@ -1024,9 +1137,7 @@ function renderBadgeBlock(
           context.blockPath,
           item.id,
         );
-        const className = `${context.styles.badge}${
-          selected ? ` ${context.styles.selectedBadge}` : ""
-        }`;
+        const className = context.styles.badge;
 
         if (context.mode === "edit" && context.editSurfaceMode === "content") {
           return (
@@ -1036,22 +1147,32 @@ function renderBadgeBlock(
               nodeId={item.id}
               fields={["node", "text", "order"]}
             >
-              <button
-                type="button"
-                aria-label={context.t("renderer.editBadge", {
-                  label: item.text,
-                })}
-                className={`${className} ${context.styles.editableBadge}`}
-                onClick={() =>
-                  context.onSelectBlock?.({
-                    sectionId: context.sectionId,
-                    blockPath: context.blockPath,
-                    badgeItemId: item.id,
-                  })
-                }
-              >
-                {item.text}
-              </button>
+              {selected ? (
+                <EditableBadge
+                  item={item}
+                  sectionId={context.sectionId}
+                  blockPath={context.blockPath}
+                  styles={context.styles}
+                  t={context.t}
+                />
+              ) : (
+                <button
+                  type="button"
+                  aria-label={context.t("renderer.editBadge", {
+                    label: item.text,
+                  })}
+                  className={`${className} ${context.styles.editableBadge}`}
+                  onClick={() =>
+                    context.onSelectBlock?.({
+                      sectionId: context.sectionId,
+                      blockPath: context.blockPath,
+                      badgeItemId: item.id,
+                    })
+                  }
+                >
+                  {item.text}
+                </button>
+              )}
             </ResumeDiffTarget>
           );
         }
@@ -2123,6 +2244,7 @@ export function ResumeRenderer({
   onSelectBlock,
   onChangeSectionTitle,
   onChangeTextBlock,
+  onCommitBadgeItem,
   onMoveBlock,
   textEditorRef,
   onTextEditorFormattingStateChange,
@@ -2270,9 +2392,10 @@ export function ResumeRenderer({
   ]);
 
   return (
-    <ResumeDiffProvider
-      presentation={mode === "print" ? undefined : diffPresentation}
-    >
+    <BadgeEditContext.Provider value={onCommitBadgeItem}>
+      <ResumeDiffProvider
+        presentation={mode === "print" ? undefined : diffPresentation}
+      >
       <div
         ref={rootRef}
         className={styles.root}
@@ -2340,6 +2463,7 @@ export function ResumeRenderer({
         ))}
         {mode === "edit" && selectedTextBlock ? null : null}
       </div>
-    </ResumeDiffProvider>
+      </ResumeDiffProvider>
+    </BadgeEditContext.Provider>
   );
 }
