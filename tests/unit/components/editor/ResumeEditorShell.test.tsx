@@ -65,6 +65,19 @@ function richText(
   };
 }
 
+function createBadgeTestDocument() {
+  const document = createDefaultResumeDocument();
+  const profileSection = document.sections[0];
+  const badges = profileSection.blocks.find((block) => block.type === "badges");
+
+  if (!badges) {
+    throw new Error("Expected profile stack to remain a badge block.");
+  }
+
+  document.sections = [{ ...profileSection, blocks: [badges] }];
+  return document;
+}
+
 function createDeferredPromise<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -1760,7 +1773,7 @@ describe("ResumeEditorShell", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={createBadgeTestDocument()}
       />,
     );
 
@@ -1794,7 +1807,7 @@ describe("ResumeEditorShell", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={createBadgeTestDocument()}
       />,
     );
 
@@ -1817,7 +1830,7 @@ describe("ResumeEditorShell", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={createBadgeTestDocument()}
       />,
     );
 
@@ -1835,7 +1848,7 @@ describe("ResumeEditorShell", () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={createBadgeTestDocument()}
       />,
     );
 
@@ -1855,8 +1868,8 @@ describe("ResumeEditorShell", () => {
   });
 
   it("removes the badge block when its final badge is cleared", () => {
-    const initialDocument = createDefaultResumeDocument();
-    const badges = initialDocument.sections[0]?.blocks[2];
+    const initialDocument = createBadgeTestDocument();
+    const badges = initialDocument.sections[0]?.blocks[0];
 
     if (badges?.type !== "badges") {
       throw new Error("Expected profile stack to remain a badge block.");
@@ -2196,7 +2209,8 @@ describe("ResumeEditorShell", () => {
 
   it("reflects the selected text block formatting in the toolbar", async () => {
     const initialDocument = createDefaultResumeDocument();
-    initialDocument.sections[0].blocks[0] = {
+    const profileSection = initialDocument.sections[0];
+    profileSection.blocks = [{
       ...initialDocument.sections[0].blocks[0],
       type: "text",
       content: richText("共享渲染器基础", [
@@ -2207,7 +2221,8 @@ describe("ResumeEditorShell", () => {
         { type: "tag" },
         { type: "link", attrs: { href: "https://example.com" } },
       ]),
-    };
+    }];
+    initialDocument.sections = [profileSection];
 
     render(
       <ResumeEditorShell
@@ -2217,28 +2232,29 @@ describe("ResumeEditorShell", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
+    const ribbon = within(screen.getByRole("tabpanel"));
+    expect(ribbon.getByRole("button", { name: spacedLabel("加粗") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("斜体") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("斜体") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("下划线") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("下划线") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("删除线") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("删除线") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: spacedLabel("内联标签") })).toHaveAttribute(
+    expect(ribbon.getByRole("button", { name: spacedLabel("内联标签") })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+    fireEvent.click(within(screen.getByRole("tabpanel")).getByRole("button", { name: "链接" }));
     expect(screen.getByRole("textbox", { name: "地址" })).toHaveValue(
       "https://example.com",
     );
@@ -2548,10 +2564,13 @@ describe("ResumeEditorShell", () => {
   });
 
   it("undoes and redoes section changes from the toolbar", () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections = initialDocument.sections.slice(0, 1);
+    initialDocument.sections[0].blocks = initialDocument.sections[0].blocks.slice(0, 1);
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={initialDocument}
       />,
     );
 
