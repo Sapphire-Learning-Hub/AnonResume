@@ -8,7 +8,7 @@ import { WorkspaceBackIcon } from "@/components/ui/InlineIcons";
 
 import { useEditorRibbonStyles } from "./EditorRibbon.style";
 
-export type EditorRibbonTab = "home" | "insert" | "design" | "layout" | "document" | "context";
+export type EditorRibbonTab = "home" | "insert" | "design" | "layout" | "context";
 
 export type EditorRibbonTabItem = {
   key: EditorRibbonTab;

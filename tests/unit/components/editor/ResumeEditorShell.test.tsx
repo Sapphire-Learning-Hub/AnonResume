@@ -99,7 +99,7 @@ function getInspectorPanel() {
   return screen.getByRole("tabpanel");
 }
 
-function openRibbonTab(name: "开始" | "插入" | "设计" | "布局" | "文档") {
+function openRibbonTab(name: "开始" | "插入" | "设计" | "布局") {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
@@ -398,7 +398,7 @@ describe("ResumeEditorShell", () => {
 
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
-    openRibbonTab("文档");
+    expect(screen.queryByRole("tab", { name: "文档" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "编辑简介" }));
     fireEvent.change(screen.getByRole("textbox", { name: "简历简介" }), {
       target: { value: "面向复杂业务的前端平台工程师" },
@@ -1022,8 +1022,6 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    openRibbonTab("文档");
-
     expect(screen.getByRole("button", { name: spacedLabel("取消发布") })).toBeEnabled();
     expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(
       /取\s*消\s*发\s*布/,
@@ -1066,8 +1064,6 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    openRibbonTab("文档");
-
     fireEvent.click(screen.getByRole("button", { name: "复制公开链接" }));
 
     await waitFor(() =>
@@ -1090,8 +1086,6 @@ describe("ResumeEditorShell", () => {
         publishDocument={publishDocument}
       />,
     );
-
-    openRibbonTab("文档");
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("发布") }));
 
@@ -1123,7 +1117,6 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    openRibbonTab("文档");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("发布") }));
 
     await waitFor(() => {
@@ -1169,7 +1162,6 @@ describe("ResumeEditorShell", () => {
 
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
-    openRibbonTab("文档");
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);

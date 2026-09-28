@@ -76,7 +76,6 @@ import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
   AiAssistantIcon,
-  DocumentIcon,
   EnterFullscreenIcon,
   ExitFullscreenIcon,
   HelpIcon,
@@ -2442,11 +2441,6 @@ export function ResumeEditorShell({
       label: t("editor.ribbon.tab.layout"),
       icon: <LayoutIcon size={15} />,
     },
-    {
-      key: "document",
-      label: t("editor.ribbon.tab.document"),
-      icon: <DocumentIcon size={15} />,
-    },
     ...(contextRibbonKind
       ? [{
           key: "context" as const,
@@ -2532,6 +2526,21 @@ export function ResumeEditorShell({
         </Button>
       </Tooltip>
       <LocaleSwitcher />
+      <ResumeSummaryEditor
+        initialSummary={resumeSummary}
+        resumeId={resumeId}
+        saveSummary={resolvedUpdateSummary}
+        triggerType="default"
+        version={initialVersion}
+        prepareSave={async () => {
+          await flushSave();
+          return store.getState().version;
+        }}
+        onSaved={(result) => {
+          setResumeSummary(result.summary);
+          store.getState().syncMetadataVersion(result);
+        }}
+      />
       <Button
         disabled={previewBusy}
         href={previewHref}
@@ -2561,6 +2570,18 @@ export function ResumeEditorShell({
           {t("common.publish")}
         </Button>
       )}
+      {publicHref ? (
+        <>
+          <Button data-testid="resume-open-public" href={publicHref}>
+            {t("common.openPublic")}
+          </Button>
+          <Button onClick={() => void handleCopyPublicLink()}>
+            {publicLinkCopied
+              ? t("editor.publicLinkCopied")
+              : t("editor.copyPublicLink")}
+          </Button>
+        </>
+      ) : null}
       <Button
         disabled={pdfBusy}
         loading={pdfBusy}
@@ -2879,52 +2900,6 @@ export function ResumeEditorShell({
             content: pageMarginContent,
             embedded: true,
           },
-        ];
-      case "document":
-        return [
-          {
-            key: "document",
-            label: t("editor.ribbon.group.document"),
-            content: (
-              <div className={styles.ribbonControlGroup}>
-                <ResumeSummaryEditor
-                  initialSummary={resumeSummary}
-                  resumeId={resumeId}
-                  saveSummary={resolvedUpdateSummary}
-                  triggerType="default"
-                  version={initialVersion}
-                  prepareSave={async () => {
-                    await flushSave();
-                    return store.getState().version;
-                  }}
-                  onSaved={(result) => {
-                    setResumeSummary(result.summary);
-                    store.getState().syncMetadataVersion(result);
-                  }}
-                />
-              </div>
-            ),
-          },
-          ...(publicHref
-            ? [
-                {
-                  key: "publish",
-                  label: t("editor.ribbon.group.publish"),
-                  content: (
-                    <div className={styles.ribbonControlGroup}>
-                      <Button data-testid="resume-open-public" href={publicHref}>
-                        {t("common.openPublic")}
-                      </Button>
-                      <Button onClick={() => void handleCopyPublicLink()}>
-                        {publicLinkCopied
-                          ? t("editor.publicLinkCopied")
-                          : t("editor.copyPublicLink")}
-                      </Button>
-                    </div>
-                  ),
-                },
-              ]
-            : []),
         ];
       case "context":
         return selectedContextContent && contextRibbonKind
