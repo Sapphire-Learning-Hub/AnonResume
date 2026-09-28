@@ -10,7 +10,6 @@ const tabs = [
   { key: "insert" as const, label: "插入" },
   { key: "design" as const, label: "设计" },
   { key: "layout" as const, label: "布局" },
-  { key: "document" as const, label: "文档" },
 ];
 
 describe("EditorRibbon", () => {
