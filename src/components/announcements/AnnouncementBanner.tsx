@@ -122,12 +122,6 @@ const useStyles = createStyles(({ token, css }) => ({
       line-height: 1.4;
       white-space: nowrap;
     }
-
-    @media (max-width: 980px) {
-      [data-variant="header"] & {
-        display: none;
-      }
-    }
   `,
   actions: css`
     display: flex;
