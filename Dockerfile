@@ -3,9 +3,6 @@ FROM oven/bun:${BUN_VERSION}-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 COPY package.json bun.lock ./
@@ -37,7 +34,10 @@ ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV ANONRESUME_BUILD_COMMIT=${ANONRESUME_BUILD_COMMIT}
 ENV ANONRESUME_BUILD_TAG=${ANONRESUME_BUILD_TAG}
-RUN groupadd --system --gid 1001 anonresume \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends --only-upgrade perl-base \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --system --gid 1001 anonresume \
   && useradd --system --uid 1001 --gid anonresume --home-dir /app anonresume
 COPY --from=production-dependencies --chown=anonresume:anonresume /app/node_modules ./node_modules
 COPY --from=builder --chown=anonresume:anonresume /app/.next/standalone ./
