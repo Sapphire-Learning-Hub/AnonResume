@@ -1,4 +1,7 @@
-import { expect, test, type Page } from "playwright/test";
+import { randomUUID } from "node:crypto";
+
+import { hashPassword } from "@better-auth/utils/password";
+import { expect, test, type Locator, type Page } from "playwright/test";
 import { Secret, TOTP } from "otpauth";
 
 import { deactivateInstanceSetup } from "@/lib/admin/setup/recovery";
@@ -10,6 +13,12 @@ const account = {
   name: "E2E Owner",
   password: `Initial-${process.pid}-Password!`,
 };
+const editorAccount = {
+  email: `editor-${process.pid}@example.com`,
+  name: "E2E Editor",
+  password: `Editor-${process.pid}-Password!`,
+};
+const shortcutModifier = process.platform === "darwin" ? "Meta" : "Control";
 
 test.describe.serial("super-admin browser setup", () => {
   let mfaEnrollment: SetupMfaEnrollment;
@@ -35,6 +44,121 @@ test.describe.serial("super-admin browser setup", () => {
     await signInAndEnterManagement(page, account.password, mfaEnrollment);
     await expect(page).toHaveURL(/\/app\/manage$/);
     await expect(page.getByRole("heading", { name: "概览" })).toBeVisible();
+  });
+
+  test("keeps rich text editing stable while pagination updates", async ({ page }) => {
+    await createRegularAccount();
+    await page.goto("/sign-in");
+    await page.getByTestId("auth-email-input").fill(editorAccount.email);
+    await page.getByTestId("auth-password-input").fill(editorAccount.password);
+    await page.getByTestId("auth-submit").click();
+    await page.waitForURL(/\/app$/);
+
+    await page.goto("/app");
+    await page.evaluate(() => {
+      const form = document.createElement("form");
+      form.action = "/app/create-resume";
+      form.method = "post";
+      const template = document.createElement("input");
+      template.name = "templateId";
+      template.value = "blank";
+      form.append(template);
+      document.body.append(form);
+      form.submit();
+    });
+    await page.waitForURL(/\/app\/resumes\/[^/]+$/);
+    const editorUrl = page.url();
+    await expect(page.getByTestId("resume-editor-shell")).toBeVisible();
+
+    await page.getByRole("button", { name: "姓名 · 求职方向", exact: true }).click();
+    const editor = page.getByRole("textbox", { name: "文本块编辑器" });
+    await expect(editor).toBeVisible();
+    await editor.focus();
+    await editor.press("End");
+    await editor.evaluate((element) => {
+      (window as typeof window & { __resumeE2eEditor?: Element }).__resumeE2eEditor =
+        element;
+    });
+
+    await editor.dispatchEvent("compositionstart", { data: "" });
+    await page.keyboard.insertText("中文输入");
+    await editor.dispatchEvent("compositionupdate", { data: "中文输入" });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(editor).toContainText("中文输入");
+    await expect.poll(() => editor.evaluate((element) =>
+      (window as typeof window & { __resumeE2eEditor?: Element }).__resumeE2eEditor ===
+      element,
+    )).toBe(true);
+    await editor.dispatchEvent("compositionend", { data: "中文输入" });
+
+    const pastedText = Array.from(
+      { length: 180 },
+      (_, index) =>
+        `第 ${index + 1} 段：负责跨团队项目交付、流程优化与结果复盘，并持续产出可量化成果。`,
+    ).join("\n");
+    await editor.evaluate((element, text) => {
+      const transfer = new DataTransfer();
+      transfer.setData("text/plain", text);
+      element.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: transfer,
+        }),
+      );
+    }, pastedText);
+
+    const editPages = page.locator('[data-resume-editing-page="true"]');
+    await expect.poll(() => editPages.count(), { timeout: 20_000 }).toBeGreaterThan(1);
+    await expect.poll(() => editor.evaluate((element) => document.activeElement === element)).toBe(true);
+    await expect.poll(() => editor.evaluate((element) =>
+      (window as typeof window & { __resumeE2eEditor?: Element }).__resumeE2eEditor ===
+      element,
+    )).toBe(true);
+
+    await editor.press(`${shortcutModifier}+z`);
+    await expect(editor).not.toContainText("第 180 段");
+    await editor.press(`${shortcutModifier}+Shift+z`);
+    await expect(editor).toContainText("第 180 段");
+    await expect.poll(() => editPages.count(), { timeout: 20_000 }).toBeGreaterThan(1);
+
+    await selectAcrossFirstPageBreak(editor);
+    await editor.press(`${shortcutModifier}+b`);
+    await expect(editor.locator("strong").first()).toBeVisible();
+
+    await selectAcrossFirstPageBreak(editor);
+    await editor.press(`${shortcutModifier}+k`);
+    const linkDialog = page.getByRole("dialog", { name: "插入超链接" });
+    await expect(linkDialog).toBeVisible();
+    await linkDialog.getByLabel("地址").fill("https://example.com/resume");
+    await linkDialog.getByRole("button", { name: /确\s*定/ }).click();
+    const linkedFragments = editor.locator(
+      'a[href="https://example.com/resume"]',
+    );
+    await expect(linkedFragments).toHaveCount(2);
+    await expect(linkedFragments.first()).toBeVisible();
+
+    await expect(page.getByTestId("resume-save-status")).toHaveText("已保存", {
+      timeout: 20_000,
+    });
+    const editorPageCount = await editPages.count();
+
+    await page.goto(`${editorUrl}/preview`);
+    const previewRoot = page.locator('[data-resume-mode="view"]');
+    await expect(previewRoot).toHaveAttribute("data-resume-pagination-ready", "true", {
+      timeout: 20_000,
+    });
+    await expect(page.locator('[data-resume-page="true"]')).toHaveCount(
+      editorPageCount,
+    );
+
+    await page.goto(`${editorUrl}/print`);
+    await expect(page.locator("html")).toHaveAttribute("data-print-ready", "true", {
+      timeout: 20_000,
+    });
+    await expect(
+      page.locator('[data-resume-print-content="true"] [data-resume-page="true"]'),
+    ).toHaveCount(editorPageCount);
   });
 
   test("keeps product access available while management recovery is pending", async ({ page }) => {
@@ -77,6 +201,26 @@ async function issueSetupCode(stage: string) {
   return issued.rawCode;
 }
 
+async function createRegularAccount() {
+  const pool = getDatabasePool();
+  const userId = randomUUID();
+  const now = new Date();
+  const passwordHash = await hashPassword(editorAccount.password);
+
+  await pool.query(
+    `INSERT INTO "user"
+      (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, true, NULL, $4, $4)`,
+    [userId, editorAccount.name, editorAccount.email, now],
+  );
+  await pool.query(
+    `INSERT INTO "account"
+      (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt", issuer)
+     VALUES ($1, $2, 'credential', $2, $3, $4, $4, 'local:credential')`,
+    [randomUUID(), userId, passwordHash, now],
+  );
+}
+
 async function completeSetup(
   page: Page,
   input: { code: string; deviceName: string; password: string },
@@ -110,7 +254,7 @@ async function completeSetup(
   await page.getByRole("button", { name: "前往登录" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
 
-  return { secret, usedCode };
+  return { secret, usedCodes: new Set([usedCode]) };
 }
 
 async function signInAndEnterManagement(
@@ -142,15 +286,66 @@ function generateTotp(secret: string) {
 
 interface SetupMfaEnrollment {
   secret: string;
-  usedCode: string;
+  usedCodes: Set<string>;
 }
 
 async function waitForFreshTotp(enrollment: SetupMfaEnrollment) {
   const deadline = Date.now() + 35_000;
   while (Date.now() < deadline) {
     const current = generateTotp(enrollment.secret);
-    if (current !== enrollment.usedCode) return current;
+    if (!enrollment.usedCodes.has(current)) {
+      enrollment.usedCodes.add(current);
+      return current;
+    }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error("fresh_totp_unavailable");
+}
+
+async function selectAcrossFirstPageBreak(editor: Locator) {
+  const selected = await editor.evaluate((element) => {
+    const pageBreak = element.querySelector<HTMLElement>(
+      "[data-resume-page-break-id]",
+    );
+    if (!pageBreak) return false;
+
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        return node.textContent?.trim()
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const before: Text[] = [];
+    const after: Text[] = [];
+    let node = walker.nextNode();
+
+    while (node) {
+      const textNode = node as Text;
+      if (pageBreak.compareDocumentPosition(textNode) & Node.DOCUMENT_POSITION_PRECEDING) {
+        before.push(textNode);
+      } else if (
+        pageBreak.compareDocumentPosition(textNode) & Node.DOCUMENT_POSITION_FOLLOWING
+      ) {
+        after.push(textNode);
+      }
+      node = walker.nextNode();
+    }
+
+    const start = before.at(-1);
+    const end = after[0];
+    if (!start?.data.length || !end?.data.length) return false;
+
+    const range = document.createRange();
+    range.setStart(start, Math.max(0, start.data.length - 4));
+    range.setEnd(end, Math.min(4, end.data.length));
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    (element as HTMLElement).focus();
+    document.dispatchEvent(new Event("selectionchange"));
+    return !selection?.isCollapsed;
+  });
+
+  expect(selected).toBe(true);
 }
