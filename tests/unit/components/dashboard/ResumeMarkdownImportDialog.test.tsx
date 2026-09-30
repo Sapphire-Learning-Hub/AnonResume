@@ -49,7 +49,7 @@ describe("ResumeMarkdownImportDialog", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "解析预览" }));
 
     expect(await within(dialog).findByText("Imported Person")).toBeInTheDocument();
-    expect(within(dialog).getByText("2 个区块")).toBeInTheDocument();
+    expect(within(dialog).getByText("2 个章节")).toBeInTheDocument();
     expect(within(dialog).getByText("已自动识别为木及简历 Markdown")).toBeInTheDocument();
     expect(within(dialog).getByText("123456")).toBeInTheDocument();
 

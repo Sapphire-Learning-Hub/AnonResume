@@ -124,7 +124,7 @@ describe("SectionOutline", () => {
     );
     expect(profileItem).toHaveAttribute("data-dragging", "false");
     expect(profileItem).toHaveAttribute("data-over", "false");
-    expect(within(profileItem).queryByText("个人简介 区块")).not.toBeInTheDocument();
+    expect(within(profileItem).queryByText("个人简介章节")).not.toBeInTheDocument();
     expect(within(profileItem).queryByText("显示中")).not.toBeInTheDocument();
     expect(
       within(profileItem).getByRole("button", {

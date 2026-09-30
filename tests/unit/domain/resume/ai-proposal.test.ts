@@ -242,7 +242,7 @@ describe("AI resume proposals", () => {
               { id: "ai-badge-insert-skills-2", text: "[工具或领域]" },
             ],
           },
-          reason: "补充技能区块",
+          reason: "补充技能章节",
         },
       ],
     });

@@ -71,7 +71,7 @@ test.describe.serial("super-admin browser setup", () => {
     await expect(page.getByTestId("resume-editor-shell")).toBeVisible();
 
     await page.getByRole("button", { name: "姓名 · 求职方向", exact: true }).click();
-    const editor = page.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = page.getByRole("textbox", { name: "文本编辑器" });
     await expect(editor).toBeVisible();
     await editor.focus();
     await editor.press("End");

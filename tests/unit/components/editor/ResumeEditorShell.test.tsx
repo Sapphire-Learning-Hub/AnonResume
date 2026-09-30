@@ -168,7 +168,7 @@ describe("ResumeEditorShell", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tab", { name: "文本块格式" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "文本格式" })).toBeInTheDocument();
   });
 
   it("updates contextual commands for the new selection and returns to the last permanent tab", () => {
@@ -181,19 +181,19 @@ describe("ResumeEditorShell", () => {
 
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    fireEvent.click(screen.getByRole("tab", { name: "文本块格式" }));
+    fireEvent.click(screen.getByRole("tab", { name: "文本格式" }));
     expect(screen.getByRole("button", { name: spacedLabel("复制内容") })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
-    expect(screen.getByRole("tab", { name: "区块格式" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "章节格式" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.queryByRole("button", { name: spacedLabel("复制内容") })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
+    expect(screen.getByRole("button", { name: spacedLabel("复制章节") })).toBeEnabled();
 
     fireEvent.click(screen.getByTestId("resume-canvas-zoom"));
-    expect(screen.queryByRole("tab", { name: "区块格式" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "章节格式" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "插入" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -349,7 +349,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await act(async () => {
       const dispatched = fireEvent.keyDown(window, {
@@ -397,7 +397,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
     expect(screen.queryByRole("tab", { name: "文档" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "编辑简介" }));
     fireEvent.change(screen.getByRole("textbox", { name: "简历简介" }), {
@@ -421,7 +421,7 @@ describe("ResumeEditorShell", () => {
     });
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await act(async () => {
       fireEvent.keyDown(window, { key: "s", ctrlKey: true });
@@ -448,7 +448,7 @@ describe("ResumeEditorShell", () => {
     ).toBe(true);
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     expect(
       window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
@@ -465,13 +465,13 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
 
     const undoEvent = fireEvent.keyDown(window, { key: "z", ctrlKey: true });
 
     expect(undoEvent).toBe(false);
-    expect(screen.queryByRole("button", { name: "新区块" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新章节" })).not.toBeInTheDocument();
 
     const redoEvent = fireEvent.keyDown(window, {
       key: "z",
@@ -480,7 +480,7 @@ describe("ResumeEditorShell", () => {
     });
 
     expect(redoEvent).toBe(false);
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
 
     const nativeInput = document.createElement("input");
 
@@ -489,7 +489,7 @@ describe("ResumeEditorShell", () => {
     nativeInput.remove();
 
     expect(inputUndoEvent).toBe(true);
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
   });
 
   it("temporarily switches to layout sorting while Control is held", () => {
@@ -903,7 +903,7 @@ describe("ResumeEditorShell", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tab", { name: "文本块格式" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "文本格式" })).toBeInTheDocument();
     expect(within(propertyPanel).queryByRole("heading")).not.toBeInTheDocument();
     expect(
       within(propertyPanel).queryByRole("button", { name: "文档设置" }),
@@ -1161,7 +1161,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
@@ -1213,7 +1213,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
 
     expect(await screen.findByText("已保存")).toBeInTheDocument();
@@ -1240,7 +1240,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
     fireEvent.click(screen.getByRole("link", { name: spacedLabel("预览") }));
 
     await waitFor(() => expect(saveDocument).toHaveBeenCalledTimes(1));
@@ -1275,7 +1275,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await waitFor(() => expect(saveDocument).toHaveBeenCalledTimes(1));
     await waitFor(() =>
@@ -1326,7 +1326,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await waitFor(() => expect(loadCurrentResume).toHaveBeenCalledWith("resume-demo"));
 
@@ -1381,7 +1381,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     await waitFor(() => {
       expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
@@ -1414,18 +1414,18 @@ describe("ResumeEditorShell", () => {
     );
     const dialog = getInspectorPanel();
 
-    expect(within(dialog).getByRole("group", { name: "区块布局" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("group", { name: "章节布局" })).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledWith({
       behavior: "smooth",
       block: "center",
     });
     expect(within(dialog).getByLabelText("分栏数")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("区块间距")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: spacedLabel("隐藏区块") })).toBeEnabled();
+    expect(within(dialog).getByLabelText("章节间距")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: spacedLabel("隐藏章节") })).toBeEnabled();
     expect(within(dialog).queryByText("语义")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("profile")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("可见性")).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText("区块语义")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("章节用途")).not.toBeInTheDocument();
   });
 
   it("updates section layout from the inspector and reflects it on the canvas", () => {
@@ -1438,9 +1438,9 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "区块布局" }),
+      within(getInspectorPanel()).getByRole("group", { name: "章节布局" }),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("区块间距"), {
+    fireEvent.change(screen.getByLabelText("章节间距"), {
       target: { value: "28" },
     });
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("横向布局") }));
@@ -1465,21 +1465,21 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "未命名区块" }));
+    fireEvent.click(screen.getByRole("button", { name: "未命名章节" }));
     const sectionPanel = getInspectorPanel();
     fireEvent.click(
-      within(sectionPanel).getByRole("button", { name: spacedLabel("添加区块标题") }),
+      within(sectionPanel).getByRole("button", { name: spacedLabel("添加章节标题") }),
     );
 
     expect(
-      within(screen.getByRole("article")).getAllByText("区块标题").length,
+      within(screen.getByRole("article")).getAllByText("章节标题").length,
     ).toBeGreaterThan(0);
     fireEvent.click(
       within(getInspectorPanel()).getByRole("button", {
-        name: spacedLabel("移除区块标题"),
+        name: spacedLabel("移除章节标题"),
       }),
     );
-    expect(within(screen.getByRole("article")).queryByText("区块标题")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("article")).queryByText("章节标题")).not.toBeInTheDocument();
   });
 
   it("exposes pagination behavior and structural row settings", () => {
@@ -1493,7 +1493,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     const keepSectionTogether = within(getInspectorPanel()).getByRole(
       "checkbox",
-      { name: "尽量保持区块完整" },
+      { name: "尽量保持章节完整" },
     );
     expect(keepSectionTogether).toBeChecked();
     fireEvent.click(keepSectionTogether);
@@ -1501,7 +1501,7 @@ describe("ResumeEditorShell", () => {
 
     openRibbonTab("开始");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
-    fireEvent.click(screen.getByRole("button", { name: "拖动 行 Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "拖动 双列内容" }));
 
     const rowPanel = getInspectorPanel();
     expect(within(rowPanel).getByRole("group", { name: "行布局" })).toBeInTheDocument();
@@ -1520,18 +1520,18 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "拖动 列表 Block" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 列表内容" })[0]!);
     let panel = getInspectorPanel();
     expect(within(panel).getByRole("group", { name: "列表布局" })).toBeInTheDocument();
     expect(within(panel).getByRole("switch", { name: "有序列表" })).not.toBeChecked();
     expect(within(panel).getByText("圆点")).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "拖动 徽章 Block" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 标签内容" })[0]!);
     panel = getInspectorPanel();
     expect(within(panel).getByRole("group", { name: "标签布局" })).toBeInTheDocument();
     expect(within(panel).getByRole("switch", { name: "标签自动换行" })).toBeChecked();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "选择 分组 Block" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "选择 内容组" })[0]!);
     panel = getInspectorPanel();
     expect(within(panel).getByRole("group", { name: "分组布局" })).toBeInTheDocument();
     expect(within(panel).getByText("纵向布局")).toBeInTheDocument();
@@ -1548,7 +1548,7 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "区块布局" }),
+      within(getInspectorPanel()).getByRole("group", { name: "章节布局" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("分栏数"), {
       target: { value: "2" },
@@ -1573,7 +1573,7 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "区块布局" }),
+      within(getInspectorPanel()).getByRole("group", { name: "章节布局" }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("上内边距"), {
       target: { value: "12" },
@@ -1612,11 +1612,11 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(sectionTitle.closest("button")!);
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     expect(editor).toHaveTextContent("个人简介");
     const dialog = getInspectorPanel();
-    expect(within(dialog).getByRole("group", { name: "区块操作" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("group", { name: "章节操作" })).toBeInTheDocument();
     openRibbonTab("开始");
     expect(screen.getByRole("tabpanel", { name: "开始" })).toHaveTextContent("文本格式");
     expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toBeEnabled();
@@ -1635,11 +1635,11 @@ describe("ResumeEditorShell", () => {
     const canvas = screen.getByRole("article");
     fireEvent.click(within(canvas).getByText("个人简介").closest("button")!);
 
-    expect(screen.getByLabelText("区块标题颜色调色板")).toHaveAttribute(
+    expect(screen.getByLabelText("章节标题颜色调色板")).toHaveAttribute(
       "aria-disabled",
       "false",
     );
-    expect(screen.getByLabelText("区块标题颜色调色板")).toHaveAttribute(
+    expect(screen.getByLabelText("章节标题颜色调色板")).toHaveAttribute(
       "data-color-value",
       "#be123c",
     );
@@ -1658,7 +1658,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(title.closest("button")!);
     openRibbonTab("开始");
 
-    const sizeInput = screen.getByLabelText("区块标题字号");
+    const sizeInput = screen.getByLabelText("章节标题字号");
     expect(sizeInput).toHaveValue(28);
 
     fireEvent.change(sizeInput, { target: { value: "32" } });
@@ -1678,7 +1678,7 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     expect(editor.tagName).toBe("DIV");
     expect(editor).toHaveAttribute("contenteditable", "true");
@@ -1686,8 +1686,8 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("开始");
     const dialog = screen.getByRole("tabpanel");
     expect(within(dialog).getByText("文本样式")).toBeInTheDocument();
-    expect(within(dialog).queryByText("Block 类型")).not.toBeInTheDocument();
-    expect(within(dialog).queryByText("Block 路径")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("内容类型")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("内容位置")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("block-profile-summary")).not.toBeInTheDocument();
   });
 
@@ -1740,7 +1740,7 @@ describe("ResumeEditorShell", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: spacedLabel("居中对齐") }));
 
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveStyle({
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toHaveStyle({
       fontSize: "24px",
       fontWeight: "800",
       lineHeight: "1.25",
@@ -1823,7 +1823,7 @@ describe("ResumeEditorShell", () => {
     });
 
     expect(lineHeightInput).toHaveValue("1.25");
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveStyle({
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toHaveStyle({
       lineHeight: "1.25",
     });
   });
@@ -1871,7 +1871,7 @@ describe("ResumeEditorShell", () => {
     openRibbonTab("插入");
     expect(screen.getByRole("button", { name: "链接" })).toBeEnabled();
     expect(screen.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
-    expect(within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制区块") })).toBeEnabled();
+    expect(within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制章节") })).toBeEnabled();
   });
 
   it("keeps the ribbon color picker bound to the whole block color", () => {
@@ -1948,7 +1948,7 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
     fireEvent.click(
-      within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制区块") }),
+      within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制章节") }),
     );
 
     expect(screen.getAllByRole("group", { name: "拖动排序 个人简介" })).toHaveLength(2);
@@ -1968,7 +1968,7 @@ describe("ResumeEditorShell", () => {
     );
 
     expect(screen.getAllByRole("button", { name: "共享渲染器基础" })).toHaveLength(1);
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveTextContent(
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toHaveTextContent(
       "共享渲染器基础",
     );
   });
@@ -1995,7 +1995,7 @@ describe("ResumeEditorShell", () => {
         name: "基于流式布局的结构化简历编辑基础能力",
       }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toHaveTextContent(
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toHaveTextContent(
       "编辑、预览与打印三种模式共享同一渲染契约",
     );
   });
@@ -2115,7 +2115,7 @@ describe("ResumeEditorShell", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.queryByRole("textbox", { name: "文本块编辑器" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "文本编辑器" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toBeDisabled();
     expect(within(screen.getByRole("tabpanel", { name: "开始" })).queryByText("文本样式"))
       .not.toBeInTheDocument();
@@ -2220,9 +2220,9 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
     expect(screen.getByText("从这里开始编写")).toBeInTheDocument();
   });
 
@@ -2235,7 +2235,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增项目区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增项目章节") }));
 
     expect(screen.getByRole("button", { name: "项目" })).toBeInTheDocument();
     expect(
@@ -2255,13 +2255,13 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "区块布局" }),
+      within(getInspectorPanel()).getByRole("group", { name: "章节布局" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("隐藏区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("隐藏章节") }));
 
     expect(screen.getAllByText("已隐藏")).toHaveLength(1);
     expect(screen.queryByText("共享渲染器基础")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: spacedLabel("显示区块") })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: spacedLabel("显示章节") })).toBeInTheDocument();
   });
 
   it("deletes the selected section and shifts focus to the next remaining section", () => {
@@ -2274,9 +2274,9 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
     expect(
-      within(getInspectorPanel()).getByRole("group", { name: "区块布局" }),
+      within(getInspectorPanel()).getByRole("group", { name: "章节布局" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("删除区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("删除章节") }));
 
     expect(screen.queryByRole("button", { name: "个人简介" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "经历" })).toBeInTheDocument();
@@ -2295,20 +2295,20 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增区块") }));
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("新增章节") }));
 
     expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
     expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("撤销") }));
 
-    expect(screen.queryByRole("button", { name: "新区块" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "新章节" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("重做") }));
 
-    expect(screen.getByRole("button", { name: "新区块" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
   });
 
@@ -2348,10 +2348,10 @@ describe("ResumeEditorShell", () => {
       within(screen.getByRole("tabpanel", { name: "开始" })).getByText("文本样式"),
     ).toBeInTheDocument();
     getInspectorPanel();
-    fireEvent.click(screen.getByRole("button", { name: "上移 Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "上移内容" }));
 
     const movedBlock = screen.getByRole("textbox", {
-      name: "文本块编辑器",
+      name: "文本编辑器",
     });
     const roleBlock = screen.getByRole("button", {
       name: "AnonResume - 前端工程师",

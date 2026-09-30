@@ -85,7 +85,7 @@ describe("TiptapTextBlockEditor", () => {
   it("opens the link field with the platform shortcut", async () => {
     render(<TiptapTextBlockEditor content={initialContent} onChange={vi.fn()} />);
 
-    const editor = await screen.findByRole("textbox", { name: "文本块编辑器" });
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
 
     fireEvent.focus(editor);
     fireEvent.keyDown(editor, { key: "k", metaKey: true });
@@ -106,7 +106,7 @@ describe("TiptapTextBlockEditor", () => {
     );
 
     await waitFor(() => expect(ref.current).not.toBeNull());
-    const editor = await screen.findByRole("textbox", { name: "文本块编辑器" });
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
 
     act(() => {
       ref.current?.applyCommand({ type: "toggleBold" });
@@ -158,7 +158,7 @@ describe("TiptapTextBlockEditor", () => {
       />,
     );
 
-    const editor = await screen.findByRole("textbox", { name: "文本块编辑器" });
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
 
     await waitFor(() => expect(ref.current).not.toBeNull());
 
@@ -207,7 +207,7 @@ describe("TiptapTextBlockEditor", () => {
     );
 
     const editor = await screen.findByRole("textbox", {
-      name: "文本块编辑器",
+      name: "文本编辑器",
     });
     await waitFor(() => expect(ref.current).not.toBeNull());
 
@@ -254,7 +254,7 @@ describe("TiptapTextBlockEditor", () => {
       />,
     );
 
-    const editor = await screen.findByRole("textbox", { name: "文本块编辑器" });
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
 
     await waitFor(() => expect(ref.current).not.toBeNull());
 
@@ -610,7 +610,7 @@ describe("TiptapTextBlockEditor", () => {
       });
     });
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
     expect(editor).toHaveTextContent("Shared renderer baseline");
     expect(within(editor).getByRole("link", { name: "作品集" })).toHaveAttribute(
       "href",
@@ -651,7 +651,7 @@ describe("TiptapTextBlockEditor", () => {
       });
     });
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
     expect(within(editor).getByRole("link", { name: "新名称" })).toHaveAttribute(
       "href",
       "mailto:team@example.com",
@@ -744,7 +744,7 @@ describe("TiptapTextBlockEditor", () => {
     );
 
     await waitFor(() => expect(ref.current).not.toBeNull());
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     await waitFor(() =>
       expect(
@@ -774,7 +774,7 @@ describe("TiptapTextBlockEditor", () => {
         editor.querySelector('[data-resume-page-break-id="replacement"]'),
       ).toHaveStyle({ height: "80px" }),
     );
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toBe(editor);
     expect(editor).toHaveTextContent("MarkedLink");
     expect(onChange).not.toHaveBeenCalled();
   });
@@ -790,7 +790,7 @@ describe("TiptapTextBlockEditor", () => {
       />,
     );
     const editor = await screen.findByRole("textbox", {
-      name: "文本块编辑器",
+      name: "文本编辑器",
     });
 
     await waitFor(() =>
