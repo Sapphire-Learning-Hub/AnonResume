@@ -383,6 +383,107 @@ describe("ResumeRenderer", () => {
     });
   });
 
+  it("keeps the active editor mounted until composition-safe pagination can commit", async () => {
+    let experienceHeight = 300;
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        const sectionId = this.getAttribute?.("data-resume-section-id");
+
+        if (sectionId === "section-profile") {
+          return createRect(700);
+        }
+
+        if (sectionId === "section-experience") {
+          return createRect(experienceHeight + 100);
+        }
+
+        const blockPath = this.getAttribute?.("data-resume-block-path");
+
+        if (
+          blockPath === "block-profile-summary" ||
+          blockPath === "block-profile-highlights" ||
+          blockPath === "block-profile-stack"
+        ) {
+          return createRect(200);
+        }
+
+        if (blockPath === "group-experience-anonresume") {
+          return createRect(experienceHeight);
+        }
+
+        if (this.hasAttribute?.("data-resume-section-title")) {
+          return createRect(80);
+        }
+
+        return createRect(40);
+      },
+    });
+
+    const onPaginationReadyChange = vi.fn();
+    const document = createDefaultResumeDocument();
+    const selection = {
+      sectionId: "section-experience",
+      blockPath: [
+        "group-experience-anonresume",
+        "row-experience-header",
+        "text-experience-role",
+      ],
+      richTextField: "content" as const,
+    };
+    const { container, rerender } = render(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={0}
+        selection={selection}
+        onPaginationReadyChange={onPaginationReadyChange}
+      />,
+    );
+
+    const secondPage = await screen.findByTestId("resume-page-2");
+    const editor = within(secondPage).getByRole("textbox", {
+      name: "文本块编辑器",
+    });
+
+    fireEvent.focus(editor);
+    fireEvent.compositionStart(editor);
+    experienceHeight = 100;
+
+    rerender(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={1}
+        selection={selection}
+        onPaginationReadyChange={onPaginationReadyChange}
+      />,
+    );
+
+    expect(
+      container.querySelectorAll(
+        '[data-resume-section-id="section-profile"]',
+      ),
+    ).toHaveLength(1);
+    expect(
+      container
+        .querySelector("[data-resume-pagination-ready]")
+        ?.getAttribute("data-resume-pagination-ready"),
+    ).toBe("true");
+    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
+
+    fireEvent.compositionEnd(editor);
+    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+
+    fireEvent.blur(editor);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
+    });
+  });
+
   it("finishes pagination when a structural row is empty", async () => {
     Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
       configurable: true,

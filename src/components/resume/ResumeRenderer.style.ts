@@ -29,6 +29,16 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       }
     }
   `,
+  measurementRoot: css`
+    position: fixed;
+    top: 0;
+    left: -100000px;
+    width: 210mm;
+    visibility: hidden;
+    pointer-events: none;
+    user-select: none;
+    contain: layout style paint;
+  `,
   pageFrame: css`
     display: grid;
     gap: 10px;
