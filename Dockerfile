@@ -3,9 +3,6 @@ FROM oven/bun:${BUN_VERSION}-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-  && apt-get upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
 
 FROM base AS dependencies
 COPY package.json bun.lock ./
