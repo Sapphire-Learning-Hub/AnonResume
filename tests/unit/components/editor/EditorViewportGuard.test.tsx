@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -12,11 +12,14 @@ vi.mock("next/navigation", () => ({
 
 function installMatchMedia(matches: boolean) {
   const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  let currentMatches = matches;
 
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches,
+      get matches() {
+        return currentMatches;
+      },
       media: query,
       onchange: null,
       addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
@@ -30,6 +33,16 @@ function installMatchMedia(matches: boolean) {
       dispatchEvent: vi.fn(),
     })),
   });
+
+  return {
+    setMatches(nextMatches: boolean) {
+      currentMatches = nextMatches;
+      const event = { matches: nextMatches } as MediaQueryListEvent;
+      for (const listener of listeners) {
+        listener(event);
+      }
+    },
+  };
 }
 
 function CapabilityProbe() {
@@ -73,10 +86,31 @@ describe("EditorViewportGuard", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("exposes the resolved capability to workbench controls", async () => {
-    installMatchMedia(false);
+  it("keeps an admitted editor mounted when a desktop window becomes narrow", async () => {
+    const viewport = installMatchMedia(true);
+
+    render(
+      <EditorViewportGuard>
+        <div>desktop editor</div>
+      </EditorViewportGuard>,
+    );
+
+    expect(await screen.findByText("desktop editor")).toBeInTheDocument();
+
+    act(() => viewport.setMatches(false));
+
+    expect(screen.getByText("desktop editor")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps the workbench capability responsive to viewport changes", async () => {
+    const viewport = installMatchMedia(true);
 
     render(<CapabilityProbe />);
+
+    expect(await screen.findByText("allowed")).toBeInTheDocument();
+
+    act(() => viewport.setMatches(false));
 
     expect(await screen.findByText("blocked")).toBeInTheDocument();
   });
