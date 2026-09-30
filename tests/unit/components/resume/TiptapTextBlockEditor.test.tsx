@@ -646,4 +646,151 @@ describe("TiptapTextBlockEditor", () => {
       }),
     );
   });
+
+  it("updates page-break decorations without replacing the editor or content", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const onChange = vi.fn();
+    const complexContent: RichTextContent = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "Marked",
+              marks: [{ type: "bold" }],
+            },
+            { type: "hardBreak" },
+            { type: "resumeIcon", attrs: { iconId: "lucide:mail" } },
+            {
+              type: "text",
+              text: "Link",
+              marks: [
+                { type: "link", attrs: { href: "https://example.com" } },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const firstBreaks = [
+      pageBreak("marked", 0, 3, 48),
+      pageBreak("hard-break", 1, 0, 52),
+      pageBreak("before-icon", 2, 0, 56),
+      pageBreak("after-icon", 2, 1, 60),
+      pageBreak("link", 3, 2, 64),
+    ];
+    const { rerender } = render(
+      <TiptapTextBlockEditor
+        ref={ref}
+        content={complexContent}
+        onChange={onChange}
+        pageBreaks={firstBreaks}
+      />,
+    );
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+
+    await waitFor(() =>
+      expect(
+        editor.querySelectorAll('[data-resume-page-break="true"]'),
+      ).toHaveLength(5),
+    );
+
+    for (const decoration of editor.querySelectorAll<HTMLElement>(
+      '[data-resume-page-break="true"]',
+    )) {
+      expect(decoration).toHaveAttribute("contenteditable", "false");
+      expect(decoration).toHaveAttribute("aria-hidden", "true");
+      expect(decoration.textContent).toBe("");
+    }
+
+    rerender(
+      <TiptapTextBlockEditor
+        ref={ref}
+        content={complexContent}
+        onChange={onChange}
+        pageBreaks={[pageBreak("replacement", 3, 1, 80)]}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        editor.querySelector('[data-resume-page-break-id="replacement"]'),
+      ).toHaveStyle({ height: "80px" }),
+    );
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
+    expect(editor).toHaveTextContent("MarkedLink");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("defers page-break replacement until composition ends", async () => {
+    const onEditingStateChange = vi.fn();
+    const { rerender } = render(
+      <TiptapTextBlockEditor
+        content={initialContent}
+        onChange={vi.fn()}
+        onEditingStateChange={onEditingStateChange}
+        pageBreaks={[pageBreak("initial", 0, 2, 40)]}
+      />,
+    );
+    const editor = await screen.findByRole("textbox", {
+      name: "文本块编辑器",
+    });
+
+    await waitFor(() =>
+      expect(
+        editor.querySelector('[data-resume-page-break-id="initial"]'),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.focus(editor);
+    fireEvent.compositionStart(editor);
+    rerender(
+      <TiptapTextBlockEditor
+        content={initialContent}
+        onChange={vi.fn()}
+        onEditingStateChange={onEditingStateChange}
+        pageBreaks={[pageBreak("latest", 0, 8, 72)]}
+      />,
+    );
+
+    expect(
+      editor.querySelector('[data-resume-page-break-id="initial"]'),
+    ).toBeInTheDocument();
+    expect(
+      editor.querySelector('[data-resume-page-break-id="latest"]'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.compositionEnd(editor);
+
+    await waitFor(() =>
+      expect(
+        editor.querySelector('[data-resume-page-break-id="latest"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      editor.querySelector('[data-resume-page-break-id="initial"]'),
+    ).not.toBeInTheDocument();
+    expect(onEditingStateChange).toHaveBeenLastCalledWith({
+      focused: true,
+      composing: false,
+    });
+  });
 });
+
+function pageBreak(
+  id: string,
+  nodeIndex: number,
+  offset: number,
+  height: number,
+) {
+  return {
+    id,
+    position: { paragraphIndex: 0, nodeIndex, offset },
+    height,
+    pageIndex: 1,
+  };
+}

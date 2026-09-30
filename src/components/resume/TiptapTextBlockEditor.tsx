@@ -36,6 +36,12 @@ import { useTiptapTextBlockEditorStyles } from "./TiptapTextBlockEditor.style";
 import { ResumeIconNode } from "./ResumeIconNode";
 import { ResumeInlineTagMark } from "./ResumeInlineTagMark";
 import { ResumeTextColorMark } from "./ResumeTextColorMark";
+import {
+  applyTiptapPageBreaks,
+  createTiptapPageBreakExtension,
+  measureTiptapRichTextLines,
+  type TiptapPageBreak,
+} from "./pagination/tiptap-page-breaks";
 
 const defaultMessages = getMessages(defaultLocale);
 
@@ -98,6 +104,9 @@ export type TiptapTextBlockEditorCommand =
 
 export interface TiptapTextBlockEditorHandle {
   applyCommand: (command: TiptapTextBlockEditorCommand) => boolean;
+  measureRichTextLines: () =>
+    | ReturnType<typeof measureTiptapRichTextLines>
+    | undefined;
   prepareLink: () => TiptapLinkContext | undefined;
 }
 
@@ -119,6 +128,11 @@ export interface TiptapTextBlockEditorFormatState {
   tag: boolean;
   textColor: string;
   linkHref: string;
+}
+
+export interface TiptapTextBlockEditorEditingState {
+  focused: boolean;
+  composing: boolean;
 }
 
 function createResumeIconInsertion(iconId: string) {
@@ -181,7 +195,9 @@ interface TiptapTextBlockEditorProps {
   content: RichTextContent;
   inlineToolbarLabels?: TiptapInlineToolbarLabels;
   onChange: (content: RichTextContent) => void;
+  onEditingStateChange?: (state: TiptapTextBlockEditorEditingState) => void;
   onFormattingStateChange?: (state: TiptapTextBlockEditorFormatState) => void;
+  pageBreaks?: readonly TiptapPageBreak[];
   style?: CSSProperties;
   wrapperClassName?: string;
 }
@@ -296,7 +312,9 @@ export const TiptapTextBlockEditor = forwardRef<
   content,
   inlineToolbarLabels = defaultInlineToolbarLabels,
   onChange,
+  onEditingStateChange,
   onFormattingStateChange,
+  pageBreaks = [],
   style,
   wrapperClassName,
 }, ref) {
@@ -308,6 +326,47 @@ export const TiptapTextBlockEditor = forwardRef<
   const linkInputRef = useRef<InputRef>(null);
   const linkSelectionRef = useRef<TextSelectionRange | null>(null);
   const colorSelectionRef = useRef<TextSelectionRange | null>(null);
+  const editingStateRef = useRef<TiptapTextBlockEditorEditingState>({
+    focused: false,
+    composing: false,
+  });
+  const onEditingStateChangeRef = useRef(onEditingStateChange);
+  const pageBreaksRef = useRef(pageBreaks);
+  const pendingPageBreaksRef = useRef<readonly TiptapPageBreak[] | null>(null);
+
+  useLayoutEffect(() => {
+    pageBreaksRef.current = pageBreaks;
+  }, [pageBreaks]);
+
+  useLayoutEffect(() => {
+    onEditingStateChangeRef.current = onEditingStateChange;
+  }, [onEditingStateChange]);
+
+  useEffect(
+    () => () => {
+      onEditingStateChangeRef.current?.({
+        focused: false,
+        composing: false,
+      });
+    },
+    [],
+  );
+
+  function updateEditingState(
+    nextState: TiptapTextBlockEditorEditingState,
+  ) {
+    const currentState = editingStateRef.current;
+
+    if (
+      currentState.focused === nextState.focused &&
+      currentState.composing === nextState.composing
+    ) {
+      return;
+    }
+
+    editingStateRef.current = nextState;
+    onEditingStateChangeRef.current?.(nextState);
+  }
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -344,6 +403,7 @@ export const TiptapTextBlockEditor = forwardRef<
       ResumeIconNode,
       ResumeInlineTagMark,
       ResumeTextColorMark,
+      createTiptapPageBreakExtension(styles.pageBreak),
     ],
     content,
     editorProps: {
@@ -379,6 +439,8 @@ export const TiptapTextBlockEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
+      measureRichTextLines: () =>
+        editor ? measureTiptapRichTextLines(editor) : undefined,
       prepareLink: () => editor ? prepareLinkForEditor(editor, linkSelectionRef) : undefined,
       applyCommand: (command) => {
         if (!editor) {
@@ -491,6 +553,18 @@ export const TiptapTextBlockEditor = forwardRef<
 
     editor.commands.setContent(nextContent, { emitUpdate: false });
   }, [content, editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    if (editingStateRef.current.composing) {
+      pendingPageBreaksRef.current = pageBreaks;
+      return;
+    }
+
+    pendingPageBreaksRef.current = null;
+    applyTiptapPageBreaks(editor, pageBreaks);
+  }, [editor, pageBreaks]);
 
   useEffect(() => {
     if (!editor) return;
@@ -609,7 +683,34 @@ export const TiptapTextBlockEditor = forwardRef<
 
   return (
     <>
-      <EditorContent editor={editor} className={wrapperClassName} style={style} />
+      <EditorContent
+        editor={editor}
+        className={wrapperClassName}
+        style={style}
+        onFocusCapture={() =>
+          updateEditingState({
+            focused: true,
+            composing: editingStateRef.current.composing,
+          })
+        }
+        onBlurCapture={() =>
+          updateEditingState({ focused: false, composing: false })
+        }
+        onCompositionStartCapture={() =>
+          updateEditingState({ focused: true, composing: true })
+        }
+        onCompositionEndCapture={() => {
+          updateEditingState({ focused: true, composing: false });
+
+          if (editor) {
+            applyTiptapPageBreaks(
+              editor,
+              pendingPageBreaksRef.current ?? pageBreaksRef.current,
+            );
+            pendingPageBreaksRef.current = null;
+          }
+        }}
+      />
       {editor ? (
         <BubbleMenu
           editor={editor}
