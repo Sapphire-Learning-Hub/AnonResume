@@ -21,11 +21,13 @@ interface ResumePageBreakAnchor {
 }
 
 interface ResolvedResumePageBreaks {
+  section: ResumePageBreak[];
   structural: ResumePageBreak[];
   text: TiptapPageBreak[];
 }
 
 const EMPTY_BREAKS: ResolvedResumePageBreaks = {
+  section: [],
   structural: [],
   text: [],
 };
@@ -72,6 +74,7 @@ export function useResumePageBreaks(
     );
 
     return {
+      section: matching.filter((pageBreak) => pageBreak.kind === "section"),
       structural: matching.filter(
         (pageBreak) => pageBreak.kind === "structural",
       ),
@@ -97,6 +100,20 @@ const spacerStyle: CSSProperties = {
   pointerEvents: "none",
   userSelect: "none",
 };
+
+export function ResumeSectionPageBreak({ sectionId }: { sectionId: string }) {
+  const { section } = useResumePageBreaks({ sectionId, path: [] });
+
+  return section.map((pageBreak) => (
+    <span
+      key={pageBreak.id}
+      aria-hidden="true"
+      data-resume-page-break-id={pageBreak.id}
+      data-resume-page-index={pageBreak.toPageIndex}
+      style={{ ...spacerStyle, height: pageBreak.spacerHeight }}
+    />
+  ));
+}
 
 export function ResumeStructuralPageBreaks({
   sectionId,

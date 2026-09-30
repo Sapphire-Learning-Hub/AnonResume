@@ -712,6 +712,17 @@ describe("ResumeRenderer", () => {
       ).toHaveLength(2);
     });
 
+    const experienceSection = screen.getByTestId(
+      "resume-section-section-experience",
+    );
+    expect(experienceSection.parentElement?.firstElementChild).toHaveAttribute(
+      "data-resume-page-break-id",
+      "section-experience:section:",
+    );
+    expect(experienceSection.parentElement?.lastElementChild).toBe(
+      experienceSection,
+    );
+
     const profileBlock = container.querySelector(
       '[data-resume-block-path="block-profile-summary"]',
     );

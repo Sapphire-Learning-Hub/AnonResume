@@ -29,6 +29,7 @@ describe("createResumePageBreakMap", () => {
       sections: structuralSections,
       pageHeight: 100,
       pageGap: 24,
+      sectionGap: 20,
       pagePadding: { top: 10, right: 12, bottom: 10, left: 12 },
       revision: "document-3",
     });
@@ -37,6 +38,7 @@ describe("createResumePageBreakMap", () => {
       sections: structuralSections,
       pageHeight: 100,
       pageGap: 24,
+      sectionGap: 20,
       pagePadding: { top: 10, right: 12, bottom: 10, left: 12 },
       revision: "document-3",
     });
@@ -57,6 +59,71 @@ describe("createResumePageBreakMap", () => {
       ],
     });
     expect(first.breaks[0]?.id).toBe(second.breaks[0]?.id);
+  });
+
+  it("moves a whole section to the next page from the section boundary", () => {
+    const result = createResumePageBreakMap({
+      pages: [
+        {
+          index: 0,
+          sectionIds: ["section-first"],
+          totalHeight: 70,
+          sections: [
+            {
+              sectionId: "section-first",
+              includeTitle: true,
+              blocks: [{ path: ["first"] }],
+              totalHeight: 70,
+            },
+          ],
+        },
+        {
+          index: 1,
+          sectionIds: ["section-kept"],
+          totalHeight: 60,
+          sections: [
+            {
+              sectionId: "section-kept",
+              includeTitle: true,
+              blocks: [{ path: ["kept"] }],
+              totalHeight: 60,
+            },
+          ],
+        },
+      ],
+      sections: [
+        {
+          id: "section-first",
+          height: 70,
+          titleHeight: 20,
+          blocks: [{ id: "first", path: ["first"], type: "text", height: 50 }],
+        },
+        {
+          id: "section-kept",
+          height: 60,
+          titleHeight: 20,
+          keepTogether: true,
+          blocks: [{ id: "kept", path: ["kept"], type: "text", height: 40 }],
+        },
+      ],
+      pageHeight: 100,
+      pageGap: 24,
+      pagePadding: { top: 10, right: 12, bottom: 10, left: 12 },
+      revision: "kept-section",
+      sectionGap: 20,
+    });
+
+    expect(result.breaks).toEqual([
+      {
+        id: result.breaks[0]?.id,
+        kind: "section",
+        sectionId: "section-kept",
+        path: [],
+        fromPageIndex: 0,
+        toPageIndex: 1,
+        spacerHeight: 54,
+      },
+    ]);
   });
 
   it("anchors a text continuation at the next fragment range", () => {
@@ -100,6 +167,7 @@ describe("createResumePageBreakMap", () => {
       ],
       pageHeight: 100,
       pageGap: 20,
+      sectionGap: 20,
       pagePadding: { top: 12, right: 12, bottom: 8, left: 12 },
       revision: "document-4",
     });
@@ -127,6 +195,7 @@ describe("createResumePageBreakMap", () => {
       sections: structuralSections,
       pageHeight: 100,
       pageGap: 20,
+      sectionGap: 20,
       pagePadding: { top: 10, right: 10, bottom: 10, left: 10 },
       revision: "oversized",
     });

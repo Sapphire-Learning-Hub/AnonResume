@@ -83,6 +83,11 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     flex-direction: column;
     gap: var(--resume-section-gap);
   `,
+  sectionFlow: css`
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  `,
   section: css`
     display: flex;
     flex-direction: column;

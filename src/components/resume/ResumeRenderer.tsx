@@ -88,6 +88,7 @@ import type { EditPaginationRevision } from "./pagination/edit-pagination-schedu
 import {
   ResumeInlinePageBreak,
   ResumePageBreakProvider,
+  ResumeSectionPageBreak,
   ResumeStructuralPageBreaks,
   useResumePageBreaks,
 } from "./pagination/page-break-context";
@@ -2147,7 +2148,7 @@ function renderResumeSection(
         .filter((block): block is ResumeBlock => Boolean(block))
     : null;
 
-  return (
+  const renderedSection = (
     <ResumeDiffTarget
       key={context.instanceKey}
       nodeType="section"
@@ -2229,6 +2230,17 @@ function renderResumeSection(
         )}
       </section>
     </ResumeDiffTarget>
+  );
+
+  if (context.mode !== "edit") {
+    return renderedSection;
+  }
+
+  return (
+    <div key={context.instanceKey} className={context.styles.sectionFlow}>
+      <ResumeSectionPageBreak sectionId={section.id} />
+      {renderedSection}
+    </div>
   );
 }
 
@@ -2407,6 +2419,7 @@ export function ResumeRenderer({
                 sections: measuredSections,
                 pageHeight: pageContentHeight,
                 pageGap: EDIT_PAGE_GAP_PX,
+                sectionGap: DEFAULT_SECTION_GAP_PX,
                 pagePadding: document.settings.page.margin,
                 revision: revisionKey,
               }),

@@ -15,7 +15,7 @@ interface PagePadding {
 
 export interface ResumePageBreak {
   id: string;
-  kind: "structural" | "text";
+  kind: "section" | "structural" | "text";
   sectionId: string;
   path: string[];
   textPosition?: RichTextPosition;
@@ -74,6 +74,7 @@ export function createResumePageBreakMap(input: {
   sections: MeasuredResumeSection[];
   pageHeight: number;
   pageGap: number;
+  sectionGap: number;
   pagePadding: PagePadding;
   revision: string;
 }): ResumePageBreakMap {
@@ -95,9 +96,17 @@ export function createResumePageBreakMap(input: {
       continue;
     }
 
-    const anchor = findFirstAnchor(firstFragment);
+    const startsNewSection = !previousPage.sectionIds.includes(
+      firstSection.sectionId,
+    );
+    const anchor: BreakAnchor = startsNewSection
+      ? { kind: "section", path: [] }
+      : findFirstAnchor(firstFragment);
 
-    if (!hasPath(measuredSection.blocks, anchor.path)) {
+    if (
+      anchor.kind !== "section" &&
+      !hasPath(measuredSection.blocks, anchor.path)
+    ) {
       continue;
     }
 
@@ -115,7 +124,8 @@ export function createResumePageBreakMap(input: {
         Math.max(0, input.pageHeight - previousPage.totalHeight) +
         input.pagePadding.bottom +
         input.pageGap +
-        input.pagePadding.top,
+        input.pagePadding.top -
+        (startsNewSection ? input.sectionGap : 0),
     });
   }
 
