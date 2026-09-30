@@ -1,7 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type PropsWithChildren, useEffect, useSyncExternalStore } from "react";
+import {
+  type PropsWithChildren,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 export type EditorViewportAccess = "checking" | "allowed" | "blocked";
 
@@ -47,18 +52,46 @@ export function useEditorViewportAccess() {
   );
 }
 
+function subscribeToEditorViewportSession() {
+  return () => {};
+}
+
+function createEditorViewportSessionStore() {
+  let access: EditorViewportAccess = "checking";
+
+  return {
+    getSnapshot() {
+      if (access === "checking") {
+        access = getEditorViewportSnapshot();
+      }
+
+      return access;
+    },
+  };
+}
+
+function useEditorViewportSessionAccess() {
+  const [store] = useState(createEditorViewportSessionStore);
+
+  return useSyncExternalStore(
+    subscribeToEditorViewportSession,
+    store.getSnapshot,
+    getEditorViewportServerSnapshot,
+  );
+}
+
 export function EditorViewportGuard({
   children,
   fallbackHref = "/app",
 }: PropsWithChildren<{ fallbackHref?: string }>) {
   const router = useRouter();
-  const access = useEditorViewportAccess();
+  const sessionAccess = useEditorViewportSessionAccess();
 
   useEffect(() => {
-    if (access === "blocked") {
+    if (sessionAccess === "blocked") {
       router.replace(fallbackHref);
     }
-  }, [access, fallbackHref, router]);
+  }, [fallbackHref, router, sessionAccess]);
 
-  return access === "allowed" ? children : null;
+  return sessionAccess === "allowed" ? children : null;
 }
