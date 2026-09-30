@@ -135,6 +135,14 @@ export interface TiptapTextBlockEditorEditingState {
   composing: boolean;
 }
 
+export type TiptapPaginationRequestReason =
+  | "input"
+  | "paste"
+  | "drop"
+  | "history"
+  | "format"
+  | "compositionEnd";
+
 function createResumeIconInsertion(iconId: string) {
   return [
     {
@@ -189,7 +197,7 @@ function prepareLinkForEditor(
   };
 }
 
-interface TiptapTextBlockEditorProps {
+export interface TiptapTextBlockEditorProps {
   ariaLabel?: string;
   className?: string;
   content: RichTextContent;
@@ -197,6 +205,7 @@ interface TiptapTextBlockEditorProps {
   onChange: (content: RichTextContent) => void;
   onEditingStateChange?: (state: TiptapTextBlockEditorEditingState) => void;
   onFormattingStateChange?: (state: TiptapTextBlockEditorFormatState) => void;
+  onPaginationRequest?: (reason: TiptapPaginationRequestReason) => void;
   pageBreaks?: readonly TiptapPageBreak[];
   style?: CSSProperties;
   wrapperClassName?: string;
@@ -314,6 +323,7 @@ export const TiptapTextBlockEditor = forwardRef<
   onChange,
   onEditingStateChange,
   onFormattingStateChange,
+  onPaginationRequest,
   pageBreaks = [],
   style,
   wrapperClassName,
@@ -331,6 +341,7 @@ export const TiptapTextBlockEditor = forwardRef<
     composing: false,
   });
   const onEditingStateChangeRef = useRef(onEditingStateChange);
+  const onPaginationRequestRef = useRef(onPaginationRequest);
   const pageBreaksRef = useRef(pageBreaks);
   const pendingPageBreaksRef = useRef<readonly TiptapPageBreak[] | null>(null);
 
@@ -341,6 +352,10 @@ export const TiptapTextBlockEditor = forwardRef<
   useLayoutEffect(() => {
     onEditingStateChangeRef.current = onEditingStateChange;
   }, [onEditingStateChange]);
+
+  useLayoutEffect(() => {
+    onPaginationRequestRef.current = onPaginationRequest;
+  }, [onPaginationRequest]);
 
   useEffect(
     () => () => {
@@ -366,6 +381,14 @@ export const TiptapTextBlockEditor = forwardRef<
 
     editingStateRef.current = nextState;
     onEditingStateChangeRef.current?.(nextState);
+  }
+
+  function requestPagination(reason: TiptapPaginationRequestReason) {
+    if (editingStateRef.current.composing && reason !== "compositionEnd") {
+      return;
+    }
+
+    onPaginationRequestRef.current?.(reason);
   }
 
   const editor = useEditor({
@@ -448,40 +471,53 @@ export const TiptapTextBlockEditor = forwardRef<
         }
 
         if (command.type === "insertIcon") {
-          return editor
+          const applied = editor
             .chain()
             .focus(undefined, { scrollIntoView: false })
             .insertContent(createResumeIconInsertion(command.iconId))
             .run();
+
+          if (applied) requestPagination("format");
+          return applied;
         }
 
         const chain = editor.chain().focus();
         const preparedChain = editor.state.selection.empty ? chain.selectAll() : chain;
 
+        let applied = false;
+
         switch (command.type) {
           case "toggleBold":
-            return preparedChain.toggleBold().run();
+            applied = preparedChain.toggleBold().run();
+            break;
           case "toggleItalic":
-            return preparedChain.toggleItalic().run();
+            applied = preparedChain.toggleItalic().run();
+            break;
           case "toggleUnderline":
-            return preparedChain.toggleUnderline().run();
+            applied = preparedChain.toggleUnderline().run();
+            break;
           case "toggleStrike":
-            return preparedChain.toggleStrike().run();
+            applied = preparedChain.toggleStrike().run();
+            break;
           case "toggleTag":
-            return preparedChain.toggleMark("tag").run();
+            applied = preparedChain.toggleMark("tag").run();
+            break;
           case "setTextColor": {
             const color = normalizeTextColor(command.color);
 
-            return color
+            applied = color
               ? preparedChain.setMark("textColor", { color }).run()
               : false;
+            break;
           }
           case "unsetTextColor":
-            return preparedChain.unsetMark("textColor").run();
+            applied = preparedChain.unsetMark("textColor").run();
+            break;
           case "setLink": {
             const href = normalizeLinkHref(command.href);
 
-            return href ? preparedChain.setLink({ href }).run() : false;
+            applied = href ? preparedChain.setLink({ href }).run() : false;
+            break;
           }
           case "upsertLink": {
             const href = normalizeLinkHref(command.href);
@@ -497,7 +533,7 @@ export const TiptapTextBlockEditor = forwardRef<
               linkChain = linkChain.insertContentAt(range, text);
             }
 
-            const applied = linkChain
+            applied = linkChain
               .setTextSelection({ from: range.from, to: range.from + text.length })
               .setLink({
                 href,
@@ -507,18 +543,21 @@ export const TiptapTextBlockEditor = forwardRef<
 
             if (applied) linkSelectionRef.current = null;
 
-            return applied;
+            break;
           }
           case "unsetLink":
           {
             const range = linkSelectionRef.current;
-            const result = (range ? chain.setTextSelection(range) : preparedChain)
+            applied = (range ? chain.setTextSelection(range) : preparedChain)
               .unsetLink()
               .run();
             linkSelectionRef.current = null;
-            return result;
+            break;
           }
         }
+
+        if (applied) requestPagination("format");
+        return applied;
       },
     }),
     [editor],
@@ -586,22 +625,23 @@ export const TiptapTextBlockEditor = forwardRef<
     if (!editor) return;
 
     const chain = editor.chain().focus();
+    let applied = false;
 
     switch (command.type) {
       case "toggleBold":
-        chain.toggleBold().run();
+        applied = chain.toggleBold().run();
         break;
       case "toggleItalic":
-        chain.toggleItalic().run();
+        applied = chain.toggleItalic().run();
         break;
       case "toggleUnderline":
-        chain.toggleUnderline().run();
+        applied = chain.toggleUnderline().run();
         break;
       case "toggleStrike":
-        chain.toggleStrike().run();
+        applied = chain.toggleStrike().run();
         break;
       case "toggleTag":
-        chain.toggleMark("tag").run();
+        applied = chain.toggleMark("tag").run();
         break;
       case "setTextColor": {
         const color = normalizeTextColor(command.color);
@@ -615,7 +655,7 @@ export const TiptapTextBlockEditor = forwardRef<
           ? chain.setTextSelection(savedSelection)
           : chain;
 
-        colorChain.setMark("textColor", { color }).run();
+        applied = colorChain.setMark("textColor", { color }).run();
         colorSelectionRef.current = null;
         break;
       }
@@ -625,7 +665,7 @@ export const TiptapTextBlockEditor = forwardRef<
           ? chain.setTextSelection(savedSelection)
           : chain;
 
-        colorChain.unsetMark("textColor").run();
+        applied = colorChain.unsetMark("textColor").run();
         colorSelectionRef.current = null;
         break;
       }
@@ -641,23 +681,25 @@ export const TiptapTextBlockEditor = forwardRef<
           ? chain.setTextSelection(savedSelection)
           : chain;
 
-        linkChain.setLink({ href }).run();
+        applied = linkChain.setLink({ href }).run();
         linkSelectionRef.current = null;
         setLinkPopoverOpen(false);
         break;
       }
       case "unsetLink":
-        chain.unsetLink().run();
+        applied = chain.unsetLink().run();
         linkSelectionRef.current = null;
         break;
       case "insertIcon":
-        editor
+        applied = editor
           .chain()
           .focus(undefined, { scrollIntoView: false })
           .insertContent(createResumeIconInsertion(command.iconId))
           .run();
         break;
     }
+
+    if (applied) requestPagination("format");
   }
 
   function openLinkPopover() {
@@ -693,6 +735,17 @@ export const TiptapTextBlockEditor = forwardRef<
             composing: editingStateRef.current.composing,
           })
         }
+        onInputCapture={() => requestPagination("input")}
+        onPasteCapture={() => requestPagination("paste")}
+        onDropCapture={() => requestPagination("drop")}
+        onKeyDownCapture={(event) => {
+          if (
+            (event.metaKey || event.ctrlKey) &&
+            ["z", "y"].includes(event.key.toLowerCase())
+          ) {
+            requestPagination("history");
+          }
+        }}
         onBlurCapture={() =>
           updateEditingState({ focused: false, composing: false })
         }
@@ -701,6 +754,7 @@ export const TiptapTextBlockEditor = forwardRef<
         }
         onCompositionEndCapture={() => {
           updateEditingState({ focused: true, composing: false });
+          requestPagination("compositionEnd");
 
           if (editor) {
             applyTiptapPageBreaks(

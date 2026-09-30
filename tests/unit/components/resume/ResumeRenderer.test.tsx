@@ -478,14 +478,12 @@ describe("ResumeRenderer", () => {
       container
         .querySelector("[data-resume-pagination-ready]")
         ?.getAttribute("data-resume-pagination-ready"),
-    ).toBe("true");
+    ).toBe("false");
     expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
 
     fireEvent.compositionEnd(editor);
     expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
-
-    fireEvent.blur(editor);
 
     await waitFor(() => {
       expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();

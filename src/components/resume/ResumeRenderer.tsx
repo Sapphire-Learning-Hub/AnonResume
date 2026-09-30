@@ -41,13 +41,13 @@ import {
 } from "@/domain/resume/operations";
 import {
   paginateMeasuredSections,
+  type MeasuredResumeSection,
   type ResumePageFragment,
   type ResumePageLayout,
   type ResumePageSectionLayout,
 } from "@/domain/resume/pagination";
 import {
   createResumePageBreakMap,
-  type ResumePageBreakMap,
 } from "@/domain/resume/page-flow/break-map";
 import type {
   BadgeBlock,
@@ -81,14 +81,16 @@ import {
 import { ResumeInlineIcon } from "./ResumeInlineIcon";
 import { ResumePrintReadyFlag } from "./ResumePrintReadyFlag";
 import { useResumeRendererStyles } from "./ResumeRenderer.style";
-import { measureResumeFlow } from "./pagination/flow-measurement";
+import { measureResumeSectionFlow } from "./pagination/flow-measurement";
 import { ResumeEditingCanvas } from "./pagination/ResumeEditingCanvas";
+import type { EditPaginationRevision } from "./pagination/edit-pagination-scheduler";
 import {
   ResumeInlinePageBreak,
   ResumePageBreakProvider,
   ResumeStructuralPageBreaks,
   useResumePageBreaks,
 } from "./pagination/page-break-context";
+import { useResumeEditPagination } from "./pagination/useResumeEditPagination";
 import type {
   ResumeDiffNodeAnnotation,
   ResumeDiffTextSegment,
@@ -140,6 +142,11 @@ const BadgeEditContext = createContext<ResumeRendererProps["onCommitBadgeItem"]>
 const TextEditingStateContext = createContext<
   ((state: TiptapTextBlockEditorEditingState) => void) | undefined
 >(undefined);
+const TextPaginationRequestContext = createContext<
+  ComponentPropsWithoutRef<
+    typeof TiptapTextBlockEditor
+  >["onPaginationRequest"]
+>(undefined);
 type SortableBlockAxis = "vertical" | "horizontal" | "grid";
 const A4_PAGE_HEIGHT_PX = (297 / 25.4) * 96;
 const A4_PAGE_WIDTH_PX = (210 / 25.4) * 96;
@@ -163,6 +170,7 @@ const ResumeTextBlockEditor = forwardRef<
   ResumeTextBlockEditorProps
 >(function ResumeTextBlockEditor(props, ref) {
   const onEditingStateChange = useContext(TextEditingStateContext);
+  const onPaginationRequest = useContext(TextPaginationRequestContext);
   const { pageBreakAnchor, ...editorProps } = props;
   const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
@@ -171,6 +179,7 @@ const ResumeTextBlockEditor = forwardRef<
       {...editorProps}
       ref={ref}
       onEditingStateChange={onEditingStateChange}
+      onPaginationRequest={onPaginationRequest}
       pageBreaks={pageBreaks}
     />
   );
@@ -1960,63 +1969,6 @@ function createSinglePageLayout(
   ];
 }
 
-function areBlockLayoutsEqual(
-  current: ResumePageFragment,
-  next: ResumePageFragment,
-): boolean {
-  if (serializeBlockPath(current.path) !== serializeBlockPath(next.path)) {
-    return false;
-  }
-
-  if (Boolean(current.continuation) !== Boolean(next.continuation)) {
-    return false;
-  }
-
-  if ((current.children?.length ?? 0) !== (next.children?.length ?? 0)) {
-    return false;
-  }
-
-  return (
-    current.children?.every((child, index) =>
-      areBlockLayoutsEqual(child, next.children?.[index] ?? child),
-    ) ?? true
-  );
-}
-
-function arePageLayoutsEqual(
-  current: ResumePageLayout[],
-  next: ResumePageLayout[],
-) {
-  if (current.length !== next.length) {
-    return false;
-  }
-
-  return current.every((page, pageIndex) => {
-    const nextPage = next[pageIndex];
-
-    if (!nextPage || page.sections.length !== nextPage.sections.length) {
-      return false;
-    }
-
-    return page.sections.every((section, sectionIndex) => {
-      const nextSection = nextPage.sections[sectionIndex];
-
-      if (
-        !nextSection ||
-        section.sectionId !== nextSection.sectionId ||
-        section.includeTitle !== nextSection.includeTitle ||
-        section.blocks.length !== nextSection.blocks.length
-      ) {
-        return false;
-      }
-
-      return section.blocks.every((block, blockIndex) =>
-        areBlockLayoutsEqual(block, nextSection.blocks[blockIndex]!),
-      );
-    });
-  });
-}
-
 function getPageContentHeight(document: ResumeDocument) {
   return Math.max(
     1,
@@ -2294,27 +2246,6 @@ export function ResumeRenderer({
     () => document.sections.filter((section) => section.visible),
     [document.sections],
   );
-  const [pageLayouts, setPageLayouts] = useState<ResumePageLayout[]>(() =>
-    createSinglePageLayout(visibleSections),
-  );
-  const [pageBreakMap, setPageBreakMap] = useState<ResumePageBreakMap>({
-    revision: "initial",
-    pageCount: 1,
-    breaks: [],
-  });
-  const [paginationReady, setPaginationReady] = useState(false);
-  const [measuredLayoutKey, setMeasuredLayoutKey] = useState("");
-  const [pendingLayout, setPendingLayout] = useState<{
-    inputKey: string;
-    pages: ResumePageLayout[];
-    breakMap: ResumePageBreakMap;
-  }>();
-  const [editingState, setEditingState] =
-    useState<TiptapTextBlockEditorEditingState>({
-      focused: false,
-      composing: false,
-    });
-  const [layoutRevision, setLayoutRevision] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const [activeTextEditor, setActiveTextEditor] =
     useState<TiptapTextBlockEditorHandle | null>(null);
@@ -2337,60 +2268,176 @@ export function ResumeRenderer({
     () => createSinglePageLayout(visibleSections),
     [visibleSections],
   );
-  const layoutInputKey = useMemo(
+  const documentKey = useMemo(
+    () => JSON.stringify(visibleSections),
+    [visibleSections],
+  );
+  const geometryKey = useMemo(
     () =>
       JSON.stringify({
+        mode,
         zoom,
         paginationRevision,
         pageContentHeight,
-        layoutRevision,
-        typography: document.settings.typography,
-        sections: visibleSections,
+        settings: document.settings,
+        selection,
       }),
     [
-      document.settings.typography,
-      layoutRevision,
+      document.settings,
+      mode,
       pageContentHeight,
       paginationRevision,
+      selection,
+      zoom,
+    ],
+  );
+  const committedSpacerHeightsRef = useRef<ReadonlyMap<string, number>>(
+    new Map(),
+  );
+  const measurementCacheRef = useRef(
+    new Map<string, MeasuredResumeSection>(),
+  );
+  const createPaginationWork = useCallback(
+    (revision: EditPaginationRevision) => {
+      const root = rootRef.current;
+
+      if (!root) return undefined;
+
+      const revisionKey = JSON.stringify(revision);
+      const measuredSections: MeasuredResumeSection[] = [];
+      let sectionIndex = 0;
+      let measurementComplete = visibleSections.length === 0;
+      let unavailableAttempts = 0;
+
+      return {
+        run(deadline: number) {
+          if (visibleSections.length === 0) {
+            return {
+              done: true as const,
+              result: {
+                pages: measurementLayout,
+                breaks: {
+                  revision: revisionKey,
+                  pageCount: 1,
+                  breaks: [],
+                },
+              },
+            };
+          }
+
+          while (!measurementComplete && performance.now() < deadline) {
+            const section = visibleSections[sectionIndex];
+
+            if (!section) {
+              measurementComplete = true;
+              break;
+            }
+
+            const cacheKey = JSON.stringify({
+              section,
+              geometry: revision.geometry,
+              width: revision.width,
+              active:
+                selection?.sectionId === section.id ? selection : undefined,
+            });
+            const cached = measurementCacheRef.current.get(cacheKey);
+            const measured =
+              cached ??
+              measureResumeSectionFlow(root, section, {
+                zoom,
+                activeEditor: activeTextEditor,
+                activeSelection: selection,
+                committedSpacerHeights: committedSpacerHeightsRef.current,
+              });
+
+            if (!measured) {
+              unavailableAttempts += 1;
+
+              if (unavailableAttempts >= 2) {
+                return { done: true as const, aborted: true as const };
+              }
+
+              return { done: false as const };
+            }
+
+            unavailableAttempts = 0;
+            if (!cached) {
+              measurementCacheRef.current.set(cacheKey, measured);
+
+              if (measurementCacheRef.current.size > 200) {
+                const oldestKey = measurementCacheRef.current.keys().next().value;
+                if (oldestKey) measurementCacheRef.current.delete(oldestKey);
+              }
+            }
+
+            measuredSections.push(measured);
+            sectionIndex += 1;
+            measurementComplete = sectionIndex >= visibleSections.length;
+          }
+
+          if (!measurementComplete) {
+            return { done: false as const };
+          }
+
+          const pages = paginateMeasuredSections({
+            pageHeight: pageContentHeight,
+            sectionGap: DEFAULT_SECTION_GAP_PX,
+            sections: measuredSections,
+          }).pages;
+
+          return {
+            done: true as const,
+            result: {
+              pages,
+              breaks: createResumePageBreakMap({
+                pages,
+                sections: measuredSections,
+                pageHeight: pageContentHeight,
+                pageGap: EDIT_PAGE_GAP_PX,
+                pagePadding: document.settings.page.margin,
+                revision: revisionKey,
+              }),
+            },
+          };
+        },
+      };
+    },
+    [
+      activeTextEditor,
+      document,
+      measurementLayout,
+      pageContentHeight,
+      selection,
       visibleSections,
       zoom,
     ],
   );
-  const isLayoutCurrent = paginationReady && measuredLayoutKey === layoutInputKey;
-  const hasCommittedLayout = measuredLayoutKey !== "";
-  const pendingLayoutIsCurrent = pendingLayout?.inputKey === layoutInputKey;
-  const measurementNeeded = !isLayoutCurrent && !pendingLayoutIsCurrent;
-  const measurementDeferredForEditing =
-    mode === "edit" &&
-    hasCommittedLayout &&
-    (editingState.focused || editingState.composing);
-  const shouldMeasureLayout =
-    measurementNeeded && !measurementDeferredForEditing;
-  const paginationSettled =
-    isLayoutCurrent || pendingLayoutIsCurrent || measurementDeferredForEditing;
-  const resolvedPageLayouts = hasCommittedLayout ? pageLayouts : measurementLayout;
-  const printReady = isLayoutCurrent;
-  const committedSpacerHeights = useMemo(
-    () =>
-      new Map(
-        pageBreakMap.breaks.map((pageBreak) => [
-          pageBreak.id,
-          pageBreak.spacerHeight,
-        ]),
-      ),
-    [pageBreakMap.breaks],
-  );
-  const handleEditingStateChange = useCallback(
-    (nextState: TiptapTextBlockEditorEditingState) => {
-      setEditingState((currentState) =>
-        currentState.focused === nextState.focused &&
-        currentState.composing === nextState.composing
-          ? currentState
-          : nextState,
-      );
+  const pagination = useResumeEditPagination({
+    rootRef,
+    initialPages: measurementLayout,
+    initialBreaks: {
+      revision: "initial",
+      pageCount: 1,
+      breaks: [],
     },
-    [],
-  );
+    documentKey,
+    geometryKey,
+    createWork: createPaginationWork,
+  });
+  const resolvedPageLayouts = pagination.pages;
+  const pageBreakMap = pagination.breaks;
+  const paginationSettled = pagination.ready;
+  const printReady = pagination.ready;
+
+  useLayoutEffect(() => {
+    committedSpacerHeightsRef.current = new Map(
+      pageBreakMap.breaks.map((pageBreak) => [
+        pageBreak.id,
+        pageBreak.spacerHeight,
+      ]),
+    );
+  }, [pageBreakMap.breaks]);
+
   const firstPageBySectionId = useMemo(() => {
     const firstPages = new Map<string, number>();
 
@@ -2406,172 +2453,35 @@ export function ResumeRenderer({
   }, [resolvedPageLayouts]);
 
   useEffect(() => {
-    onPageCountChange?.(resolvedPageLayouts.length);
-  }, [onPageCountChange, resolvedPageLayouts.length]);
+    onPageCountChange?.(pagination.pageCount);
+  }, [onPageCountChange, pagination.pageCount]);
 
   useEffect(() => {
     onPaginationReadyChange?.(paginationSettled);
   }, [onPaginationReadyChange, paginationSettled]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setLayoutRevision((current) => current + 1);
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (
-      !pendingLayout ||
-      editingState.focused ||
-      editingState.composing
-    ) {
-      return;
-    }
-
-    if (pendingLayout.inputKey !== layoutInputKey) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      setPageLayouts(pendingLayout.pages);
-      setPageBreakMap(pendingLayout.breakMap);
-      setMeasuredLayoutKey(pendingLayout.inputKey);
-      setPaginationReady(true);
-      setPendingLayout(undefined);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    editingState.composing,
-    editingState.focused,
-    layoutInputKey,
-    pendingLayout,
-  ]);
-
-  useLayoutEffect(() => {
-    if (!shouldMeasureLayout) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      let nextLayouts: ResumePageLayout[];
-      let nextBreakMap: ResumePageBreakMap;
-
-      if (visibleSections.length === 0) {
-        nextLayouts = measurementLayout;
-        nextBreakMap = {
-          revision: layoutInputKey,
-          pageCount: 1,
-          breaks: [],
-        };
-      } else {
-        const rootElement = rootRef.current;
-
-        if (!rootElement) {
-          return;
-        }
-
-        const measuredSections = measureResumeFlow({
-          root: rootElement,
-          document,
-          zoom,
-          activeEditor: activeTextEditor,
-          activeSelection: selection,
-          committedSpacerHeights,
-        });
-
-        if (!measuredSections) {
-          return;
-        }
-
-        nextLayouts = paginateMeasuredSections({
-          pageHeight: pageContentHeight,
-          sectionGap: DEFAULT_SECTION_GAP_PX,
-          sections: measuredSections,
-        }).pages;
-        nextBreakMap = createResumePageBreakMap({
-          pages: nextLayouts,
-          sections: measuredSections,
-          pageHeight: pageContentHeight,
-          pageGap: EDIT_PAGE_GAP_PX,
-          pagePadding: document.settings.page.margin,
-          revision: layoutInputKey,
-        });
-      }
-
-      if (arePageLayoutsEqual(pageLayouts, nextLayouts)) {
-        setPendingLayout(undefined);
-        setPageBreakMap(nextBreakMap);
-        setMeasuredLayoutKey(layoutInputKey);
-        setPaginationReady(true);
-        return;
-      }
-
-      if (editingState.focused || editingState.composing) {
-        setPendingLayout({
-          inputKey: layoutInputKey,
-          pages: nextLayouts,
-          breakMap: nextBreakMap,
-        });
-        setPaginationReady(true);
-        return;
-      }
-
-      setPageLayouts(nextLayouts);
-      setPageBreakMap(nextBreakMap);
-      setPendingLayout(undefined);
-      setMeasuredLayoutKey(layoutInputKey);
-      setPaginationReady(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    editingState.composing,
-    editingState.focused,
-    activeTextEditor,
-    committedSpacerHeights,
-    hasCommittedLayout,
-    document,
-    layoutInputKey,
-    layoutRevision,
-    measurementLayout,
-    pageContentHeight,
-    pageLayouts,
-    shouldMeasureLayout,
-    selection,
-    visibleSections,
-    zoom,
-  ]);
-
   return (
     <BadgeEditContext.Provider value={onCommitBadgeItem}>
-      <TextEditingStateContext.Provider value={handleEditingStateChange}>
-        <ResumeDiffProvider
-          presentation={mode === "print" ? undefined : diffPresentation}
+      <TextEditingStateContext.Provider value={pagination.onEditingStateChange}>
+        <TextPaginationRequestContext.Provider
+          value={pagination.requestPagination}
         >
-          <div
-            ref={rootRef}
-            className={styles.root}
-            data-resume-mode={mode}
-            data-resume-edit-surface-mode={editSurfaceMode}
-            data-resume-responsive-view={responsiveView ? "true" : "false"}
-            data-resume-pagination-ready={paginationSettled ? "true" : "false"}
-            data-resume-pagination-revision={paginationRevision}
+          <ResumeDiffProvider
+            presentation={mode === "print" ? undefined : diffPresentation}
           >
-            {mode === "print" ? (
-              <ResumePrintReadyFlag ready={printReady} />
-            ) : null}
-            {mode === "edit" ? (
+            <div
+              ref={rootRef}
+              className={styles.root}
+              data-resume-mode={mode}
+              data-resume-edit-surface-mode={editSurfaceMode}
+              data-resume-responsive-view={responsiveView ? "true" : "false"}
+              data-resume-pagination-ready={paginationSettled ? "true" : "false"}
+              data-resume-pagination-revision={paginationRevision}
+            >
+              {mode === "print" ? (
+                <ResumePrintReadyFlag ready={printReady} />
+              ) : null}
+              {mode === "edit" ? (
               <ResumePageBreakProvider breakMap={pageBreakMap}>
                 <ResumeEditingCanvas
                   pageCount={resolvedPageLayouts.length}
@@ -2665,9 +2575,10 @@ export function ResumeRenderer({
                   </article>
                 </div>
               ))
-            )}
-          </div>
-        </ResumeDiffProvider>
+              )}
+            </div>
+          </ResumeDiffProvider>
+        </TextPaginationRequestContext.Provider>
       </TextEditingStateContext.Provider>
     </BadgeEditContext.Provider>
   );

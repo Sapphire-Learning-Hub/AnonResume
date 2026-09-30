@@ -12,7 +12,7 @@ const BLOCK_PATH_SEPARATOR = "::";
 const DEFAULT_BLOCK_GAP_PX = 10;
 const STATIC_LINE_TOLERANCE_PX = 1;
 
-interface MeasureResumeFlowParams {
+export interface MeasureResumeFlowParams {
   root: HTMLElement;
   document: ResumeDocument;
   zoom: number;
@@ -453,7 +453,7 @@ function measureResumeBlock(params: {
   };
 }
 
-function measureResumeSection(
+export function measureResumeSectionFlow(
   root: HTMLElement,
   section: ResumeDocument["sections"][number],
   params: Omit<MeasureResumeFlowParams, "root" | "document">,
@@ -527,7 +527,7 @@ export function measureResumeFlow({
 }: MeasureResumeFlowParams): MeasuredResumeSection[] | undefined {
   const sections = document.sections
     .filter((section) => section.visible)
-    .map((section) => measureResumeSection(root, section, params));
+    .map((section) => measureResumeSectionFlow(root, section, params));
 
   return sections.some((section) => !section)
     ? undefined

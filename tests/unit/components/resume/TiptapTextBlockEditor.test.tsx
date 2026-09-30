@@ -38,6 +38,10 @@ class MockResizeObserver {
 describe("TiptapTextBlockEditor", () => {
   beforeEach(() => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: () => document.body,
+    });
   });
 
   afterEach(() => {
@@ -187,6 +191,55 @@ describe("TiptapTextBlockEditor", () => {
         ],
       }),
     );
+  });
+
+  it("reports input, paste, drop, history, format, and composition pagination reasons", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const onPaginationRequest = vi.fn();
+
+    render(
+      <TiptapTextBlockEditor
+        ref={ref}
+        content={initialContent}
+        onChange={vi.fn()}
+        onPaginationRequest={onPaginationRequest}
+      />,
+    );
+
+    const editor = await screen.findByRole("textbox", {
+      name: "文本块编辑器",
+    });
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    fireEvent.input(editor, { inputType: "insertText", data: "a" });
+    fireEvent.paste(editor, {
+      clipboardData: { getData: () => "pasted text" },
+    });
+    fireEvent.drop(editor, {
+      dataTransfer: { getData: () => "dropped text" },
+    });
+    fireEvent.keyDown(editor, { key: "z", metaKey: true });
+
+    act(() => {
+      ref.current?.applyCommand({ type: "toggleBold" });
+    });
+
+    fireEvent.compositionStart(editor);
+    fireEvent.input(editor, { inputType: "insertCompositionText", data: "中" });
+    fireEvent.compositionEnd(editor);
+
+    await waitFor(() => {
+      expect(onPaginationRequest.mock.calls.flat()).toEqual(
+        expect.arrayContaining([
+          "input",
+          "paste",
+          "drop",
+          "history",
+          "format",
+          "compositionEnd",
+        ]),
+      );
+    });
   });
 
   it("applies an inline tag with the platform shortcut", async () => {
