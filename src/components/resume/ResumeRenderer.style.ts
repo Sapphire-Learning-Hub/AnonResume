@@ -29,16 +29,6 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       }
     }
   `,
-  measurementRoot: css`
-    position: fixed;
-    top: 0;
-    left: -100000px;
-    width: 210mm;
-    visibility: hidden;
-    pointer-events: none;
-    user-select: none;
-    contain: layout style paint;
-  `,
   pageFrame: css`
     display: grid;
     gap: 10px;
@@ -85,19 +75,6 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       line-height: 1;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
-    }
-  `,
-  printSafeArea: css`
-    position: absolute;
-    z-index: 4;
-    inset: var(--resume-page-padding);
-    border: 1px dashed rgba(15, 98, 254, 0.28);
-    border-radius: 4px;
-    pointer-events: none;
-    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.04);
-
-    @media print {
-      display: none;
     }
   `,
   pageContent: css`

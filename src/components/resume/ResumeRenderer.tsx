@@ -37,7 +37,6 @@ import {
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
 import {
   findBlockByPath,
-  findTextBlock,
   getPlainTextFromRichText,
 } from "@/domain/resume/operations";
 import {
@@ -46,6 +45,10 @@ import {
   type ResumePageLayout,
   type ResumePageSectionLayout,
 } from "@/domain/resume/pagination";
+import {
+  createResumePageBreakMap,
+  type ResumePageBreakMap,
+} from "@/domain/resume/page-flow/break-map";
 import type {
   BadgeBlock,
   GroupBlock,
@@ -79,6 +82,13 @@ import { ResumeInlineIcon } from "./ResumeInlineIcon";
 import { ResumePrintReadyFlag } from "./ResumePrintReadyFlag";
 import { useResumeRendererStyles } from "./ResumeRenderer.style";
 import { measureResumeFlow } from "./pagination/flow-measurement";
+import { ResumeEditingCanvas } from "./pagination/ResumeEditingCanvas";
+import {
+  ResumeInlinePageBreak,
+  ResumePageBreakProvider,
+  ResumeStructuralPageBreaks,
+  useResumePageBreaks,
+} from "./pagination/page-break-context";
 import type {
   ResumeDiffNodeAnnotation,
   ResumeDiffTextSegment,
@@ -132,26 +142,36 @@ const TextEditingStateContext = createContext<
 >(undefined);
 type SortableBlockAxis = "vertical" | "horizontal" | "grid";
 const A4_PAGE_HEIGHT_PX = (297 / 25.4) * 96;
+const A4_PAGE_WIDTH_PX = (210 / 25.4) * 96;
 const DEFAULT_SECTION_GAP_PX = 20;
 const DEFAULT_BLOCK_GAP_PX = 10;
+const EDIT_PAGE_GAP_PX = 24;
 const BLOCK_PATH_SEPARATOR = "::";
 const UNSAFE_LINK_PROTOCOL_PATTERN = /^\s*(?:javascript|data):/i;
 
 type ResumeTextBlockEditorProps = ComponentPropsWithoutRef<
   typeof TiptapTextBlockEditor
->;
+> & {
+  pageBreakAnchor?: {
+    sectionId: string;
+    path: string[];
+  };
+};
 
 const ResumeTextBlockEditor = forwardRef<
   TiptapTextBlockEditorHandle,
   ResumeTextBlockEditorProps
 >(function ResumeTextBlockEditor(props, ref) {
   const onEditingStateChange = useContext(TextEditingStateContext);
+  const { pageBreakAnchor, ...editorProps } = props;
+  const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
   return (
     <TiptapTextBlockEditor
-      {...props}
+      {...editorProps}
       ref={ref}
       onEditingStateChange={onEditingStateChange}
+      pageBreaks={pageBreaks}
     />
   );
 });
@@ -492,7 +512,13 @@ function getTextBlockStyle(block: TextBlock): CSSProperties {
   };
 }
 
-function StyledRichText({ block }: { block: TextBlock }) {
+function StyledRichText({
+  block,
+  pageBreakAnchor,
+}: {
+  block: TextBlock;
+  pageBreakAnchor?: { sectionId: string; path: string[] };
+}) {
   const annotations = useResumeDiffAnnotations("block", block.id, ["text"]);
   const annotation = getInlineTextAnnotation(annotations);
   const segmentText = annotation?.textSegments
@@ -507,19 +533,48 @@ function StyledRichText({ block }: { block: TextBlock }) {
           segmentOffset: 0,
         }
       : undefined;
+  const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
   return block.content.content.map((paragraph, paragraphIndex) => (
     <p key={`${block.id}-${paragraphIndex}`} style={getTextBlockStyle(block)}>
       {paragraph.content.map((node, nodeIndex) => {
+        const nodeBreaks = pageBreaks
+          .filter(
+            (pageBreak) =>
+              pageBreak.position.paragraphIndex === paragraphIndex &&
+              pageBreak.position.nodeIndex === nodeIndex,
+          )
+          .sort(
+            (left, right) => left.position.offset - right.position.offset,
+          );
+
         if (node.type === "hardBreak") {
           if (cursor) takeTextSegments(cursor, 1);
           return (
-            <br
+            <span
               key={`hard-break-${block.id}-${nodeIndex}`}
               data-resume-rich-node-index={nodeIndex}
               data-resume-rich-node-type="hardBreak"
               data-resume-rich-paragraph-index={paragraphIndex}
-            />
+            >
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 0)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+              <br />
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 1)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+            </span>
           );
         }
 
@@ -531,8 +586,73 @@ function StyledRichText({ block }: { block: TextBlock }) {
               data-resume-rich-node-type="resumeIcon"
               data-resume-rich-paragraph-index={paragraphIndex}
             >
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 0)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
               <ResumeInlineIcon iconId={node.attrs.iconId} />
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 1)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
             </span>
+          );
+        }
+
+        let offset = 0;
+        const textParts: ReactNode[] = [];
+
+        for (const pageBreak of nodeBreaks) {
+          const nextOffset = Math.max(
+            offset,
+            Math.min(node.text.length, pageBreak.position.offset),
+          );
+          const value = node.text.slice(offset, nextOffset);
+
+          if (value) {
+            textParts.push(
+              <span key={`${pageBreak.id}-text`}>
+                {renderDiffAwareText(
+                  value,
+                  node.marks,
+                  cursor,
+                  annotation?.side,
+                  `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
+                )}
+              </span>,
+            );
+          }
+
+          textParts.push(
+            <ResumeInlinePageBreak
+              key={pageBreak.id}
+              pageBreak={pageBreak}
+            />,
+          );
+          offset = nextOffset;
+        }
+
+        const remainder = node.text.slice(offset);
+
+        if (remainder || textParts.length === 0) {
+          textParts.push(
+            <span key={`${block.id}-${paragraphIndex}-${nodeIndex}-remainder`}>
+              {renderDiffAwareText(
+                remainder,
+                node.marks,
+                cursor,
+                annotation?.side,
+                `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
+              )}
+            </span>,
           );
         }
 
@@ -543,13 +663,7 @@ function StyledRichText({ block }: { block: TextBlock }) {
             data-resume-rich-node-type="text"
             data-resume-rich-paragraph-index={paragraphIndex}
           >
-            {renderDiffAwareText(
-              node.text,
-              node.marks,
-              cursor,
-              annotation?.side,
-              `${block.id}-${paragraphIndex}-${nodeIndex}`,
-            )}
+            {textParts}
           </span>
         );
       })}
@@ -748,13 +862,19 @@ function renderTextBlock(
     context.blockPath,
   );
   const plainText = getPlainTextFromRichText(block.content);
+  const pageBreakAnchor = {
+    sectionId: context.sectionId,
+    path: context.blockPath,
+  };
 
   if (context.mode === "edit" && context.editSurfaceMode === "content") {
     if (selected) {
       return renderSelectedEditorShell({
         shellTestId: `selected-editor-shell-${context.sectionId}-${block.id}`,
         placeholderTestId: `selected-editor-placeholder-${context.sectionId}-${block.id}`,
-        placeholder: <StyledRichText block={block} />,
+        placeholder: (
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
+        ),
         editor: (
           <ResumeTextBlockEditor
             ref={context.textEditorRef}
@@ -762,6 +882,7 @@ function renderTextBlock(
             className={context.styles.textEditor}
             content={block.content}
             inlineToolbarLabels={getInlineToolbarLabels(context.t)}
+            pageBreakAnchor={pageBreakAnchor}
             style={getTextBlockStyle(block)}
             wrapperClassName={context.styles.textEditorOverlay}
             onChange={(content) =>
@@ -792,7 +913,7 @@ function renderTextBlock(
         }
       >
         <div className={selected ? context.styles.selectedEditableText : undefined}>
-          <StyledRichText block={block} />
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
         </div>
       </button>
     );
@@ -800,7 +921,7 @@ function renderTextBlock(
 
   return (
     <div>
-      <StyledRichText block={block} />
+      <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
     </div>
   );
 }
@@ -858,6 +979,7 @@ function SortableListItem({
       data-resume-over={over}
       data-testid={`resume-list-item-${itemPath.join("-")}`}
     >
+      <ResumeStructuralPageBreaks sectionId={sectionId} path={itemPath} />
       <div
         aria-hidden="true"
         className={styles.sortableBlockChrome}
@@ -1075,6 +1197,10 @@ function renderListBlock(
                 }
                 data-resume-list-item-path={serializeBlockPath(itemPath)}
               >
+                <ResumeStructuralPageBreaks
+                  sectionId={context.sectionId}
+                  path={itemPath}
+                />
                 {itemContent}
               </li>
             )}
@@ -1465,6 +1591,7 @@ function SortableBlockItem({
         data-resume-edit-surface-mode={editSurfaceMode}
         data-resume-over={over}
       >
+        <ResumeStructuralPageBreaks sectionId={sectionId} path={blockPath} />
         {draggable ? (
           <div
             aria-hidden="true"
@@ -1588,6 +1715,10 @@ function SortableBlockChildren({
             data-resume-block-path={serializeBlockPath(blockPath)}
             data-resume-drag-mode="none"
           >
+            <ResumeStructuralPageBreaks
+              sectionId={sectionId}
+              path={blockPath}
+            />
             {renderBlock(block, styles, {
               t,
               mode,
@@ -2166,11 +2297,17 @@ export function ResumeRenderer({
   const [pageLayouts, setPageLayouts] = useState<ResumePageLayout[]>(() =>
     createSinglePageLayout(visibleSections),
   );
+  const [pageBreakMap, setPageBreakMap] = useState<ResumePageBreakMap>({
+    revision: "initial",
+    pageCount: 1,
+    breaks: [],
+  });
   const [paginationReady, setPaginationReady] = useState(false);
   const [measuredLayoutKey, setMeasuredLayoutKey] = useState("");
   const [pendingLayout, setPendingLayout] = useState<{
     inputKey: string;
     pages: ResumePageLayout[];
+    breakMap: ResumePageBreakMap;
   }>();
   const [editingState, setEditingState] =
     useState<TiptapTextBlockEditorEditingState>({
@@ -2179,7 +2316,6 @@ export function ResumeRenderer({
     });
   const [layoutRevision, setLayoutRevision] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const measurementRootRef = useRef<HTMLDivElement>(null);
   const [activeTextEditor, setActiveTextEditor] =
     useState<TiptapTextBlockEditorHandle | null>(null);
   const captureTextEditor = useCallback(
@@ -2192,10 +2328,6 @@ export function ResumeRenderer({
     () => mergeRefs(captureTextEditor, textEditorRef),
     [captureTextEditor, textEditorRef],
   );
-  const selectedTextBlock =
-    selection?.sectionId && selection.blockPath
-      ? findTextBlock(document, selection.sectionId, selection.blockPath)
-      : undefined;
   const pageContentHeight = useMemo(() => getPageContentHeight(document), [document]);
   const sectionMap = useMemo(
     () => new Map(visibleSections.map((section) => [section.id, section])),
@@ -2238,6 +2370,16 @@ export function ResumeRenderer({
     isLayoutCurrent || pendingLayoutIsCurrent || measurementDeferredForEditing;
   const resolvedPageLayouts = hasCommittedLayout ? pageLayouts : measurementLayout;
   const printReady = isLayoutCurrent;
+  const committedSpacerHeights = useMemo(
+    () =>
+      new Map(
+        pageBreakMap.breaks.map((pageBreak) => [
+          pageBreak.id,
+          pageBreak.spacerHeight,
+        ]),
+      ),
+    [pageBreakMap.breaks],
+  );
   const handleEditingStateChange = useCallback(
     (nextState: TiptapTextBlockEditorEditingState) => {
       setEditingState((currentState) =>
@@ -2298,6 +2440,7 @@ export function ResumeRenderer({
 
     const frameId = window.requestAnimationFrame(() => {
       setPageLayouts(pendingLayout.pages);
+      setPageBreakMap(pendingLayout.breakMap);
       setMeasuredLayoutKey(pendingLayout.inputKey);
       setPaginationReady(true);
       setPendingLayout(undefined);
@@ -2320,9 +2463,15 @@ export function ResumeRenderer({
 
     const frameId = window.requestAnimationFrame(() => {
       let nextLayouts: ResumePageLayout[];
+      let nextBreakMap: ResumePageBreakMap;
 
       if (visibleSections.length === 0) {
         nextLayouts = measurementLayout;
+        nextBreakMap = {
+          revision: layoutInputKey,
+          pageCount: 1,
+          breaks: [],
+        };
       } else {
         const rootElement = rootRef.current;
 
@@ -2336,7 +2485,7 @@ export function ResumeRenderer({
           zoom,
           activeEditor: activeTextEditor,
           activeSelection: selection,
-          committedSpacerHeights: new Map(),
+          committedSpacerHeights,
         });
 
         if (!measuredSections) {
@@ -2348,22 +2497,36 @@ export function ResumeRenderer({
           sectionGap: DEFAULT_SECTION_GAP_PX,
           sections: measuredSections,
         }).pages;
+        nextBreakMap = createResumePageBreakMap({
+          pages: nextLayouts,
+          sections: measuredSections,
+          pageHeight: pageContentHeight,
+          pageGap: EDIT_PAGE_GAP_PX,
+          pagePadding: document.settings.page.margin,
+          revision: layoutInputKey,
+        });
       }
 
       if (arePageLayoutsEqual(pageLayouts, nextLayouts)) {
         setPendingLayout(undefined);
+        setPageBreakMap(nextBreakMap);
         setMeasuredLayoutKey(layoutInputKey);
         setPaginationReady(true);
         return;
       }
 
       if (editingState.focused || editingState.composing) {
-        setPendingLayout({ inputKey: layoutInputKey, pages: nextLayouts });
+        setPendingLayout({
+          inputKey: layoutInputKey,
+          pages: nextLayouts,
+          breakMap: nextBreakMap,
+        });
         setPaginationReady(true);
         return;
       }
 
       setPageLayouts(nextLayouts);
+      setPageBreakMap(nextBreakMap);
       setPendingLayout(undefined);
       setMeasuredLayoutKey(layoutInputKey);
       setPaginationReady(true);
@@ -2376,6 +2539,7 @@ export function ResumeRenderer({
     editingState.composing,
     editingState.focused,
     activeTextEditor,
+    committedSpacerHeights,
     hasCommittedLayout,
     document,
     layoutInputKey,
@@ -2395,25 +2559,66 @@ export function ResumeRenderer({
         <ResumeDiffProvider
           presentation={mode === "print" ? undefined : diffPresentation}
         >
-          <>
-            <div
-              ref={rootRef}
-              className={styles.root}
-              data-resume-mode={mode}
-              data-resume-edit-surface-mode={editSurfaceMode}
-              data-resume-responsive-view={responsiveView ? "true" : "false"}
-              data-resume-pagination-ready={paginationSettled ? "true" : "false"}
-              data-resume-pagination-revision={paginationRevision}
-            >
-              {mode === "print" ? (
-                <ResumePrintReadyFlag ready={printReady} />
-              ) : null}
-              {resolvedPageLayouts.map((page) => (
+          <div
+            ref={rootRef}
+            className={styles.root}
+            data-resume-mode={mode}
+            data-resume-edit-surface-mode={editSurfaceMode}
+            data-resume-responsive-view={responsiveView ? "true" : "false"}
+            data-resume-pagination-ready={paginationSettled ? "true" : "false"}
+            data-resume-pagination-revision={paginationRevision}
+          >
+            {mode === "print" ? (
+              <ResumePrintReadyFlag ready={printReady} />
+            ) : null}
+            {mode === "edit" ? (
+              <ResumePageBreakProvider breakMap={pageBreakMap}>
+                <ResumeEditingCanvas
+                  pageCount={resolvedPageLayouts.length}
+                  pageHeight={A4_PAGE_HEIGHT_PX}
+                  pageWidth={A4_PAGE_WIDTH_PX}
+                  pageGap={EDIT_PAGE_GAP_PX}
+                  pagePadding={document.settings.page.margin}
+                  styleVariables={styleVariables as CSSProperties}
+                  showPrintSafeArea={showPrintSafeArea}
+                >
+                  <div className={styles.pageContent}>
+                    {measurementLayout[0]?.sections.map(
+                      (sectionLayout, sectionIndex) => {
+                        const section = sectionMap.get(sectionLayout.sectionId);
+
+                        if (!section) {
+                          return null;
+                        }
+
+                        return renderResumeSection(section, {
+                          t,
+                          sectionLayout,
+                          mode,
+                          editSurfaceMode,
+                          selection,
+                          styles,
+                          onSelectBlock,
+                          onChangeSectionTitle,
+                          onChangeTextBlock,
+                          onMoveBlock,
+                          textEditorRef: mergedTextEditorRef,
+                          onTextEditorFormattingStateChange,
+                          instanceKey: `edit-${section.id}-${sectionIndex}`,
+                          anchorId: getResumeSectionAnchorId(section.id),
+                        });
+                      },
+                    )}
+                  </div>
+                </ResumeEditingCanvas>
+              </ResumePageBreakProvider>
+            ) : (
+              resolvedPageLayouts.map((page) => (
                 <div
                   key={`resume-page-${page.index}`}
                   className={styles.pageFrame}
                 >
-                  {mode !== "print" ? (
+                  {mode === "view" ? (
                     <div
                       className={styles.pageLabel}
                       data-print-chrome="screen"
@@ -2428,13 +2633,6 @@ export function ResumeRenderer({
                     data-resume-page-index={page.index + 1}
                     data-testid={`resume-page-${page.index + 1}`}
                   >
-                    {mode === "edit" && showPrintSafeArea ? (
-                      <div
-                        aria-hidden="true"
-                        className={styles.printSafeArea}
-                        data-resume-print-safe-area="true"
-                      />
-                    ) : null}
                     <div className={styles.pageContent}>
                       {page.sections.map((sectionLayout, sectionIndex) => {
                         const section = sectionMap.get(sectionLayout.sectionId);
@@ -2466,46 +2664,9 @@ export function ResumeRenderer({
                     </div>
                   </article>
                 </div>
-              ))}
-              {mode === "edit" && selectedTextBlock ? null : null}
-            </div>
-            {hasCommittedLayout && shouldMeasureLayout ? (
-              <div
-                ref={measurementRootRef}
-                aria-hidden="true"
-                className={styles.measurementRoot}
-                data-resume-measurement-root="true"
-              >
-                <article
-                  className={styles.page}
-                  style={styleVariables as CSSProperties}
-                  data-resume-page="true"
-                  data-resume-page-index="measurement"
-                >
-                  <div className={styles.pageContent}>
-                    {measurementLayout[0]?.sections.map(
-                      (sectionLayout, sectionIndex) => {
-                        const section = sectionMap.get(sectionLayout.sectionId);
-
-                        if (!section) {
-                          return null;
-                        }
-
-                        return renderResumeSection(section, {
-                          t,
-                          sectionLayout,
-                          mode: "view",
-                          editSurfaceMode,
-                          styles,
-                          instanceKey: `measurement-${section.id}-${sectionIndex}`,
-                        });
-                      },
-                    )}
-                  </div>
-                </article>
-              </div>
-            ) : null}
-          </>
+              ))
+            )}
+          </div>
         </ResumeDiffProvider>
       </TextEditingStateContext.Provider>
     </BadgeEditContext.Provider>

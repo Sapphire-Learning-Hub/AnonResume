@@ -390,13 +390,21 @@ describe("ResumeRenderer", () => {
       configurable: true,
       value: function getBoundingClientRect() {
         const sectionId = this.getAttribute?.("data-resume-section-id");
+        const spacerHeight = Array.from(
+          (this as HTMLElement).querySelectorAll<HTMLElement>(
+            "[data-resume-page-break-id]",
+          ),
+        ).reduce(
+          (total, spacer) => total + Number.parseFloat(spacer.style.height || "0"),
+          0,
+        );
 
         if (sectionId === "section-profile") {
-          return createRect(700);
+          return createRect(700 + spacerHeight);
         }
 
         if (sectionId === "section-experience") {
-          return createRect(experienceHeight + 100);
+          return createRect(experienceHeight + 100 + spacerHeight);
         }
 
         const blockPath = this.getAttribute?.("data-resume-block-path");
@@ -406,18 +414,18 @@ describe("ResumeRenderer", () => {
           blockPath === "block-profile-highlights" ||
           blockPath === "block-profile-stack"
         ) {
-          return createRect(200);
+          return createRect(200 + spacerHeight);
         }
 
         if (blockPath === "group-experience-anonresume") {
-          return createRect(experienceHeight);
+          return createRect(experienceHeight + spacerHeight);
         }
 
         if (this.hasAttribute?.("data-resume-section-title")) {
           return createRect(80);
         }
 
-        return createRect(40);
+        return createRect(40 + spacerHeight);
       },
     });
 
@@ -442,8 +450,8 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const secondPage = await screen.findByTestId("resume-page-2");
-    const editor = within(secondPage).getByRole("textbox", {
+    await screen.findByTestId("resume-page-2");
+    const editor = screen.getByRole("textbox", {
       name: "文本块编辑器",
     });
 
@@ -482,6 +490,106 @@ describe("ResumeRenderer", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
     });
+  });
+
+  it("keeps one edit document tree mounted while visual pages change", async () => {
+    let profileHeight = 700;
+    let experienceHeight = 400;
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        const sectionId = this.getAttribute?.("data-resume-section-id");
+        const blockPath = this.getAttribute?.("data-resume-block-path");
+        const spacerHeight = Array.from(
+          (this as HTMLElement).querySelectorAll<HTMLElement>(
+            "[data-resume-page-break-id]",
+          ),
+        ).reduce(
+          (total, spacer) => total + Number.parseFloat(spacer.style.height || "0"),
+          0,
+        );
+
+        if (sectionId === "section-profile") {
+          return createRect(profileHeight + spacerHeight);
+        }
+
+        if (sectionId === "section-experience") {
+          return createRect(experienceHeight + spacerHeight);
+        }
+
+        if (this.hasAttribute?.("data-resume-section-title")) {
+          return createRect(80);
+        }
+
+        if (
+          blockPath === "block-profile-summary" ||
+          blockPath === "block-profile-highlights" ||
+          blockPath === "block-profile-stack"
+        ) {
+          return createRect((profileHeight - 100) / 3);
+        }
+
+        if (blockPath === "group-experience-anonresume") {
+          return createRect(experienceHeight - 100 + spacerHeight);
+        }
+
+        return createRect(40);
+      },
+    });
+
+    const document = createDefaultResumeDocument();
+    const { container, rerender } = render(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={0}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll("[data-resume-editing-page]"),
+      ).toHaveLength(2);
+    });
+
+    const profileBlock = container.querySelector(
+      '[data-resume-block-path="block-profile-summary"]',
+    );
+    const experienceBlock = container.querySelector(
+      '[data-resume-block-path="group-experience-anonresume"]',
+    );
+
+    expect(
+      container.querySelectorAll("[data-resume-editing-content]"),
+    ).toHaveLength(1);
+
+    profileHeight = 300;
+    experienceHeight = 300;
+    rerender(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={1}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll("[data-resume-editing-page]"),
+      ).toHaveLength(1);
+    });
+
+    expect(
+      container.querySelector('[data-resume-block-path="block-profile-summary"]'),
+    ).toBe(profileBlock);
+    expect(
+      container.querySelector(
+        '[data-resume-block-path="group-experience-anonresume"]',
+      ),
+    ).toBe(experienceBlock);
+    expect(screen.getByTestId("resume-page-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
   });
 
   it("finishes pagination when a structural row is empty", async () => {
