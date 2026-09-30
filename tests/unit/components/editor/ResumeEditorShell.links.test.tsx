@@ -105,7 +105,7 @@ describe("ResumeEditorShell link editing", () => {
     fireEvent.click(linkDialog.getByRole("button", { name: spacedLabel("确定") }));
 
     expect(
-      within(screen.getByRole("textbox", { name: "文本块编辑器" })).getByRole("link", { name: "联系我" }),
+      within(screen.getByRole("textbox", { name: "文本编辑器" })).getByRole("link", { name: "联系我" }),
     ).toHaveAttribute("href", "mailto:hello@example.com?subject=%E7%AE%80%E5%8E%86%E5%92%A8%E8%AF%A2");
   });
 
@@ -132,7 +132,7 @@ describe("ResumeEditorShell link editing", () => {
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("清除链接") }));
 
     expect(
-      within(screen.getByRole("textbox", { name: "文本块编辑器" })).queryByRole("link"),
+      within(screen.getByRole("textbox", { name: "文本编辑器" })).queryByRole("link"),
     ).not.toBeInTheDocument();
   });
 
@@ -157,7 +157,7 @@ describe("ResumeEditorShell link editing", () => {
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("确定") }));
 
     expect(
-      within(screen.getByRole("textbox", { name: "文本块编辑器" })).getByRole("link", {
+      within(screen.getByRole("textbox", { name: "文本编辑器" })).getByRole("link", {
         name: "跳到工作经历",
       }),
     ).toHaveAttribute("href", "#resume-section-section-experience");
@@ -172,7 +172,7 @@ describe("ResumeEditorShell link editing", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    fireEvent.keyDown(screen.getByRole("textbox", { name: "文本块编辑器" }), {
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "文本编辑器" }), {
       key: "k",
       metaKey: true,
     });

@@ -613,7 +613,7 @@ describe("ResumeRenderer", () => {
 
     await screen.findByTestId("resume-page-2");
     const editor = screen.getByRole("textbox", {
-      name: "文本块编辑器",
+      name: "文本编辑器",
     });
 
     fireEvent.focus(editor);
@@ -641,7 +641,7 @@ describe("ResumeRenderer", () => {
         ?.getAttribute("data-resume-pagination-ready"),
     ).toBe("false");
     expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
+    expect(screen.getByRole("textbox", { name: "文本编辑器" })).toBe(editor);
 
     fireEvent.compositionEnd(editor);
     expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
@@ -1130,7 +1130,7 @@ describe("ResumeRenderer", () => {
     );
 
     const editTitleButton = within(editRender.container).getByLabelText(
-      "编辑区块标题 个人简介",
+      "编辑章节标题 个人简介",
     );
     const viewTitle = viewRender.container.querySelector(
       '[data-resume-section-title="true"]',
@@ -1307,7 +1307,7 @@ describe("ResumeRenderer", () => {
       "resume-sort-chrome-group-experience-anonresume-row-experience-header",
     );
     const dragHandle = screen.getByRole("button", {
-      name: "拖动 行 Block",
+      name: "拖动 双列内容",
     });
 
     expect(blockItem).toHaveAttribute("data-resume-drag-mode", "handle");
@@ -1342,7 +1342,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "拖动 行 Block" }));
+    fireEvent.click(screen.getByRole("button", { name: "拖动 双列内容" }));
 
     expect(onSelectBlock).toHaveBeenCalledWith({
       sectionId: "section-experience",
@@ -1367,7 +1367,7 @@ describe("ResumeRenderer", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "选择 分组 Block" }),
+      screen.getByRole("button", { name: "选择 内容组" }),
     );
 
     expect(onSelectBlock).toHaveBeenCalledWith({
@@ -1488,7 +1488,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     expect(editor.tagName).toBe("DIV");
     expect(editor).toHaveAttribute("contenteditable", "true");
@@ -1529,7 +1529,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     expect(editor).toHaveTextContent("基于流式布局的结构化简历编辑基础能力");
     expect(
@@ -1553,7 +1553,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const editor = screen.getByRole("textbox", { name: "文本块编辑器" });
+    const editor = screen.getByRole("textbox", { name: "文本编辑器" });
 
     expect(editor.tagName).toBe("DIV");
     expect(editor).toHaveAttribute("contenteditable", "true");

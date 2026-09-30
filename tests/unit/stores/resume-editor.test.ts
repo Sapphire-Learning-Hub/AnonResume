@@ -599,7 +599,7 @@ describe("createResumeEditorStore", () => {
     expect(state.history.past).toHaveLength(1);
     expect(newSection?.title?.content[0]?.content[0]).toMatchObject({
       type: "text",
-      text: "新区块",
+      text: "新章节",
     });
     expect(newSection?.blocks[0]).toMatchObject({
       type: "text",
@@ -1092,7 +1092,7 @@ describe("createResumeEditorStore", () => {
 
     expect(state.document.sections.map((section) => getSectionTitle(section.title))).toEqual([
       "个人简介",
-      "新区块",
+      "新章节",
       "经历",
     ]);
     expect(state.selection).toEqual({ sectionId: newSectionId });
