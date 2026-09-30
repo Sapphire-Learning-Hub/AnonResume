@@ -5,13 +5,18 @@ import {
   createWholeFragment,
   pathsEqual,
   type MeasuredResumeNode,
+  type MeasuredRichTextLine,
   type ResumePageFragment,
 } from "./pagination-model";
 
 const DEFAULT_SECTION_TITLE_GAP_PX = 20;
 const DEFAULT_TOP_LEVEL_BLOCK_GAP_PX = 10;
 
-export type { MeasuredResumeNode, ResumePageFragment } from "./pagination-model";
+export type {
+  MeasuredResumeNode,
+  MeasuredRichTextLine,
+  ResumePageFragment,
+} from "./pagination-model";
 
 export interface MeasuredResumeSection {
   id: string;
@@ -79,12 +84,86 @@ function getSectionTitleGap(section: MeasuredResumeSection) {
 
 function isBreakableVerticalNode(node: MeasuredResumeNode) {
   return (
-    node.direction !== "horizontal" &&
-    (node.type === "group" ||
-      node.type === "list" ||
-      node.type === "listItem") &&
-    Boolean(node.children?.length)
+    (node.type === "text" && Boolean(node.textLines?.length)) ||
+    (node.direction !== "horizontal" &&
+      (node.type === "group" ||
+        node.type === "list" ||
+        node.type === "listItem") &&
+      Boolean(node.children?.length))
   );
+}
+
+function calculateTextLinesHeight(lines: MeasuredRichTextLine[]) {
+  return lines.reduce((total, line) => total + line.height, 0);
+}
+
+function createTextRemainderNode(
+  node: MeasuredResumeNode,
+  lines: MeasuredRichTextLine[],
+) {
+  const sourceTo = node.textRange?.to ?? node.textLines?.at(-1)?.to;
+
+  if (!sourceTo || lines.length === 0) {
+    return undefined;
+  }
+
+  return {
+    ...cloneMeasuredNode(node),
+    height: calculateTextLinesHeight(lines) + (node.trailingHeight ?? 0),
+    continuation: true,
+    leadingHeight: 0,
+    textLines: lines,
+    textRange: {
+      from: lines[0]!.from,
+      to: sourceTo,
+    },
+  } satisfies MeasuredResumeNode;
+}
+
+function takeTextLines(
+  node: MeasuredResumeNode,
+  availableSpace: number,
+): NodePlacementResult {
+  const lines = node.textLines ?? [];
+  const leadingHeight = node.leadingHeight ?? 0;
+  const trailingHeight = node.trailingHeight ?? 0;
+  let height = leadingHeight;
+  let lineCount = 0;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const isLastLine = index === lines.length - 1;
+    const nextHeight =
+      height + line.height + (isLastLine ? trailingHeight : 0);
+
+    if (nextHeight > availableSpace) {
+      break;
+    }
+
+    height = nextHeight;
+    lineCount += 1;
+  }
+
+  if (lineCount === 0) {
+    return { height: 0 };
+  }
+
+  const placedLines = lines.slice(0, lineCount);
+  const remainingLines = lines.slice(lineCount);
+  const sourceFrom = node.textRange?.from ?? placedLines[0]!.from;
+
+  return {
+    fragment: {
+      path: [...node.path],
+      ...(node.continuation ? { continuation: true } : {}),
+      textRange: {
+        from: sourceFrom,
+        to: placedLines.at(-1)!.to,
+      },
+    },
+    height,
+    remainingNode: createTextRemainderNode(node, remainingLines),
+  };
 }
 
 function isKeepWithNextCompanion(
@@ -236,6 +315,10 @@ function takeNodeFragment(
 
   if (!allowSplit || !isBreakableVerticalNode(node)) {
     return { height: 0 };
+  }
+
+  if (node.type === "text" && node.textLines?.length) {
+    return takeTextLines(node, availableSpace);
   }
 
   return takeVerticalChildren(node, availableSpace, pageHeight);

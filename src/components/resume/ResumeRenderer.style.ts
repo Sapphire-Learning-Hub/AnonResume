@@ -77,24 +77,16 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       -webkit-box-decoration-break: clone;
     }
   `,
-  printSafeArea: css`
-    position: absolute;
-    z-index: 4;
-    inset: var(--resume-page-padding);
-    border: 1px dashed rgba(15, 98, 254, 0.28);
-    border-radius: 4px;
-    pointer-events: none;
-    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.04);
-
-    @media print {
-      display: none;
-    }
-  `,
   pageContent: css`
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: var(--resume-section-gap);
+  `,
+  sectionFlow: css`
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
   `,
   section: css`
     display: flex;

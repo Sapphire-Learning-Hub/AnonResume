@@ -1,3 +1,9 @@
+import {
+  compareRichTextPositions,
+  type RichTextPosition,
+  type RichTextRange,
+} from "./page-flow/rich-text-range";
+
 export type MeasuredResumeNodeType =
   | "text"
   | "badges"
@@ -5,6 +11,12 @@ export type MeasuredResumeNodeType =
   | "group"
   | "list"
   | "listItem";
+
+export interface MeasuredRichTextLine {
+  from: RichTextPosition;
+  to: RichTextPosition;
+  height: number;
+}
 
 export interface MeasuredResumeNode {
   id: string;
@@ -17,12 +29,17 @@ export interface MeasuredResumeNode {
   wrapperHeight?: number;
   children?: MeasuredResumeNode[];
   continuation?: boolean;
+  textLines?: MeasuredRichTextLine[];
+  textRange?: RichTextRange;
+  leadingHeight?: number;
+  trailingHeight?: number;
 }
 
 export interface ResumePageFragment {
   path: string[];
   children?: ResumePageFragment[];
   continuation?: boolean;
+  textRange?: RichTextRange;
 }
 
 export function pathsEqual(current: string[], target: string[]) {
@@ -39,6 +56,17 @@ export function cloneMeasuredNode(
     ...node,
     path: [...node.path],
     children: node.children?.map(cloneMeasuredNode),
+    textLines: node.textLines?.map((line) => ({
+      ...line,
+      from: { ...line.from },
+      to: { ...line.to },
+    })),
+    textRange: node.textRange
+      ? {
+          from: { ...node.textRange.from },
+          to: { ...node.textRange.to },
+        }
+      : undefined,
   };
 }
 
@@ -51,6 +79,7 @@ export function createWholeFragment(
       ? { children: node.children.map(createWholeFragment) }
       : {}),
     ...(node.continuation ? { continuation: true } : {}),
+    ...(node.textRange ? { textRange: node.textRange } : {}),
   };
 }
 
@@ -78,6 +107,26 @@ export function calculateFragmentHeight(
   node: MeasuredResumeNode,
   fragment: ResumePageFragment,
 ): number {
+  if (fragment.textRange && node.textLines?.length) {
+    const lines = node.textLines.filter(
+      (line) =>
+        compareRichTextPositions(line.from, fragment.textRange!.from) >= 0 &&
+        compareRichTextPositions(line.to, fragment.textRange!.to) <= 0,
+    );
+    const sourceFrom = node.textRange?.from ?? node.textLines[0]!.from;
+    const sourceTo = node.textRange?.to ?? node.textLines.at(-1)!.to;
+
+    return (
+      lines.reduce((total, line) => total + line.height, 0) +
+      (compareRichTextPositions(fragment.textRange.from, sourceFrom) === 0
+        ? (node.leadingHeight ?? 0)
+        : 0) +
+      (compareRichTextPositions(fragment.textRange.to, sourceTo) === 0
+        ? (node.trailingHeight ?? 0)
+        : 0)
+    );
+  }
+
   if (!fragment.children?.length || !node.children?.length) {
     return node.height;
   }

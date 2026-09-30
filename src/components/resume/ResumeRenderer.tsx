@@ -20,6 +20,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   createContext,
+  forwardRef,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -27,6 +29,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ComponentPropsWithoutRef,
   type ReactNode,
   type Ref,
 } from "react";
@@ -34,17 +37,19 @@ import {
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
 import {
   findBlockByPath,
-  findTextBlock,
   getPlainTextFromRichText,
 } from "@/domain/resume/operations";
 import {
   paginateMeasuredSections,
-  type MeasuredResumeNode,
   type MeasuredResumeSection,
   type ResumePageFragment,
   type ResumePageLayout,
   type ResumePageSectionLayout,
 } from "@/domain/resume/pagination";
+import {
+  createResumePageBreakMap,
+} from "@/domain/resume/page-flow/break-map";
+import { sliceRichTextContent } from "@/domain/resume/page-flow/rich-text-range";
 import type {
   BadgeBlock,
   GroupBlock,
@@ -62,6 +67,7 @@ import { getResumeStyleVariables } from "@/styles/resume-style-vars";
 
 import {
   TiptapTextBlockEditor,
+  type TiptapTextBlockEditorEditingState,
   type TiptapInlineToolbarLabels,
   type TiptapTextBlockEditorFormatState,
   type TiptapTextBlockEditorHandle,
@@ -76,6 +82,17 @@ import {
 import { ResumeInlineIcon } from "./ResumeInlineIcon";
 import { ResumePrintReadyFlag } from "./ResumePrintReadyFlag";
 import { useResumeRendererStyles } from "./ResumeRenderer.style";
+import { measureResumeSectionFlow } from "./pagination/flow-measurement";
+import { ResumeEditingCanvas } from "./pagination/ResumeEditingCanvas";
+import type { EditPaginationRevision } from "./pagination/edit-pagination-scheduler";
+import {
+  ResumeInlinePageBreak,
+  ResumePageBreakProvider,
+  ResumeSectionPageBreak,
+  ResumeStructuralPageBreaks,
+  useResumePageBreaks,
+} from "./pagination/page-break-context";
+import { useResumeEditPagination } from "./pagination/useResumeEditPagination";
 import type {
   ResumeDiffNodeAnnotation,
   ResumeDiffTextSegment,
@@ -124,15 +141,68 @@ export interface ResumeRendererProps {
 type ResumeRendererStyles = ReturnType<typeof useResumeRendererStyles>["styles"];
 type Translator = ReturnType<typeof useI18n>["t"];
 const BadgeEditContext = createContext<ResumeRendererProps["onCommitBadgeItem"]>(undefined);
+const TextEditingStateContext = createContext<
+  ((state: TiptapTextBlockEditorEditingState) => void) | undefined
+>(undefined);
+const TextPaginationRequestContext = createContext<
+  ComponentPropsWithoutRef<
+    typeof TiptapTextBlockEditor
+  >["onPaginationRequest"]
+>(undefined);
 type SortableBlockAxis = "vertical" | "horizontal" | "grid";
 const A4_PAGE_HEIGHT_PX = (297 / 25.4) * 96;
+const A4_PAGE_WIDTH_PX = (210 / 25.4) * 96;
 const DEFAULT_SECTION_GAP_PX = 20;
 const DEFAULT_BLOCK_GAP_PX = 10;
+const EDIT_PAGE_GAP_PX = 24;
 const BLOCK_PATH_SEPARATOR = "::";
 const UNSAFE_LINK_PROTOCOL_PATTERN = /^\s*(?:javascript|data):/i;
 
+type ResumeTextBlockEditorProps = ComponentPropsWithoutRef<
+  typeof TiptapTextBlockEditor
+> & {
+  pageBreakAnchor?: {
+    sectionId: string;
+    path: string[];
+  };
+};
+
+const ResumeTextBlockEditor = forwardRef<
+  TiptapTextBlockEditorHandle,
+  ResumeTextBlockEditorProps
+>(function ResumeTextBlockEditor(props, ref) {
+  const onEditingStateChange = useContext(TextEditingStateContext);
+  const onPaginationRequest = useContext(TextPaginationRequestContext);
+  const { pageBreakAnchor, ...editorProps } = props;
+  const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
+
+  return (
+    <TiptapTextBlockEditor
+      {...editorProps}
+      ref={ref}
+      onEditingStateChange={onEditingStateChange}
+      onPaginationRequest={onPaginationRequest}
+      pageBreaks={pageBreaks}
+    />
+  );
+});
+
 function serializeBlockPath(blockPath: string[]) {
   return blockPath.join(BLOCK_PATH_SEPARATOR);
+}
+
+function assignRefValue<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === "function") {
+    ref(value);
+  } else if (ref) {
+    (ref as { current: T | null }).current = value;
+  }
+}
+
+function mergeRefs<T>(...refs: Array<Ref<T> | undefined>): Ref<T> {
+  return (value) => {
+    refs.forEach((ref) => assignRefValue(ref, value));
+  };
 }
 
 function getInlineToolbarLabels(t: Translator): TiptapInlineToolbarLabels {
@@ -235,26 +305,51 @@ function renderRichText(content: RichTextContent): ReactNode {
     <p key={`${paragraphIndex}-${paragraph.type}`}>
       {paragraph.content.map((node, nodeIndex) => {
         if (node.type === "hardBreak") {
-          return <br key={`hard-break-${paragraphIndex}-${nodeIndex}`} />;
-        }
-
-        if (node.type === "resumeIcon") {
           return (
-            <ResumeInlineIcon
-              key={`resume-icon-${paragraphIndex}-${nodeIndex}`}
-              iconId={node.attrs.iconId}
+            <br
+              key={`hard-break-${paragraphIndex}-${nodeIndex}`}
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="hardBreak"
+              data-resume-rich-paragraph-index={paragraphIndex}
             />
           );
         }
 
-        const textNode = <span key={`text-${paragraphIndex}-${nodeIndex}`}>{node.text}</span>;
+        if (node.type === "resumeIcon") {
+          return (
+            <span
+              key={`resume-icon-${paragraphIndex}-${nodeIndex}`}
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="resumeIcon"
+              data-resume-rich-paragraph-index={paragraphIndex}
+            >
+              <ResumeInlineIcon iconId={node.attrs.iconId} />
+            </span>
+          );
+        }
+
+        const textNode = (
+          <span
+            key={`text-${paragraphIndex}-${nodeIndex}`}
+            data-resume-rich-node-index={nodeIndex}
+            data-resume-rich-node-type="text"
+            data-resume-rich-paragraph-index={paragraphIndex}
+          >
+            {node.text}
+          </span>
+        );
 
         if (!node.marks?.length) {
           return textNode;
         }
 
         return (
-          <span key={`marked-text-${paragraphIndex}-${nodeIndex}`}>
+          <span
+            key={`marked-text-${paragraphIndex}-${nodeIndex}`}
+            data-resume-rich-node-index={nodeIndex}
+            data-resume-rich-node-type="text"
+            data-resume-rich-paragraph-index={paragraphIndex}
+          >
             {applyMarks(node.text, node.marks)}
           </span>
         );
@@ -366,20 +461,36 @@ function RichTextView({
         {paragraph.content.map((node, nodeIndex) => {
           if (node.type === "hardBreak") {
             if (cursor) takeTextSegments(cursor, 1);
-            return <br key={`hard-break-${paragraphIndex}-${nodeIndex}`} />;
-          }
-
-          if (node.type === "resumeIcon") {
             return (
-              <ResumeInlineIcon
-                key={`resume-icon-${paragraphIndex}-${nodeIndex}`}
-                iconId={node.attrs.iconId}
+              <br
+                key={`hard-break-${paragraphIndex}-${nodeIndex}`}
+                data-resume-rich-node-index={nodeIndex}
+                data-resume-rich-node-type="hardBreak"
+                data-resume-rich-paragraph-index={paragraphIndex}
               />
             );
           }
 
+          if (node.type === "resumeIcon") {
+            return (
+              <span
+                key={`resume-icon-${paragraphIndex}-${nodeIndex}`}
+                data-resume-rich-node-index={nodeIndex}
+                data-resume-rich-node-type="resumeIcon"
+                data-resume-rich-paragraph-index={paragraphIndex}
+              >
+                <ResumeInlineIcon iconId={node.attrs.iconId} />
+              </span>
+            );
+          }
+
           return (
-            <span key={`text-${paragraphIndex}-${nodeIndex}`}>
+            <span
+              key={`text-${paragraphIndex}-${nodeIndex}`}
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="text"
+              data-resume-rich-paragraph-index={paragraphIndex}
+            >
               {renderDiffAwareText(
                 node.text,
                 node.marks,
@@ -412,7 +523,13 @@ function getTextBlockStyle(block: TextBlock): CSSProperties {
   };
 }
 
-function StyledRichText({ block }: { block: TextBlock }) {
+function StyledRichText({
+  block,
+  pageBreakAnchor,
+}: {
+  block: TextBlock;
+  pageBreakAnchor?: { sectionId: string; path: string[] };
+}) {
   const annotations = useResumeDiffAnnotations("block", block.id, ["text"]);
   const annotation = getInlineTextAnnotation(annotations);
   const segmentText = annotation?.textSegments
@@ -427,33 +544,137 @@ function StyledRichText({ block }: { block: TextBlock }) {
           segmentOffset: 0,
         }
       : undefined;
+  const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
   return block.content.content.map((paragraph, paragraphIndex) => (
     <p key={`${block.id}-${paragraphIndex}`} style={getTextBlockStyle(block)}>
       {paragraph.content.map((node, nodeIndex) => {
+        const nodeBreaks = pageBreaks
+          .filter(
+            (pageBreak) =>
+              pageBreak.position.paragraphIndex === paragraphIndex &&
+              pageBreak.position.nodeIndex === nodeIndex,
+          )
+          .sort(
+            (left, right) => left.position.offset - right.position.offset,
+          );
+
         if (node.type === "hardBreak") {
           if (cursor) takeTextSegments(cursor, 1);
-          return <br key={`hard-break-${block.id}-${nodeIndex}`} />;
+          return (
+            <span
+              key={`hard-break-${block.id}-${nodeIndex}`}
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="hardBreak"
+              data-resume-rich-paragraph-index={paragraphIndex}
+            >
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 0)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+              <br />
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 1)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+            </span>
+          );
         }
 
         if (node.type === "resumeIcon") {
           return (
-            <ResumeInlineIcon
+            <span
               key={`resume-icon-${block.id}-${nodeIndex}`}
-              iconId={node.attrs.iconId}
-            />
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="resumeIcon"
+              data-resume-rich-paragraph-index={paragraphIndex}
+            >
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 0)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+              <ResumeInlineIcon iconId={node.attrs.iconId} />
+              {nodeBreaks
+                .filter((pageBreak) => pageBreak.position.offset === 1)
+                .map((pageBreak) => (
+                  <ResumeInlinePageBreak
+                    key={pageBreak.id}
+                    pageBreak={pageBreak}
+                  />
+                ))}
+            </span>
+          );
+        }
+
+        let offset = 0;
+        const textParts: ReactNode[] = [];
+
+        for (const pageBreak of nodeBreaks) {
+          const nextOffset = Math.max(
+            offset,
+            Math.min(node.text.length, pageBreak.position.offset),
+          );
+          const value = node.text.slice(offset, nextOffset);
+
+          if (value) {
+            textParts.push(
+              <span key={`${pageBreak.id}-text`}>
+                {renderDiffAwareText(
+                  value,
+                  node.marks,
+                  cursor,
+                  annotation?.side,
+                  `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
+                )}
+              </span>,
+            );
+          }
+
+          textParts.push(
+            <ResumeInlinePageBreak
+              key={pageBreak.id}
+              pageBreak={pageBreak}
+            />,
+          );
+          offset = nextOffset;
+        }
+
+        const remainder = node.text.slice(offset);
+
+        if (remainder || textParts.length === 0) {
+          textParts.push(
+            <span key={`${block.id}-${paragraphIndex}-${nodeIndex}-remainder`}>
+              {renderDiffAwareText(
+                remainder,
+                node.marks,
+                cursor,
+                annotation?.side,
+                `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
+              )}
+            </span>,
           );
         }
 
         return (
-          <span key={`${block.id}-text-${nodeIndex}`}>
-            {renderDiffAwareText(
-              node.text,
-              node.marks,
-              cursor,
-              annotation?.side,
-              `${block.id}-${paragraphIndex}-${nodeIndex}`,
-            )}
+          <span
+            key={`${block.id}-text-${nodeIndex}`}
+            data-resume-rich-node-index={nodeIndex}
+            data-resume-rich-node-type="text"
+            data-resume-rich-paragraph-index={paragraphIndex}
+          >
+            {textParts}
           </span>
         );
       })}
@@ -561,7 +782,7 @@ function renderSectionTitle(
             placeholderTestId: `selected-editor-placeholder-${section.id}-title`,
             placeholder: renderRichText(section.title),
             editor: (
-              <TiptapTextBlockEditor
+              <ResumeTextBlockEditor
                 ref={context.textEditorRef}
                 ariaLabel={context.t("editor.textBlockEditor")}
                 className={context.styles.textEditor}
@@ -652,20 +873,27 @@ function renderTextBlock(
     context.blockPath,
   );
   const plainText = getPlainTextFromRichText(block.content);
+  const pageBreakAnchor = {
+    sectionId: context.sectionId,
+    path: context.blockPath,
+  };
 
   if (context.mode === "edit" && context.editSurfaceMode === "content") {
     if (selected) {
       return renderSelectedEditorShell({
         shellTestId: `selected-editor-shell-${context.sectionId}-${block.id}`,
         placeholderTestId: `selected-editor-placeholder-${context.sectionId}-${block.id}`,
-        placeholder: <StyledRichText block={block} />,
+        placeholder: (
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
+        ),
         editor: (
-          <TiptapTextBlockEditor
+          <ResumeTextBlockEditor
             ref={context.textEditorRef}
             ariaLabel={context.t("editor.textBlockEditor")}
             className={context.styles.textEditor}
             content={block.content}
             inlineToolbarLabels={getInlineToolbarLabels(context.t)}
+            pageBreakAnchor={pageBreakAnchor}
             style={getTextBlockStyle(block)}
             wrapperClassName={context.styles.textEditorOverlay}
             onChange={(content) =>
@@ -696,7 +924,7 @@ function renderTextBlock(
         }
       >
         <div className={selected ? context.styles.selectedEditableText : undefined}>
-          <StyledRichText block={block} />
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
         </div>
       </button>
     );
@@ -704,7 +932,7 @@ function renderTextBlock(
 
   return (
     <div>
-      <StyledRichText block={block} />
+      <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
     </div>
   );
 }
@@ -762,6 +990,7 @@ function SortableListItem({
       data-resume-over={over}
       data-testid={`resume-list-item-${itemPath.join("-")}`}
     >
+      <ResumeStructuralPageBreaks sectionId={sectionId} path={itemPath} />
       <div
         aria-hidden="true"
         className={styles.sortableBlockChrome}
@@ -979,6 +1208,10 @@ function renderListBlock(
                 }
                 data-resume-list-item-path={serializeBlockPath(itemPath)}
               >
+                <ResumeStructuralPageBreaks
+                  sectionId={context.sectionId}
+                  path={itemPath}
+                />
                 {itemContent}
               </li>
             )}
@@ -1369,6 +1602,7 @@ function SortableBlockItem({
         data-resume-edit-surface-mode={editSurfaceMode}
         data-resume-over={over}
       >
+        <ResumeStructuralPageBreaks sectionId={sectionId} path={blockPath} />
         {draggable ? (
           <div
             aria-hidden="true"
@@ -1492,6 +1726,10 @@ function SortableBlockChildren({
             data-resume-block-path={serializeBlockPath(blockPath)}
             data-resume-drag-mode="none"
           >
+            <ResumeStructuralPageBreaks
+              sectionId={sectionId}
+              path={blockPath}
+            />
             {renderBlock(block, styles, {
               t,
               mode,
@@ -1733,63 +1971,6 @@ function createSinglePageLayout(
   ];
 }
 
-function areBlockLayoutsEqual(
-  current: ResumePageFragment,
-  next: ResumePageFragment,
-): boolean {
-  if (serializeBlockPath(current.path) !== serializeBlockPath(next.path)) {
-    return false;
-  }
-
-  if (Boolean(current.continuation) !== Boolean(next.continuation)) {
-    return false;
-  }
-
-  if ((current.children?.length ?? 0) !== (next.children?.length ?? 0)) {
-    return false;
-  }
-
-  return (
-    current.children?.every((child, index) =>
-      areBlockLayoutsEqual(child, next.children?.[index] ?? child),
-    ) ?? true
-  );
-}
-
-function arePageLayoutsEqual(
-  current: ResumePageLayout[],
-  next: ResumePageLayout[],
-) {
-  if (current.length !== next.length) {
-    return false;
-  }
-
-  return current.every((page, pageIndex) => {
-    const nextPage = next[pageIndex];
-
-    if (!nextPage || page.sections.length !== nextPage.sections.length) {
-      return false;
-    }
-
-    return page.sections.every((section, sectionIndex) => {
-      const nextSection = nextPage.sections[sectionIndex];
-
-      if (
-        !nextSection ||
-        section.sectionId !== nextSection.sectionId ||
-        section.includeTitle !== nextSection.includeTitle ||
-        section.blocks.length !== nextSection.blocks.length
-      ) {
-        return false;
-      }
-
-      return section.blocks.every((block, blockIndex) =>
-        areBlockLayoutsEqual(block, nextSection.blocks[blockIndex]!),
-      );
-    });
-  });
-}
-
 function getPageContentHeight(document: ResumeDocument) {
   return Math.max(
     1,
@@ -1800,7 +1981,11 @@ function getPageContentHeight(document: ResumeDocument) {
 }
 
 function isWholeTopLevelBlockLayout(block: ResumePageFragment) {
-  return block.path.length === 1 && !block.children?.length;
+  return (
+    block.path.length === 1 &&
+    !block.children?.length &&
+    !block.textRange
+  );
 }
 
 function renderBlockFragment(
@@ -1898,6 +2083,14 @@ function renderBlockFragment(
     );
   }
 
+  const renderedBlock =
+    block.type === "text" && fragment.textRange
+      ? {
+          ...block,
+          content: sliceRichTextContent(block.content, fragment.textRange),
+        }
+      : block;
+
   return (
     <ResumeDiffTarget
       key={key}
@@ -1906,7 +2099,7 @@ function renderBlockFragment(
       fields={["node", "text", "style", "layout", "order"]}
     >
       <div data-resume-block-path={key}>
-        {renderBlock(block, styles, {
+        {renderBlock(renderedBlock, styles, {
           t: context.t,
           mode: context.mode,
           editSurfaceMode: context.editSurfaceMode,
@@ -1923,197 +2116,6 @@ function renderBlockFragment(
       </div>
     </ResumeDiffTarget>
   );
-}
-
-function measureElementHeight(
-  element: HTMLElement | null,
-  zoom: number,
-) {
-  return Math.ceil((element?.getBoundingClientRect().height ?? 0) / zoom);
-}
-
-function isStructurallyEmptyBlock(block: ResumeBlock): boolean {
-  if (block.type !== "group" && block.type !== "row") {
-    return false;
-  }
-
-  return block.children.every(isStructurallyEmptyBlock);
-}
-
-function calculateWrapperHeight(
-  height: number,
-  children: MeasuredResumeNode[],
-  childGap: number,
-) {
-  const childrenHeight = children.reduce(
-    (total, child, index) =>
-      total + child.height + (index > 0 ? childGap : 0),
-    0,
-  );
-
-  return Math.max(0, height - childrenHeight);
-}
-
-function measureResumeBlock(
-  rootElement: HTMLElement,
-  block: ResumeBlock,
-  blockPath: string[],
-  zoom: number,
-): MeasuredResumeNode | undefined {
-  const element = rootElement.querySelector<HTMLElement>(
-    `[data-resume-block-path="${serializeBlockPath(blockPath)}"]`,
-  );
-  const height = measureElementHeight(element, zoom);
-
-  if (!element || (height <= 0 && !isStructurallyEmptyBlock(block))) {
-    return undefined;
-  }
-
-  if (block.type === "group" && block.direction !== "horizontal") {
-    const children = block.children
-      .map((child) =>
-        measureResumeBlock(rootElement, child, [...blockPath, child.id], zoom),
-      )
-      .filter((child): child is MeasuredResumeNode => Boolean(child));
-
-    if (children.length !== block.children.length) {
-      return undefined;
-    }
-
-    const childGap = block.gap ?? DEFAULT_BLOCK_GAP_PX;
-
-    return {
-      id: block.id,
-      path: blockPath,
-      type: "group",
-      height,
-      direction: block.direction,
-      childGap,
-      wrapperHeight: calculateWrapperHeight(height, children, childGap),
-      children,
-    };
-  }
-
-  if (block.type === "list") {
-    const children = block.items
-      .map((item) => {
-        const itemPath = [...blockPath, item.id];
-        const itemElement = rootElement.querySelector<HTMLElement>(
-          `[data-resume-list-item-path="${serializeBlockPath(itemPath)}"]`,
-        );
-        const itemHeight = measureElementHeight(itemElement, zoom);
-
-        if (itemHeight <= 0) {
-          return undefined;
-        }
-
-        const itemChildren = item.children
-          .map((child) =>
-            measureResumeBlock(
-              rootElement,
-              child,
-              [...itemPath, child.id],
-              zoom,
-            ),
-          )
-          .filter((child): child is MeasuredResumeNode => Boolean(child));
-
-        const measuredEveryChild = itemChildren.length === item.children.length;
-
-        return {
-          id: item.id,
-          path: itemPath,
-          type: "listItem" as const,
-          height: itemHeight,
-          direction: "vertical" as const,
-          childGap: DEFAULT_BLOCK_GAP_PX,
-          wrapperHeight: measuredEveryChild
-            ? calculateWrapperHeight(
-                itemHeight,
-                itemChildren,
-                DEFAULT_BLOCK_GAP_PX,
-              )
-            : itemHeight,
-          children: measuredEveryChild ? itemChildren : undefined,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-    if (children.length !== block.items.length) {
-      return undefined;
-    }
-
-    const childGap = block.gap ?? 8;
-
-    return {
-      id: block.id,
-      path: blockPath,
-      type: "list",
-      height,
-      direction: "vertical",
-      childGap,
-      wrapperHeight: calculateWrapperHeight(height, children, childGap),
-      children,
-    };
-  }
-
-  return {
-    id: block.id,
-    path: blockPath,
-    type: block.type,
-    height,
-    ...(block.type === "group" || block.type === "row"
-      ? { direction: "horizontal" as const }
-      : {}),
-  };
-}
-
-function measureResumeSection(
-  rootElement: HTMLElement,
-  section: ResumeDocument["sections"][number],
-  zoom: number,
-): MeasuredResumeSection | undefined {
-  const sectionElement = rootElement.querySelector<HTMLElement>(
-    `[data-resume-section-id="${section.id}"]`,
-  );
-  const titleElement = section.title
-    ? sectionElement?.querySelector<HTMLElement>(
-        '[data-resume-section-title="true"]',
-      ) ?? null
-    : null;
-  const titleHeight = section.title
-    ? measureElementHeight(titleElement, zoom)
-    : 0;
-  const titleGap = titleElement
-    ? Math.max(
-        0,
-        Number.parseFloat(getComputedStyle(titleElement).marginBottom) / zoom ||
-          0,
-      )
-    : 0;
-  const height = measureElementHeight(sectionElement, zoom);
-  const blocks = section.blocks
-    .map((block) => measureResumeBlock(rootElement, block, [block.id], zoom))
-    .filter((block): block is MeasuredResumeNode => Boolean(block));
-
-  if (
-    !sectionElement ||
-    height <= 0 ||
-    blocks.length !== section.blocks.length ||
-    (section.title && titleHeight <= 0)
-  ) {
-    return undefined;
-  }
-
-  return {
-    id: section.id,
-    height,
-    titleHeight,
-    titleGap,
-    keepTogether: section.pagination?.keepTogether,
-    topLevelGap: section.layout?.gap ?? DEFAULT_BLOCK_GAP_PX,
-    blocks,
-  };
 }
 
 function renderResumeSection(
@@ -2146,7 +2148,7 @@ function renderResumeSection(
         .filter((block): block is ResumeBlock => Boolean(block))
     : null;
 
-  return (
+  const renderedSection = (
     <ResumeDiffTarget
       key={context.instanceKey}
       nodeType="section"
@@ -2229,6 +2231,17 @@ function renderResumeSection(
       </section>
     </ResumeDiffTarget>
   );
+
+  if (context.mode !== "edit") {
+    return renderedSection;
+  }
+
+  return (
+    <div key={context.instanceKey} className={context.styles.sectionFlow}>
+      <ResumeSectionPageBreak sectionId={section.id} />
+      {renderedSection}
+    </div>
+  );
 }
 
 export function ResumeRenderer({
@@ -2258,17 +2271,19 @@ export function ResumeRenderer({
     () => document.sections.filter((section) => section.visible),
     [document.sections],
   );
-  const [pageLayouts, setPageLayouts] = useState<ResumePageLayout[]>(() =>
-    createSinglePageLayout(visibleSections),
-  );
-  const [paginationReady, setPaginationReady] = useState(false);
-  const [measuredLayoutKey, setMeasuredLayoutKey] = useState("");
-  const [layoutRevision, setLayoutRevision] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
-  const selectedTextBlock =
-    selection?.sectionId && selection.blockPath
-      ? findTextBlock(document, selection.sectionId, selection.blockPath)
-      : undefined;
+  const [activeTextEditor, setActiveTextEditor] =
+    useState<TiptapTextBlockEditorHandle | null>(null);
+  const captureTextEditor = useCallback(
+    (editor: TiptapTextBlockEditorHandle | null) => {
+      setActiveTextEditor(editor);
+    },
+    [],
+  );
+  const mergedTextEditorRef = useMemo(
+    () => mergeRefs(captureTextEditor, textEditorRef),
+    [captureTextEditor, textEditorRef],
+  );
   const pageContentHeight = useMemo(() => getPageContentHeight(document), [document]);
   const sectionMap = useMemo(
     () => new Map(visibleSections.map((section) => [section.id, section])),
@@ -2278,28 +2293,177 @@ export function ResumeRenderer({
     () => createSinglePageLayout(visibleSections),
     [visibleSections],
   );
-  const layoutInputKey = useMemo(
+  const documentKey = useMemo(
+    () => JSON.stringify(visibleSections),
+    [visibleSections],
+  );
+  const geometryKey = useMemo(
     () =>
       JSON.stringify({
+        mode,
         zoom,
         paginationRevision,
         pageContentHeight,
-        layoutRevision,
-        typography: document.settings.typography,
-        sections: visibleSections,
+        settings: document.settings,
+        selection,
       }),
     [
-      document.settings.typography,
-      layoutRevision,
+      document.settings,
+      mode,
       pageContentHeight,
       paginationRevision,
+      selection,
+      zoom,
+    ],
+  );
+  const committedSpacerHeightsRef = useRef<ReadonlyMap<string, number>>(
+    new Map(),
+  );
+  const measurementCacheRef = useRef(
+    new Map<string, MeasuredResumeSection>(),
+  );
+  const createPaginationWork = useCallback(
+    (revision: EditPaginationRevision) => {
+      const root = rootRef.current;
+
+      if (!root) return undefined;
+
+      const revisionKey = JSON.stringify(revision);
+      const measuredSections: MeasuredResumeSection[] = [];
+      let sectionIndex = 0;
+      let measurementComplete = visibleSections.length === 0;
+      let unavailableAttempts = 0;
+
+      return {
+        run(deadline: number) {
+          if (visibleSections.length === 0) {
+            return {
+              done: true as const,
+              result: {
+                pages: measurementLayout,
+                breaks: {
+                  revision: revisionKey,
+                  pageCount: 1,
+                  breaks: [],
+                },
+              },
+            };
+          }
+
+          while (!measurementComplete && performance.now() < deadline) {
+            const section = visibleSections[sectionIndex];
+
+            if (!section) {
+              measurementComplete = true;
+              break;
+            }
+
+            const cacheKey = JSON.stringify({
+              section,
+              geometry: revision.geometry,
+              width: revision.width,
+              active:
+                selection?.sectionId === section.id ? selection : undefined,
+            });
+            const cached = measurementCacheRef.current.get(cacheKey);
+            const measured =
+              cached ??
+              measureResumeSectionFlow(root, section, {
+                zoom,
+                activeEditor: activeTextEditor,
+                activeSelection: selection,
+                committedSpacerHeights: committedSpacerHeightsRef.current,
+              });
+
+            if (!measured) {
+              unavailableAttempts += 1;
+
+              if (unavailableAttempts >= 2) {
+                return { done: true as const, aborted: true as const };
+              }
+
+              return { done: false as const };
+            }
+
+            unavailableAttempts = 0;
+            if (!cached) {
+              measurementCacheRef.current.set(cacheKey, measured);
+
+              if (measurementCacheRef.current.size > 200) {
+                const oldestKey = measurementCacheRef.current.keys().next().value;
+                if (oldestKey) measurementCacheRef.current.delete(oldestKey);
+              }
+            }
+
+            measuredSections.push(measured);
+            sectionIndex += 1;
+            measurementComplete = sectionIndex >= visibleSections.length;
+          }
+
+          if (!measurementComplete) {
+            return { done: false as const };
+          }
+
+          const pages = paginateMeasuredSections({
+            pageHeight: pageContentHeight,
+            sectionGap: DEFAULT_SECTION_GAP_PX,
+            sections: measuredSections,
+          }).pages;
+
+          return {
+            done: true as const,
+            result: {
+              pages,
+              breaks: createResumePageBreakMap({
+                pages,
+                sections: measuredSections,
+                pageHeight: pageContentHeight,
+                pageGap: EDIT_PAGE_GAP_PX,
+                sectionGap: DEFAULT_SECTION_GAP_PX,
+                pagePadding: document.settings.page.margin,
+                revision: revisionKey,
+              }),
+            },
+          };
+        },
+      };
+    },
+    [
+      activeTextEditor,
+      document,
+      measurementLayout,
+      pageContentHeight,
+      selection,
       visibleSections,
       zoom,
     ],
   );
-  const isLayoutCurrent = paginationReady && measuredLayoutKey === layoutInputKey;
-  const resolvedPageLayouts = isLayoutCurrent ? pageLayouts : measurementLayout;
-  const printReady = isLayoutCurrent;
+  const pagination = useResumeEditPagination({
+    rootRef,
+    initialPages: measurementLayout,
+    initialBreaks: {
+      revision: "initial",
+      pageCount: 1,
+      breaks: [],
+    },
+    documentKey,
+    geometryKey,
+    createWork: createPaginationWork,
+  });
+  const resolvedPageLayouts = pagination.pages;
+  const pageBreakMap = pagination.breaks;
+  const paginationSettled = pagination.ready;
+  const printReady = pagination.ready;
+
+  useLayoutEffect(() => {
+    committedSpacerHeightsRef.current = new Map(
+      pageBreakMap.breaks.map((pageBreak) => [
+        pageBreak.id,
+        pageBreak.spacerHeight,
+      ]),
+    );
+  }, [pageBreakMap.breaks]);
+
   const firstPageBySectionId = useMemo(() => {
     const firstPages = new Map<string, number>();
 
@@ -2315,155 +2479,133 @@ export function ResumeRenderer({
   }, [resolvedPageLayouts]);
 
   useEffect(() => {
-    onPageCountChange?.(resolvedPageLayouts.length);
-  }, [onPageCountChange, resolvedPageLayouts.length]);
+    onPageCountChange?.(pagination.pageCount);
+  }, [onPageCountChange, pagination.pageCount]);
 
   useEffect(() => {
-    onPaginationReadyChange?.(isLayoutCurrent);
-  }, [isLayoutCurrent, onPaginationReadyChange]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setLayoutRevision((current) => current + 1);
-    };
-
-    window.addEventListener("resize", handleResize);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (isLayoutCurrent) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      if (visibleSections.length === 0) {
-        if (!arePageLayoutsEqual(pageLayouts, measurementLayout)) {
-          setPageLayouts(measurementLayout);
-        }
-        setPaginationReady(true);
-        setMeasuredLayoutKey(layoutInputKey);
-        return;
-      }
-
-      const rootElement = rootRef.current;
-
-      if (!rootElement) {
-        return;
-      }
-
-      const measuredSections = visibleSections
-        .map((section) => measureResumeSection(rootElement, section, zoom))
-        .filter((section): section is MeasuredResumeSection => Boolean(section));
-
-      if (measuredSections.length !== visibleSections.length) {
-        return;
-      }
-
-      const nextLayouts = paginateMeasuredSections({
-        pageHeight: pageContentHeight,
-        sectionGap: DEFAULT_SECTION_GAP_PX,
-        sections: measuredSections,
-      }).pages;
-
-      if (!arePageLayoutsEqual(pageLayouts, nextLayouts)) {
-        setPageLayouts(nextLayouts);
-      }
-
-      setMeasuredLayoutKey(layoutInputKey);
-      setPaginationReady(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    isLayoutCurrent,
-    layoutInputKey,
-    layoutRevision,
-    measurementLayout,
-    pageContentHeight,
-    pageLayouts,
-    visibleSections,
-    zoom,
-  ]);
+    onPaginationReadyChange?.(paginationSettled);
+  }, [onPaginationReadyChange, paginationSettled]);
 
   return (
     <BadgeEditContext.Provider value={onCommitBadgeItem}>
-      <ResumeDiffProvider
-        presentation={mode === "print" ? undefined : diffPresentation}
-      >
-      <div
-        ref={rootRef}
-        className={styles.root}
-        data-resume-mode={mode}
-        data-resume-edit-surface-mode={editSurfaceMode}
-        data-resume-responsive-view={responsiveView ? "true" : "false"}
-        data-resume-pagination-ready={isLayoutCurrent ? "true" : "false"}
-        data-resume-pagination-revision={paginationRevision}
-      >
-        {mode === "print" ? <ResumePrintReadyFlag ready={printReady} /> : null}
-        {resolvedPageLayouts.map((page) => (
-          <div key={`resume-page-${page.index}`} className={styles.pageFrame}>
-            {mode !== "print" ? (
-              <div
-                className={styles.pageLabel}
-                data-print-chrome="screen"
-              >
-                {t("renderer.pageLabel", { index: page.index + 1 })}
-              </div>
-            ) : null}
-            <article
-              className={styles.page}
-              style={styleVariables as CSSProperties}
-              data-resume-page="true"
-              data-resume-page-index={page.index + 1}
-              data-testid={`resume-page-${page.index + 1}`}
+      <TextEditingStateContext.Provider value={pagination.onEditingStateChange}>
+        <TextPaginationRequestContext.Provider
+          value={pagination.requestPagination}
+        >
+          <ResumeDiffProvider
+            presentation={mode === "print" ? undefined : diffPresentation}
+          >
+            <div
+              ref={rootRef}
+              className={styles.root}
+              data-resume-mode={mode}
+              data-resume-edit-surface-mode={editSurfaceMode}
+              data-resume-responsive-view={responsiveView ? "true" : "false"}
+              data-resume-pagination-ready={paginationSettled ? "true" : "false"}
+              data-resume-pagination-revision={paginationRevision}
             >
-              {mode === "edit" && showPrintSafeArea ? (
-                <div
-                  aria-hidden="true"
-                  className={styles.printSafeArea}
-                  data-resume-print-safe-area="true"
-                />
+              {mode === "print" ? (
+                <ResumePrintReadyFlag ready={printReady} />
               ) : null}
-              <div className={styles.pageContent}>
-                {page.sections.map((sectionLayout, sectionIndex) => {
-                  const section = sectionMap.get(sectionLayout.sectionId);
+              {mode === "edit" ? (
+              <ResumePageBreakProvider breakMap={pageBreakMap}>
+                <ResumeEditingCanvas
+                  pageCount={resolvedPageLayouts.length}
+                  pageHeight={A4_PAGE_HEIGHT_PX}
+                  pageWidth={A4_PAGE_WIDTH_PX}
+                  pageGap={EDIT_PAGE_GAP_PX}
+                  pagePadding={document.settings.page.margin}
+                  styleVariables={styleVariables as CSSProperties}
+                  showPrintSafeArea={showPrintSafeArea}
+                >
+                  <div className={styles.pageContent}>
+                    {measurementLayout[0]?.sections.map(
+                      (sectionLayout, sectionIndex) => {
+                        const section = sectionMap.get(sectionLayout.sectionId);
 
-                  if (!section) {
-                    return null;
-                  }
+                        if (!section) {
+                          return null;
+                        }
 
-                  return renderResumeSection(section, {
-                    t,
-                    sectionLayout,
-                    mode,
-                    editSurfaceMode,
-                    selection,
-                    styles,
-                    onSelectBlock,
-                    onChangeSectionTitle,
-                    onChangeTextBlock,
-                    onMoveBlock,
-                    textEditorRef,
-                    onTextEditorFormattingStateChange,
-                    instanceKey: `page-${page.index}-${sectionLayout.sectionId}-${sectionIndex}`,
-                    anchorId: firstPageBySectionId.get(section.id) === page.index
-                      ? getResumeSectionAnchorId(section.id)
-                      : undefined,
-                  });
-                })}
-              </div>
-            </article>
-          </div>
-        ))}
-        {mode === "edit" && selectedTextBlock ? null : null}
-      </div>
-      </ResumeDiffProvider>
+                        return renderResumeSection(section, {
+                          t,
+                          sectionLayout,
+                          mode,
+                          editSurfaceMode,
+                          selection,
+                          styles,
+                          onSelectBlock,
+                          onChangeSectionTitle,
+                          onChangeTextBlock,
+                          onMoveBlock,
+                          textEditorRef: mergedTextEditorRef,
+                          onTextEditorFormattingStateChange,
+                          instanceKey: `edit-${section.id}-${sectionIndex}`,
+                          anchorId: getResumeSectionAnchorId(section.id),
+                        });
+                      },
+                    )}
+                  </div>
+                </ResumeEditingCanvas>
+              </ResumePageBreakProvider>
+            ) : (
+              resolvedPageLayouts.map((page) => (
+                <div
+                  key={`resume-page-${page.index}`}
+                  className={styles.pageFrame}
+                >
+                  {mode === "view" ? (
+                    <div
+                      className={styles.pageLabel}
+                      data-print-chrome="screen"
+                    >
+                      {t("renderer.pageLabel", { index: page.index + 1 })}
+                    </div>
+                  ) : null}
+                  <article
+                    className={styles.page}
+                    style={styleVariables as CSSProperties}
+                    data-resume-page="true"
+                    data-resume-page-index={page.index + 1}
+                    data-testid={`resume-page-${page.index + 1}`}
+                  >
+                    <div className={styles.pageContent}>
+                      {page.sections.map((sectionLayout, sectionIndex) => {
+                        const section = sectionMap.get(sectionLayout.sectionId);
+
+                        if (!section) {
+                          return null;
+                        }
+
+                        return renderResumeSection(section, {
+                          t,
+                          sectionLayout,
+                          mode,
+                          editSurfaceMode,
+                          selection,
+                          styles,
+                          onSelectBlock,
+                          onChangeSectionTitle,
+                          onChangeTextBlock,
+                          onMoveBlock,
+                          textEditorRef: mergedTextEditorRef,
+                          onTextEditorFormattingStateChange,
+                          instanceKey: `page-${page.index}-${sectionLayout.sectionId}-${sectionIndex}`,
+                          anchorId:
+                            firstPageBySectionId.get(section.id) === page.index
+                              ? getResumeSectionAnchorId(section.id)
+                              : undefined,
+                        });
+                      })}
+                    </div>
+                  </article>
+                </div>
+              ))
+              )}
+            </div>
+          </ResumeDiffProvider>
+        </TextPaginationRequestContext.Provider>
+      </TextEditingStateContext.Provider>
     </BadgeEditContext.Provider>
   );
 }

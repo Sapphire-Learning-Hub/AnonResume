@@ -89,6 +89,167 @@ describe("ResumeRenderer", () => {
     },
   );
 
+  it("keeps edit text whole while view and print render lossless page slices", async () => {
+    const resume = createDefaultResumeDocument();
+    resume.settings.page.margin = {
+      top: 520,
+      right: 32,
+      bottom: 520,
+      left: 32,
+    };
+    resume.sections = [
+      {
+        id: "section-sliced-rich-text",
+        visible: true,
+        layout: { direction: "vertical", gap: 0 },
+        blocks: [
+          {
+            id: "block-sliced-rich-text",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "text",
+                      text: "Alpha ",
+                      marks: [{ type: "bold" }],
+                    },
+                    {
+                      type: "text",
+                      text: "Linked",
+                      marks: [
+                        {
+                          type: "link",
+                          attrs: { href: "https://example.com/profile" },
+                        },
+                      ],
+                    },
+                    {
+                      type: "resumeIcon",
+                      attrs: { iconId: "lucide:mail" },
+                    },
+                    {
+                      type: "text",
+                      text: " Omega",
+                      marks: [{ type: "italic" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        if (
+          this.hasAttribute?.("data-resume-section-id") ||
+          this.getAttribute?.("data-resume-block-path") ===
+            "block-sliced-rich-text"
+        ) {
+          return createRect(120);
+        }
+
+        return createRect(0);
+      },
+    });
+    const rangeSpy = vi.spyOn(document, "createRange").mockImplementation(() => {
+      let top = 0;
+
+      return {
+        setStart(node: Node) {
+          const element =
+            node instanceof Element ? node : node.parentElement;
+          const richNode = element?.closest<HTMLElement>(
+            "[data-resume-rich-node-index]",
+          );
+          top = richNode?.dataset.resumeRichNodeIndex === "3" ? 60 : 0;
+        },
+        setEnd(node: Node) {
+          const element =
+            node instanceof Element ? node : node.parentElement;
+          const richNode = element?.closest<HTMLElement>(
+            "[data-resume-rich-node-index]",
+          );
+          top = richNode?.dataset.resumeRichNodeIndex === "3" ? 60 : 0;
+        },
+        setStartBefore() {
+          top = 0;
+        },
+        setStartAfter() {
+          top = 60;
+        },
+        collapse() {},
+        getBoundingClientRect() {
+          return {
+            ...createRect(60),
+            top,
+            bottom: top + 60,
+          };
+        },
+      } as unknown as Range;
+    });
+
+    for (const mode of ["view", "print"] as const) {
+      const rendered = render(<ResumeRenderer document={resume} mode={mode} />);
+
+      await waitFor(() =>
+        expect(
+          rendered.container.querySelectorAll('[data-testid^="resume-page-"]'),
+        ).toHaveLength(2),
+      );
+
+      const firstPage = rendered.container.querySelector(
+        '[data-testid="resume-page-1"]',
+      );
+      const secondPage = rendered.container.querySelector(
+        '[data-testid="resume-page-2"]',
+      );
+
+      expect(firstPage).toHaveTextContent("Alpha Linked");
+      expect(firstPage).not.toHaveTextContent("Omega");
+      expect(firstPage?.querySelector("strong")).toHaveTextContent("Alpha");
+      expect(firstPage?.querySelector("a")).toHaveAttribute(
+        "href",
+        "https://example.com/profile",
+      );
+      expect(
+        firstPage?.querySelector('[data-resume-icon-id="lucide:mail"]'),
+      ).not.toBeNull();
+      expect(secondPage).toHaveTextContent("Omega");
+      expect(secondPage).not.toHaveTextContent("Alpha Linked");
+      expect(secondPage?.querySelector("em")).toHaveTextContent("Omega");
+      expect(`${firstPage?.textContent}${secondPage?.textContent}`).toContain(
+        "Alpha Linked Omega",
+      );
+      expect(
+        rendered.container.querySelectorAll(
+          "#resume-section-section-sliced-rich-text",
+        ),
+      ).toHaveLength(1);
+
+      rendered.unmount();
+    }
+
+    const edit = render(<ResumeRenderer document={resume} mode="edit" />);
+    const editContent = edit.container.querySelector(
+      '[data-resume-editing-content="true"]',
+    );
+
+    expect(editContent).toHaveTextContent("Alpha Linked Omega");
+    expect(editContent?.querySelectorAll("a")).toHaveLength(1);
+    expect(
+      editContent?.querySelectorAll('[data-resume-icon-id="lucide:mail"]'),
+    ).toHaveLength(1);
+    rangeSpy.mockRestore();
+  });
+
   it.each(["view", "print"] as const)(
     "renders a per-section title color in %s output",
     (mode) => {
@@ -381,6 +542,224 @@ describe("ResumeRenderer", () => {
     await waitFor(() => {
       expect(onPaginationReadyChange).toHaveBeenLastCalledWith(true);
     });
+  });
+
+  it("keeps the active editor mounted until composition-safe pagination can commit", async () => {
+    let experienceHeight = 300;
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        const sectionId = this.getAttribute?.("data-resume-section-id");
+        const spacerHeight = Array.from(
+          (this as HTMLElement).querySelectorAll<HTMLElement>(
+            "[data-resume-page-break-id]",
+          ),
+        ).reduce(
+          (total, spacer) => total + Number.parseFloat(spacer.style.height || "0"),
+          0,
+        );
+
+        if (sectionId === "section-profile") {
+          return createRect(700 + spacerHeight);
+        }
+
+        if (sectionId === "section-experience") {
+          return createRect(experienceHeight + 100 + spacerHeight);
+        }
+
+        const blockPath = this.getAttribute?.("data-resume-block-path");
+
+        if (
+          blockPath === "block-profile-summary" ||
+          blockPath === "block-profile-highlights" ||
+          blockPath === "block-profile-stack"
+        ) {
+          return createRect(200 + spacerHeight);
+        }
+
+        if (blockPath === "group-experience-anonresume") {
+          return createRect(experienceHeight + spacerHeight);
+        }
+
+        if (this.hasAttribute?.("data-resume-section-title")) {
+          return createRect(80);
+        }
+
+        return createRect(40 + spacerHeight);
+      },
+    });
+
+    const onPaginationReadyChange = vi.fn();
+    const document = createDefaultResumeDocument();
+    const selection = {
+      sectionId: "section-experience",
+      blockPath: [
+        "group-experience-anonresume",
+        "row-experience-header",
+        "text-experience-role",
+      ],
+      richTextField: "content" as const,
+    };
+    const { container, rerender } = render(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={0}
+        selection={selection}
+        onPaginationReadyChange={onPaginationReadyChange}
+      />,
+    );
+
+    await screen.findByTestId("resume-page-2");
+    const editor = screen.getByRole("textbox", {
+      name: "文本块编辑器",
+    });
+
+    fireEvent.focus(editor);
+    fireEvent.compositionStart(editor);
+    experienceHeight = 100;
+
+    rerender(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={1}
+        selection={selection}
+        onPaginationReadyChange={onPaginationReadyChange}
+      />,
+    );
+
+    expect(
+      container.querySelectorAll(
+        '[data-resume-section-id="section-profile"]',
+      ),
+    ).toHaveLength(1);
+    expect(
+      container
+        .querySelector("[data-resume-pagination-ready]")
+        ?.getAttribute("data-resume-pagination-ready"),
+    ).toBe("false");
+    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "文本块编辑器" })).toBe(editor);
+
+    fireEvent.compositionEnd(editor);
+    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps one edit document tree mounted while visual pages change", async () => {
+    let profileHeight = 700;
+    let experienceHeight = 400;
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        const sectionId = this.getAttribute?.("data-resume-section-id");
+        const blockPath = this.getAttribute?.("data-resume-block-path");
+        const spacerHeight = Array.from(
+          (this as HTMLElement).querySelectorAll<HTMLElement>(
+            "[data-resume-page-break-id]",
+          ),
+        ).reduce(
+          (total, spacer) => total + Number.parseFloat(spacer.style.height || "0"),
+          0,
+        );
+
+        if (sectionId === "section-profile") {
+          return createRect(profileHeight + spacerHeight);
+        }
+
+        if (sectionId === "section-experience") {
+          return createRect(experienceHeight + spacerHeight);
+        }
+
+        if (this.hasAttribute?.("data-resume-section-title")) {
+          return createRect(80);
+        }
+
+        if (
+          blockPath === "block-profile-summary" ||
+          blockPath === "block-profile-highlights" ||
+          blockPath === "block-profile-stack"
+        ) {
+          return createRect((profileHeight - 100) / 3);
+        }
+
+        if (blockPath === "group-experience-anonresume") {
+          return createRect(experienceHeight - 100 + spacerHeight);
+        }
+
+        return createRect(40);
+      },
+    });
+
+    const document = createDefaultResumeDocument();
+    const { container, rerender } = render(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={0}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll("[data-resume-editing-page]"),
+      ).toHaveLength(2);
+    });
+
+    const experienceSection = screen.getByTestId(
+      "resume-section-section-experience",
+    );
+    expect(experienceSection.parentElement?.firstElementChild).toHaveAttribute(
+      "data-resume-page-break-id",
+      "section-experience:section:",
+    );
+    expect(experienceSection.parentElement?.lastElementChild).toBe(
+      experienceSection,
+    );
+
+    const profileBlock = container.querySelector(
+      '[data-resume-block-path="block-profile-summary"]',
+    );
+    const experienceBlock = container.querySelector(
+      '[data-resume-block-path="group-experience-anonresume"]',
+    );
+
+    expect(
+      container.querySelectorAll("[data-resume-editing-content]"),
+    ).toHaveLength(1);
+
+    profileHeight = 300;
+    experienceHeight = 300;
+    rerender(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        paginationRevision={1}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelectorAll("[data-resume-editing-page]"),
+      ).toHaveLength(1);
+    });
+
+    expect(
+      container.querySelector('[data-resume-block-path="block-profile-summary"]'),
+    ).toBe(profileBlock);
+    expect(
+      container.querySelector(
+        '[data-resume-block-path="group-experience-anonresume"]',
+      ),
+    ).toBe(experienceBlock);
+    expect(screen.getByTestId("resume-page-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
   });
 
   it("finishes pagination when a structural row is empty", async () => {

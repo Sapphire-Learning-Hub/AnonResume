@@ -33,4 +33,25 @@ describe("pagination architecture", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps edit pagination on one visible document tree", () => {
+    const renderer = readFileSync(
+      resolve(root, "src/components/resume/ResumeRenderer.tsx"),
+      "utf8",
+    );
+    const editingCanvas = readFileSync(
+      resolve(
+        root,
+        "src/components/resume/pagination/ResumeEditingCanvas.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(renderer).not.toContain("measurementRoot");
+    expect(renderer).not.toContain("pendingLayout");
+    expect(renderer).toContain("sliceRichTextContent");
+    expect(
+      editingCanvas.match(/data-resume-editing-content=/g),
+    ).toHaveLength(1);
+  });
 });

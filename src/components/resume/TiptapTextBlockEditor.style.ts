@@ -3,6 +3,12 @@
 import { createStyles } from "antd-style";
 
 export const useTiptapTextBlockEditorStyles = createStyles(({ token, css }) => ({
+  pageBreak: css`
+    display: block;
+    width: 100%;
+    pointer-events: none;
+    user-select: none;
+  `,
   inlineToolbar: css`
     display: flex;
     align-items: center;
