@@ -151,7 +151,6 @@ function takeTextLines(
   const placedLines = lines.slice(0, lineCount);
   const remainingLines = lines.slice(lineCount);
   const sourceFrom = node.textRange?.from ?? placedLines[0]!.from;
-  const sourceTo = node.textRange?.to ?? lines.at(-1)!.to;
 
   return {
     fragment: {
