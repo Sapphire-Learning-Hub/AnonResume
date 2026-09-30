@@ -49,6 +49,7 @@ import {
 import {
   createResumePageBreakMap,
 } from "@/domain/resume/page-flow/break-map";
+import { sliceRichTextContent } from "@/domain/resume/page-flow/rich-text-range";
 import type {
   BadgeBlock,
   GroupBlock,
@@ -1979,7 +1980,11 @@ function getPageContentHeight(document: ResumeDocument) {
 }
 
 function isWholeTopLevelBlockLayout(block: ResumePageFragment) {
-  return block.path.length === 1 && !block.children?.length;
+  return (
+    block.path.length === 1 &&
+    !block.children?.length &&
+    !block.textRange
+  );
 }
 
 function renderBlockFragment(
@@ -2077,6 +2082,14 @@ function renderBlockFragment(
     );
   }
 
+  const renderedBlock =
+    block.type === "text" && fragment.textRange
+      ? {
+          ...block,
+          content: sliceRichTextContent(block.content, fragment.textRange),
+        }
+      : block;
+
   return (
     <ResumeDiffTarget
       key={key}
@@ -2085,7 +2098,7 @@ function renderBlockFragment(
       fields={["node", "text", "style", "layout", "order"]}
     >
       <div data-resume-block-path={key}>
-        {renderBlock(block, styles, {
+        {renderBlock(renderedBlock, styles, {
           t: context.t,
           mode: context.mode,
           editSurfaceMode: context.editSurfaceMode,

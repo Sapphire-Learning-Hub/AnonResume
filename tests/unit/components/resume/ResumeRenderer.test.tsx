@@ -89,6 +89,167 @@ describe("ResumeRenderer", () => {
     },
   );
 
+  it("keeps edit text whole while view and print render lossless page slices", async () => {
+    const resume = createDefaultResumeDocument();
+    resume.settings.page.margin = {
+      top: 520,
+      right: 32,
+      bottom: 520,
+      left: 32,
+    };
+    resume.sections = [
+      {
+        id: "section-sliced-rich-text",
+        visible: true,
+        layout: { direction: "vertical", gap: 0 },
+        blocks: [
+          {
+            id: "block-sliced-rich-text",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "text",
+                      text: "Alpha ",
+                      marks: [{ type: "bold" }],
+                    },
+                    {
+                      type: "text",
+                      text: "Linked",
+                      marks: [
+                        {
+                          type: "link",
+                          attrs: { href: "https://example.com/profile" },
+                        },
+                      ],
+                    },
+                    {
+                      type: "resumeIcon",
+                      attrs: { iconId: "lucide:mail" },
+                    },
+                    {
+                      type: "text",
+                      text: " Omega",
+                      marks: [{ type: "italic" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function getBoundingClientRect() {
+        if (
+          this.hasAttribute?.("data-resume-section-id") ||
+          this.getAttribute?.("data-resume-block-path") ===
+            "block-sliced-rich-text"
+        ) {
+          return createRect(120);
+        }
+
+        return createRect(0);
+      },
+    });
+    const rangeSpy = vi.spyOn(document, "createRange").mockImplementation(() => {
+      let top = 0;
+
+      return {
+        setStart(node: Node) {
+          const element =
+            node instanceof Element ? node : node.parentElement;
+          const richNode = element?.closest<HTMLElement>(
+            "[data-resume-rich-node-index]",
+          );
+          top = richNode?.dataset.resumeRichNodeIndex === "3" ? 60 : 0;
+        },
+        setEnd(node: Node) {
+          const element =
+            node instanceof Element ? node : node.parentElement;
+          const richNode = element?.closest<HTMLElement>(
+            "[data-resume-rich-node-index]",
+          );
+          top = richNode?.dataset.resumeRichNodeIndex === "3" ? 60 : 0;
+        },
+        setStartBefore() {
+          top = 0;
+        },
+        setStartAfter() {
+          top = 60;
+        },
+        collapse() {},
+        getBoundingClientRect() {
+          return {
+            ...createRect(60),
+            top,
+            bottom: top + 60,
+          };
+        },
+      } as unknown as Range;
+    });
+
+    for (const mode of ["view", "print"] as const) {
+      const rendered = render(<ResumeRenderer document={resume} mode={mode} />);
+
+      await waitFor(() =>
+        expect(
+          rendered.container.querySelectorAll('[data-testid^="resume-page-"]'),
+        ).toHaveLength(2),
+      );
+
+      const firstPage = rendered.container.querySelector(
+        '[data-testid="resume-page-1"]',
+      );
+      const secondPage = rendered.container.querySelector(
+        '[data-testid="resume-page-2"]',
+      );
+
+      expect(firstPage).toHaveTextContent("Alpha Linked");
+      expect(firstPage).not.toHaveTextContent("Omega");
+      expect(firstPage?.querySelector("strong")).toHaveTextContent("Alpha");
+      expect(firstPage?.querySelector("a")).toHaveAttribute(
+        "href",
+        "https://example.com/profile",
+      );
+      expect(
+        firstPage?.querySelector('[data-resume-icon-id="lucide:mail"]'),
+      ).not.toBeNull();
+      expect(secondPage).toHaveTextContent("Omega");
+      expect(secondPage).not.toHaveTextContent("Alpha Linked");
+      expect(secondPage?.querySelector("em")).toHaveTextContent("Omega");
+      expect(`${firstPage?.textContent}${secondPage?.textContent}`).toContain(
+        "Alpha Linked Omega",
+      );
+      expect(
+        rendered.container.querySelectorAll(
+          "#resume-section-section-sliced-rich-text",
+        ),
+      ).toHaveLength(1);
+
+      rendered.unmount();
+    }
+
+    const edit = render(<ResumeRenderer document={resume} mode="edit" />);
+    const editContent = edit.container.querySelector(
+      '[data-resume-editing-content="true"]',
+    );
+
+    expect(editContent).toHaveTextContent("Alpha Linked Omega");
+    expect(editContent?.querySelectorAll("a")).toHaveLength(1);
+    expect(
+      editContent?.querySelectorAll('[data-resume-icon-id="lucide:mail"]'),
+    ).toHaveLength(1);
+    rangeSpy.mockRestore();
+  });
+
   it.each(["view", "print"] as const)(
     "renders a per-section title color in %s output",
     (mode) => {
