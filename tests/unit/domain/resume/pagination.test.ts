@@ -984,4 +984,190 @@ describe("paginateMeasuredSections", () => {
       { path: ["outer-group"] },
     ]);
   });
+
+  it("splits a rich text block across two pages at measured line boundaries", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 60,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-summary",
+          height: 110,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "summary",
+              path: ["summary"],
+              type: "text",
+              height: 110,
+              leadingHeight: 5,
+              trailingHeight: 5,
+              textLines: [
+                textLine(0, 5, 25),
+                textLine(5, 10, 25),
+                textLine(10, 15, 25),
+                textLine(15, 20, 25),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[0]?.sections[0]?.blocks).toEqual([
+      {
+        path: ["summary"],
+        textRange: {
+          from: textPosition(0),
+          to: textPosition(10),
+        },
+      },
+    ]);
+    expect(result.pages[0]?.sections[0]?.totalHeight).toBe(55);
+    expect(result.pages[1]?.sections[0]?.blocks).toEqual([
+      {
+        path: ["summary"],
+        continuation: true,
+        textRange: {
+          from: textPosition(10),
+          to: textPosition(20),
+        },
+      },
+    ]);
+    expect(result.pages[1]?.sections[0]?.totalHeight).toBe(55);
+  });
+
+  it("splits one rich text block repeatedly across three pages", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 45,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-summary",
+          height: 96,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "summary",
+              path: ["summary"],
+              type: "text",
+              height: 96,
+              leadingHeight: 3,
+              trailingHeight: 3,
+              textLines: [
+                textLine(0, 4, 15),
+                textLine(4, 8, 15),
+                textLine(8, 12, 15),
+                textLine(12, 16, 15),
+                textLine(16, 20, 15),
+                textLine(20, 24, 15),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages).toHaveLength(3);
+    expect(
+      result.pages.map(
+        (page) => page.sections[0]?.blocks[0]?.textRange,
+      ),
+    ).toEqual([
+      { from: textPosition(0), to: textPosition(8) },
+      { from: textPosition(8), to: textPosition(20) },
+      { from: textPosition(20), to: textPosition(24) },
+    ]);
+  });
+
+  it("moves a text block when the remaining page cannot fit its first line", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 60,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-summary",
+          height: 85,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "intro",
+              path: ["intro"],
+              type: "badges",
+              height: 45,
+            },
+            {
+              id: "summary",
+              path: ["summary"],
+              type: "text",
+              height: 40,
+              textLines: [textLine(0, 5, 20), textLine(5, 10, 20)],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[0]?.sections[0]?.blocks).toEqual([
+      { path: ["intro"] },
+    ]);
+    expect(result.pages[1]?.sections[0]?.blocks).toEqual([
+      { path: ["summary"] },
+    ]);
+  });
+
+  it("keeps an atomic inline line intact when splitting rich text", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 30,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-contact",
+          height: 40,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "contact",
+              path: ["contact"],
+              type: "text",
+              height: 40,
+              textLines: [
+                textLine(0, 1, 20, 0),
+                textLine(0, 1, 20, 1),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[0]?.sections[0]?.blocks[0]?.textRange).toEqual({
+      from: textPosition(0, 0),
+      to: textPosition(1, 0),
+    });
+    expect(result.pages[1]?.sections[0]?.blocks[0]?.textRange).toEqual({
+      from: textPosition(0, 1),
+      to: textPosition(1, 1),
+    });
+  });
 });
+
+function textPosition(offset: number, nodeIndex = 0) {
+  return { paragraphIndex: 0, nodeIndex, offset };
+}
+
+function textLine(
+  fromOffset: number,
+  toOffset: number,
+  height: number,
+  nodeIndex = 0,
+) {
+  return {
+    from: textPosition(fromOffset, nodeIndex),
+    to: textPosition(toOffset, nodeIndex),
+    height,
+  };
+}
