@@ -1022,20 +1022,15 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: spacedLabel("取消发布") })).toBeEnabled();
-    expect(screen.getByTestId("resume-publish-action")).toHaveTextContent(
-      /取\s*消\s*发\s*布/,
-    );
-    expect(screen.getByRole("link", { name: spacedLabel("打开公开页") })).toHaveAttribute(
-      "href",
-      "/resume/foundation-resume",
-    );
-    expect(screen.getByTestId("resume-open-public")).toHaveAttribute(
-      "href",
-      "/resume/foundation-resume",
-    );
+    expect(screen.getByRole("button", { name: "复制公开链接" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "打开公开页" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("取消发布") }));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "更多公开页操作" }));
+    expect(await screen.findByRole("link", { name: "打开公开页" })).toHaveAttribute(
+      "href",
+      "/resume/foundation-resume",
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "取消发布" }));
     expect(unpublishDocument).not.toHaveBeenCalled();
     const dialog = screen.getByRole("dialog", { name: "取消发布简历" });
     fireEvent.click(
@@ -1074,6 +1069,22 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: "公开链接已复制" })).toBeInTheDocument();
   });
 
+  it("links to the public resume appearance guide before publication", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "公开页外观帮助" }),
+    ).toHaveAttribute("href", "/docs/public-resume-customization");
+    expect(
+      screen.getByRole("link", { name: "公开页外观帮助" }),
+    ).toHaveAttribute("target", "_blank");
+  });
+
   it("publishes the current resume and reveals the public link", async () => {
     const publishDocument = vi
       .fn()
@@ -1094,13 +1105,10 @@ describe("ResumeEditorShell", () => {
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(await screen.findByTestId("resume-publish-action")).toHaveTextContent(
-      "取消发布",
+      "复制公开链接",
     );
-    expect(await screen.findByRole("link", { name: spacedLabel("打开公开页") })).toHaveAttribute(
-      "href",
-      "/resume/resume-demo",
-    );
-    expect(await screen.findByTestId("resume-open-public")).toHaveAttribute(
+    fireEvent.click(screen.getByRole("button", { name: "更多公开页操作" }));
+    expect(await screen.findByRole("link", { name: "打开公开页" })).toHaveAttribute(
       "href",
       "/resume/resume-demo",
     );
@@ -1189,6 +1197,7 @@ describe("ResumeEditorShell", () => {
     });
 
     expect(publishDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" });
+    fireEvent.click(screen.getByRole("button", { name: "更多公开页操作" }));
     expect(screen.getByTestId("resume-open-public")).toHaveAttribute(
       "href",
       "/resume/resume-demo",

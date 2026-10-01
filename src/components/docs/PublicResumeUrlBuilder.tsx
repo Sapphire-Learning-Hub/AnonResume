@@ -2,6 +2,7 @@
 
 import {
   Button,
+  ColorPicker,
   Empty,
   Form,
   Input,
@@ -334,11 +335,42 @@ export function PublicResumeUrlBuilder({
                 }
               >
                 <Space.Compact block>
-                  <span aria-hidden="true" className={styles.colorPrefix}>#</span>
+                  <ColorPicker
+                    allowClear
+                    disabledAlpha
+                    disabledFormat
+                    format="hex"
+                    value={
+                      COLOR_PATTERN.test(backgroundInput)
+                        ? `#${backgroundInput}`
+                        : null
+                    }
+                    onChange={(color) =>
+                      updateColor("background", color.toHex())
+                    }
+                    onClear={() => updateColor("background", "")}
+                  >
+                    <Button
+                      aria-label={t("docs.builder.pickBackground")}
+                      className={styles.colorPickerButton}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={styles.colorSwatch}
+                        data-empty={!COLOR_PATTERN.test(backgroundInput)}
+                        style={
+                          COLOR_PATTERN.test(backgroundInput)
+                            ? { backgroundColor: `#${backgroundInput}` }
+                            : undefined
+                        }
+                      />
+                    </Button>
+                  </ColorPicker>
                   <Input
                     aria-label={t("docs.builder.field.background")}
                     className={styles.colorInput}
                     maxLength={6}
+                    prefix="#"
                     value={backgroundInput}
                     onChange={(event) =>
                       updateColor("background", event.target.value)
@@ -360,11 +392,40 @@ export function PublicResumeUrlBuilder({
                 }
               >
                 <Space.Compact block>
-                  <span aria-hidden="true" className={styles.colorPrefix}>#</span>
+                  <ColorPicker
+                    allowClear
+                    disabledAlpha
+                    disabledFormat
+                    format="hex"
+                    value={
+                      COLOR_PATTERN.test(accentInput)
+                        ? `#${accentInput}`
+                        : null
+                    }
+                    onChange={(color) => updateColor("accent", color.toHex())}
+                    onClear={() => updateColor("accent", "")}
+                  >
+                    <Button
+                      aria-label={t("docs.builder.pickAccent")}
+                      className={styles.colorPickerButton}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={styles.colorSwatch}
+                        data-empty={!COLOR_PATTERN.test(accentInput)}
+                        style={
+                          COLOR_PATTERN.test(accentInput)
+                            ? { backgroundColor: `#${accentInput}` }
+                            : undefined
+                        }
+                      />
+                    </Button>
+                  </ColorPicker>
                   <Input
                     aria-label={t("docs.builder.field.accent")}
                     className={styles.colorInput}
                     maxLength={6}
+                    prefix="#"
                     value={accentInput}
                     onChange={(event) =>
                       updateColor("accent", event.target.value)

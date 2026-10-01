@@ -128,6 +128,46 @@ describe("PublicResumeUrlBuilder", () => {
     expect(feedback.success).toHaveBeenCalledWith("链接已复制");
   });
 
+  it("writes a color selected from the picker into the share URL", async () => {
+    vi.mocked(fetchResumeEntriesPage).mockResolvedValue({
+      items: [
+        {
+          id: "resume-one",
+          title: "前端工程师简历",
+          summary: "公开简历",
+          version: 2,
+          updatedAt: 1,
+          published: true,
+          slug: "frontend-engineer",
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+    });
+
+    renderBuilder();
+
+    const output = await screen.findByRole("textbox", {
+      name: "分享链接",
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "选择页面外侧背景颜色" }),
+    );
+    const pickerInput = document.querySelector<HTMLInputElement>(
+      ".ant-color-picker-hex-input input",
+    );
+    expect(pickerInput).not.toBeNull();
+    fireEvent.change(pickerInput!, { target: { value: "123456" } });
+
+    await waitFor(() => {
+      expect(output).toHaveValue(
+        "http://localhost:3000/resume/frontend-engineer?view-background=123456",
+      );
+    });
+  });
+
   it("searches published resumes from the selector without a separate action", async () => {
     vi.mocked(fetchResumeEntriesPage).mockResolvedValue({
       items: [],

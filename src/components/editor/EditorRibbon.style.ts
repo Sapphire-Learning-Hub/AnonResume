@@ -23,8 +23,22 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
         box-sizing: border-box;
         height: ${RIBBON_CONTROL_HEIGHT}px;
         min-height: ${RIBBON_CONTROL_HEIGHT}px;
-        border-radius: ${RIBBON_CONTROL_RADIUS}px;
         font-size: 12px;
+      }
+
+      && button:not(.ant-btn-compact-item),
+      && a.ant-btn:not(.ant-btn-compact-item) {
+        border-radius: ${RIBBON_CONTROL_RADIUS}px;
+      }
+
+      && button.ant-btn-compact-first-item {
+        border-start-start-radius: ${RIBBON_CONTROL_RADIUS}px;
+        border-end-start-radius: ${RIBBON_CONTROL_RADIUS}px;
+      }
+
+      && button.ant-btn-compact-last-item {
+        border-start-end-radius: ${RIBBON_CONTROL_RADIUS}px;
+        border-end-end-radius: ${RIBBON_CONTROL_RADIUS}px;
       }
     }
 

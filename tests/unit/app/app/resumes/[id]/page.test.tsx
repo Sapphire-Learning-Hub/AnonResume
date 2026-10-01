@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import { notFound } from "next/navigation";
 
@@ -98,7 +98,8 @@ describe("ResumeEditorPage", () => {
     render(page);
 
     expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue("居中叙事简历");
-    expect(screen.getByRole("link", { name: /打\s*开\s*公\s*开\s*页/ })).toHaveAttribute(
+    fireEvent.click(screen.getByRole("button", { name: "更多公开页操作" }));
+    expect(await screen.findByRole("link", { name: "打开公开页" })).toHaveAttribute(
       "href",
       "/resume/resume-foundation",
     );

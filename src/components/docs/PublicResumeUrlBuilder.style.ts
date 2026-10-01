@@ -56,16 +56,54 @@ export const usePublicResumeUrlBuilderStyles = createStyles(
         width: 100%;
       }
     `,
-    colorPrefix: css`
-      display: inline-flex;
-      width: 42px;
-      align-items: center;
-      justify-content: center;
+    colorPickerButton: css`
+      && {
+        width: 42px;
+        padding: 0;
+      }
+    `,
+    colorSwatch: css`
+      position: relative;
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      overflow: hidden;
       border: 1px solid ${token.colorBorder};
-      border-right: 0;
-      border-radius: ${token.borderRadius}px 0 0 ${token.borderRadius}px;
-      background: ${token.colorFillTertiary};
-      color: ${token.colorTextSecondary};
+      border-radius: ${token.borderRadiusSM}px;
+
+      &[data-empty="true"] {
+        background-color: ${token.colorBgContainer};
+        background-image:
+          linear-gradient(
+            45deg,
+            ${token.colorFillSecondary} 25%,
+            transparent 25%,
+            transparent 75%,
+            ${token.colorFillSecondary} 75%
+          ),
+          linear-gradient(
+            45deg,
+            ${token.colorFillSecondary} 25%,
+            transparent 25%,
+            transparent 75%,
+            ${token.colorFillSecondary} 75%
+          );
+        background-position:
+          0 0,
+          4px 4px;
+        background-size: 8px 8px;
+      }
+
+      &[data-empty="true"]::after {
+        position: absolute;
+        top: 8px;
+        left: -2px;
+        width: 22px;
+        height: 1px;
+        background: ${token.colorError};
+        content: "";
+        transform: rotate(-45deg);
+      }
     `,
     output: css`
       display: grid;

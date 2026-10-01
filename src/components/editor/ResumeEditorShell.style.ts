@@ -61,6 +61,11 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       }
     }
   `,
+  publicActionsMenuItem: css`
+    &&&& {
+      border-radius: calc(${token.borderRadiusLG}px - ${token.paddingXXS}px);
+    }
+  `,
   ribbonControlGroup: css`
     display: flex;
     align-items: center;
