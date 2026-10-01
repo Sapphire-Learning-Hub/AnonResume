@@ -2567,6 +2567,7 @@ export function ResumeEditorShell({
               : t("editor.copyPublicLink")}
           </Button>
           <Dropdown
+            classNames={{ item: styles.publicActionsMenuItem }}
             menu={{
               items: [
                 {
@@ -2590,7 +2591,8 @@ export function ResumeEditorShell({
                 if (key === "unpublish") setUnpublishOpen(true);
               },
             }}
-            trigger={["click"]}
+            mouseEnterDelay={0}
+            trigger={["hover", "click"]}
           >
             <Button
               aria-label={t("editor.publicActionsMore")}

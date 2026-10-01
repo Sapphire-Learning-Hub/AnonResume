@@ -1025,7 +1025,7 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: "复制公开链接" })).toBeEnabled();
     expect(screen.queryByRole("link", { name: "打开公开页" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "更多公开页操作" }));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "更多公开页操作" }));
     expect(await screen.findByRole("link", { name: "打开公开页" })).toHaveAttribute(
       "href",
       "/resume/foundation-resume",
