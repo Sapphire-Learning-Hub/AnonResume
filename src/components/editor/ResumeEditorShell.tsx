@@ -13,11 +13,13 @@ import {
 import {
   Button,
   Checkbox,
+  Dropdown,
   Modal,
   Pagination,
   Popconfirm,
   Segmented,
   Select,
+  Space,
   Switch,
   Tag,
   Tooltip,
@@ -28,6 +30,7 @@ import {
   AlignRightOutlined,
   AppstoreAddOutlined,
   BoldOutlined,
+  DownOutlined,
   FileAddOutlined,
   FileTextOutlined,
   ItalicOutlined,
@@ -2553,13 +2556,49 @@ export function ResumeEditorShell({
         {t("common.preview")}
       </Button>
       {publicHref ? (
-        <Button
-          data-testid="resume-publish-action"
-          disabled={publicationBusy}
-          onClick={() => setUnpublishOpen(true)}
-        >
-          {t("common.unpublish")}
-        </Button>
+        <Space.Compact>
+          <Button
+            data-testid="resume-publish-action"
+            disabled={publicationBusy}
+            onClick={() => void handleCopyPublicLink()}
+          >
+            {publicLinkCopied
+              ? t("editor.publicLinkCopied")
+              : t("editor.copyPublicLink")}
+          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: "open-public",
+                  label: (
+                    <a
+                      data-testid="resume-open-public"
+                      href={publicHref}
+                    >
+                      {t("common.openPublic")}
+                    </a>
+                  ),
+                },
+                {
+                  danger: true,
+                  key: "unpublish",
+                  label: t("common.unpublish"),
+                },
+              ],
+              onClick: ({ key }) => {
+                if (key === "unpublish") setUnpublishOpen(true);
+              },
+            }}
+            trigger={["click"]}
+          >
+            <Button
+              aria-label={t("editor.publicActionsMore")}
+              disabled={publicationBusy}
+              icon={<DownOutlined />}
+            />
+          </Dropdown>
+        </Space.Compact>
       ) : (
         <Button
           data-testid="resume-publish-action"
@@ -2570,18 +2609,18 @@ export function ResumeEditorShell({
           {t("common.publish")}
         </Button>
       )}
-      {publicHref ? (
-        <>
-          <Button data-testid="resume-open-public" href={publicHref}>
-            {t("common.openPublic")}
-          </Button>
-          <Button onClick={() => void handleCopyPublicLink()}>
-            {publicLinkCopied
-              ? t("editor.publicLinkCopied")
-              : t("editor.copyPublicLink")}
-          </Button>
-        </>
-      ) : null}
+      <Tooltip title={t("editor.publicAppearanceHelp")}>
+        <Button
+          aria-label={t("editor.publicAppearanceHelp")}
+          className={styles.ribbonIconButton}
+          href="/docs/public-resume-customization"
+          rel="noreferrer"
+          target="_blank"
+          type="text"
+        >
+          <HelpIcon size={16} />
+        </Button>
+      </Tooltip>
       <Button
         disabled={pdfBusy}
         loading={pdfBusy}
