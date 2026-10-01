@@ -1,6 +1,6 @@
 "use client";
 
-import { Modal } from "antd";
+import { Button, Modal } from "antd";
 import { useSyncExternalStore } from "react";
 
 import { useI18n } from "@/i18n/I18nProvider";
@@ -36,9 +36,11 @@ function getServerShortcutPlatform(): ShortcutPlatform {
 export function EditorShortcutPanel({
   open,
   onCancel,
+  onRestartOnboarding,
 }: {
   open: boolean;
   onCancel: () => void;
+  onRestartOnboarding?: () => void;
 }) {
   const { styles } = useEditorShortcutPanelStyles();
   const { t } = useI18n();
@@ -122,6 +124,17 @@ export function EditorShortcutPanel({
             </div>
           </section>
         ))}
+        {onRestartOnboarding ? (
+          <section className={styles.group}>
+            <h3 className={styles.groupTitle}>{t("onboarding.help.title")}</h3>
+            <p className={styles.groupDescription}>
+              {t("onboarding.help.description")}
+            </p>
+            <Button type="primary" onClick={onRestartOnboarding}>
+              {t("onboarding.action.restart")}
+            </Button>
+          </section>
+        ) : null}
       </div>
     </Modal>
   );

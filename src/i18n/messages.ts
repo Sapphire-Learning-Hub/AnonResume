@@ -670,6 +670,9 @@ const messages = {
     "onboarding.action.complete": "完成练习",
     "onboarding.action.restart": "重新开始新手引导",
     "onboarding.practicePreview": "练习预览",
+    "onboarding.returnToPractice": "返回练习",
+    "onboarding.help.title": "新手练习",
+    "onboarding.help.description": "重新打开一份练习简历，按步骤熟悉编辑器。",
     "onboarding.progress": "步骤 {current}/{total}",
     "onboarding.disclosure": "练习内容不会出现在你的简历列表中。",
     "onboarding.error.generic": "新手引导暂时无法继续，请稍后重试。",
@@ -1996,6 +1999,10 @@ const messages = {
     "onboarding.action.complete": "Finish practice",
     "onboarding.action.restart": "Restart onboarding",
     "onboarding.practicePreview": "Practice preview",
+    "onboarding.returnToPractice": "Return to practice",
+    "onboarding.help.title": "Editor practice",
+    "onboarding.help.description":
+      "Open a fresh practice resume and learn the editor step by step.",
     "onboarding.progress": "Step {current} of {total}",
     "onboarding.disclosure":
       "Practice content will not appear in your resume list.",
