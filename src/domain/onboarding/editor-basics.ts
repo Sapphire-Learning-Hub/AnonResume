@@ -95,6 +95,8 @@ export const editorOnboardingSteps = [
   },
 ] as const satisfies readonly EditorOnboardingStepDefinition[];
 
-export function getEditorOnboardingStep(stepId: EditorOnboardingStepId) {
+export function getEditorOnboardingStep(
+  stepId: EditorOnboardingStepId,
+): EditorOnboardingStepDefinition | undefined {
   return editorOnboardingSteps.find(({ id }) => id === stepId);
 }
