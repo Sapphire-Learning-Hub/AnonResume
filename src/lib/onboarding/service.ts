@@ -9,6 +9,7 @@ import {
 } from "@/domain/onboarding/editor-basics";
 import { evaluateEditorOnboardingDocumentStep } from "@/domain/onboarding/editor-basics-document";
 import type { AppLocale } from "@/i18n/messages";
+import { readNodeEnvironment } from "@/lib/config/process-environment";
 
 import {
   countStandardResumes,
@@ -236,7 +237,7 @@ export async function prepareEditorOnboardingEntry(input: {
   sessionId: string;
   locale: AppLocale;
 }) {
-  return process.env.NODE_ENV === "development"
+  return readNodeEnvironment() === "development"
     ? prepareDevelopmentEntry(input)
     : prepareProductionEntry(input);
 }

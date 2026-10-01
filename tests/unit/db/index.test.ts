@@ -9,6 +9,7 @@ describe("database schema", () => {
     expect(columns).toEqual([
       "id",
       "userId",
+      "kind",
       "name",
       "summary",
       "customSummary",
