@@ -218,6 +218,13 @@
       "when": 1790235430491,
       "tag": "0030_cleanup_legacy_runtime_records",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790883514564,
+      "tag": "0031_editor_onboarding",
+      "breakpoints": true
     }
   ]
 }

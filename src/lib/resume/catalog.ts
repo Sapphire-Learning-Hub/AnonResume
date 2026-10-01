@@ -4,6 +4,8 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import type { ResumeDocument } from "@/domain/resume/schema";
 import { defaultLocale, getMessages, type AppLocale } from "@/i18n/messages";
 
+export type ResumeKind = "standard" | "onboarding";
+
 export interface ResumeCatalogEntry {
   id: string;
   title: string;
@@ -16,6 +18,7 @@ export interface ResumeCatalogEntry {
 
 export interface ResumeRecord extends ResumeCatalogEntry {
   userId: string;
+  kind: ResumeKind;
   customSummary?: string;
   document: ResumeDocument;
   slug?: string;
@@ -52,6 +55,7 @@ export function createLocalResumeRecord(
 
   return {
     id: resumeId,
+    kind: "standard",
     userId,
     title: derivedTitle,
     summary: messages["catalog.localDraftSummary"],

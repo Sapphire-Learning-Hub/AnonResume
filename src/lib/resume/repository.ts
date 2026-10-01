@@ -24,6 +24,7 @@ import {
   createResumeId,
   createLocalResumeRecord,
   type ResumeCatalogEntry,
+  type ResumeKind,
   type ResumeRecord,
 } from "@/lib/resume/catalog";
 
@@ -69,6 +70,13 @@ export class ResumeIdentifierConflictError extends Error {
     super(`Resume identifier is already in use: ${resumeId}`);
     this.name = "ResumeIdentifierConflictError";
     this.resumeId = resumeId;
+  }
+}
+
+export class ResumePublicationForbiddenError extends Error {
+  constructor(resumeId: string) {
+    super(`Resume cannot be published: ${resumeId}`);
+    this.name = "ResumePublicationForbiddenError";
   }
 }
 
@@ -180,6 +188,7 @@ function mapResumeRow(row: ResumeRow): ResumeRecord {
 
   return {
     id: row.id,
+    kind: row.kind,
     userId: row.userId,
     title: row.name,
     summary: resolveSummary({
@@ -213,6 +222,7 @@ async function insertResumeRecord(record: ResumeRecord) {
     .values({
       id: record.id,
       userId: record.userId,
+      kind: record.kind,
       name: record.title,
       summary: record.summary,
       customSummary: record.customSummary ?? null,
@@ -352,7 +362,10 @@ export async function paginateResumeEntries({
 }): Promise<PageResult<ResumeCatalogEntry>> {
   const normalizedQuery = query?.trim().slice(0, 100);
   const searchPattern = normalizedQuery ? `%${normalizedQuery}%` : undefined;
-  const ownershipFilter = eq(resumes.userId, userId);
+  const ownershipFilter = and(
+    eq(resumes.userId, userId),
+    eq(resumes.kind, "standard"),
+  )!;
   const searchFilter = searchPattern
     ? or(
           ilike(resumes.name, searchPattern),
@@ -362,8 +375,7 @@ export async function paginateResumeEntries({
     : undefined;
   const publicationFilter =
     publication === "published" ? eq(resumes.published, true) : undefined;
-  const filter =
-    and(ownershipFilter, searchFilter, publicationFilter) ?? ownershipFilter;
+  const filter = and(ownershipFilter, searchFilter, publicationFilter)!;
   const [totalRow] = await db
     .select({ value: count() })
     .from(resumes)
@@ -508,12 +520,15 @@ async function createStrictResumeRecord(
   resumeId: string,
   locale: AppLocale = defaultLocale,
   document?: ResumeDocument,
+  kind: ResumeKind = "standard",
 ) {
   if (await selectResumeRecord(userId, resumeId)) {
     throw new ResumeIdentifierConflictError(resumeId);
   }
 
   const record = createLocalResumeRecord(userId, resumeId, locale);
+
+  record.kind = kind;
 
   if (document) {
     record.title = document.meta.title;
@@ -528,6 +543,46 @@ async function createStrictResumeRecord(
   }
 
   return (await selectResumeRecord(userId, resumeId))!;
+}
+
+export async function createOnboardingResumeRecord(params: {
+  userId: string;
+  locale: AppLocale;
+  document: ResumeDocument;
+  createId?: () => string;
+}): Promise<ResumeRecord> {
+  const createId = params.createId ?? createResumeId;
+  let lastConflict: ResumeIdentifierConflictError | undefined;
+
+  for (let attempt = 0; attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await createStrictResumeRecord(
+        params.userId,
+        createId(),
+        params.locale,
+        validateResumeDocument(params.document),
+        "onboarding",
+      );
+    } catch (error) {
+      if (error instanceof ResumeIdentifierConflictError) {
+        lastConflict = error;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastConflict!;
+}
+
+export async function countStandardResumeRecords(userId: string) {
+  const [row] = await db
+    .select({ value: count() })
+    .from(resumes)
+    .where(and(eq(resumes.userId, userId), eq(resumes.kind, "standard")));
+
+  return row?.value ?? 0;
 }
 
 export async function createGeneratedResumeRecord(params: {
@@ -588,6 +643,7 @@ export async function duplicateResumeRecord(params: {
   const copied = await insertResumeRecord({
     id: params.copyId,
     userId: params.userId,
+    kind: "standard",
     title: params.title,
     summary: source.summary,
     customSummary: source.customSummary,
@@ -721,6 +777,11 @@ export async function publishResumeRecord(userIdOrResumeId: string, resumeId?: s
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
   const current = await requireExistingResumeRecord(userId, scopedResumeId);
+
+  if (current.kind === "onboarding") {
+    throw new ResumePublicationForbiddenError(scopedResumeId);
+  }
+
   await createResumeVersionSnapshotFromRecord(current);
   const rows = await db
     .update(resumes)
@@ -767,7 +828,13 @@ export async function getPublishedResumeBySlug(slug: string) {
   const rows = await db
     .select()
     .from(resumes)
-    .where(and(eq(resumes.slug, slug), eq(resumes.published, true)))
+    .where(
+      and(
+        eq(resumes.slug, slug),
+        eq(resumes.published, true),
+        eq(resumes.kind, "standard"),
+      ),
+    )
     .limit(1);
 
   return rows[0] ? mapResumeRow(rows[0]) : undefined;

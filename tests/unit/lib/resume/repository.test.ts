@@ -14,7 +14,9 @@ vi.mock("@/lib/config/runtime", () => ({
 }));
 
 import {
+  countStandardResumeRecords,
   createGeneratedResumeRecord,
+  createOnboardingResumeRecord,
   createResumeRecord,
   deleteResumeRecord,
   duplicateResumeRecord,
@@ -28,6 +30,7 @@ import {
   ResumeIdentifierConflictError,
   resetResumeRepository,
   restoreResumeVersion,
+  ResumePublicationForbiddenError,
   saveResumeRecord,
   snapshotResumeVersion,
 } from "@/lib/resume/repository";
@@ -173,6 +176,62 @@ describe("resume repository persistence", () => {
     expect(created.title).toBe("等宽模块简历");
     expect(created.version).toBe(1);
     expect(created.document.meta.title).toBe("等宽模块简历");
+  });
+
+  it("excludes onboarding resumes from catalog and published lookups", async () => {
+    await createGeneratedResumeRecord({
+      userId: "user-onboarding",
+      templateId: "classic",
+      createId: () => "resume-standard",
+    });
+    await createOnboardingResumeRecord({
+      userId: "user-onboarding",
+      locale: "zh-CN",
+      document: createDefaultResumeDocument("zh-CN"),
+      createId: () => "resume-onboarding",
+    });
+    await getDatabasePool().query(
+      `UPDATE "${process.env.ANONRESUME_DB_SCHEMA || "public"}".resumes
+          SET published = true, slug = 'onboarding-public'
+        WHERE user_id = 'user-onboarding' AND id = 'resume-onboarding'`,
+    );
+
+    await expect(listResumeEntries("user-onboarding")).resolves.toMatchObject([
+      { id: "resume-standard" },
+    ]);
+    await expect(
+      getPublishedResumeBySlug("onboarding-public"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("counts only standard resumes for onboarding eligibility", async () => {
+    await createGeneratedResumeRecord({
+      userId: "user-onboarding-count",
+      createId: () => "resume-standard-count",
+    });
+    await createOnboardingResumeRecord({
+      userId: "user-onboarding-count",
+      locale: "en-US",
+      document: createDefaultResumeDocument("en-US"),
+      createId: () => "resume-onboarding-count",
+    });
+
+    await expect(
+      countStandardResumeRecords("user-onboarding-count"),
+    ).resolves.toBe(1);
+  });
+
+  it("rejects publishing an onboarding resume", async () => {
+    await createOnboardingResumeRecord({
+      userId: "user-onboarding-publish",
+      locale: "zh-CN",
+      document: createDefaultResumeDocument("zh-CN"),
+      createId: () => "resume-onboarding-publish",
+    });
+
+    await expect(
+      publishResumeRecord("user-onboarding-publish", "resume-onboarding-publish"),
+    ).rejects.toBeInstanceOf(ResumePublicationForbiddenError);
   });
 
   it("creates a generated resume from a validated imported document", async () => {
