@@ -129,6 +129,26 @@ describe("ResumeOnboardingController", () => {
     expect(document).toEqual(before);
   });
 
+  it("uses the ribbon tab as a visible fallback before its command is mounted", async () => {
+    const run = createRun("insert-content");
+    const ribbonTab = addAnchor("editor-ribbon-tab-insert", "插入");
+    const onSelectRibbonTab = vi.fn();
+
+    render(
+      <ResumeOnboardingController
+        document={createEditorOnboardingDocument("zh-CN")}
+        run={run}
+        saveStatus="saved"
+        onSelectRibbonTab={onSelectRibbonTab}
+      />,
+    );
+
+    expect(screen.queryByText("未找到当前操作位置，请重新打开引导。")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "带我前往" }));
+    expect(onSelectRibbonTab).toHaveBeenCalledWith("insert");
+    ribbonTab.remove();
+  });
+
   it("shows recovery controls for a missing anchor", () => {
     const run = createRun("format-text");
     clientMocks.update.mockResolvedValue(nextRun(run, "insert-content"));

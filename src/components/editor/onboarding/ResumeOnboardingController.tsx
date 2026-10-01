@@ -56,7 +56,12 @@ export function ResumeOnboardingController({
         : null,
   );
   const step = getEditorOnboardingStep(run.currentStep);
-  const anchor = useOnboardingAnchor(step?.anchorId ?? "", anchorRevision);
+  const targetAnchor = useOnboardingAnchor(step?.anchorId ?? "", anchorRevision);
+  const ribbonTabAnchor = useOnboardingAnchor(
+    step?.ribbonTab ? `editor-ribbon-tab-${step.ribbonTab}` : "",
+    anchorRevision,
+  );
+  const anchor = targetAnchor ?? ribbonTabAnchor;
 
   function restoreFocus() {
     requestAnimationFrame(() => returnFocusRef.current?.focus());
