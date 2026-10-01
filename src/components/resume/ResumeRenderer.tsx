@@ -2558,6 +2558,7 @@ export function ResumeRenderer({
                     <div
                       className={styles.pageLabel}
                       data-print-chrome="screen"
+                      data-resume-page-label="true"
                     >
                       {t("renderer.pageLabel", { index: page.index + 1 })}
                     </div>

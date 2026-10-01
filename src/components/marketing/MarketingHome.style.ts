@@ -133,7 +133,7 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     align-items: center;
     justify-content: center;
 
-    a {
+    > a {
       color: ${token.colorTextSecondary};
       font-size: 14px;
       font-weight: 600;
@@ -141,8 +141,8 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
       transition: color ${token.motionDurationMid};
     }
 
-    a:hover,
-    a:focus-visible {
+    > a:hover,
+    > a:focus-visible {
       color: ${token.colorPrimary};
     }
 
@@ -881,13 +881,13 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     flex-wrap: wrap;
     gap: 18px;
 
-    a {
+    > a {
       color: inherit;
       text-decoration: none;
     }
 
-    a:hover,
-    a:focus-visible {
+    > a:hover,
+    > a:focus-visible {
       color: ${token.colorPrimary};
     }
   `,

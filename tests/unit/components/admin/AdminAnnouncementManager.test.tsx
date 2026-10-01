@@ -28,7 +28,7 @@ const publishedAnnouncement: AnnouncementListItem = {
   dismissible: true,
   status: "published",
   publishedAt: "2026-09-16T08:00:00.000Z",
-  expiresAt: "2026-10-01T08:00:00.000Z",
+  expiresAt: "2099-10-01T08:00:00.000Z",
   createdAt: "2026-09-16T07:00:00.000Z",
   updatedAt: "2026-09-16T08:00:00.000Z",
 };

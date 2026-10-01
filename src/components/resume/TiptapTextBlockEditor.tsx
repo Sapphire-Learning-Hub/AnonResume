@@ -433,6 +433,7 @@ export const TiptapTextBlockEditor = forwardRef<
       attributes: {
         "aria-label": ariaLabel,
         class: className ?? "",
+        "data-style-scope": "resume-rich-text",
         role: "textbox",
       },
       handleKeyDown: (_view, event) => {

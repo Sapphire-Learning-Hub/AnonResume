@@ -86,8 +86,9 @@ nodes.
   such assertions only when they enforce an accessibility, legal, security, or
   stable cross-surface contract.
 - Assert outcomes at the most stable inexpensive boundary: unit tests for
-  domain rules, integration tests for subsystem boundaries, and browser tests
-  only for essential journeys that lower levels cannot prove.
+  domain rules, component tests for user interaction, and integration tests
+  for subsystem boundaries. Do not add end-to-end browser test suites; verify
+  workflows that require a real browser through focused manual acceptance.
 - Mock only genuine external boundaries. A test must fail when its protected
   behavior breaks, not merely when implementation is rearranged.
 - Before adding a test, identify its behavior, realistic failure, and coverage
@@ -135,6 +136,12 @@ nodes.
 - Express conditional styling with `data-*` or `aria-*` state on a stable base
   class. Do not concatenate generated style classes conditionally; the
   `check:styles` architecture rule rejects this pattern.
+- Keep component styles at the smallest owned boundary. Target an element
+  through its own class or `data-*` state instead of reaching through a layout
+  container. Bare semantic descendant selectors are reserved for global
+  foundations or an explicit `data-style-scope` content root; interactive
+  descendants must otherwise use a direct-child boundary. Never let prose or
+  shell typography style nested controls or third-party components.
 - Do not attach low-specificity generated styles to Ant Design components in a
   way that loses to library defaults. Follow nearby `&&` specificity patterns
   and verify initial render as well as client navigation.

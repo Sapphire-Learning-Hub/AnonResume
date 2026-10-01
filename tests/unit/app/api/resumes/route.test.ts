@@ -1,6 +1,7 @@
 import { getOptionalSession } from "@/lib/auth/session";
 import {
   createResumeRecord,
+  publishResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume/repository";
 
@@ -56,5 +57,33 @@ describe("resume catalog route", () => {
     );
 
     expect(await response.json()).toMatchObject({ page: 1, pageSize: 100 });
+  });
+
+  it("returns only published resumes when requested", async () => {
+    await createResumeRecord("user-demo", "resume-published");
+    await publishResumeRecord("user-demo", "resume-published");
+    await createResumeRecord("user-demo", "resume-draft");
+    await createResumeRecord("user-other", "resume-other");
+    await publishResumeRecord("user-other", "resume-other");
+
+    const response = await GET(
+      new Request("http://localhost/api/resumes?publication=published"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ total: 1 });
+    expect(body.items).toEqual([
+      expect.objectContaining({ id: "resume-published", published: true }),
+    ]);
+  });
+
+  it("rejects unknown publication filters", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/resumes?publication=archived"),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_publication" });
   });
 });

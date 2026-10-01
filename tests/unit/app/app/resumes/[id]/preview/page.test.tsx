@@ -45,9 +45,15 @@ describe("ResumePreviewPage", () => {
     render(page);
 
     expect(screen.getByText("预览")).toBeInTheDocument();
-    expect(screen.getByText("居中叙事简历")).toBeInTheDocument();
+    const header = screen.getByRole("region", { name: "居中叙事简历" });
+    expect(header).toContainElement(
+      screen.getByRole("heading", { level: 1, name: "居中叙事简历" }),
+    );
     expect(screen.getByText("林知夏")).toBeInTheDocument();
     expect(screen.getByText("品牌策划与内容创意")).toBeInTheDocument();
+    expect(header).toContainElement(
+      screen.getByRole("link", { name: "返回编辑器" }),
+    );
     expect(screen.getByRole("link", { name: "返回编辑器" })).toHaveAttribute(
       "href",
       "/app/resumes/resume-foundation",

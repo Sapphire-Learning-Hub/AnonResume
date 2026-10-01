@@ -2,11 +2,15 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { ResumeViewShell } from "@/components/resume/ResumeViewShell";
+import { parsePublicResumeAppearance } from "@/domain/resume/public-appearance";
 import { getRequestMessages } from "@/i18n/server";
+import { getRuntimeConfig } from "@/lib/config/runtime";
+import { getPdfExportQueueConfig } from "@/lib/pdf/export-queue";
 import { getPublishedResumeBySlug } from "@/lib/resume/repository";
 
 interface PublicResumePageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({
@@ -57,8 +61,12 @@ export async function generateMetadata({
 
 export default async function PublicResumePage({
   params,
+  searchParams,
 }: PublicResumePageProps) {
   const { slug } = await params;
+  const appearance = parsePublicResumeAppearance(
+    searchParams ? await searchParams : {},
+  );
   const messages = await getRequestMessages();
   const resume = await getPublishedResumeBySlug(slug);
 
@@ -66,13 +74,23 @@ export default async function PublicResumePage({
     notFound();
   }
 
+  const runtime = await getRuntimeConfig("web");
+  const allowAnonymousPdfExport = getPdfExportQueueConfig(
+    runtime.values,
+  ).allowAnonymous;
+
   return (
     <ResumeViewShell
-      eyebrow={messages["view.publicEyebrow"]}
       title={resume.title}
-      description={messages["view.publicDescription"]}
-      downloadHref={`/resume/${resume.slug}/pdf`}
-      downloadLabel={messages["common.downloadPdf"]}
+      appearance={appearance}
+      downloadHref={
+        allowAnonymousPdfExport
+          ? `/resume/${resume.slug}/pdf`
+          : undefined
+      }
+      downloadLabel={
+        allowAnonymousPdfExport ? messages["common.downloadPdf"] : undefined
+      }
       document={resume.document}
     />
   );

@@ -344,22 +344,26 @@ export async function paginateResumeEntries({
   page,
   pageSize,
   query,
+  publication = "all",
 }: PageRequest & {
   userId: string;
   query?: string;
+  publication?: "all" | "published";
 }): Promise<PageResult<ResumeCatalogEntry>> {
   const normalizedQuery = query?.trim().slice(0, 100);
   const searchPattern = normalizedQuery ? `%${normalizedQuery}%` : undefined;
-  const filter = searchPattern
-    ? and(
-        eq(resumes.userId, userId),
-        or(
+  const ownershipFilter = eq(resumes.userId, userId);
+  const searchFilter = searchPattern
+    ? or(
           ilike(resumes.name, searchPattern),
           ilike(resumes.summary, searchPattern),
           ilike(resumes.customSummary, searchPattern),
-        ),
       )
-    : eq(resumes.userId, userId);
+    : undefined;
+  const publicationFilter =
+    publication === "published" ? eq(resumes.published, true) : undefined;
+  const filter =
+    and(ownershipFilter, searchFilter, publicationFilter) ?? ownershipFilter;
   const [totalRow] = await db
     .select({ value: count() })
     .from(resumes)

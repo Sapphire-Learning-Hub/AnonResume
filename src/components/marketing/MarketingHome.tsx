@@ -313,6 +313,7 @@ export function MarketingHome({
             <a data-marketing-scroll="true" href="#open-source">
               {t("home.navigation.open")}
             </a>
+            <a href="/docs">{t("home.navigation.docs")}</a>
           </nav>
           <div className={styles.navActions}>
             <Button href="/sign-in" type="primary">

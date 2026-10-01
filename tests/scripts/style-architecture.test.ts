@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyzeStyleArchitectureSource,
+  analyzeStyleSelectorScopeSource,
   scanStyleArchitecture,
 } from "../../scripts/style-architecture";
 
@@ -86,6 +87,80 @@ describe("style architecture", () => {
     expect(issues.map((issue) => issue.styleName)).toEqual([
       "emphasis",
       "standard",
+    ]);
+  });
+
+  it("rejects interactive element selectors that cross an ordinary component boundary", () => {
+    const issues = analyzeStyleSelectorScopeSource(
+      `const useStyles = createStyles(({ css }) => ({
+        layout: css\`
+          a,
+          button:hover {
+            color: red;
+          }
+        \`,
+      }));`,
+      "fixture.style.ts",
+    );
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "unscoped-interactive-descendant",
+        filePath: "fixture.style.ts",
+        styleName: "layout",
+      }),
+      expect.objectContaining({
+        code: "unscoped-interactive-descendant",
+        filePath: "fixture.style.ts",
+        styleName: "layout",
+      }),
+    ]);
+  });
+
+  it("allows direct children and descendants inside an explicit content scope", () => {
+    const issues = analyzeStyleSelectorScopeSource(
+      `const useStyles = createStyles(({ css }) => ({
+        navigation: css\`
+          > a,
+          & > button {
+            color: inherit;
+          }
+        \`,
+        article: css\`
+          &[data-style-scope="article-prose"] {
+            a,
+            button {
+              color: inherit;
+            }
+          }
+        \`,
+      }));`,
+      "fixture.style.ts",
+    );
+
+    expect(issues).toEqual([]);
+  });
+
+  it("rejects nested Ant Design selectors that attempt to raise specificity", () => {
+    const issues = analyzeStyleSelectorScopeSource(
+      `const useStyles = createStyles(({ css }) => ({
+        panel: css\`
+          .ant-input-affix-wrapper {
+            && {
+              margin-bottom: 24px;
+            }
+          }
+        \`,
+      }));`,
+      "fixture.style.ts",
+    );
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        code: "nested-antd-override",
+        filePath: "fixture.style.ts",
+        styleName: "panel",
+      }),
     ]);
   });
 

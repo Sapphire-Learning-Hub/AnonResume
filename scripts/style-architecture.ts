@@ -5,6 +5,8 @@ import ts from "typescript";
 
 export type StyleArchitectureIssueCode =
   | "conditional-style-modifier"
+  | "nested-antd-override"
+  | "unscoped-interactive-descendant"
   | "unstable-antd-override";
 
 export interface StyleArchitectureIssue {
@@ -23,6 +25,9 @@ export interface DirectAntStyleUsage {
 }
 
 const antdImportPattern = /import\s*\{([^}]*)\}\s*from\s*["']antd["']/g;
+const interactiveElementPattern =
+  /(^|[\s>+~])(a|button|input|select|textarea)(?=[:.\[#\s>+~]|$)/g;
+const nestedAntOverridePattern = /\.ant-[^{]+\{\s*&&\s*\{/g;
 
 function getAntComponentNames(source: string) {
   const componentNames = new Set<string>();
@@ -77,6 +82,150 @@ function getStyleName(node: ts.Node): string | null {
   }
 
   return node.name.text;
+}
+
+function getStyleDefinitionName(node: ts.TaggedTemplateExpression) {
+  const parent = node.parent;
+
+  if (!ts.isPropertyAssignment(parent)) {
+    return null;
+  }
+
+  if (ts.isIdentifier(parent.name) || ts.isStringLiteral(parent.name)) {
+    return parent.name.text;
+  }
+
+  return null;
+}
+
+function getTemplateText(template: ts.TemplateLiteral) {
+  if (ts.isNoSubstitutionTemplateLiteral(template)) {
+    return template.text;
+  }
+
+  return [
+    template.head.text,
+    ...template.templateSpans.flatMap((span) => [
+      " __style_expression__ ",
+      span.literal.text,
+    ]),
+  ].join("");
+}
+
+function selectorHasUnscopedInteractiveDescendant(selector: string) {
+  interactiveElementPattern.lastIndex = 0;
+
+  for (const match of selector.matchAll(interactiveElementPattern)) {
+    const prefix = selector.slice(0, match.index ?? 0).trimEnd();
+
+    if (prefix.endsWith(">")) {
+      continue;
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+function findUnscopedInteractiveSelectors(cssText: string) {
+  const selectors: string[] = [];
+  const scopeStack: boolean[] = [];
+  let segmentStart = 0;
+
+  for (let index = 0; index < cssText.length; index += 1) {
+    const character = cssText[index];
+
+    if (character === ";") {
+      segmentStart = index + 1;
+      continue;
+    }
+
+    if (character === "}") {
+      scopeStack.pop();
+      segmentStart = index + 1;
+      continue;
+    }
+
+    if (character !== "{") {
+      continue;
+    }
+
+    const prelude = cssText.slice(segmentStart, index).trim();
+    const parentHasExplicitScope = scopeStack.at(-1) ?? false;
+    const hasExplicitScope =
+      parentHasExplicitScope || prelude.includes("[data-style-scope");
+
+    if (!prelude.startsWith("@") && !hasExplicitScope) {
+      for (const selector of prelude.split(",")) {
+        const normalizedSelector = selector.trim();
+
+        if (selectorHasUnscopedInteractiveDescendant(normalizedSelector)) {
+          selectors.push(normalizedSelector);
+        }
+      }
+    }
+
+    scopeStack.push(hasExplicitScope);
+    segmentStart = index + 1;
+  }
+
+  return selectors;
+}
+
+export function analyzeStyleSelectorScopeSource(
+  source: string,
+  filePath: string,
+): StyleArchitectureIssue[] {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const issues: StyleArchitectureIssue[] = [];
+
+  function visit(node: ts.Node) {
+    if (
+      ts.isTaggedTemplateExpression(node) &&
+      ts.isIdentifier(node.tag) &&
+      node.tag.text === "css"
+    ) {
+      const styleName = getStyleDefinitionName(node);
+
+      if (styleName) {
+        const templateText = getTemplateText(node.template);
+
+        for (const match of templateText.matchAll(nestedAntOverridePattern)) {
+          issues.push({
+            ...getSourcePosition(sourceFile, node),
+            code: "nested-antd-override",
+            filePath,
+            styleName,
+            message: `Nested Ant Design override "${match[0].split("{")[0].trim()}" must be replaced with a class applied directly to the component.`,
+          });
+        }
+
+        for (const selector of findUnscopedInteractiveSelectors(
+          templateText,
+        )) {
+          issues.push({
+            ...getSourcePosition(sourceFile, node),
+            code: "unscoped-interactive-descendant",
+            filePath,
+            styleName,
+            message: `Interactive selector "${selector}" must use a direct-child boundary or an explicit data-style-scope content root.`,
+          });
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return issues;
 }
 
 function getStyleMembers(node: ts.Node) {
@@ -359,6 +508,7 @@ export async function scanStyleArchitecture(
   for (const [path, source] of sourceByFile) {
     const displayPath = relative(process.cwd(), path) || path;
     issues.push(...analyzeStyleArchitectureSource(source, displayPath));
+    issues.push(...analyzeStyleSelectorScopeSource(source, displayPath));
 
     const localStyleSources = [...sourceByFile]
       .filter(([candidatePath]) => dirname(candidatePath) === dirname(path))

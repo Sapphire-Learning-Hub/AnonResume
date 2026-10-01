@@ -38,10 +38,12 @@ export async function fetchResumeEntriesPage({
   page,
   pageSize,
   query = "",
+  publication,
 }: {
   page: number;
   pageSize: number;
   query?: string;
+  publication?: "all" | "published";
 }): Promise<PageResult<ResumeCatalogEntry>> {
   const searchParams = new URLSearchParams({
     page: String(page),
@@ -49,6 +51,7 @@ export async function fetchResumeEntriesPage({
   });
 
   if (query) searchParams.set("q", query);
+  if (publication) searchParams.set("publication", publication);
   const response = await fetch(`/api/resumes?${searchParams.toString()}`);
 
   return (await parseJson(response)) as unknown as PageResult<ResumeCatalogEntry>;

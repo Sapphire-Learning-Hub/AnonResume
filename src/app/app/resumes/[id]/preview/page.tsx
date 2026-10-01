@@ -23,7 +23,6 @@ export default async function ResumePreviewPage({
     <ResumeViewShell
       eyebrow={messages["view.previewEyebrow"]}
       title={resume.title}
-      description={messages["view.previewDescription"]}
       backHref={`/app/resumes/${resume.id}`}
       backLabel={messages["common.backToEditor"]}
       document={resume.document}
