@@ -127,6 +127,35 @@ describe("resume repository persistence", () => {
     expect(result.items.map((resume) => resume.id)).toEqual(["resume-frontend"]);
   });
 
+  it("filters published resumes before search and pagination", async () => {
+    for (const [userId, resumeId, title, published] of [
+      ["user-published", "resume-public-frontend", "Frontend Engineer", true],
+      ["user-published", "resume-draft-frontend", "Frontend Engineer Draft", false],
+      ["user-published", "resume-public-backend", "Backend Engineer", true],
+      ["user-other", "resume-other-frontend", "Frontend Manager", true],
+    ] as const) {
+      const document = createDefaultResumeDocument();
+      document.meta.title = title;
+      await createResumeRecord(userId, resumeId);
+      await saveResumeRecord({ userId, resumeId, version: 1, document });
+      if (published) await publishResumeRecord(userId, resumeId);
+    }
+
+    const result = await paginateResumeEntries({
+      userId: "user-published",
+      page: 2,
+      pageSize: 1,
+      query: "engineer",
+      publication: "published",
+    });
+
+    expect(result).toMatchObject({ page: 2, total: 2, totalPages: 2 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({ published: true });
+    expect(result.items[0]?.id).not.toBe("resume-draft-frontend");
+    expect(result.items[0]?.id).not.toBe("resume-other-frontend");
+  });
+
   it("does not recreate a user's last deleted resume", async () => {
     await createResumeRecord("user-empty", "resume-only");
     await deleteResumeRecord("user-empty", "resume-only");

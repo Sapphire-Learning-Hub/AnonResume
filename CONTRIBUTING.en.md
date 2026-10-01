@@ -77,6 +77,11 @@ Use narrower tests while iterating when appropriate, but do not treat a partial
 run as the final result. If a required command cannot run, explain why in the
 Pull Request.
 
+The project does not maintain real-browser end-to-end test suites. Cover user
+interaction with component tests and cross-module contracts with integration
+tests. For workflows that require a complete browser environment, document the
+manual acceptance steps and results in the Pull Request.
+
 Database changes must include the Drizzle schema, migration, compatible
 application code, and relevant tests. Document every new environment variable
 in `.env.example` with a safe placeholder and its purpose.

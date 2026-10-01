@@ -235,13 +235,15 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     white-space: pre-wrap;
     box-shadow: 0 0 0 2px rgba(15, 98, 254, 0.22);
 
-    p {
-      margin: 0;
-    }
+    &[data-style-scope="resume-rich-text"] {
+      p {
+        margin: 0;
+      }
 
-    a {
-      color: var(--resume-accent);
-      text-decoration: underline;
+      a {
+        color: var(--resume-accent);
+        text-decoration: underline;
+      }
     }
   `,
   group: css`

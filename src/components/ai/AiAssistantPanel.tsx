@@ -483,7 +483,10 @@ export function AiAssistantPanel({
                     </span>
                     {isStreamingAssistant ? renderProgressTrace() : null}
                     {liveMessageText || !isStreamingAssistant ? (
-                      <div className={styles.messageContent}>
+                      <div
+                        className={styles.messageContent}
+                        data-style-scope="ai-markdown"
+                      >
                         {message.role === "assistant" ? (
                           <AiMarkdownMessage>
                             {(isStreamingAssistant
@@ -529,7 +532,10 @@ export function AiAssistantPanel({
                     {t("ai.assistant")}
                   </span>
                   {renderProgressTrace()}
-                  <div className={styles.messageContent}>
+                  <div
+                    className={styles.messageContent}
+                    data-style-scope="ai-markdown"
+                  >
                     <AiMarkdownMessage>{assistant.streamingText}</AiMarkdownMessage>
                   </div>
                 </div>

@@ -45,6 +45,34 @@ describe("fetchResumeEntriesPage", () => {
       "/api/resumes?page=2&pageSize=10&q=frontend",
     );
   });
+
+  it("requests only published resumes when the publication filter is set", async () => {
+    const page = {
+      items: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 0,
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(page), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await fetchResumeEntriesPage({
+      page: 1,
+      pageSize: 20,
+      publication: "published",
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/resumes?page=1&pageSize=20&publication=published",
+    );
+  });
 });
 
 describe("exportResumePdfDocument", () => {

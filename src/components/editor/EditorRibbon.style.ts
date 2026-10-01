@@ -17,13 +17,15 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     color: ${token.colorText};
     box-shadow: 0 2px 8px color-mix(in srgb, ${token.colorText} 5%, transparent);
 
-    && button,
-    && a.ant-btn {
-      box-sizing: border-box;
-      height: ${RIBBON_CONTROL_HEIGHT}px;
-      min-height: ${RIBBON_CONTROL_HEIGHT}px;
-      border-radius: ${RIBBON_CONTROL_RADIUS}px;
-      font-size: 12px;
+    &[data-style-scope="editor-ribbon"] {
+      && button,
+      && a.ant-btn {
+        box-sizing: border-box;
+        height: ${RIBBON_CONTROL_HEIGHT}px;
+        min-height: ${RIBBON_CONTROL_HEIGHT}px;
+        border-radius: ${RIBBON_CONTROL_RADIUS}px;
+        font-size: 12px;
+      }
     }
 
     && .ant-input,

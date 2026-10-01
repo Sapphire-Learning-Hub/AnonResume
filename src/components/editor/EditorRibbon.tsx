@@ -157,7 +157,11 @@ export function EditorRibbon({
   }
 
   return (
-    <header className={styles.ribbon} data-testid="editor-ribbon">
+    <header
+      className={styles.ribbon}
+      data-style-scope="editor-ribbon"
+      data-testid="editor-ribbon"
+    >
       <div className={styles.documentBar} ref={documentViewportRef}>
         <Button
           aria-label={backLabel}
