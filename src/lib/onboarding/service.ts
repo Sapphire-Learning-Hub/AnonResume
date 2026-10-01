@@ -101,7 +101,7 @@ async function ensureActiveRunResume(
     transaction,
     run.userId,
     run.id,
-    { resumeId },
+    { resumeId, currentStep: FIRST_STEP },
   ))!;
 }
 
@@ -326,11 +326,15 @@ export async function transitionEditorOnboarding(input: {
 
     const definition = getEditorOnboardingStep(input.action.stepId);
     const nextStep = getNextStep(input.action.stepId);
-    if (!definition || !nextStep || definition.completion === "preview-route") {
+    if (!definition || !nextStep) {
       throw new EditorOnboardingTransitionError();
     }
 
     if (input.action.type === "complete-step") {
+      if (definition.completion === "preview-route") {
+        throw new EditorOnboardingTransitionError();
+      }
+
       if (definition.completion === "persisted-document") {
         const document = await getOwnedOnboardingResumeDocument(
           transaction,

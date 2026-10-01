@@ -162,7 +162,12 @@ describe("editor onboarding lifecycle", () => {
       sessionId: randomUUID(),
       locale: "zh-CN",
     });
-    await db.delete(resumes).where(eq(resumes.id, first.run!.resumeId!));
+    const advanced = await transitionEditorOnboarding({
+      userId,
+      runId: first.run!.id,
+      action: { type: "complete-step", stepId: "canvas-intro" },
+    });
+    await db.delete(resumes).where(eq(resumes.id, advanced.resumeId!));
 
     const repaired = await prepareEditorOnboardingEntry({
       userId,
@@ -172,6 +177,7 @@ describe("editor onboarding lifecycle", () => {
 
     expect(repaired.run?.id).toBe(first.run?.id);
     expect(repaired.run?.resumeId).not.toBe(first.run?.resumeId);
+    expect(repaired.run?.currentStep).toBe("canvas-intro");
     expect(await getResumeRecord(userId, repaired.run!.resumeId!)).toBeDefined();
   });
 
@@ -320,6 +326,40 @@ describe("editor onboarding lifecycle", () => {
       .from(onboardingRuns)
       .where(eq(onboardingRuns.id, run.id));
     expect(rows).toEqual([{ currentStep: "output-overview" }]);
+  });
+
+  it("allows the preview route step to be skipped", async () => {
+    const userId = createUserId("skip-preview");
+    const decision = await prepareEditorOnboardingEntry({
+      userId,
+      sessionId: randomUUID(),
+      locale: "zh-CN",
+    });
+    let run = decision.run!;
+
+    for (const stepId of [
+      "canvas-intro",
+      "edit-text",
+      "format-text",
+      "insert-content",
+      "change-design",
+      "reorder-content",
+    ] as const) {
+      run = await transitionEditorOnboarding({
+        userId,
+        runId: run.id,
+        action: { type: "skip-step", stepId },
+      });
+    }
+
+    expect(run.currentStep).toBe("preview");
+    await expect(
+      transitionEditorOnboarding({
+        userId,
+        runId: run.id,
+        action: { type: "skip-step", stepId: "preview" },
+      }),
+    ).resolves.toEqual(expect.objectContaining({ currentStep: "output-overview" }));
   });
 
   it("manually restarts by replacing the active practice run", async () => {
