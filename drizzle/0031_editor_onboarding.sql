@@ -17,7 +17,7 @@ CREATE TABLE "onboarding_runs" (
 );
 --> statement-breakpoint
 ALTER TABLE "resumes" ADD COLUMN "kind" text DEFAULT 'standard' NOT NULL;--> statement-breakpoint
-ALTER TABLE "onboarding_runs" ADD CONSTRAINT "onboarding_runs_resume_fk" FOREIGN KEY ("resume_id") REFERENCES "public"."resumes"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "onboarding_runs" ADD CONSTRAINT "onboarding_runs_resume_fk" FOREIGN KEY ("resume_id") REFERENCES "resumes"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "onboarding_runs_user_trigger_unique" ON "onboarding_runs" USING btree ("user_id","trigger_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "onboarding_runs_user_active_unique" ON "onboarding_runs" USING btree ("user_id") WHERE "onboarding_runs"."status" IN ('active', 'paused');--> statement-breakpoint
 CREATE INDEX "onboarding_runs_user_status_idx" ON "onboarding_runs" USING btree ("user_id","status");--> statement-breakpoint
