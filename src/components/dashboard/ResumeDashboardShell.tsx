@@ -16,6 +16,7 @@ import {
   type ResumeSummaryUpdateResult,
 } from "@/components/resume/ResumeSummaryEditor";
 import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
+import type { EditorOnboardingStepId } from "@/domain/onboarding/editor-basics";
 import type { PageResult, PaginationSearchParams } from "@/lib/shared/pagination";
 import {
   exportResumePdfDocument,
@@ -48,6 +49,42 @@ const useStyles = createStyles(({ token, css }) => ({
   catalog: css`
     display: grid;
     min-width: 0;
+  `,
+  onboardingContinuation: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin: 0 0 20px;
+    padding: 16px 18px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-inline-start: 3px solid ${token.colorPrimary};
+    border-radius: ${token.borderRadiusLG}px;
+    background: ${token.colorFillQuaternary};
+
+    @media (max-width: 720px) {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 12px;
+    }
+  `,
+  onboardingContinuationCopy: css`
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  `,
+  onboardingContinuationTitle: css`
+    margin: 0;
+    color: ${token.colorText};
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.45;
+  `,
+  onboardingContinuationDescription: css`
+    margin: 0;
+    color: ${token.colorTextSecondary};
+    font-size: 13px;
+    line-height: 1.5;
   `,
   catalogToolbar: css`
     display: flex;
@@ -669,9 +706,16 @@ function ResumeRowActions({
   );
 }
 
+export interface OnboardingContinuation {
+  href: string;
+  status: "active" | "paused";
+  currentStep: EditorOnboardingStepId;
+}
+
 export function ResumeDashboardShell({
   resumes,
   createAction,
+  onboardingContinuation,
   pagination,
   searchParams = {},
   searchQuery = "",
@@ -682,6 +726,7 @@ export function ResumeDashboardShell({
 }: {
   resumes: ResumeCatalogEntry[];
   createAction: string;
+  onboardingContinuation?: OnboardingContinuation;
   pagination?: PageResult<ResumeCatalogEntry>;
   searchParams?: PaginationSearchParams;
   searchQuery?: string;
@@ -761,6 +806,25 @@ export function ResumeDashboardShell({
       <section className={styles.pageHeader}>
         <h1 className={styles.heading}>{t("dashboard.heading")}</h1>
       </section>
+
+      {onboardingContinuation ? (
+        <section
+          aria-label={t("onboarding.continue.title")}
+          className={styles.onboardingContinuation}
+        >
+          <div className={styles.onboardingContinuationCopy}>
+            <h2 className={styles.onboardingContinuationTitle}>
+              {t("onboarding.continue.title")}
+            </h2>
+            <p className={styles.onboardingContinuationDescription}>
+              {t("onboarding.continue.description")}
+            </p>
+          </div>
+          <Button href={onboardingContinuation.href} type="primary">
+            {t("onboarding.continue.action")}
+          </Button>
+        </section>
+      ) : null}
 
       <section aria-label={t("dashboard.resumeList")} className={styles.catalog}>
           <div

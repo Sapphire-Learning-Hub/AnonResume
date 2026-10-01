@@ -53,6 +53,30 @@ describe("ResumeDashboardShell", () => {
     expect(screen.getByRole("dialog", { name: /^模板中心/ })).toBeInTheDocument();
   });
 
+  it("renders a compact editor practice continuation above the catalog", () => {
+    render(
+      <ResumeDashboardShell
+        createAction="/app/create-resume"
+        onboardingContinuation={{
+          currentStep: "insert-content",
+          href: "/app/resumes/practice-one",
+          status: "paused",
+        }}
+        resumes={[]}
+      />,
+    );
+
+    const continuation = screen.getByRole("region", {
+      name: "继续编辑器练习",
+    });
+    expect(continuation).toHaveTextContent("从上次停下的位置继续完成编辑练习。");
+    expect(within(continuation).getByRole("link", { name: "继续练习" })).toHaveAttribute(
+      "href",
+      "/app/resumes/practice-one",
+    );
+    expect(screen.getByText("还没有简历")).toBeInTheDocument();
+  });
+
   it("opens the resume import flow separately from template creation", async () => {
     installEditorViewport(false);
 
