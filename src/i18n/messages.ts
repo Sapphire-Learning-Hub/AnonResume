@@ -649,6 +649,55 @@ const messages = {
     "editor.saveStatus.saved": "已保存",
     "editor.saveStatus.error": "保存失败",
     "editor.save": "保存",
+    "onboarding.document.title": "编辑器新手练习",
+    "onboarding.document.practiceTitle": "开始编辑",
+    "onboarding.document.editTarget": "把这段文字改成你的职业目标",
+    "onboarding.document.practiceDescription":
+      "这是一份练习简历，你可以放心尝试编辑和排版功能。",
+    "onboarding.document.reorderTitle": "调整内容顺序",
+    "onboarding.document.reorderDescription":
+      "稍后你会把这个章节移动到新的位置。",
+    "onboarding.continue.title": "继续编辑器练习",
+    "onboarding.continue.description": "从上次停下的位置继续完成编辑练习。",
+    "onboarding.continue.action": "继续练习",
+    "onboarding.action.next": "下一步",
+    "onboarding.action.retry": "再试一次",
+    "onboarding.action.skip": "跳过此步",
+    "onboarding.action.pause": "暂时离开",
+    "onboarding.action.resume": "继续引导",
+    "onboarding.action.exit": "退出练习",
+    "onboarding.action.complete": "完成练习",
+    "onboarding.action.restart": "重新开始新手引导",
+    "onboarding.practicePreview": "练习预览",
+    "onboarding.progress": "步骤 {current}/{total}",
+    "onboarding.disclosure": "练习内容不会出现在你的简历列表中。",
+    "onboarding.error.generic": "新手引导暂时无法继续，请稍后重试。",
+    "onboarding.error.targetMissing": "未找到当前操作位置，请重新打开引导。",
+    "onboarding.error.transitionFailed": "进度保存失败，请重试。",
+    "onboarding.step.canvas-intro.title": "认识编辑画布",
+    "onboarding.step.canvas-intro.description":
+      "这里展示简历最终效果。点击下一步，开始直接编辑内容。",
+    "onboarding.step.edit-text.title": "直接修改文字",
+    "onboarding.step.edit-text.description":
+      "点击标出的文字，把它改成任意内容；保存后任务会自动完成。",
+    "onboarding.step.format-text.title": "为文字添加格式",
+    "onboarding.step.format-text.description":
+      "选中刚才修改的文字，再使用加粗按钮突出重点。",
+    "onboarding.step.insert-content.title": "添加新的内容",
+    "onboarding.step.insert-content.description":
+      "打开“插入”，在练习章节中添加一种内容。",
+    "onboarding.step.change-design.title": "更换简历外观",
+    "onboarding.step.change-design.description":
+      "打开“设计”，选择另一种视觉预设或调整一项外观设置。",
+    "onboarding.step.reorder-content.title": "调整章节顺序",
+    "onboarding.step.reorder-content.description":
+      "打开“布局”，把“调整内容顺序”章节移动到新的位置。",
+    "onboarding.step.preview.title": "检查最终效果",
+    "onboarding.step.preview.description":
+      "打开预览，检查简历在分享前的完整效果。",
+    "onboarding.step.output-overview.title": "了解发布与导出",
+    "onboarding.step.output-overview.description":
+      "这里可以发布公开页或导出 PDF。练习简历不会真的发布，查看后即可完成引导。",
     "ai.title": "AI 编辑助手",
     "ai.resize": "调整 AI 编辑助手宽度",
     "ai.conversation.select": "选择对话",
@@ -1924,6 +1973,60 @@ const messages = {
     "editor.saveStatus.saved": "Saved",
     "editor.saveStatus.error": "Error",
     "editor.save": "Save",
+    "onboarding.document.title": "Editor onboarding practice",
+    "onboarding.document.practiceTitle": "Start editing",
+    "onboarding.document.editTarget": "Change this text to your career goal",
+    "onboarding.document.practiceDescription":
+      "This is a practice resume, so you can safely try editing and layout tools.",
+    "onboarding.document.reorderTitle": "Reorder content",
+    "onboarding.document.reorderDescription":
+      "Later, you will move this section to a new position.",
+    "onboarding.continue.title": "Continue editor practice",
+    "onboarding.continue.description":
+      "Resume the editor practice from where you left off.",
+    "onboarding.continue.action": "Continue practice",
+    "onboarding.action.next": "Next",
+    "onboarding.action.retry": "Try again",
+    "onboarding.action.skip": "Skip this step",
+    "onboarding.action.pause": "Leave for now",
+    "onboarding.action.resume": "Resume guide",
+    "onboarding.action.exit": "Exit practice",
+    "onboarding.action.complete": "Finish practice",
+    "onboarding.action.restart": "Restart onboarding",
+    "onboarding.practicePreview": "Practice preview",
+    "onboarding.progress": "Step {current} of {total}",
+    "onboarding.disclosure":
+      "Practice content will not appear in your resume list.",
+    "onboarding.error.generic":
+      "The onboarding guide cannot continue right now. Try again later.",
+    "onboarding.error.targetMissing":
+      "The current control could not be found. Reopen the guide and try again.",
+    "onboarding.error.transitionFailed":
+      "Your progress could not be saved. Try again.",
+    "onboarding.step.canvas-intro.title": "Meet the editing canvas",
+    "onboarding.step.canvas-intro.description":
+      "This canvas shows the final resume. Select Next to start editing directly.",
+    "onboarding.step.edit-text.title": "Edit text directly",
+    "onboarding.step.edit-text.description":
+      "Select the highlighted text and replace it with anything. The task completes after it is saved.",
+    "onboarding.step.format-text.title": "Format important text",
+    "onboarding.step.format-text.description":
+      "Select the text you just changed, then use Bold to emphasize it.",
+    "onboarding.step.insert-content.title": "Add new content",
+    "onboarding.step.insert-content.description":
+      "Open Insert and add a content type to the practice section.",
+    "onboarding.step.change-design.title": "Change the resume appearance",
+    "onboarding.step.change-design.description":
+      "Open Design and choose another visual preset or adjust one appearance setting.",
+    "onboarding.step.reorder-content.title": "Reorder sections",
+    "onboarding.step.reorder-content.description":
+      "Open Layout and move the Reorder content section to a new position.",
+    "onboarding.step.preview.title": "Check the final result",
+    "onboarding.step.preview.description":
+      "Open Preview to review the complete resume before sharing it.",
+    "onboarding.step.output-overview.title": "Publish and export",
+    "onboarding.step.output-overview.description":
+      "This area publishes a public page or exports a PDF. The practice resume will not be published; review the options to finish.",
     "ai.title": "AI editing assistant",
     "ai.resize": "Resize AI editing assistant",
     "ai.conversation.select": "Select conversation",
