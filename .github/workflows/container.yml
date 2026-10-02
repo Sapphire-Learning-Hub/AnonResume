@@ -80,6 +80,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    env:
+      TRIVY_PLATFORM: ${{ matrix.platform }}
     permissions:
       contents: read
       packages: write
