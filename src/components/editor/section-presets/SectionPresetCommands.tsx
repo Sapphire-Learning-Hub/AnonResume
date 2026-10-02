@@ -16,9 +16,6 @@ import type { AppLocale } from "@/i18n/messages";
 
 import { useSectionPresetCommandsStyles } from "./SectionPresetCommands.style";
 
-const A4_WIDTH_PX = (210 / 25.4) * 96;
-const PREVIEW_SCALE = 0.62;
-
 export function SectionPresetCommands({
   locale,
   onInsert,
@@ -102,28 +99,13 @@ export function SectionPresetCommands({
           <>
             <p className={styles.previewIntro}>{previewPreset.description}</p>
             <div className={styles.previewViewport}>
-              <div
-                className={styles.previewPage}
-                style={{
-                  width: A4_WIDTH_PX * PREVIEW_SCALE,
-                  height: (297 / 25.4) * 96 * PREVIEW_SCALE,
-                }}
-              >
-                <div
-                  style={{
-                    width: A4_WIDTH_PX,
-                    transform: `scale(${PREVIEW_SCALE})`,
-                    transformOrigin: "top left",
-                  }}
-                >
-                  <ResumeSectionRenderer
-                    key={previewPresetId}
-                    mode="view"
-                    settings={settings}
-                    sections={[previewSection]}
-                    zoom={PREVIEW_SCALE}
-                  />
-                </div>
+              <div className={styles.previewScale}>
+                <ResumeSectionRenderer
+                  key={previewPresetId}
+                  mode="view"
+                  settings={settings}
+                  sections={[previewSection]}
+                />
               </div>
             </div>
           </>

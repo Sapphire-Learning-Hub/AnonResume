@@ -90,16 +90,18 @@ export const useSectionPresetCommandsStyles = createStyles(
     `,
     previewViewport: css`
       display: flex;
+      align-items: flex-start;
       justify-content: center;
-      height: min(52vh, 520px);
+      max-height: min(52vh, 520px);
+      padding: ${token.paddingLG}px;
       overflow: auto;
       border: 1px solid ${token.colorBorderSecondary};
       border-radius: ${token.borderRadiusLG}px;
       background: ${token.colorBgLayout};
     `,
-    previewPage: css`
+    previewScale: css`
       flex: 0 0 auto;
-      transform-origin: top left;
+      zoom: 0.62;
     `,
   }),
 );

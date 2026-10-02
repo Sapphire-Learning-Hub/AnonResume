@@ -139,7 +139,20 @@ interface ResumeRendererSharedProps {
   onPaginationReadyChange?: (ready: boolean) => void;
 }
 
-export interface ResumeSectionRendererProps extends ResumeRendererSharedProps {
+interface ResumePagedSectionRendererProps extends ResumeRendererSharedProps {
+  settings: ResumeDocument["settings"];
+  sections: readonly ResumeSection[];
+}
+
+export interface ResumeSectionRendererProps
+  extends Omit<
+    ResumeRendererSharedProps,
+    | "paginationRevision"
+    | "showPrintSafeArea"
+    | "zoom"
+    | "onPageCountChange"
+    | "onPaginationReadyChange"
+  > {
   settings: ResumeDocument["settings"];
   sections: readonly ResumeSection[];
 }
@@ -2264,7 +2277,7 @@ function renderResumeSection(
   );
 }
 
-export function ResumeSectionRenderer({
+function ResumePagedSectionRenderer({
   settings,
   sections,
   mode,
@@ -2284,7 +2297,7 @@ export function ResumeSectionRenderer({
   onTextEditorFormattingStateChange,
   onPageCountChange,
   onPaginationReadyChange,
-}: ResumeSectionRendererProps): ReactNode {
+}: ResumePagedSectionRendererProps): ReactNode {
   const { styles } = useResumeRendererStyles();
   const { t } = useI18n();
   const styleVariables = getResumeStyleVariables(settings);
@@ -2588,7 +2601,7 @@ export function ResumeSectionRenderer({
                     </div>
                   ) : null}
                   <article
-                    className={styles.page}
+                    className={`${styles.documentSurface} ${styles.page}`}
                     style={styleVariables as CSSProperties}
                     data-resume-page="true"
                     data-resume-page-index={page.index + 1}
@@ -2635,12 +2648,95 @@ export function ResumeSectionRenderer({
   );
 }
 
+export function ResumeSectionRenderer({
+  settings,
+  sections,
+  mode,
+  editSurfaceMode = "content",
+  responsiveView = false,
+  diffPresentation,
+  selection,
+  onSelectBlock,
+  onChangeSectionTitle,
+  onChangeTextBlock,
+  onCommitBadgeItem,
+  onMoveBlock,
+  textEditorRef,
+  onTextEditorFormattingStateChange,
+}: ResumeSectionRendererProps): ReactNode {
+  const { styles } = useResumeRendererStyles();
+  const { t } = useI18n();
+  const styleVariables = getResumeStyleVariables(settings);
+  const visibleSections = useMemo(
+    () => sections.filter((section) => section.visible),
+    [sections],
+  );
+  const sectionLayouts = useMemo(
+    () => createSinglePageLayout(visibleSections)[0]?.sections ?? [],
+    [visibleSections],
+  );
+  const sectionMap = useMemo(
+    () => new Map(visibleSections.map((section) => [section.id, section])),
+    [visibleSections],
+  );
+
+  return (
+    <BadgeEditContext.Provider value={onCommitBadgeItem}>
+      <TextEditingStateContext.Provider value={undefined}>
+        <TextPaginationRequestContext.Provider value={undefined}>
+          <ResumeDiffProvider
+            presentation={mode === "print" ? undefined : diffPresentation}
+          >
+            <div
+              className={styles.root}
+              data-resume-mode={mode}
+              data-resume-edit-surface-mode={editSurfaceMode}
+              data-resume-responsive-view={responsiveView ? "true" : "false"}
+            >
+              <article
+                className={`${styles.documentSurface} ${styles.sectionSurface}`}
+                style={styleVariables as CSSProperties}
+                data-resume-section-surface="true"
+              >
+                <div className={styles.pageContent}>
+                  {sectionLayouts.map((sectionLayout, sectionIndex) => {
+                    const section = sectionMap.get(sectionLayout.sectionId);
+
+                    if (!section) return null;
+
+                    return renderResumeSection(section, {
+                      t,
+                      sectionLayout,
+                      mode,
+                      editSurfaceMode,
+                      selection,
+                      styles,
+                      onSelectBlock,
+                      onChangeSectionTitle,
+                      onChangeTextBlock,
+                      onMoveBlock,
+                      textEditorRef,
+                      onTextEditorFormattingStateChange,
+                      instanceKey: `section-surface-${section.id}-${sectionIndex}`,
+                      anchorId: getResumeSectionAnchorId(section.id),
+                    });
+                  })}
+                </div>
+              </article>
+            </div>
+          </ResumeDiffProvider>
+        </TextPaginationRequestContext.Provider>
+      </TextEditingStateContext.Provider>
+    </BadgeEditContext.Provider>
+  );
+}
+
 export function ResumeRenderer({
   document,
   ...props
 }: ResumeRendererProps): ReactNode {
   return (
-    <ResumeSectionRenderer
+    <ResumePagedSectionRenderer
       {...props}
       settings={document.settings}
       sections={document.sections}

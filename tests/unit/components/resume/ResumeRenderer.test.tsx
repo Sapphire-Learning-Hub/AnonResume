@@ -73,23 +73,38 @@ describe("ResumeRenderer", () => {
     ).toEqual(["section-experience", "section-profile"]);
   });
 
-  it("stabilizes empty input at one page", async () => {
+  it("renders supplied sections on a content-sized surface without page chrome", () => {
     const resume = createDefaultResumeDocument();
-    const onPageCountChange = vi.fn();
 
-    render(
+    const { container } = render(
+      <ResumeSectionRenderer
+        mode="view"
+        settings={resume.settings}
+        sections={[resume.sections[0]!]}
+      />,
+    );
+
+    expect(
+      container.querySelector('[data-resume-section-surface="true"]'),
+    ).toBeInTheDocument();
+    expect(container.querySelector('[data-resume-page="true"]')).toBeNull();
+    expect(screen.queryByText("第 1 页")).not.toBeInTheDocument();
+  });
+
+  it("keeps an empty section surface stable without creating a page", () => {
+    const resume = createDefaultResumeDocument();
+    const { container } = render(
       <ResumeSectionRenderer
         mode="view"
         settings={resume.settings}
         sections={[]}
-        onPageCountChange={onPageCountChange}
       />,
     );
 
-    expect(screen.getByRole("article")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(onPageCountChange).toHaveBeenLastCalledWith(1);
-    });
+    expect(
+      container.querySelector('[data-resume-section-surface="true"]'),
+    ).toBeInTheDocument();
+    expect(container.querySelector('[data-resume-page="true"]')).toBeNull();
   });
 
   it("omits hidden supplied sections", () => {
