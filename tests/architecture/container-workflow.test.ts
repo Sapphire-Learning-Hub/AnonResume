@@ -72,7 +72,9 @@ it("tests published tag artifacts instead of rebuilding them", async () => {
   expect(workflow).toContain("if: github.event_name == 'pull_request'");
   expect(workflow).toContain("name: verify published images");
   expect(workflow).toContain("needs: merge");
-  expect(workflow).toContain("ANONRESUME_VERSION: ${{ github.ref_name }}");
+  expect(workflow).toContain(
+    "ANONRESUME_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}",
+  );
 });
 
 it("scans platform digests before publishing release manifests", async () => {
@@ -96,6 +98,48 @@ it("selects the matrix platform when scanning release image digests", async () =
   );
 
   expect(workflow).toContain("TRIVY_PLATFORM: ${{ matrix.platform }}");
+});
+
+it("preflights both release image architectures without publishing them", async () => {
+  const workflow = await readFile(
+    path.join(process.cwd(), ".github/workflows/container.yml"),
+    "utf8",
+  );
+  const preflight = workflow.slice(
+    workflow.indexOf("  release-preflight:"),
+    workflow.indexOf("  build:"),
+  );
+
+  expect(preflight).toContain(
+    "name: preflight release images (${{ matrix.arch }})",
+  );
+  expect(preflight).toContain(
+    "github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/v')",
+  );
+  expect(preflight).toContain("tags: anonresume-release-preflight-core:${{ matrix.arch }}");
+  expect(preflight).toContain("tags: anonresume-release-preflight-pdf:${{ matrix.arch }}");
+  expect(preflight).toContain("image-ref: anonresume-release-preflight-core:${{ matrix.arch }}");
+  expect(preflight).toContain("image-ref: anonresume-release-preflight-pdf:${{ matrix.arch }}");
+  expect(preflight.match(/push: false/g)).toHaveLength(2);
+  expect(preflight.match(/load: true/g)).toHaveLength(2);
+  expect(preflight).not.toContain("docker/login-action");
+});
+
+it("recovers a failed release from its immutable tag source", async () => {
+  const workflow = await readFile(
+    path.join(process.cwd(), ".github/workflows/container.yml"),
+    "utf8",
+  );
+
+  expect(workflow).toContain("workflow_dispatch:");
+  expect(workflow).toContain("release_tag:");
+  expect(workflow).toContain("ref: ${{ env.RELEASE_SOURCE_REF }}");
+  expect(workflow).toContain(
+    "github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')",
+  );
+  expect(workflow).toContain(
+    "ANONRESUME_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}",
+  );
 });
 
 it("does not upgrade the base distribution during every image build", async () => {

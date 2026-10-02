@@ -21,6 +21,11 @@ and a production deployment are separate operations.
 - Never replace, move, or delete an existing remote tag or Release. Stop on a
   collision, a dirty worktree with unexplained changes, or a local/remote hash
   mismatch.
+- Every Release Pull Request must pass the native AMD64 and ARM64 release-image
+  preflight for both the core and PDF images. The preflight must build and scan
+  the candidate images without publishing them. Treat any build or scan failure
+  as release-blocking: fix it on the same release branch and rerun the complete
+  preflight before merge.
 - Prepare every release on a one-time `release/vX.Y.Z` branch and merge it
   through the repository's normal Pull Request, CI, and review process. Never
   tag the release branch or bypass branch protection.
@@ -44,6 +49,9 @@ and a production deployment are separate operations.
 6. Run `bun run check` and `bun run build`. If a full test run fails outside the
    changed area, diagnose and rerun that exact test, then rerun the complete gate.
    Do not publish from partial verification.
+7. Confirm the Release Pull Request will be named `release/vX.Y.Z`; the Container
+   Images workflow uses this typed branch name to run the non-publishing native
+   AMD64 and ARM64 image preflight.
 
 ## Draft user-centered public notes
 
@@ -108,7 +116,11 @@ content for the Release:
 3. Push `release/vX.Y.Z` and open a Pull Request against `main`. The title must
    follow Conventional Commits and the body must include the approved bilingual
    Release text plus the verification results.
-4. Stop until required CI passes, all discussions are resolved, one non-author
+4. Require both `preflight release images (amd64)` and `preflight release images
+   (arm64)` to build and scan the core and PDF images successfully. These jobs
+   must not log in to a registry or publish image manifests. Diagnose and fix
+   failures in this Release Pull Request; never defer them until after tagging.
+5. Stop until required CI passes, all discussions are resolved, one non-author
    reviewer approves, and the Pull Request is Squash merged. Do not merge it on
    the user's behalf unless they explicitly request that operation.
 
@@ -135,6 +147,14 @@ After the release Pull Request is merged:
    `AnonResume vX.Y.Z`, and the approved notes.
 7. Read the Release back with `gh release view` and verify its title, tag, public
    status, body, and URL. Confirm the worktree is clean.
+
+If the tag-triggered workflow fails after an immutable tag has been pushed, fix
+the workflow through a normal Pull Request. After that fix is merged, recover the
+same release by manually running the Container Images workflow from `main` with
+the existing tag as `release_tag`. The recovery workflow must check out product
+source from that tag, validate that its package version matches, then rebuild,
+scan, publish, and verify the images. It must not move or replace the tag. Publish
+the GitHub Release only after this recovery succeeds.
 
 Report the release commit, signed tag verification, push results, public Release
 URL, core and PDF image digests, local verification outcome, and any residual
