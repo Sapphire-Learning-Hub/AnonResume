@@ -89,6 +89,15 @@ it("scans platform digests before publishing release manifests", async () => {
   );
 });
 
+it("selects the matrix platform when scanning release image digests", async () => {
+  const workflow = await readFile(
+    path.join(process.cwd(), ".github/workflows/container.yml"),
+    "utf8",
+  );
+
+  expect(workflow).toContain("TRIVY_PLATFORM: ${{ matrix.platform }}");
+});
+
 it("does not upgrade the base distribution during every image build", async () => {
   const dockerfile = await readFile(
     path.join(process.cwd(), "Dockerfile"),
