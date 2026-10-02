@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import { ResumeDashboardShell } from "@/components/dashboard/ResumeDashboardShell";
 import { getRequestLocale } from "@/i18n/server";
 import { requireSession } from "@/lib/auth/session";
@@ -23,10 +21,6 @@ export default async function DashboardPage({
     locale,
   });
 
-  if (onboarding.autoOpenHref) {
-    redirect(onboarding.autoOpenHref);
-  }
-
   const resolvedSearchParams = await searchParams;
   const request = parsePageRequest(resolvedSearchParams);
   const queryValue = resolvedSearchParams.q;
@@ -40,7 +34,17 @@ export default async function DashboardPage({
   return (
     <ResumeDashboardShell
       createAction="/app/create-resume"
+      onboardingPrompt={
+        onboarding.promptHref &&
+        onboarding.run?.status === "active"
+          ? {
+              href: onboarding.promptHref,
+              runId: onboarding.run.id,
+            }
+          : undefined
+      }
       onboardingContinuation={
+        !onboarding.promptHref &&
         onboarding.continueHref &&
         onboarding.run &&
         (onboarding.run.status === "active" ||

@@ -72,11 +72,6 @@ export function createEditorOnboardingDocument(
             messages["onboarding.document.editTarget"],
             { fontSize: 20, fontWeight: 700 },
           ),
-          createPracticeTextBlock(
-            "onboarding-block-instructions",
-            messages["onboarding.document.practiceDescription"],
-            { color: "#475569" },
-          ),
         ],
       },
       {

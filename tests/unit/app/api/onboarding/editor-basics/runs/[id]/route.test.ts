@@ -91,4 +91,17 @@ describe("editor onboarding transition route", () => {
     expect(rejected.status).toBe(409);
     expect(await rejected.json()).toEqual({ error: "transition_rejected" });
   });
+
+  it("accepts starting a prepared onboarding run", async () => {
+    const response = await PATCH(createRequest({ type: "start" }), {
+      params: Promise.resolve({ id: "run-one" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(transitionEditorOnboarding).toHaveBeenCalledWith({
+      userId: "user-one",
+      runId: "run-one",
+      action: { type: "start" },
+    });
+  });
 });

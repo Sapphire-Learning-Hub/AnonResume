@@ -54,9 +54,9 @@ describe("Dashboard workbench view", () => {
     } as never);
   });
 
-  it("redirects only a newly auto-opened practice run", async () => {
+  it("asks before opening a newly prepared practice run", async () => {
     vi.mocked(prepareEditorOnboardingEntry).mockResolvedValue({
-      autoOpenHref: "/app/resumes/practice-one",
+      promptHref: "/app/resumes/practice-one",
       run: {
         id: "run-one",
         userId: "user-demo",
@@ -66,18 +66,17 @@ describe("Dashboard workbench view", () => {
         resumeId: "practice-one",
         status: "active",
         currentStep: "canvas-intro",
-        autoOpenedAt: Date.now(),
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
     });
 
-    await expect(DashboardPage()).rejects.toThrow(
-      "NEXT_REDIRECT:/app/resumes/practice-one",
-    );
-    expect(navigationMocks.redirect).toHaveBeenCalledWith(
-      "/app/resumes/practice-one",
-    );
+    render(await DashboardPage());
+
+    expect(
+      screen.getByRole("dialog", { name: "第一次使用简历编辑器？" }),
+    ).toBeInTheDocument();
+    expect(navigationMocks.redirect).not.toHaveBeenCalled();
   });
 
   it("shows continuation for an active run without changing the empty catalog", async () => {

@@ -53,7 +53,7 @@ describe("editor onboarding lifecycle", () => {
     }
   });
 
-  it("automatically creates and opens one practice resume for a new user", async () => {
+  it("creates a practice resume and asks a new user before opening it", async () => {
     const userId = createUserId("new");
     const decision = await prepareEditorOnboardingEntry({
       userId,
@@ -61,7 +61,7 @@ describe("editor onboarding lifecycle", () => {
       locale: "zh-CN",
     });
 
-    expect(decision.autoOpenHref).toBe(`/app/resumes/${decision.run?.resumeId}`);
+    expect(decision.promptHref).toBe(`/app/resumes/${decision.run?.resumeId}`);
     expect(decision.continueHref).toBeUndefined();
     expect(decision.run).toEqual(
       expect.objectContaining({
@@ -71,6 +71,7 @@ describe("editor onboarding lifecycle", () => {
         currentStep: "canvas-intro",
       }),
     );
+    expect(decision.run).not.toHaveProperty("autoOpenedAt");
   });
 
   it("records existing resume users as ineligible and never reconsiders them", async () => {
@@ -85,7 +86,7 @@ describe("editor onboarding lifecycle", () => {
     });
     expect(first.run).toEqual(expect.objectContaining({ status: "ineligible" }));
     expect(first.run).not.toHaveProperty("resumeId");
-    expect(first.autoOpenHref).toBeUndefined();
+    expect(first.promptHref).toBeUndefined();
 
     await deleteResumeRecord(userId, resumeId);
     const second = await prepareEditorOnboardingEntry({
@@ -95,6 +96,33 @@ describe("editor onboarding lifecycle", () => {
     });
     expect(second.run?.id).toBe(first.run?.id);
     expect(second.run?.status).toBe("ineligible");
+  });
+
+  it("records entry before returning a prepared run as a continuation", async () => {
+    const userId = createUserId("start");
+    const sessionId = randomUUID();
+    const prepared = await prepareEditorOnboardingEntry({
+      userId,
+      sessionId,
+      locale: "zh-CN",
+    });
+
+    const started = await transitionEditorOnboarding({
+      userId,
+      runId: prepared.run!.id,
+      action: { type: "start" },
+    });
+    const revisited = await prepareEditorOnboardingEntry({
+      userId,
+      sessionId,
+      locale: "zh-CN",
+    });
+
+    expect(started.autoOpenedAt).toEqual(expect.any(Number));
+    expect(revisited.promptHref).toBeUndefined();
+    expect(revisited.continueHref).toBe(
+      `/app/resumes/${prepared.run?.resumeId}`,
+    );
   });
 
   it("serializes concurrent production entry and creates one run and resume", async () => {
@@ -113,7 +141,7 @@ describe("editor onboarding lifecycle", () => {
     ]);
 
     expect(first.run?.id).toBe(second.run?.id);
-    expect([first.autoOpenHref, second.autoOpenHref].filter(Boolean)).toHaveLength(1);
+    expect([first.promptHref, second.promptHref].filter(Boolean)).toHaveLength(2);
     await expect(
       db.select().from(onboardingRuns).where(eq(onboardingRuns.userId, userId)),
     ).resolves.toHaveLength(1);

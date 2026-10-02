@@ -1,7 +1,20 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 const feedbackMocks = vi.hoisted(() => ({
   toastError: vi.fn(),
+}));
+
+const onboardingMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+  update: vi.fn(),
 }));
 
 vi.mock("@/components/ui/useAppFeedback", () => ({
@@ -10,20 +23,40 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
   }),
 }));
 
+vi.mock("@/lib/onboarding/client", () => ({
+  updateEditorOnboardingRunClient: onboardingMocks.update,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: onboardingMocks.push,
+    refresh: onboardingMocks.refresh,
+  }),
+}));
+
 import { ResumeDashboardShell } from "@/components/dashboard/ResumeDashboardShell";
 
 function finishMotion(element: HTMLElement) {
-  for (const eventName of [
-    "animationend",
-    "webkitAnimationEnd",
-    "transitionend",
-    "webkitTransitionEnd",
-  ]) {
-    element.dispatchEvent(new Event(eventName, { bubbles: true }));
-  }
+  act(() => {
+    for (const eventName of [
+      "animationend",
+      "webkitAnimationEnd",
+      "transitionend",
+      "webkitTransitionEnd",
+    ]) {
+      element.dispatchEvent(new Event(eventName, { bubbles: true }));
+    }
+  });
 }
 
 describe("ResumeDashboardShell", () => {
+  beforeEach(() => {
+    onboardingMocks.push.mockReset();
+    onboardingMocks.refresh.mockReset();
+    onboardingMocks.update.mockReset();
+    onboardingMocks.update.mockResolvedValue({});
+  });
+
   function installEditorViewport(matches: boolean) {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -75,6 +108,74 @@ describe("ResumeDashboardShell", () => {
       "/app/resumes/practice-one",
     );
     expect(screen.getByText("还没有简历")).toBeInTheDocument();
+  });
+
+  it("asks before entering a new editor practice", async () => {
+    render(
+      <ResumeDashboardShell
+        createAction="/app/create-resume"
+        onboardingPrompt={{
+          href: "/app/resumes/practice-one",
+          runId: "run-one",
+        }}
+        resumes={[]}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "第一次使用简历编辑器？",
+    });
+    expect(dialog).toHaveTextContent(
+      "你看起来还没有使用过简历编辑器。我们准备了一份练习简历，带你实际完成文字编辑、内容插入、样式调整和预览。",
+    );
+    expect(dialog).not.toHaveTextContent("不会出现在简历列表");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "开始新手练习" }),
+    );
+
+    await waitFor(() => {
+      expect(onboardingMocks.update).toHaveBeenCalledWith("run-one", {
+        type: "start",
+      });
+    });
+    expect(onboardingMocks.push).toHaveBeenCalledWith(
+      "/app/resumes/practice-one",
+    );
+  });
+
+  it("pauses a prepared editor practice when the user declines it", async () => {
+    render(
+      <ResumeDashboardShell
+        createAction="/app/create-resume"
+        onboardingPrompt={{
+          href: "/app/resumes/practice-one",
+          runId: "run-one",
+        }}
+        resumes={[]}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "第一次使用简历编辑器？",
+    });
+    expect(within(dialog).getByRole("button", { name: "暂时不需要" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "暂时不需要" }));
+
+    await waitFor(() => {
+      expect(onboardingMocks.update).toHaveBeenCalledWith("run-one", {
+        type: "pause",
+      });
+      expect(onboardingMocks.refresh).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(dialog).toHaveClass("ant-zoom-leave-active");
+    });
+    finishMotion(dialog);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "第一次使用简历编辑器？" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("opens the resume import flow separately from template creation", async () => {

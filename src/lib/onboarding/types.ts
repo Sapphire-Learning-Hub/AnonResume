@@ -29,11 +29,12 @@ export interface EditorOnboardingRun {
 
 export interface EditorOnboardingEntryDecision {
   run?: EditorOnboardingRun;
-  autoOpenHref?: string;
+  promptHref?: string;
   continueHref?: string;
 }
 
 export type EditorOnboardingTransitionAction =
+  | { type: "start" }
   | {
       type: "complete-step";
       stepId: EditorOnboardingStepId;

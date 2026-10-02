@@ -26,6 +26,10 @@ import {
 } from "@/lib/resume/client";
 
 import { ResumeImportPicker } from "./ResumeImportPicker";
+import {
+  EditorOnboardingPrompt,
+  type EditorOnboardingPromptValue,
+} from "./EditorOnboardingPrompt";
 import { ResumeTemplatePicker } from "./ResumeTemplatePicker";
 
 const useStyles = createStyles(({ token, css }) => ({
@@ -715,6 +719,7 @@ export interface OnboardingContinuation {
 export function ResumeDashboardShell({
   resumes,
   createAction,
+  onboardingPrompt,
   onboardingContinuation,
   pagination,
   searchParams = {},
@@ -726,6 +731,7 @@ export function ResumeDashboardShell({
 }: {
   resumes: ResumeCatalogEntry[];
   createAction: string;
+  onboardingPrompt?: EditorOnboardingPromptValue;
   onboardingContinuation?: OnboardingContinuation;
   pagination?: PageResult<ResumeCatalogEntry>;
   searchParams?: PaginationSearchParams;
@@ -803,6 +809,9 @@ export function ResumeDashboardShell({
 
   return (
     <>
+      {onboardingPrompt ? (
+        <EditorOnboardingPrompt prompt={onboardingPrompt} />
+      ) : null}
       <section className={styles.pageHeader}>
         <h1 className={styles.heading}>{t("dashboard.heading")}</h1>
       </section>

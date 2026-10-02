@@ -16,6 +16,7 @@ const stepActionSchema = z.object({
 
 const transitionActionSchema = z.union([
   stepActionSchema,
+  z.object({ type: z.literal("start") }),
   z.object({ type: z.literal("pause") }),
   z.object({ type: z.literal("resume") }),
   z.object({ type: z.literal("dismiss") }),

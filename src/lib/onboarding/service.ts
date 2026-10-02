@@ -50,6 +50,22 @@ function createDevelopmentTrigger(sessionId: string) {
   return `${EDITOR_BASICS_FLOW_KEY}:v${EDITOR_BASICS_FLOW_VERSION}:development:${digest}`;
 }
 
+function createAvailableRunDecision(
+  run: EditorOnboardingRun,
+): EditorOnboardingEntryDecision {
+  if (!run.resumeId) return { run };
+
+  const href = createEditorHref(run.resumeId);
+  const shouldPrompt =
+    run.status === "active" &&
+    !run.autoOpenedAt &&
+    (run.source === "automatic" || run.source === "development");
+
+  return shouldPrompt
+    ? { run, promptHref: href }
+    : { run, continueHref: href };
+}
+
 function getNextStep(stepId: EditorOnboardingStepId) {
   const index = editorOnboardingSteps.findIndex(({ id }) => id === stepId);
   return editorOnboardingSteps[index + 1]?.id;
@@ -131,10 +147,7 @@ async function prepareDevelopmentEntry(input: {
           input.userId,
           run.resumeId ? [run.resumeId] : [],
         );
-        return {
-          run,
-          ...(run.resumeId ? { continueHref: createEditorHref(run.resumeId) } : {}),
-        };
+        return createAvailableRunDecision(run);
       }
       return { run: sameSession };
     }
@@ -159,9 +172,8 @@ async function prepareDevelopmentEntry(input: {
       resumeId,
       status: "active",
       currentStep: FIRST_STEP,
-      autoOpenedAt: new Date(),
     });
-    return { run, autoOpenHref: createEditorHref(resumeId) };
+    return { run, promptHref: createEditorHref(resumeId) };
   });
 }
 
@@ -188,10 +200,7 @@ async function prepareProductionEntry(input: {
           input.userId,
           run.resumeId ? [run.resumeId] : [],
         );
-        return {
-          run,
-          ...(run.resumeId ? { continueHref: createEditorHref(run.resumeId) } : {}),
-        };
+        return createAvailableRunDecision(run);
       }
       await deleteOrphanedOnboardingResumes(transaction, input.userId, []);
       return { run: existing };
@@ -226,9 +235,8 @@ async function prepareProductionEntry(input: {
       resumeId,
       status: "active",
       currentStep: FIRST_STEP,
-      autoOpenedAt: new Date(),
     });
-    return { run, autoOpenHref: createEditorHref(resumeId) };
+    return { run, promptHref: createEditorHref(resumeId) };
   });
 }
 
@@ -282,6 +290,19 @@ export async function transitionEditorOnboarding(input: {
       input.runId,
     );
     if (!run) throw new EditorOnboardingTransitionError();
+
+    if (input.action.type === "start") {
+      if (run.status !== "active" || !run.resumeId) {
+        throw new EditorOnboardingTransitionError();
+      }
+      if (run.autoOpenedAt) return run;
+      return (await updateEditorOnboardingRun(
+        transaction,
+        input.userId,
+        run.id,
+        { autoOpenedAt: new Date() },
+      ))!;
+    }
 
     if (input.action.type === "pause") {
       if (run.status !== "active") throw new EditorOnboardingTransitionError();

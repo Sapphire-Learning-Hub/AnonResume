@@ -652,14 +652,18 @@ const messages = {
     "onboarding.document.title": "编辑器新手练习",
     "onboarding.document.practiceTitle": "开始编辑",
     "onboarding.document.editTarget": "把这段文字改成你的职业目标",
-    "onboarding.document.practiceDescription":
-      "这是一份练习简历，你可以放心尝试编辑和排版功能。",
     "onboarding.document.reorderTitle": "调整内容顺序",
     "onboarding.document.reorderDescription":
       "稍后你会把这个章节移动到新的位置。",
     "onboarding.continue.title": "继续编辑器练习",
     "onboarding.continue.description": "从上次停下的位置继续完成编辑练习。",
     "onboarding.continue.action": "继续练习",
+    "onboarding.prompt.title": "第一次使用简历编辑器？",
+    "onboarding.prompt.description":
+      "你看起来还没有使用过简历编辑器。我们准备了一份练习简历，带你实际完成文字编辑、内容插入、样式调整和预览。",
+    "onboarding.prompt.start": "开始新手练习",
+    "onboarding.prompt.defer": "暂时不需要",
+    "onboarding.prompt.error": "新手练习状态更新失败，请重试。",
     "onboarding.action.next": "下一步",
     "onboarding.action.navigate": "打开对应功能区",
     "onboarding.action.retry": "再试一次",
@@ -674,7 +678,6 @@ const messages = {
     "onboarding.help.title": "新手练习",
     "onboarding.help.description": "重新打开一份练习简历，按步骤熟悉编辑器。",
     "onboarding.progress": "步骤 {current}/{total}",
-    "onboarding.disclosure": "练习内容不会出现在你的简历列表中。",
     "onboarding.error.generic": "新手引导暂时无法继续，请稍后重试。",
     "onboarding.error.targetMissing": "未找到当前操作位置，请重新打开引导。",
     "onboarding.error.transitionFailed": "进度保存失败，请重试。",
@@ -1980,8 +1983,6 @@ const messages = {
     "onboarding.document.title": "Editor onboarding practice",
     "onboarding.document.practiceTitle": "Start editing",
     "onboarding.document.editTarget": "Change this text to your career goal",
-    "onboarding.document.practiceDescription":
-      "This is a practice resume, so you can safely try editing and layout tools.",
     "onboarding.document.reorderTitle": "Reorder content",
     "onboarding.document.reorderDescription":
       "Later, you will move this section to a new position.",
@@ -1989,6 +1990,13 @@ const messages = {
     "onboarding.continue.description":
       "Resume the editor practice from where you left off.",
     "onboarding.continue.action": "Continue practice",
+    "onboarding.prompt.title": "First time using the resume editor?",
+    "onboarding.prompt.description":
+      "It looks like you have not used the resume editor yet. We prepared a practice resume that walks you through editing text, inserting content, adjusting the design, and previewing the result.",
+    "onboarding.prompt.start": "Start editor practice",
+    "onboarding.prompt.defer": "Not right now",
+    "onboarding.prompt.error":
+      "The editor practice status could not be updated. Try again.",
     "onboarding.action.next": "Next",
     "onboarding.action.navigate": "Open the relevant ribbon tab",
     "onboarding.action.retry": "Try again",
@@ -2004,8 +2012,6 @@ const messages = {
     "onboarding.help.description":
       "Open a fresh practice resume and learn the editor step by step.",
     "onboarding.progress": "Step {current} of {total}",
-    "onboarding.disclosure":
-      "Practice content will not appear in your resume list.",
     "onboarding.error.generic":
       "The onboarding guide cannot continue right now. Try again later.",
     "onboarding.error.targetMissing":
