@@ -72,7 +72,9 @@ it("tests published tag artifacts instead of rebuilding them", async () => {
   expect(workflow).toContain("if: github.event_name == 'pull_request'");
   expect(workflow).toContain("name: verify published images");
   expect(workflow).toContain("needs: merge");
-  expect(workflow).toContain("ANONRESUME_VERSION: ${{ env.RELEASE_TAG }}");
+  expect(workflow).toContain(
+    "ANONRESUME_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}",
+  );
 });
 
 it("scans platform digests before publishing release manifests", async () => {
@@ -135,7 +137,9 @@ it("recovers a failed release from its immutable tag source", async () => {
   expect(workflow).toContain(
     "github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')",
   );
-  expect(workflow).toContain("ANONRESUME_VERSION: ${{ env.RELEASE_TAG }}");
+  expect(workflow).toContain(
+    "ANONRESUME_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}",
+  );
 });
 
 it("does not upgrade the base distribution during every image build", async () => {

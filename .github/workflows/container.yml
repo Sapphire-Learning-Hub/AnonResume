@@ -375,7 +375,7 @@ jobs:
       ANONRESUME_IMAGE: ghcr.io/sapphire-learning-hub/anonresume
       ANONRESUME_PDF_IMAGE: ghcr.io/sapphire-learning-hub/anonresume-pdf
       ANONRESUME_PORT: "13000"
-      ANONRESUME_VERSION: ${{ env.RELEASE_TAG }}
+      ANONRESUME_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       BETTER_AUTH_URL: https://resume.example.test
     steps:
       - name: Check out repository
