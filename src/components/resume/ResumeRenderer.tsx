@@ -59,6 +59,7 @@ import type {
   ResumeBlock,
   ResumeDocument,
   ResumeListItem,
+  ResumeSection,
   RichTextContent,
   TextBlock,
 } from "@/domain/resume/schema";
@@ -100,8 +101,7 @@ import type {
   ResumeRendererDiffPresentation,
 } from "./resume-diff-presentation";
 
-export interface ResumeRendererProps {
-  document: ResumeDocument;
+interface ResumeRendererSharedProps {
   mode: "edit" | "view" | "print";
   editSurfaceMode?: "content" | "layout";
   paginationRevision?: number;
@@ -137,6 +137,15 @@ export interface ResumeRendererProps {
   ) => void;
   onPageCountChange?: (pageCount: number) => void;
   onPaginationReadyChange?: (ready: boolean) => void;
+}
+
+export interface ResumeSectionRendererProps extends ResumeRendererSharedProps {
+  settings: ResumeDocument["settings"];
+  sections: readonly ResumeSection[];
+}
+
+export interface ResumeRendererProps extends ResumeRendererSharedProps {
+  document: ResumeDocument;
 }
 
 type ResumeRendererStyles = ReturnType<typeof useResumeRendererStyles>["styles"];
@@ -1970,7 +1979,7 @@ function renderBlock(
 }
 
 function createSinglePageLayout(
-  sections: ResumeDocument["sections"],
+  sections: readonly ResumeSection[],
 ): ResumePageLayout[] {
   return [
     {
@@ -1982,12 +1991,12 @@ function createSinglePageLayout(
   ];
 }
 
-function getPageContentHeight(document: ResumeDocument) {
+function getPageContentHeight(settings: ResumeDocument["settings"]) {
   return Math.max(
     1,
     A4_PAGE_HEIGHT_PX -
-      document.settings.page.margin.top -
-      document.settings.page.margin.bottom,
+      settings.page.margin.top -
+      settings.page.margin.bottom,
   );
 }
 
@@ -2255,8 +2264,9 @@ function renderResumeSection(
   );
 }
 
-export function ResumeRenderer({
-  document,
+export function ResumeSectionRenderer({
+  settings,
+  sections,
   mode,
   editSurfaceMode = "content",
   paginationRevision = 0,
@@ -2274,13 +2284,13 @@ export function ResumeRenderer({
   onTextEditorFormattingStateChange,
   onPageCountChange,
   onPaginationReadyChange,
-}: ResumeRendererProps) {
+}: ResumeSectionRendererProps): ReactNode {
   const { styles } = useResumeRendererStyles();
   const { t } = useI18n();
-  const styleVariables = getResumeStyleVariables(document);
+  const styleVariables = getResumeStyleVariables(settings);
   const visibleSections = useMemo(
-    () => document.sections.filter((section) => section.visible),
-    [document.sections],
+    () => sections.filter((section) => section.visible),
+    [sections],
   );
   const rootRef = useRef<HTMLDivElement>(null);
   const [activeTextEditor, setActiveTextEditor] =
@@ -2295,7 +2305,10 @@ export function ResumeRenderer({
     () => mergeRefs(captureTextEditor, textEditorRef),
     [captureTextEditor, textEditorRef],
   );
-  const pageContentHeight = useMemo(() => getPageContentHeight(document), [document]);
+  const pageContentHeight = useMemo(
+    () => getPageContentHeight(settings),
+    [settings],
+  );
   const sectionMap = useMemo(
     () => new Map(visibleSections.map((section) => [section.id, section])),
     [visibleSections],
@@ -2315,11 +2328,11 @@ export function ResumeRenderer({
         zoom,
         paginationRevision,
         pageContentHeight,
-        settings: document.settings,
+        settings,
         selection,
       }),
     [
-      document.settings,
+      settings,
       mode,
       pageContentHeight,
       paginationRevision,
@@ -2431,7 +2444,7 @@ export function ResumeRenderer({
                 pageHeight: pageContentHeight,
                 pageGap: EDIT_PAGE_GAP_PX,
                 sectionGap: DEFAULT_SECTION_GAP_PX,
-                pagePadding: document.settings.page.margin,
+                pagePadding: settings.page.margin,
                 revision: revisionKey,
               }),
             },
@@ -2441,10 +2454,10 @@ export function ResumeRenderer({
     },
     [
       activeTextEditor,
-      document,
       measurementLayout,
       pageContentHeight,
       selection,
+      settings.page.margin,
       visibleSections,
       zoom,
     ],
@@ -2525,7 +2538,7 @@ export function ResumeRenderer({
                   pageHeight={A4_PAGE_HEIGHT_PX}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGap={EDIT_PAGE_GAP_PX}
-                  pagePadding={document.settings.page.margin}
+                  pagePadding={settings.page.margin}
                   styleVariables={styleVariables as CSSProperties}
                   showPrintSafeArea={showPrintSafeArea}
                 >
@@ -2619,5 +2632,18 @@ export function ResumeRenderer({
         </TextPaginationRequestContext.Provider>
       </TextEditingStateContext.Provider>
     </BadgeEditContext.Provider>
+  );
+}
+
+export function ResumeRenderer({
+  document,
+  ...props
+}: ResumeRendererProps): ReactNode {
+  return (
+    <ResumeSectionRenderer
+      {...props}
+      settings={document.settings}
+      sections={document.sections}
+    />
   );
 }

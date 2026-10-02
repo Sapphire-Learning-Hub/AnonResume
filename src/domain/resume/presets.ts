@@ -12,6 +12,7 @@ export type SectionPresetId =
 export interface SectionPresetDefinition {
   id: SectionPresetId;
   label: string;
+  description: string;
   semantic?: string;
 }
 
@@ -57,25 +58,30 @@ function createSectionPresetDefinitions(
     {
       id: "custom",
       label: messages["preset.custom"],
+      description: messages["preset.customDescription"],
     },
     {
       id: "experience",
       label: messages["preset.experience"],
+      description: messages["preset.experienceDescription"],
       semantic: "experience",
     },
     {
       id: "projects",
       label: messages["preset.projects"],
+      description: messages["preset.projectsDescription"],
       semantic: "project",
     },
     {
       id: "education",
       label: messages["preset.education"],
+      description: messages["preset.educationDescription"],
       semantic: "education",
     },
     {
       id: "skills",
       label: messages["preset.skills"],
+      description: messages["preset.skillsDescription"],
       semantic: "skills",
     },
   ];

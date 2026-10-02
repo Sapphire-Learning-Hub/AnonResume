@@ -8,7 +8,10 @@ import {
 } from "@/components/resume/resume-diff-presentation";
 import type { ResumeDocumentDiffResult } from "@/domain/resume/document-diff";
 
-import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
+import {
+  ResumeRenderer,
+  ResumeSectionRenderer,
+} from "@/components/resume/ResumeRenderer";
 
 function createRect(height: number, width = 794) {
   return {
@@ -51,6 +54,129 @@ describe("ResumeRenderer", () => {
     expect(getComputedStyle(screen.getByText("第 1 页")).color).toBe(
       "rgba(255, 255, 255, 0.92)",
     );
+  });
+
+  it("renders only the supplied sections in their supplied order", () => {
+    const resume = createDefaultResumeDocument();
+    const { container } = render(
+      <ResumeSectionRenderer
+        mode="view"
+        settings={resume.settings}
+        sections={[resume.sections[1]!, resume.sections[0]!]}
+      />,
+    );
+
+    expect(
+      Array.from(
+        container.querySelectorAll<HTMLElement>("[data-resume-section-id]"),
+      ).map((section) => section.dataset.resumeSectionId),
+    ).toEqual(["section-experience", "section-profile"]);
+  });
+
+  it("stabilizes empty input at one page", async () => {
+    const resume = createDefaultResumeDocument();
+    const onPageCountChange = vi.fn();
+
+    render(
+      <ResumeSectionRenderer
+        mode="view"
+        settings={resume.settings}
+        sections={[]}
+        onPageCountChange={onPageCountChange}
+      />,
+    );
+
+    expect(screen.getByRole("article")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onPageCountChange).toHaveBeenLastCalledWith(1);
+    });
+  });
+
+  it("omits hidden supplied sections", () => {
+    const resume = createDefaultResumeDocument();
+    const hiddenSection = {
+      ...resume.sections[0]!,
+      visible: false,
+    };
+
+    const { container } = render(
+      <ResumeSectionRenderer
+        mode="view"
+        settings={resume.settings}
+        sections={[hiddenSection]}
+      />,
+    );
+
+    expect(screen.queryByText("个人简介")).not.toBeInTheDocument();
+    expect(container.querySelector("[data-resume-section-id]")).toBeNull();
+  });
+
+  it("uses explicit settings without mutating settings or sections", () => {
+    const resume = createDefaultResumeDocument();
+    const settings = {
+      ...resume.settings,
+      page: {
+        ...resume.settings.page,
+        margin: { top: 18, right: 24, bottom: 30, left: 36 },
+      },
+      typography: {
+        ...resume.settings.typography,
+        baseFontSize: 17,
+        lineHeight: 1.6,
+      },
+      theme: {
+        ...resume.settings.theme,
+        accent: "#123456",
+      },
+    };
+    const sections = [resume.sections[0]!];
+    const originalSettings = structuredClone(settings);
+    const originalSections = structuredClone(sections);
+
+    render(
+      <ResumeSectionRenderer
+        mode="view"
+        settings={settings}
+        sections={sections}
+      />,
+    );
+
+    const page = screen.getByRole("article");
+
+    expect(page.style.getPropertyValue("--resume-accent")).toBe("#123456");
+    expect(page.style.getPropertyValue("--resume-base-font-size")).toBe("17px");
+    expect(page.style.getPropertyValue("--resume-line-height")).toBe("1.6");
+    expect(page.style.getPropertyValue("--resume-page-padding")).toBe(
+      "18px 24px 30px 36px",
+    );
+    expect(settings).toEqual(originalSettings);
+    expect(sections).toEqual(originalSections);
+  });
+
+  it("preserves original selection identifiers in edit mode", () => {
+    const resume = createDefaultResumeDocument();
+    const onSelectBlock = vi.fn();
+
+    render(
+      <ResumeSectionRenderer
+        mode="edit"
+        editSurfaceMode="layout"
+        settings={resume.settings}
+        sections={[resume.sections[1]!]}
+        onMoveBlock={vi.fn()}
+        onSelectBlock={onSelectBlock}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "拖动 双列内容" }));
+
+    expect(onSelectBlock).toHaveBeenCalledWith({
+      sectionId: "section-experience",
+      blockPath: [
+        "group-experience-anonresume",
+        "row-experience-header",
+      ],
+    });
   });
 
   it.each(["view", "print"] as const)(

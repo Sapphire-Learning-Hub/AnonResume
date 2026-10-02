@@ -66,6 +66,7 @@ import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
+import { SectionPresetCommands } from "@/components/editor/section-presets/SectionPresetCommands";
 import {
   ResumeLinkDialog,
   type ResumeLinkDraft,
@@ -2855,26 +2856,19 @@ export function ResumeEditorShell({
             content: (
               <div className={styles.ribbonControlGroup}>
                 <Button
-                  aria-label={t("editor.addSection")}
+                  aria-label={t("editor.addBlankSection")}
                   className={styles.ribbonLargeButton}
                   icon={<FileAddOutlined />}
                   onClick={() => store.getState().addSection()}
                 >
-                  {t("editor.addSection")}
+                  {t("editor.addBlankSection")}
                 </Button>
-                <div className={styles.ribbonPresetGrid}>
-                  {quickInsertPresets.map((preset) => (
-                    <Button
-                      aria-label={t("editor.addSectionPreset", { label: preset.label })}
-                      className={styles.ribbonSmallCommand}
-                      icon={<PlusSquareOutlined />}
-                      key={preset.id}
-                      onClick={() => store.getState().addSection(preset.id)}
-                    >
-                      {t("editor.addSectionPreset", { label: preset.label })}
-                    </Button>
-                  ))}
-                </div>
+                <SectionPresetCommands
+                  document={document}
+                  locale={locale}
+                  presets={quickInsertPresets}
+                  onInsert={(presetId) => store.getState().addSection(presetId)}
+                />
               </div>
             ),
           },
