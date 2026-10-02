@@ -2864,9 +2864,9 @@ export function ResumeEditorShell({
                   {t("editor.addBlankSection")}
                 </Button>
                 <SectionPresetCommands
-                  document={document}
                   locale={locale}
                   presets={quickInsertPresets}
+                  settings={document.settings}
                   onInsert={(presetId) => store.getState().addSection(presetId)}
                 />
               </div>

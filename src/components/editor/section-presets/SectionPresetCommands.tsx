@@ -20,15 +20,15 @@ const A4_WIDTH_PX = (210 / 25.4) * 96;
 const PREVIEW_SCALE = 0.62;
 
 export function SectionPresetCommands({
-  document,
   locale,
   onInsert,
   presets,
+  settings,
 }: {
-  document: ResumeDocument;
   locale: AppLocale;
   onInsert: (presetId: SectionPresetId) => void;
   presets: SectionPresetDefinition[];
+  settings: ResumeDocument["settings"];
 }) {
   const { styles } = useSectionPresetCommandsStyles();
   const { t } = useI18n();
@@ -119,7 +119,7 @@ export function SectionPresetCommands({
                   <ResumeSectionRenderer
                     key={previewPresetId}
                     mode="view"
-                    settings={document.settings}
+                    settings={settings}
                     sections={[previewSection]}
                     zoom={PREVIEW_SCALE}
                   />
