@@ -1,5 +1,11 @@
 type ProcessEnvironment = Record<string, string | undefined>;
 
+export function readNodeEnvironment(
+  environment: ProcessEnvironment = process.env,
+) {
+  return environment.NODE_ENV;
+}
+
 export function readRuntimeIdentityEnvironment(
   environment: ProcessEnvironment = process.env,
 ) {

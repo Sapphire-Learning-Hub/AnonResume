@@ -35,6 +35,12 @@ export const useEditorShortcutPanelStyles = createStyles(({ token, css }) => ({
     font-size: 14px;
     font-weight: 700;
   `,
+  groupDescription: css`
+    margin: 0 0 12px;
+    color: ${token.colorTextSecondary};
+    font-size: 13px;
+    line-height: 1.6;
+  `,
   shortcutList: css`
     display: grid;
     gap: 2px;

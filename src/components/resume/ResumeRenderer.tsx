@@ -35,6 +35,7 @@ import {
 } from "react";
 
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
+import { ONBOARDING_EDIT_BLOCK_ID } from "@/domain/onboarding/editor-basics-document";
 import {
   findBlockByPath,
   getPlainTextFromRichText,
@@ -1601,6 +1602,11 @@ function SortableBlockItem({
         data-resume-drag-mode={draggable ? "handle" : "none"}
         data-resume-edit-surface-mode={editSurfaceMode}
         data-resume-over={over}
+        data-onboarding-anchor={
+          mode === "edit" && block.id === ONBOARDING_EDIT_BLOCK_ID
+            ? "onboarding-edit-target"
+            : undefined
+        }
       >
         <ResumeStructuralPageBreaks sectionId={sectionId} path={blockPath} />
         {draggable ? (
@@ -1725,6 +1731,11 @@ function SortableBlockChildren({
             data-testid={`resume-block-item-${blockPath.join("-")}`}
             data-resume-block-path={serializeBlockPath(blockPath)}
             data-resume-drag-mode="none"
+            data-onboarding-anchor={
+              mode === "edit" && block.id === ONBOARDING_EDIT_BLOCK_ID
+                ? "onboarding-edit-target"
+                : undefined
+            }
           >
             <ResumeStructuralPageBreaks
               sectionId={sectionId}

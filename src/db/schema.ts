@@ -55,6 +55,7 @@ const schemaName = getDatabaseSchemaName();
 const resumeColumns = {
   id: text("id").notNull(),
   userId: text("user_id").notNull(),
+  kind: text("kind").$type<"standard" | "onboarding">().notNull().default("standard"),
   name: text("name").notNull(),
   summary: text("summary").notNull(),
   customSummary: text("custom_summary"),
@@ -75,6 +76,10 @@ export const resumes =
         }),
         uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        check(
+          "resumes_kind_check",
+          sql`${table.kind} IN ('standard', 'onboarding')`,
+        ),
         index("resumes_user_updated_id_idx").on(
           table.userId,
           table.updatedAt.desc(),
@@ -87,12 +92,92 @@ export const resumes =
         }),
         uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        check(
+          "resumes_kind_check",
+          sql`${table.kind} IN ('standard', 'onboarding')`,
+        ),
         index("resumes_user_updated_id_idx").on(
           table.userId,
           table.updatedAt.desc(),
           table.id.asc(),
         ),
       ]);
+
+const onboardingRunColumns = {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  flowKey: text("flow_key").notNull(),
+  flowVersion: integer("flow_version").notNull(),
+  source: text("source")
+    .$type<"automatic" | "manual" | "development">()
+    .notNull(),
+  triggerKey: text("trigger_key").notNull(),
+  resumeId: text("resume_id"),
+  status: text("status")
+    .$type<"active" | "paused" | "completed" | "dismissed" | "ineligible">()
+    .notNull(),
+  currentStep: text("current_step").notNull(),
+  autoOpenedAt: timestamp("auto_opened_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const onboardingRuns =
+  schemaName === "public"
+    ? pgTable("onboarding_runs", onboardingRunColumns, (table) => [
+        uniqueIndex("onboarding_runs_user_trigger_unique").on(
+          table.userId,
+          table.triggerKey,
+        ),
+        uniqueIndex("onboarding_runs_user_active_unique")
+          .on(table.userId)
+          .where(sql`${table.status} IN ('active', 'paused')`),
+        index("onboarding_runs_user_status_idx").on(table.userId, table.status),
+        check(
+          "onboarding_runs_source_check",
+          sql`${table.source} IN ('automatic', 'manual', 'development')`,
+        ),
+        check(
+          "onboarding_runs_status_check",
+          sql`${table.status} IN ('active', 'paused', 'completed', 'dismissed', 'ineligible')`,
+        ),
+        foreignKey({
+          columns: [table.resumeId],
+          foreignColumns: [resumes.id],
+          name: "onboarding_runs_resume_fk",
+        }).onDelete("set null"),
+      ])
+    : pgSchema(schemaName).table(
+        "onboarding_runs",
+        onboardingRunColumns,
+        (table) => [
+          uniqueIndex("onboarding_runs_user_trigger_unique").on(
+            table.userId,
+            table.triggerKey,
+          ),
+          uniqueIndex("onboarding_runs_user_active_unique")
+            .on(table.userId)
+            .where(sql`${table.status} IN ('active', 'paused')`),
+          index("onboarding_runs_user_status_idx").on(
+            table.userId,
+            table.status,
+          ),
+          check(
+            "onboarding_runs_source_check",
+            sql`${table.source} IN ('automatic', 'manual', 'development')`,
+          ),
+          check(
+            "onboarding_runs_status_check",
+            sql`${table.status} IN ('active', 'paused', 'completed', 'dismissed', 'ineligible')`,
+          ),
+          foreignKey({
+            columns: [table.resumeId],
+            foreignColumns: [resumes.id],
+            name: "onboarding_runs_resume_fk",
+          }).onDelete("set null"),
+        ],
+      );
 
 const resumeVersionColumns = {
   id: text("id").notNull(),

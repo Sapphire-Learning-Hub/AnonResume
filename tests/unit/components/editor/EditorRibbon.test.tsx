@@ -53,6 +53,14 @@ describe("EditorRibbon", () => {
       "aria-selected",
       "true",
     );
+    expect(screen.getByRole("tab", { name: "开始" })).toHaveAttribute(
+      "data-onboarding-anchor",
+      "editor-ribbon-tab-home",
+    );
+    expect(screen.getByRole("tab", { name: "插入" })).toHaveAttribute(
+      "data-onboarding-anchor",
+      "editor-ribbon-tab-insert",
+    );
     const commandPanel = screen.getByRole("tabpanel", { name: "开始" });
     expect(commandPanel).toHaveTextContent("编辑模式");
     expect(commandPanel).toHaveTextContent("内容编辑");

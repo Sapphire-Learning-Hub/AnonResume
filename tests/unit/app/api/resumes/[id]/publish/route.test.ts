@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getOptionalSession } from "@/lib/auth/session";
+import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   createGeneratedResumeRecord,
+  createOnboardingResumeRecord,
   getResumeRecord,
   getPublishedResumeBySlug,
   resetResumeRepository,
@@ -79,6 +81,32 @@ describe("publish route", () => {
 
     expect(response.status).toBe(404);
     expect(await getResumeRecord("user-demo", "resume-missing")).toBeUndefined();
+  });
+
+  it("rejects publishing an onboarding resume", async () => {
+    await createOnboardingResumeRecord({
+      userId: "user-demo",
+      locale: "zh-CN",
+      document: createDefaultResumeDocument("zh-CN"),
+      createId: () => "resume-onboarding",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/resumes/resume-onboarding/publish", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost",
+        },
+      }),
+      {
+        params: Promise.resolve({ id: "resume-onboarding" }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "onboarding_resume_not_publishable",
+    });
   });
 
   it("rejects cross-origin publish requests", async () => {

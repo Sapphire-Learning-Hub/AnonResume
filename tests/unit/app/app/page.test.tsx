@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, vi } from "vitest";
 
 import { requireSession } from "@/lib/auth/session";
+import { prepareEditorOnboardingEntry } from "@/lib/onboarding/service";
 import {
   createGeneratedResumeRecord,
   createResumeRecord,
@@ -11,8 +12,18 @@ import {
 
 import DashboardPage from "@/app/app/(workbench)/page";
 
+const navigationMocks = vi.hoisted(() => ({
+  redirect: vi.fn((href: string) => {
+    throw new Error(`NEXT_REDIRECT:${href}`);
+  }),
+}));
+
 vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
+}));
+
+vi.mock("@/lib/onboarding/service", () => ({
+  prepareEditorOnboardingEntry: vi.fn(),
 }));
 
 vi.mock("@/components/auth/SignOutButton", () => ({
@@ -20,6 +31,7 @@ vi.mock("@/components/auth/SignOutButton", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  redirect: navigationMocks.redirect,
   usePathname: () => "/app",
   useRouter: () => ({ refresh: vi.fn() }),
 }));
@@ -27,6 +39,8 @@ vi.mock("next/navigation", () => ({
 describe("Dashboard workbench view", () => {
   beforeEach(async () => {
     await resetResumeRepository();
+    navigationMocks.redirect.mockClear();
+    vi.mocked(prepareEditorOnboardingEntry).mockResolvedValue({});
     vi.mocked(requireSession).mockResolvedValue({
       session: {
         id: "session-demo",
@@ -38,6 +52,77 @@ describe("Dashboard workbench view", () => {
         email: "demo@example.com",
       },
     } as never);
+  });
+
+  it("asks before opening a newly prepared practice run", async () => {
+    vi.mocked(prepareEditorOnboardingEntry).mockResolvedValue({
+      promptHref: "/app/resumes/practice-one",
+      run: {
+        id: "run-one",
+        userId: "user-demo",
+        flowKey: "editor-basics",
+        flowVersion: 1,
+        source: "automatic",
+        resumeId: "practice-one",
+        status: "active",
+        currentStep: "canvas-intro",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    });
+
+    render(await DashboardPage());
+
+    expect(
+      screen.getByRole("dialog", { name: "第一次使用简历编辑器？" }),
+    ).toBeInTheDocument();
+    expect(navigationMocks.redirect).not.toHaveBeenCalled();
+  });
+
+  it("shows continuation for an active run without changing the empty catalog", async () => {
+    vi.mocked(prepareEditorOnboardingEntry).mockResolvedValue({
+      continueHref: "/app/resumes/practice-one",
+      run: {
+        id: "run-one",
+        userId: "user-demo",
+        flowKey: "editor-basics",
+        flowVersion: 1,
+        source: "automatic",
+        resumeId: "practice-one",
+        status: "paused",
+        currentStep: "format-text",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    });
+
+    render(await DashboardPage());
+
+    expect(screen.getByRole("link", { name: "继续练习" })).toHaveAttribute(
+      "href",
+      "/app/resumes/practice-one",
+    );
+    expect(screen.getByText("还没有简历")).toBeInTheDocument();
+  });
+
+  it("does not render onboarding UI for terminal or ineligible decisions", async () => {
+    vi.mocked(prepareEditorOnboardingEntry).mockResolvedValue({
+      run: {
+        id: "run-ineligible",
+        userId: "user-demo",
+        flowKey: "editor-basics",
+        flowVersion: 1,
+        source: "automatic",
+        status: "ineligible",
+        currentStep: "canvas-intro",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    });
+
+    render(await DashboardPage());
+
+    expect(screen.queryByText("继续编辑器练习")).not.toBeInTheDocument();
   });
 
   afterEach(async () => {

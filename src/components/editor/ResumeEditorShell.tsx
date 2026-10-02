@@ -64,6 +64,7 @@ import {
 } from "@/components/editor/EditorRibbon";
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
+import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
 import {
   ResumeLinkDialog,
@@ -150,6 +151,8 @@ import {
 } from "@/stores/resume-editor";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { PageResult } from "@/lib/shared/pagination";
+import { restartEditorOnboardingClient } from "@/lib/onboarding/client";
+import type { EditorOnboardingRun } from "@/lib/onboarding/types";
 
 import { useResumeEditorShellStyles } from "./ResumeEditorShell.style";
 import { getActiveResumePageIndex } from "./resume-page-navigation";
@@ -331,6 +334,7 @@ export function ResumeEditorShell({
   versionHistoryLimit = 5,
   updateSummary,
   loadCurrentResume,
+  onboardingRun,
 }: {
   resumeId: string;
   publicSlug?: string;
@@ -377,6 +381,7 @@ export function ResumeEditorShell({
     version: number;
     updatedAt: number;
   }>;
+  onboardingRun?: EditorOnboardingRun;
 }) {
   const { styles } = useResumeEditorShellStyles();
   const { locale, t } = useI18n();
@@ -1244,6 +1249,20 @@ export function ResumeEditorShell({
       // Save state and retry feedback are handled by the persistence layer.
     } finally {
       setPreviewBusy(false);
+    }
+  }
+
+  async function handleRestartOnboarding() {
+    setShortcutPanelOpen(false);
+
+    try {
+      const result = await restartEditorOnboardingClient();
+      router.push(result.editorHref);
+    } catch {
+      toast.error({
+        content: t("onboarding.error.generic"),
+        key: "editor-onboarding-restart-error",
+      });
     }
   }
 
@@ -2201,6 +2220,7 @@ export function ResumeEditorShell({
           <div
             className={styles.inspectorControlRow}
             data-field-size="select-medium"
+            data-onboarding-anchor="editor-visual-preset"
           >
             <span className={styles.inspectorControlLabel}>{t("editor.visualPreset")}</span>
             <Select
@@ -2545,6 +2565,7 @@ export function ResumeEditorShell({
         }}
       />
       <Button
+        data-onboarding-anchor="editor-preview"
         disabled={previewBusy}
         href={previewHref}
         loading={previewBusy}
@@ -2555,82 +2576,87 @@ export function ResumeEditorShell({
       >
         {t("common.preview")}
       </Button>
-      {publicHref ? (
-        <Space.Compact>
+      <div
+        className={styles.ribbonControlGroup}
+        data-onboarding-anchor="editor-output-actions"
+      >
+        {publicHref ? (
+          <Space.Compact>
+            <Button
+              data-testid="resume-publish-action"
+              disabled={publicationBusy}
+              onClick={() => void handleCopyPublicLink()}
+            >
+              {publicLinkCopied
+                ? t("editor.publicLinkCopied")
+                : t("editor.copyPublicLink")}
+            </Button>
+            <Dropdown
+              classNames={{ item: styles.publicActionsMenuItem }}
+              menu={{
+                items: [
+                  {
+                    key: "open-public",
+                    label: (
+                      <a
+                        data-testid="resume-open-public"
+                        href={publicHref}
+                      >
+                        {t("common.openPublic")}
+                      </a>
+                    ),
+                  },
+                  {
+                    danger: true,
+                    key: "unpublish",
+                    label: t("common.unpublish"),
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === "unpublish") setUnpublishOpen(true);
+                },
+              }}
+              mouseEnterDelay={0}
+              trigger={["hover", "click"]}
+            >
+              <Button
+                aria-label={t("editor.publicActionsMore")}
+                disabled={publicationBusy}
+                icon={<DownOutlined />}
+              />
+            </Dropdown>
+          </Space.Compact>
+        ) : (
           <Button
             data-testid="resume-publish-action"
             disabled={publicationBusy}
-            onClick={() => void handleCopyPublicLink()}
+            type="primary"
+            onClick={() => void handlePublish()}
           >
-            {publicLinkCopied
-              ? t("editor.publicLinkCopied")
-              : t("editor.copyPublicLink")}
+            {t("common.publish")}
           </Button>
-          <Dropdown
-            classNames={{ item: styles.publicActionsMenuItem }}
-            menu={{
-              items: [
-                {
-                  key: "open-public",
-                  label: (
-                    <a
-                      data-testid="resume-open-public"
-                      href={publicHref}
-                    >
-                      {t("common.openPublic")}
-                    </a>
-                  ),
-                },
-                {
-                  danger: true,
-                  key: "unpublish",
-                  label: t("common.unpublish"),
-                },
-              ],
-              onClick: ({ key }) => {
-                if (key === "unpublish") setUnpublishOpen(true);
-              },
-            }}
-            mouseEnterDelay={0}
-            trigger={["hover", "click"]}
+        )}
+        <Tooltip title={t("editor.publicAppearanceHelp")}>
+          <Button
+            aria-label={t("editor.publicAppearanceHelp")}
+            className={styles.ribbonIconButton}
+            href="/docs/public-resume-customization"
+            rel="noreferrer"
+            target="_blank"
+            type="text"
           >
-            <Button
-              aria-label={t("editor.publicActionsMore")}
-              disabled={publicationBusy}
-              icon={<DownOutlined />}
-            />
-          </Dropdown>
-        </Space.Compact>
-      ) : (
+            <HelpIcon size={16} />
+          </Button>
+        </Tooltip>
         <Button
-          data-testid="resume-publish-action"
-          disabled={publicationBusy}
+          disabled={pdfBusy}
+          loading={pdfBusy}
           type="primary"
-          onClick={() => void handlePublish()}
+          onClick={() => void handleExportPdf()}
         >
-          {t("common.publish")}
+          {t("common.pdf")}
         </Button>
-      )}
-      <Tooltip title={t("editor.publicAppearanceHelp")}>
-        <Button
-          aria-label={t("editor.publicAppearanceHelp")}
-          className={styles.ribbonIconButton}
-          href="/docs/public-resume-customization"
-          rel="noreferrer"
-          target="_blank"
-          type="text"
-        >
-          <HelpIcon size={16} />
-        </Button>
-      </Tooltip>
-      <Button
-        disabled={pdfBusy}
-        loading={pdfBusy}
-        type="primary"
-        onClick={() => void handleExportPdf()}
-      >
-        {t("common.pdf")}
-      </Button>
+      </div>
     </>
   );
 
@@ -2682,6 +2708,9 @@ export function ResumeEditorShell({
                         aria-label={t(label)}
                         aria-pressed={resolvedFormattingState[state]}
                         className={styles.ribbonFormatButton}
+                        data-onboarding-anchor={
+                          state === "bold" ? "editor-format-bold" : undefined
+                        }
                         disabled={textToolsDisabled}
                         onMouseDown={preventToolbarMouseDown}
                         onClick={() => runTextEditorCommand({ type: command })}
@@ -2853,7 +2882,10 @@ export function ResumeEditorShell({
             key: "content",
             label: t("editor.ribbon.group.content"),
             content: (
-              <div className={styles.ribbonPresetGrid}>
+              <div
+                className={styles.ribbonPresetGrid}
+                data-onboarding-anchor="editor-insert-content"
+              >
                 {listBlockPresets(locale).map((preset) => (
                   <Button
                     aria-label={t(preset.labelKey)}
@@ -2902,6 +2934,22 @@ export function ResumeEditorShell({
         }];
       case "layout":
         return [
+          {
+            key: "reorder",
+            label: t("editor.ribbon.group.mode"),
+            content: (
+              <Button
+                aria-label={t("editor.layoutSorting")}
+                aria-pressed={activeEditSurfaceMode === "layout"}
+                className={styles.ribbonModeButton}
+                data-onboarding-anchor="editor-reorder-content"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => handleEditSurfaceModeChange("layout")}
+              >
+                {t("editor.layoutSorting")}
+              </Button>
+            ),
+          },
           {
             key: "page",
             label: t("editor.ribbon.group.page"),
@@ -3018,6 +3066,7 @@ export function ResumeEditorShell({
       <EditorShortcutPanel
         open={shortcutPanelOpen}
         onCancel={() => setShortcutPanelOpen(false)}
+        onRestartOnboarding={() => void handleRestartOnboarding()}
       />
 
       <Modal
@@ -3267,6 +3316,7 @@ export function ResumeEditorShell({
           <div
             ref={canvasViewportRef}
             className={styles.canvasViewport}
+            data-onboarding-anchor="editor-canvas"
             onClick={(event) => {
               if (
                 event.target instanceof Element &&
@@ -3368,7 +3418,15 @@ export function ResumeEditorShell({
             .setZoom(Number((zoom - RESUME_EDITOR_ZOOM_STEP).toFixed(2)))
         }
       />
-      </main>
+    </main>
+      {onboardingRun ? (
+        <ResumeOnboardingController
+          document={document}
+          run={onboardingRun}
+          saveStatus={saveStatus}
+          onSelectRibbonTab={selectRibbonTab}
+        />
+      ) : null}
       <AiAssistantPanel
         open={aiAssistantOpen}
         resumeId={resumeId}

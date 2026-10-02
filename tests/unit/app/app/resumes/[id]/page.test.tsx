@@ -3,6 +3,8 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { notFound } from "next/navigation";
 
 import { requireSession } from "@/lib/auth/session";
+import { getEditorOnboardingRunForResume } from "@/lib/onboarding/repository";
+import type { EditorOnboardingRun } from "@/lib/onboarding/types";
 import {
   createGeneratedResumeRecord,
   publishResumeRecord,
@@ -13,6 +15,16 @@ import ResumeEditorPage from "@/app/app/resumes/[id]/page";
 
 vi.mock("@/lib/auth/session", () => ({
   requireSession: vi.fn(),
+}));
+
+vi.mock("@/lib/onboarding/repository", () => ({
+  getEditorOnboardingRunForResume: vi.fn(),
+}));
+
+vi.mock("@/components/editor/onboarding/ResumeOnboardingController", () => ({
+  ResumeOnboardingController: ({ run }: { run: EditorOnboardingRun }) => (
+    <div data-testid="resume-onboarding-controller">{run.currentStep}</div>
+  ),
 }));
 
 vi.mock("@/components/ui/useAppFeedback", () => ({
@@ -68,6 +80,7 @@ describe("ResumeEditorPage", () => {
         email: "demo@example.com",
       },
     } as never);
+    vi.mocked(getEditorOnboardingRunForResume).mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -103,6 +116,47 @@ describe("ResumeEditorPage", () => {
       "href",
       "/resume/resume-foundation",
     );
+  });
+
+  it("loads the owner-scoped onboarding run for a practice resume", async () => {
+    vi.mocked(getEditorOnboardingRunForResume).mockResolvedValue({
+      id: "run-demo",
+      userId: "user-demo",
+      flowKey: "editor-basics",
+      flowVersion: 1,
+      source: "manual",
+      resumeId: "resume-foundation",
+      status: "active",
+      currentStep: "canvas-intro",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    const page = await ResumeEditorPage({
+      params: Promise.resolve({ id: "resume-foundation" }),
+    });
+
+    render(page);
+
+    expect(getEditorOnboardingRunForResume).toHaveBeenCalledWith(
+      "user-demo",
+      "resume-foundation",
+    );
+    expect(screen.getByTestId("resume-onboarding-controller")).toHaveTextContent(
+      "canvas-intro",
+    );
+  });
+
+  it("does not mount onboarding for a standard resume", async () => {
+    const page = await ResumeEditorPage({
+      params: Promise.resolve({ id: "resume-foundation" }),
+    });
+
+    render(page);
+
+    expect(
+      screen.queryByTestId("resume-onboarding-controller"),
+    ).not.toBeInTheDocument();
   });
 
   it("returns not found for a missing resume id", async () => {

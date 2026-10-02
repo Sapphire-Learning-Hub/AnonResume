@@ -17,6 +17,10 @@ const navigationMocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
 }));
+const onboardingClientMocks = vi.hoisted(() => ({
+  restart: vi.fn(),
+  update: vi.fn(),
+}));
 
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
@@ -36,12 +40,19 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
   }),
 }));
 
+vi.mock("@/lib/onboarding/client", () => ({
+  restartEditorOnboardingClient: onboardingClientMocks.restart,
+  updateEditorOnboardingRunClient: onboardingClientMocks.update,
+}));
+
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
 } from "@/lib/resume/client";
 import type { RichTextContent } from "@/domain/resume/schema";
+import type { EditorOnboardingRun } from "@/lib/onboarding/types";
 
 import { ResumeEditorShell } from "@/components/editor/ResumeEditorShell";
 
@@ -99,6 +110,23 @@ function getInspectorPanel() {
   return screen.getByRole("tabpanel");
 }
 
+function createOnboardingRun(
+  currentStep: EditorOnboardingRun["currentStep"] = "canvas-intro",
+): EditorOnboardingRun {
+  return {
+    id: "run-demo",
+    userId: "user-demo",
+    flowKey: "editor-basics",
+    flowVersion: 1,
+    source: "manual",
+    resumeId: "resume-demo",
+    status: "active",
+    currentStep,
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
 function openRibbonTab(name: "开始" | "插入" | "设计" | "布局") {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
@@ -151,6 +179,112 @@ describe("ResumeEditorShell", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("mounts onboarding only when the editor receives an active run", () => {
+    const { rerender } = render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createEditorOnboardingDocument("zh-CN")}
+      />,
+    );
+
+    expect(screen.queryByText("认识编辑画布")).not.toBeInTheDocument();
+
+    rerender(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createEditorOnboardingDocument("zh-CN")}
+        onboardingRun={createOnboardingRun()}
+      />,
+    );
+
+    expect(screen.getByText("认识编辑画布")).toBeInTheDocument();
+  });
+
+  it("exposes stable onboarding anchors across the editor workflow", () => {
+    const { container } = render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createEditorOnboardingDocument("zh-CN")}
+        onboardingRun={createOnboardingRun()}
+      />,
+    );
+
+    for (const anchor of [
+      "editor-canvas",
+      "onboarding-edit-target",
+      "editor-format-bold",
+      "editor-preview",
+      "editor-output-actions",
+      "editor-ribbon-tab-home",
+      "editor-ribbon-tab-insert",
+      "editor-ribbon-tab-design",
+      "editor-ribbon-tab-layout",
+    ]) {
+      expect(
+        container.querySelector(`[data-onboarding-anchor='${anchor}']`),
+        anchor,
+      ).toBeInTheDocument();
+    }
+
+    openRibbonTab("插入");
+    expect(
+      container.querySelector("[data-onboarding-anchor='editor-insert-content']"),
+    ).toBeInTheDocument();
+
+    openRibbonTab("设计");
+    expect(
+      container.querySelector("[data-onboarding-anchor='editor-visual-preset']"),
+    ).toBeInTheDocument();
+
+    openRibbonTab("布局");
+    expect(
+      container.querySelector("[data-onboarding-anchor='editor-reorder-content']"),
+    ).toBeInTheDocument();
+  });
+
+  it("restarts onboarding from editor help and navigates to the new practice resume", async () => {
+    onboardingClientMocks.restart.mockResolvedValue({
+      editorHref: "/app/resumes/resume-new",
+      run: { ...createOnboardingRun(), id: "run-new", resumeId: "resume-new" },
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "查看快捷键" }));
+    fireEvent.click(screen.getByRole("button", { name: "重新开始新手引导" }));
+
+    await waitFor(() => {
+      expect(onboardingClientMocks.restart).toHaveBeenCalledOnce();
+      expect(navigationMocks.push).toHaveBeenCalledWith(
+        "/app/resumes/resume-new",
+      );
+    });
+  });
+
+  it("keeps resume article dimensions unchanged while onboarding is active", () => {
+    const document = createEditorOnboardingDocument("zh-CN");
+    const { rerender } = render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+    const article = screen.getByRole("article");
+    const before = article.getBoundingClientRect();
+
+    rerender(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={document}
+        onboardingRun={createOnboardingRun()}
+      />,
+    );
+
+    expect(screen.getByRole("article").getBoundingClientRect()).toEqual(before);
   });
 
   it("keeps the current ribbon tab when a contextual text tab appears", () => {

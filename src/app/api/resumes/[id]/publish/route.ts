@@ -5,6 +5,7 @@ import { requireSameOrigin } from "@/lib/http/request-origin";
 import {
   publishResumeRecord,
   ResumeNotFoundError,
+  ResumePublicationForbiddenError,
 } from "@/lib/resume/repository";
 
 export async function POST(
@@ -31,6 +32,13 @@ export async function POST(
   } catch (error) {
     if (error instanceof ResumeNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+
+    if (error instanceof ResumePublicationForbiddenError) {
+      return NextResponse.json(
+        { error: "onboarding_resume_not_publishable" },
+        { status: 409 },
+      );
     }
 
     throw error;

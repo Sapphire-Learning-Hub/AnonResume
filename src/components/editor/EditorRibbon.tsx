@@ -202,6 +202,7 @@ export function EditorRibbon({
               aria-selected={tab.key === activeTab}
               className={styles.tab}
               data-contextual={tab.key === "context" ? "true" : undefined}
+              data-onboarding-anchor={`editor-ribbon-tab-${tab.key}`}
               id={`editor-ribbon-tab-${tab.key}`}
               key={tab.key}
               role="tab"
