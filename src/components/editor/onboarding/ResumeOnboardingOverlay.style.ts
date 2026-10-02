@@ -6,7 +6,7 @@ export const useResumeOnboardingOverlayStyles = createStyles(
   ({ token, css }) => ({
     root: css`
       position: fixed;
-      z-index: 1500;
+      z-index: ${token.zIndexPopupBase - 1};
       inset: 0;
       pointer-events: none;
     `,

@@ -62,6 +62,7 @@ export function ResumeOnboardingController({
     anchorRevision,
   );
   const anchor = targetAnchor ?? ribbonTabAnchor;
+  const needsRibbonNavigation = !targetAnchor && Boolean(ribbonTabAnchor);
 
   function restoreFocus() {
     requestAnimationFrame(() => returnFocusRef.current?.focus());
@@ -141,7 +142,7 @@ export function ResumeOnboardingController({
             }
           : {}),
         onDismiss: () => void performTransition({ type: "dismiss" }),
-        onNavigate: handleNavigate,
+        ...(needsRibbonNavigation ? { onNavigate: handleNavigate } : {}),
         onPause: () => void performTransition({ type: "pause" }),
         onResume: () => void performTransition({ type: "resume" }),
         onRetry: () => setAnchorRevision((current) => current + 1),

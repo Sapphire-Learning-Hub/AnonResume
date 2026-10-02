@@ -106,7 +106,7 @@ describe("ResumeOnboardingController", () => {
     target.remove();
   });
 
-  it("navigates to the real control without changing resume content", async () => {
+  it("does not offer navigation when the real control is already visible", () => {
     const run = createRun("insert-content");
     const document = createEditorOnboardingDocument("zh-CN");
     const before = structuredClone(document);
@@ -122,11 +122,12 @@ describe("ResumeOnboardingController", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "带我前往" }));
-    expect(onSelectRibbonTab).toHaveBeenCalledWith("insert");
-    await waitFor(() => expect(target.scrollIntoView).toHaveBeenCalled());
-    expect(target).toHaveFocus();
+    expect(
+      screen.queryByRole("button", { name: /前往|功能区/ }),
+    ).not.toBeInTheDocument();
+    expect(onSelectRibbonTab).not.toHaveBeenCalled();
     expect(document).toEqual(before);
+    target.remove();
   });
 
   it("uses the ribbon tab as a visible fallback before its command is mounted", async () => {
@@ -144,7 +145,7 @@ describe("ResumeOnboardingController", () => {
     );
 
     expect(screen.queryByText("未找到当前操作位置，请重新打开引导。")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "带我前往" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开对应功能区" }));
     expect(onSelectRibbonTab).toHaveBeenCalledWith("insert");
     ribbonTab.remove();
   });

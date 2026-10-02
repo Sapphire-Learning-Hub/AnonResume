@@ -20,7 +20,7 @@ export type ResumeOnboardingOverlayState =
 export interface ResumeOnboardingOverlayActions {
   onAdvance?: () => void;
   onDismiss: () => void;
-  onNavigate: () => void;
+  onNavigate?: () => void;
   onPause: () => void;
   onResume?: () => void;
   onRetry: () => void;
@@ -36,16 +36,37 @@ function resolveCardPosition(anchor: DOMRectReadOnly | null) {
     };
   }
 
-  const cardWidth = Math.min(360, window.innerWidth - 32);
-  const left = Math.min(
-    Math.max(16, anchor.left),
-    Math.max(16, window.innerWidth - cardWidth - 16),
+  const inset = 16;
+  const gap = 14;
+  const cardWidth = Math.min(360, window.innerWidth - inset * 2);
+  const cardHeight = 280;
+  const verticalTop = Math.min(
+    Math.max(inset, anchor.top),
+    Math.max(inset, window.innerHeight - cardHeight - inset),
   );
-  const below = anchor.bottom + 14;
-  const top = below + 280 <= window.innerHeight
-    ? below
-    : Math.max(16, anchor.top - 294);
-  return { left, top };
+  const right = anchor.right + gap;
+  if (right + cardWidth <= window.innerWidth - inset) {
+    return { left: right, top: verticalTop };
+  }
+
+  const left = anchor.left - cardWidth - gap;
+  if (left >= inset) {
+    return { left, top: verticalTop };
+  }
+
+  const horizontalLeft = Math.min(
+    Math.max(inset, anchor.left),
+    Math.max(inset, window.innerWidth - cardWidth - inset),
+  );
+  const below = anchor.bottom + gap;
+  if (below + cardHeight <= window.innerHeight - inset) {
+    return { left: horizontalLeft, top: below };
+  }
+
+  return {
+    left: horizontalLeft,
+    top: Math.max(inset, anchor.top - cardHeight - gap),
+  };
 }
 
 export function ResumeOnboardingOverlay({
@@ -65,6 +86,10 @@ export function ResumeOnboardingOverlay({
   const busy = state === "busy";
   const cardPosition = resolveCardPosition(anchor);
   const padding = 6;
+  const showPrimaryActions =
+    state === "missing" ||
+    state === "paused" ||
+    Boolean(actions.onNavigate || actions.onAdvance);
 
   const overlay = (
     <div className={styles.root} data-state={state}>
@@ -125,7 +150,7 @@ export function ResumeOnboardingOverlay({
         {state === "missing" ? (
           <p className={styles.error}>{t("onboarding.error.targetMissing")}</p>
         ) : null}
-        <div className={styles.primaryActions}>
+        {showPrimaryActions ? <div className={styles.primaryActions}>
           {state === "missing" ? (
             <Button disabled={busy} onClick={actions.onRetry}>
               {t("onboarding.action.retry")}
@@ -136,9 +161,11 @@ export function ResumeOnboardingOverlay({
             </Button>
           ) : (
             <>
-              <Button disabled={busy} onClick={actions.onNavigate}>
-                {t("onboarding.action.navigate")}
-              </Button>
+              {actions.onNavigate ? (
+                <Button disabled={busy} onClick={actions.onNavigate}>
+                  {t("onboarding.action.navigate")}
+                </Button>
+              ) : null}
               {actions.onAdvance ? (
                 <Button loading={busy} type="primary" onClick={actions.onAdvance}>
                   {step.id === "output-overview"
@@ -148,7 +175,7 @@ export function ResumeOnboardingOverlay({
               ) : null}
             </>
           )}
-        </div>
+        </div> : null}
         <div className={styles.secondaryActions}>
           {state === "active" || state === "missing" ? (
             <Button disabled={busy} type="text" onClick={actions.onSkip}>
