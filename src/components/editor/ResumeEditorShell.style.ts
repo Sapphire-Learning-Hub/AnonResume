@@ -106,6 +106,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       &:hover:not(:disabled) {
         border-color: ${token.colorBorder};
         background: ${token.colorFillTertiary};
+        color: ${token.colorText};
       }
 
       &[aria-pressed="true"] {
@@ -148,6 +149,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       min-width: 66px;
       max-width: 104px;
       height: 62px;
+      min-height: 62px;
       gap: 4px;
       padding: 5px 9px;
       border-color: transparent;
@@ -161,6 +163,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       &:hover:not(:disabled) {
         border-color: ${token.colorBorder};
         background: ${token.colorFillTertiary};
+        color: ${token.colorText};
       }
 
       .anticon {

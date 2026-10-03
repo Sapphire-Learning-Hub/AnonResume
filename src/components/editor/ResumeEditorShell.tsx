@@ -2858,12 +2858,14 @@ export function ResumeEditorShell({
                 <Button
                   aria-label={t("editor.addBlankSection")}
                   className={styles.ribbonLargeButton}
+                  data-ribbon-control="large"
                   icon={<FileAddOutlined />}
                   onClick={() => store.getState().addSection()}
                 >
                   {t("editor.addBlankSection")}
                 </Button>
                 <SectionPresetCommands
+                  className={styles.ribbonLargeButton}
                   locale={locale}
                   presets={quickInsertPresets}
                   settings={document.settings}
@@ -2909,6 +2911,7 @@ export function ResumeEditorShell({
               <Button
                 aria-label={t("editor.link")}
                 className={styles.ribbonLargeButton}
+                data-ribbon-control="large"
                 disabled={textToolsDisabled}
                 icon={<LinkOutlined />}
                 onMouseDown={preventToolbarMouseDown}
@@ -2932,16 +2935,27 @@ export function ResumeEditorShell({
             key: "reorder",
             label: t("editor.ribbon.group.mode"),
             content: (
-              <Button
-                aria-label={t("editor.layoutSorting")}
-                aria-pressed={activeEditSurfaceMode === "layout"}
-                className={styles.ribbonModeButton}
-                data-onboarding-anchor="editor-reorder-content"
-                icon={<AppstoreAddOutlined />}
-                onClick={() => handleEditSurfaceModeChange("layout")}
-              >
-                {t("editor.layoutSorting")}
-              </Button>
+              <div className={styles.ribbonCommandStack}>
+                <Button
+                  aria-label={t("editor.contentEditing")}
+                  aria-pressed={activeEditSurfaceMode === "content"}
+                  className={styles.ribbonModeButton}
+                  icon={<FileTextOutlined />}
+                  onClick={() => handleEditSurfaceModeChange("content")}
+                >
+                  {t("editor.contentEditing")}
+                </Button>
+                <Button
+                  aria-label={t("editor.layoutSorting")}
+                  aria-pressed={activeEditSurfaceMode === "layout"}
+                  className={styles.ribbonModeButton}
+                  data-onboarding-anchor="editor-reorder-content"
+                  icon={<AppstoreAddOutlined />}
+                  onClick={() => handleEditSurfaceModeChange("layout")}
+                >
+                  {t("editor.layoutSorting")}
+                </Button>
+              </div>
             ),
           },
           {

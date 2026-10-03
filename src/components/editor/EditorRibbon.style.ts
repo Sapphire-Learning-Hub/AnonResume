@@ -18,8 +18,8 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
     box-shadow: 0 2px 8px color-mix(in srgb, ${token.colorText} 5%, transparent);
 
     &[data-style-scope="editor-ribbon"] {
-      && button,
-      && a.ant-btn {
+      && button:not([data-ribbon-control="large"]),
+      && a.ant-btn:not([data-ribbon-control="large"]) {
         box-sizing: border-box;
         height: ${RIBBON_CONTROL_HEIGHT}px;
         min-height: ${RIBBON_CONTROL_HEIGHT}px;

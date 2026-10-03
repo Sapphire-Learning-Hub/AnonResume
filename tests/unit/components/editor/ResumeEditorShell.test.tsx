@@ -131,6 +131,17 @@ function openRibbonTab(name: "开始" | "插入" | "设计" | "布局") {
   fireEvent.click(screen.getByRole("tab", { name }));
 }
 
+async function findDialogByContent(accessibleName: string, content: string) {
+  const matches = await screen.findAllByText(content);
+  const dialog = matches
+    .map((match) => match.closest<HTMLElement>('[role="dialog"]'))
+    .filter((candidate): candidate is HTMLElement => candidate !== null)
+    .at(-1);
+
+  expect(dialog).toHaveAccessibleName(accessibleName);
+  return dialog as HTMLElement;
+}
+
 class MockResizeObserver {
   observe() {}
 
@@ -2269,6 +2280,29 @@ describe("ResumeEditorShell", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("keeps both editor modes available from the Layout ribbon", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    openRibbonTab("布局");
+    const layoutPanel = within(screen.getByRole("tabpanel", { name: "布局" }));
+    const contentMode = layoutPanel.getByRole("button", {
+      name: spacedLabel("内容编辑"),
+    });
+    const layoutMode = layoutPanel.getByRole("button", {
+      name: spacedLabel("布局排序"),
+    });
+
+    fireEvent.click(layoutMode);
+    expect(layoutMode).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(contentMode);
+    expect(contentMode).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("updates toolbar pressed state after applying formatting", async () => {
     render(
       <ResumeEditorShell
@@ -2378,6 +2412,7 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "选择章节模板…" }));
     fireEvent.click(screen.getByRole("button", { name: "插入项目章节" }));
 
     expect(screen.getByRole("button", { name: "项目" })).toBeInTheDocument();
@@ -2397,9 +2432,13 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
+    expect(screen.queryByRole("button", { name: "预览项目章节" })).not
+      .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "选择章节模板…" }));
+    expect(await screen.findByText("章节模板")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "预览项目章节" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "项目章节模板" });
+    const dialog = await findDialogByContent("项目章节模板", "项目名称");
 
     expect(within(dialog).getByText("项目名称")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "项目" })).not.toBeInTheDocument();
@@ -2414,17 +2453,14 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "选择章节模板…" }));
     fireEvent.click(screen.getByRole("button", { name: "预览项目章节" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "项目章节模板" });
+    const dialog = await findDialogByContent("项目章节模板", "项目名称");
     fireEvent.click(
       within(dialog).getByRole("button", { name: "使用此模板" }),
     );
 
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "项目章节模板" })).not
-        .toBeInTheDocument();
-    });
     expect(screen.getByRole("button", { name: "项目" })).toBeInTheDocument();
   });
 
@@ -2437,24 +2473,20 @@ describe("ResumeEditorShell", () => {
     );
 
     openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "选择章节模板…" }));
     fireEvent.click(screen.getByRole("button", { name: "预览项目章节" }));
 
-    const projectDialog = await screen.findByRole("dialog", {
-      name: "项目章节模板",
-    });
+    const projectDialog = await findDialogByContent("项目章节模板", "项目名称");
     fireEvent.click(
       within(projectDialog).getByRole("button", { name: spacedLabel("取消") }),
     );
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "项目章节模板" })).not
-        .toBeInTheDocument();
-    });
-
+    await screen.findByRole("dialog", { name: "章节模板" });
     fireEvent.click(screen.getByRole("button", { name: "预览教育章节" }));
 
-    const educationDialog = await screen.findByRole("dialog", {
-      name: "教育章节模板",
-    });
+    const educationDialog = await findDialogByContent(
+      "教育章节模板",
+      "学校 / 专业",
+    );
 
     expect(
       await within(educationDialog).findByText("学校 / 专业"),
