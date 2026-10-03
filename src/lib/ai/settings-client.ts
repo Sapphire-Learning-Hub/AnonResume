@@ -10,6 +10,10 @@ const personalModelSchema = z.object({
   supportsToolCalls: z.boolean(),
   contextWindow: z.number().int().positive(),
   maxOutputTokens: z.number().int().positive(),
+  connectionTimeoutSeconds: z.number().int().positive(),
+  firstChunkTimeoutSeconds: z.number().int().positive(),
+  streamIdleTimeoutSeconds: z.number().int().positive(),
+  totalTimeoutSeconds: z.number().int().positive(),
 });
 
 const personalProviderSchema = z.object({
@@ -59,6 +63,10 @@ export interface PersonalAiModelInput {
   supportsToolCalls: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+  connectionTimeoutSeconds: number;
+  firstChunkTimeoutSeconds: number;
+  streamIdleTimeoutSeconds: number;
+  totalTimeoutSeconds: number;
 }
 
 async function responseJson(response: Response) {

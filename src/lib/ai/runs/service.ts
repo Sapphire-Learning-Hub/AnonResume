@@ -28,6 +28,7 @@ import {
 import { AiConversationNotFoundError } from "@/lib/ai/conversations/repository";
 import type { AiProviderAdapter, AiProviderRequest } from "@/lib/ai/providers/types";
 import { AiProviderError } from "@/lib/ai/providers/types";
+import { aiProviderTimeoutPolicyFromSeconds } from "@/lib/ai/providers/timeout-policy";
 import { createAiProposalToolDefinition } from "@/lib/ai/proposals/tool";
 import { attachAiProposalTargetHashes } from "@/lib/ai/proposals/target-hashes";
 import { decryptVersionedAiCredential } from "@/lib/ai/security/credentials";
@@ -319,6 +320,10 @@ export async function prepareAiRun(input: {
       providerModelKey: aiModels.providerModelKey,
       supportsToolCalls: aiModels.supportsToolCalls,
       maxOutputTokens: aiModels.maxOutputTokens,
+      connectionTimeoutSeconds: aiModels.connectionTimeoutSeconds,
+      firstChunkTimeoutSeconds: aiModels.firstChunkTimeoutSeconds,
+      streamIdleTimeoutSeconds: aiModels.streamIdleTimeoutSeconds,
+      totalTimeoutSeconds: aiModels.totalTimeoutSeconds,
       inputPointRate: aiModels.inputPointRate,
       cachedInputPointRate: aiModels.cachedInputPointRate,
       outputPointRate: aiModels.outputPointRate,
@@ -415,6 +420,7 @@ export async function prepareAiRun(input: {
     model: row.providerModelKey,
     messages,
     maxOutputTokens: row.maxOutputTokens,
+    timeoutPolicy: aiProviderTimeoutPolicyFromSeconds(row),
     latencyPreference: "fast",
     allowCrossOriginRedirects: row.allowCrossOriginRedirects,
     trustedEndpointHostnames: input.configuration.trustedEndpointHostnames,
@@ -734,6 +740,7 @@ function auditProviderRequest(request: AiProviderRequest) {
     model: request.model,
     messages: request.messages,
     maxOutputTokens: request.maxOutputTokens,
+    timeoutPolicy: request.timeoutPolicy,
     proposalTool: request.proposalTool,
     tools: request.tools,
     toolChoice: request.toolChoice,
@@ -1335,6 +1342,10 @@ export async function* executePreparedAiRun(
       });
     }
     const serializedError = serializeAiRunError(error);
+    const diagnostics = serializedError.diagnostics
+      && typeof serializedError.diagnostics === "object"
+      ? serializedError.diagnostics as Record<string, unknown>
+      : undefined;
     console.error("[AnonResume][AI run] execution failed", {
       runId: prepared.runId,
       providerRequestId: providerRequestId ?? null,
@@ -1343,6 +1354,14 @@ export async function* executePreparedAiRun(
       errorName: serializedError.name,
       errorCode: serializedError.code,
       message: serializedError.message,
+      timeoutPhase:
+        typeof diagnostics?.timeoutPhase === "string"
+          ? diagnostics.timeoutPhase
+          : undefined,
+      elapsedMs:
+        typeof diagnostics?.elapsedMs === "number"
+          ? diagnostics.elapsedMs
+          : undefined,
     });
     await db
       .update(aiRuns)

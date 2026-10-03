@@ -15,6 +15,13 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 import { AdminAiProviders } from "@/components/admin/ai/AdminAiProviders";
 import { AdminAiQuotas } from "@/components/admin/ai/AdminAiQuotas";
 
+const MODEL_TIMEOUTS = {
+  connectionTimeoutSeconds: 30,
+  firstChunkTimeoutSeconds: 300,
+  streamIdleTimeoutSeconds: 90,
+  totalTimeoutSeconds: 600,
+};
+
 describe("AI billing administration forms", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -87,6 +94,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "0",
               cachedInputPointRate: "0",
               outputPointRate: "0",
@@ -162,6 +170,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "0",
               cachedInputPointRate: "0",
               outputPointRate: "0",
@@ -208,6 +217,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "100",
               cachedInputPointRate: "50",
               outputPointRate: "200",
@@ -248,6 +258,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "100",
               cachedInputPointRate: "50",
               outputPointRate: "200",
@@ -268,6 +279,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "100",
               cachedInputPointRate: "50",
               outputPointRate: "200",
@@ -348,6 +360,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "120",
               cachedInputPointRate: "60",
               outputPointRate: "240",
@@ -396,6 +409,7 @@ describe("AI billing administration forms", () => {
               supportsToolCalls: false,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
               inputPointRate: "100",
               cachedInputPointRate: "50",
               outputPointRate: "200",

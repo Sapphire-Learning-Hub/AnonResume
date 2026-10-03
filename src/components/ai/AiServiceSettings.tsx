@@ -357,6 +357,14 @@ export function AiServiceSettings() {
                                         contextWindow: model.contextWindow,
                                         enabled: !model.enabled,
                                         maxOutputTokens: model.maxOutputTokens,
+                                        connectionTimeoutSeconds:
+                                          model.connectionTimeoutSeconds,
+                                        firstChunkTimeoutSeconds:
+                                          model.firstChunkTimeoutSeconds,
+                                        streamIdleTimeoutSeconds:
+                                          model.streamIdleTimeoutSeconds,
+                                        totalTimeoutSeconds:
+                                          model.totalTimeoutSeconds,
                                         modelKey: model.modelKey,
                                         modelName: model.modelName,
                                         supportsStreaming:

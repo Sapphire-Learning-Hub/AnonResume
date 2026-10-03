@@ -20,6 +20,13 @@ function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
+const MODEL_TIMEOUTS = {
+  connectionTimeoutSeconds: 30,
+  firstChunkTimeoutSeconds: 300,
+  streamIdleTimeoutSeconds: 90,
+  totalTimeoutSeconds: 600,
+};
+
 describe("AI administration service", () => {
   const marker = `ai-admin-${randomUUID()}`;
   const userId = `${marker}-user`;
@@ -285,6 +292,7 @@ describe("AI administration service", () => {
       actorUserId,
       providerId: multiProviderId,
       value: {
+        ...MODEL_TIMEOUTS,
         providerModelKey: `${marker}-first-managed-model`,
         displayName: `${marker} first managed model`,
         enabled: true,
@@ -301,6 +309,7 @@ describe("AI administration service", () => {
       actorUserId,
       providerId: multiProviderId,
       value: {
+        ...MODEL_TIMEOUTS,
         providerModelKey: `${marker}-second-managed-model`,
         displayName: `${marker} second managed model`,
         enabled: true,
@@ -321,6 +330,9 @@ describe("AI administration service", () => {
       providerId: multiProviderId,
       modelId: second.modelId,
       value: {
+        ...MODEL_TIMEOUTS,
+        firstChunkTimeoutSeconds: 420,
+        totalTimeoutSeconds: 720,
         providerModelKey: `${marker}-second-model-v2`,
         displayName: `${marker} second model v2`,
         enabled: false,
@@ -337,6 +349,8 @@ describe("AI administration service", () => {
       modelId: second.modelId,
       providerId: multiProviderId,
       rateCardVersion: 2,
+      firstChunkTimeoutSeconds: 420,
+      totalTimeoutSeconds: 720,
     });
 
     const renamed = await updateAiAdminModel({
@@ -344,6 +358,9 @@ describe("AI administration service", () => {
       providerId: multiProviderId,
       modelId: second.modelId,
       value: {
+        ...MODEL_TIMEOUTS,
+        firstChunkTimeoutSeconds: 420,
+        totalTimeoutSeconds: 720,
         providerModelKey: `${marker}-second-model-v2`,
         displayName: `${marker} renamed model`,
         enabled: false,

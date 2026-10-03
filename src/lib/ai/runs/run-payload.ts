@@ -80,6 +80,12 @@ const payloadSchema = z.object({
     model: z.string(),
     messages: z.array(providerMessageSchema),
     maxOutputTokens: z.number().int().positive(),
+    timeoutPolicy: z.object({
+      connectionTimeoutMs: z.number().int().positive(),
+      firstChunkTimeoutMs: z.number().int().positive(),
+      streamIdleTimeoutMs: z.number().int().positive(),
+      totalTimeoutMs: z.number().int().positive(),
+    }).strict().optional(),
     latencyPreference: z.enum(["fast", "provider_default"]).optional(),
     allowCrossOriginRedirects: z.boolean().optional(),
     trustedEndpointHostnames: z.array(z.string()).optional(),

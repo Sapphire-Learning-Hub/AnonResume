@@ -2,6 +2,7 @@ import {
   aiAdminModelSchema,
   aiAdminProviderSchema,
 } from "@/lib/ai/admin/validation";
+import { DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS } from "@/lib/ai/providers/timeout-policy";
 
 const provider = {
   displayName: "Example provider",
@@ -31,10 +32,32 @@ describe("AI administration validation", () => {
   });
 
   it("accepts zero rates only when the model is explicitly free", () => {
+    const result = aiAdminModelSchema.safeParse({
+      ...model,
+      freeModel: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({
+        connectionTimeoutSeconds:
+          DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.connection,
+        firstChunkTimeoutSeconds:
+          DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.firstChunk,
+        streamIdleTimeoutSeconds:
+          DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.streamIdle,
+        totalTimeoutSeconds: DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.total,
+      });
+    }
+  });
+
+  it("rejects a total timeout shorter than an execution phase", () => {
     expect(aiAdminModelSchema.safeParse({
       ...model,
       freeModel: true,
-    }).success).toBe(true);
+      firstChunkTimeoutSeconds: 120,
+      totalTimeoutSeconds: 60,
+    }).success).toBe(false);
   });
 
   it("keeps provider validation independent from model configuration", () => {

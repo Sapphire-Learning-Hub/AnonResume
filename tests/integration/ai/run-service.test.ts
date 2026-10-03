@@ -82,6 +82,10 @@ describe("AI run service", () => {
         supportsToolCalls: true,
         contextWindow: 32_000,
         maxOutputTokens: 1_024,
+        connectionTimeoutSeconds: 12,
+        firstChunkTimeoutSeconds: 240,
+        streamIdleTimeoutSeconds: 45,
+        totalTimeoutSeconds: 480,
         inputPointRate: 1_000,
         cachedInputPointRate: 100,
         outputPointRate: 5_000,
@@ -168,6 +172,12 @@ describe("AI run service", () => {
     });
     expect(prepared.request.latencyPreference).toBe("fast");
     expect(prepared.request.allowCrossOriginRedirects).toBe(true);
+    expect(prepared.request.timeoutPolicy).toEqual({
+      connectionTimeoutMs: 12_000,
+      firstChunkTimeoutMs: 240_000,
+      streamIdleTimeoutMs: 45_000,
+      totalTimeoutMs: 480_000,
+    });
     expect(prepared.request.messages[0]?.content).not.toContain("beforeHash");
     expect(prepared.request.messages[0]?.content).not.toContain("contentHash");
     const [queuedRun] = await db

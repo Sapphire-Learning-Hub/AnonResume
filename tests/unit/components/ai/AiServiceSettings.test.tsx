@@ -6,6 +6,13 @@ import {
   AiProviderEditorModal,
 } from "@/components/ai/AiServiceSettingsDialogs";
 
+const MODEL_TIMEOUTS = {
+  connectionTimeoutSeconds: 30,
+  firstChunkTimeoutSeconds: 300,
+  streamIdleTimeoutSeconds: 90,
+  totalTimeoutSeconds: 600,
+};
+
 const clientMock = vi.hoisted(() => ({
   createModel: vi.fn(),
   createProvider: vi.fn(),
@@ -83,6 +90,7 @@ describe("AiServiceSettings", () => {
               supportsToolCalls: true,
               contextWindow: 128_000,
               maxOutputTokens: 4_096,
+              ...MODEL_TIMEOUTS,
             },
             {
               id: "65dd9f6e-bbcb-4cdf-997f-731b09bc98d1",
@@ -94,6 +102,7 @@ describe("AiServiceSettings", () => {
               supportsToolCalls: false,
               contextWindow: 64_000,
               maxOutputTokens: 2_048,
+              ...MODEL_TIMEOUTS,
             },
           ],
         },
@@ -138,6 +147,7 @@ describe("AiServiceSettings", () => {
           supportsToolCalls: false,
           contextWindow: 64_000,
           maxOutputTokens: 2_048,
+          ...MODEL_TIMEOUTS,
         }}
         onCancel={vi.fn()}
         onSubmit={vi.fn()}

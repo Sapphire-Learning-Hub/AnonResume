@@ -17,6 +17,10 @@ import {
   type AiProviderErrorCode,
   type AiProviderRequest,
 } from "./types";
+import {
+  DEFAULT_AI_PROVIDER_TIMEOUT_POLICY,
+  type AiProviderTimeoutPolicy,
+} from "./timeout-policy";
 
 interface OpenAiChunk {
   id?: unknown;
@@ -45,13 +49,48 @@ interface OpenAiCompatibleAdapterOptions {
   resolver?: AiDnsResolver;
   maxRedirects?: number;
   maxResponseBytes?: number;
+  timeoutPolicy?: Partial<AiProviderTimeoutPolicy>;
+  /** @deprecated Use timeoutPolicy. */
   requestTimeoutMs?: number;
 }
 
 const MAX_DIAGNOSTIC_EXCERPT_LENGTH = 4_096;
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1_024 * 1_024;
-const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 const MAX_SSE_EVENT_BYTES = 1 * 1_024 * 1_024;
+
+type AiProviderTimeoutPhase = NonNullable<
+  NonNullable<AiProviderError["diagnostics"]>["timeoutPhase"]
+>;
+
+function timeoutError(
+  phase: AiProviderTimeoutPhase,
+  startedAt: number,
+) {
+  return new AiProviderError("timeout", {
+    elapsedMs: Date.now() - startedAt,
+    timeoutPhase: phase,
+  });
+}
+
+function resolveTimeoutPolicy(
+  requestPolicy: AiProviderTimeoutPolicy | undefined,
+  optionPolicy: Partial<AiProviderTimeoutPolicy> | undefined,
+  legacyRequestTimeoutMs: number | undefined,
+): AiProviderTimeoutPolicy {
+  const legacyPolicy = legacyRequestTimeoutMs === undefined
+    ? DEFAULT_AI_PROVIDER_TIMEOUT_POLICY
+    : {
+        connectionTimeoutMs: legacyRequestTimeoutMs,
+        firstChunkTimeoutMs: legacyRequestTimeoutMs,
+        streamIdleTimeoutMs: legacyRequestTimeoutMs,
+        totalTimeoutMs: legacyRequestTimeoutMs,
+      };
+  return {
+    ...legacyPolicy,
+    ...optionPolicy,
+    ...requestPolicy,
+  };
+}
 
 function diagnosticExcerpt(value: string) {
   return value.slice(0, MAX_DIAGNOSTIC_EXCERPT_LENGTH);
@@ -121,6 +160,11 @@ async function* readSseData(
   response: Response,
   maxResponseBytes: number,
   signal: AbortSignal,
+  timeouts: Pick<
+    AiProviderTimeoutPolicy,
+    "firstChunkTimeoutMs" | "streamIdleTimeoutMs"
+  >,
+  startedAt: number,
 ) {
   if (!response.body) throw new AiProviderError("invalid_response");
   const reader = response.body.getReader();
@@ -133,11 +177,23 @@ async function* readSseData(
   });
   const abort = () => rejectAborted?.(new AiProviderError("aborted"));
   signal.addEventListener("abort", abort, { once: true });
+  let receivedEvent = false;
+  let deadline = Date.now() + timeouts.firstChunkTimeoutMs;
 
   try {
     if (signal.aborted) abort();
     while (true) {
-      const { done, value } = await Promise.race([reader.read(), aborted]);
+      const phase = receivedEvent ? "stream_idle" : "first_chunk";
+      const remainingMs = Math.max(0, deadline - Date.now());
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(timeoutError(phase, startedAt)),
+          remainingMs,
+        );
+      });
+      const read = Promise.race([reader.read(), aborted, timedOut]);
+      const { done, value } = await read.finally(() => clearTimeout(timeout));
       receivedBytes += value?.byteLength ?? 0;
       if (receivedBytes > maxResponseBytes) {
         throw new AiProviderError("invalid_response");
@@ -156,7 +212,11 @@ async function* readSseData(
           .filter((line) => line.startsWith("data:"))
           .map((line) => line.slice(5).trimStart())
           .join("\n");
-        if (data) yield data;
+        if (data) {
+          receivedEvent = true;
+          deadline = Date.now() + timeouts.streamIdleTimeoutMs;
+          yield data;
+        }
         boundary = buffer.indexOf("\n\n");
       }
 
@@ -173,6 +233,7 @@ async function* readSseData(
     }
   } finally {
     signal.removeEventListener("abort", abort);
+    await reader.cancel().catch(() => undefined);
   }
 }
 
@@ -180,19 +241,19 @@ function createPinnedDispatcher({
   hostname,
   addresses,
   maxResponseBytes,
-  requestTimeoutMs,
+  timeoutPolicy,
 }: {
   hostname: string;
   addresses: readonly AiResolvedAddress[];
   maxResponseBytes: number;
-  requestTimeoutMs: number;
+  timeoutPolicy: AiProviderTimeoutPolicy;
 }) {
-  const connector = buildConnector({ timeout: requestTimeoutMs });
+  const connector = buildConnector({ timeout: timeoutPolicy.connectionTimeoutMs });
   let nextAddress = 0;
 
   return new Agent({
-    bodyTimeout: requestTimeoutMs,
-    headersTimeout: requestTimeoutMs,
+    bodyTimeout: 0,
+    headersTimeout: timeoutPolicy.connectionTimeoutMs,
     maxResponseSize: maxResponseBytes,
     connect(options, callback) {
       const address = addresses[nextAddress % addresses.length]!;
@@ -218,7 +279,8 @@ async function fetchWithValidatedRedirects({
   signal,
   maxRedirects,
   maxResponseBytes,
-  requestTimeoutMs,
+  timeoutPolicy,
+  startedAt,
 }: {
   fetchImpl: typeof fetch;
   trustedProxyFetchImpl: typeof fetch;
@@ -227,7 +289,8 @@ async function fetchWithValidatedRedirects({
   signal: AbortSignal;
   maxRedirects: number;
   maxResponseBytes: number;
-  requestTimeoutMs: number;
+  timeoutPolicy: AiProviderTimeoutPolicy;
+  startedAt: number;
 }) {
   const trustedProxyHostnames = new Set(request.trustedEndpointHostnames ?? []);
   const tools = request.tools ?? (request.proposalTool ? [request.proposalTool] : []);
@@ -265,7 +328,7 @@ async function fetchWithValidatedRedirects({
           hostname: target.hostname,
           addresses: resolved.addresses,
           maxResponseBytes,
-          requestTimeoutMs,
+          timeoutPolicy,
         });
     const transport = resolved.trustedProxyResolution
       ? trustedProxyFetchImpl
@@ -283,15 +346,35 @@ async function fetchWithValidatedRedirects({
     };
     if (dispatcher) fetchOptions.dispatcher = dispatcher;
     let response: Response;
+    const connectionController = new AbortController();
+    const connectionTimeout = setTimeout(
+      () => connectionController.abort(),
+      timeoutPolicy.connectionTimeoutMs,
+    );
+    const connectionSignal = AbortSignal.any([
+      signal,
+      connectionController.signal,
+    ]);
+    fetchOptions.signal = connectionSignal;
     try {
       response = await transport(target, fetchOptions);
     } catch (error) {
       await dispatcher?.destroy().catch(() => undefined);
+      if (connectionController.signal.aborted && !signal.aborted) {
+        throw timeoutError("connection", startedAt);
+      }
       if (signal.aborted) throw new AiProviderError("aborted");
-      if (error instanceof DOMException && error.name === "TimeoutError") {
-        throw new AiProviderError("timeout");
+      const code = (error as { code?: unknown }).code;
+      if (
+        (error instanceof DOMException && error.name === "TimeoutError") ||
+        code === "UND_ERR_CONNECT_TIMEOUT" ||
+        code === "UND_ERR_HEADERS_TIMEOUT"
+      ) {
+        throw timeoutError("connection", startedAt);
       }
       throw new AiProviderError("unavailable");
+    } finally {
+      clearTimeout(connectionTimeout);
     }
 
     if (response.status >= 300 && response.status < 400) {
@@ -333,12 +416,16 @@ export function createOpenAiCompatibleAdapter(
   const trustedProxyFetchImpl = options.trustedProxyFetchImpl ?? globalThis.fetch;
   const maxRedirects = options.maxRedirects ?? 2;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
-  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
   return {
     async *start(request, signal) {
       const startedAt = Date.now();
-      const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+      const timeoutPolicy = resolveTimeoutPolicy(
+        request.timeoutPolicy,
+        options.timeoutPolicy,
+        options.requestTimeoutMs,
+      );
+      const timeoutSignal = AbortSignal.timeout(timeoutPolicy.totalTimeoutMs);
       const requestSignal = AbortSignal.any([signal, timeoutSignal]);
       let dispatcher: Dispatcher | undefined;
       try {
@@ -350,7 +437,8 @@ export function createOpenAiCompatibleAdapter(
           signal: requestSignal,
           maxRedirects,
           maxResponseBytes,
-          requestTimeoutMs,
+          timeoutPolicy,
+          startedAt,
         });
         const response = fetched.response;
         dispatcher = fetched.dispatcher;
@@ -380,6 +468,8 @@ export function createOpenAiCompatibleAdapter(
         response,
         maxResponseBytes,
         requestSignal,
+        timeoutPolicy,
+        startedAt,
       )) {
         if (data === "[DONE]") break;
 
@@ -527,13 +617,16 @@ export function createOpenAiCompatibleAdapter(
       } catch (error) {
         if (error instanceof AiProviderError) {
           if (error.code === "aborted" && timeoutSignal.aborted && !signal.aborted) {
-            throw new AiProviderError("timeout");
+            throw timeoutError("total", startedAt);
           }
           throw error;
         }
         if (requestSignal.aborted) {
           throw new AiProviderError(
             timeoutSignal.aborted && !signal.aborted ? "timeout" : "aborted",
+            timeoutSignal.aborted && !signal.aborted
+              ? timeoutError("total", startedAt).diagnostics
+              : undefined,
           );
         }
         throw error;
