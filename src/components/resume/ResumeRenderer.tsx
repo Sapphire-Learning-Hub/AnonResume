@@ -59,6 +59,7 @@ import type {
   ResumeBlock,
   ResumeDocument,
   ResumeListItem,
+  ResumeSection,
   RichTextContent,
   TextBlock,
 } from "@/domain/resume/schema";
@@ -100,8 +101,7 @@ import type {
   ResumeRendererDiffPresentation,
 } from "./resume-diff-presentation";
 
-export interface ResumeRendererProps {
-  document: ResumeDocument;
+interface ResumeRendererSharedProps {
   mode: "edit" | "view" | "print";
   editSurfaceMode?: "content" | "layout";
   paginationRevision?: number;
@@ -137,6 +137,28 @@ export interface ResumeRendererProps {
   ) => void;
   onPageCountChange?: (pageCount: number) => void;
   onPaginationReadyChange?: (ready: boolean) => void;
+}
+
+interface ResumePagedSectionRendererProps extends ResumeRendererSharedProps {
+  settings: ResumeDocument["settings"];
+  sections: readonly ResumeSection[];
+}
+
+export interface ResumeSectionRendererProps
+  extends Omit<
+    ResumeRendererSharedProps,
+    | "paginationRevision"
+    | "showPrintSafeArea"
+    | "zoom"
+    | "onPageCountChange"
+    | "onPaginationReadyChange"
+  > {
+  settings: ResumeDocument["settings"];
+  sections: readonly ResumeSection[];
+}
+
+export interface ResumeRendererProps extends ResumeRendererSharedProps {
+  document: ResumeDocument;
 }
 
 type ResumeRendererStyles = ReturnType<typeof useResumeRendererStyles>["styles"];
@@ -1970,7 +1992,7 @@ function renderBlock(
 }
 
 function createSinglePageLayout(
-  sections: ResumeDocument["sections"],
+  sections: readonly ResumeSection[],
 ): ResumePageLayout[] {
   return [
     {
@@ -1982,12 +2004,12 @@ function createSinglePageLayout(
   ];
 }
 
-function getPageContentHeight(document: ResumeDocument) {
+function getPageContentHeight(settings: ResumeDocument["settings"]) {
   return Math.max(
     1,
     A4_PAGE_HEIGHT_PX -
-      document.settings.page.margin.top -
-      document.settings.page.margin.bottom,
+      settings.page.margin.top -
+      settings.page.margin.bottom,
   );
 }
 
@@ -2255,8 +2277,9 @@ function renderResumeSection(
   );
 }
 
-export function ResumeRenderer({
-  document,
+function ResumePagedSectionRenderer({
+  settings,
+  sections,
   mode,
   editSurfaceMode = "content",
   paginationRevision = 0,
@@ -2274,13 +2297,13 @@ export function ResumeRenderer({
   onTextEditorFormattingStateChange,
   onPageCountChange,
   onPaginationReadyChange,
-}: ResumeRendererProps) {
+}: ResumePagedSectionRendererProps): ReactNode {
   const { styles } = useResumeRendererStyles();
   const { t } = useI18n();
-  const styleVariables = getResumeStyleVariables(document);
+  const styleVariables = getResumeStyleVariables(settings);
   const visibleSections = useMemo(
-    () => document.sections.filter((section) => section.visible),
-    [document.sections],
+    () => sections.filter((section) => section.visible),
+    [sections],
   );
   const rootRef = useRef<HTMLDivElement>(null);
   const [activeTextEditor, setActiveTextEditor] =
@@ -2295,7 +2318,10 @@ export function ResumeRenderer({
     () => mergeRefs(captureTextEditor, textEditorRef),
     [captureTextEditor, textEditorRef],
   );
-  const pageContentHeight = useMemo(() => getPageContentHeight(document), [document]);
+  const pageContentHeight = useMemo(
+    () => getPageContentHeight(settings),
+    [settings],
+  );
   const sectionMap = useMemo(
     () => new Map(visibleSections.map((section) => [section.id, section])),
     [visibleSections],
@@ -2315,11 +2341,11 @@ export function ResumeRenderer({
         zoom,
         paginationRevision,
         pageContentHeight,
-        settings: document.settings,
+        settings,
         selection,
       }),
     [
-      document.settings,
+      settings,
       mode,
       pageContentHeight,
       paginationRevision,
@@ -2431,7 +2457,7 @@ export function ResumeRenderer({
                 pageHeight: pageContentHeight,
                 pageGap: EDIT_PAGE_GAP_PX,
                 sectionGap: DEFAULT_SECTION_GAP_PX,
-                pagePadding: document.settings.page.margin,
+                pagePadding: settings.page.margin,
                 revision: revisionKey,
               }),
             },
@@ -2441,10 +2467,10 @@ export function ResumeRenderer({
     },
     [
       activeTextEditor,
-      document,
       measurementLayout,
       pageContentHeight,
       selection,
+      settings.page.margin,
       visibleSections,
       zoom,
     ],
@@ -2525,7 +2551,7 @@ export function ResumeRenderer({
                   pageHeight={A4_PAGE_HEIGHT_PX}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGap={EDIT_PAGE_GAP_PX}
-                  pagePadding={document.settings.page.margin}
+                  pagePadding={settings.page.margin}
                   styleVariables={styleVariables as CSSProperties}
                   showPrintSafeArea={showPrintSafeArea}
                 >
@@ -2575,7 +2601,7 @@ export function ResumeRenderer({
                     </div>
                   ) : null}
                   <article
-                    className={styles.page}
+                    className={`${styles.documentSurface} ${styles.page}`}
                     style={styleVariables as CSSProperties}
                     data-resume-page="true"
                     data-resume-page-index={page.index + 1}
@@ -2619,5 +2645,101 @@ export function ResumeRenderer({
         </TextPaginationRequestContext.Provider>
       </TextEditingStateContext.Provider>
     </BadgeEditContext.Provider>
+  );
+}
+
+export function ResumeSectionRenderer({
+  settings,
+  sections,
+  mode,
+  editSurfaceMode = "content",
+  responsiveView = false,
+  diffPresentation,
+  selection,
+  onSelectBlock,
+  onChangeSectionTitle,
+  onChangeTextBlock,
+  onCommitBadgeItem,
+  onMoveBlock,
+  textEditorRef,
+  onTextEditorFormattingStateChange,
+}: ResumeSectionRendererProps): ReactNode {
+  const { styles } = useResumeRendererStyles();
+  const { t } = useI18n();
+  const styleVariables = getResumeStyleVariables(settings);
+  const visibleSections = useMemo(
+    () => sections.filter((section) => section.visible),
+    [sections],
+  );
+  const sectionLayouts = useMemo(
+    () => createSinglePageLayout(visibleSections)[0]?.sections ?? [],
+    [visibleSections],
+  );
+  const sectionMap = useMemo(
+    () => new Map(visibleSections.map((section) => [section.id, section])),
+    [visibleSections],
+  );
+
+  return (
+    <BadgeEditContext.Provider value={onCommitBadgeItem}>
+      <TextEditingStateContext.Provider value={undefined}>
+        <TextPaginationRequestContext.Provider value={undefined}>
+          <ResumeDiffProvider
+            presentation={mode === "print" ? undefined : diffPresentation}
+          >
+            <div
+              className={styles.root}
+              data-resume-mode={mode}
+              data-resume-edit-surface-mode={editSurfaceMode}
+              data-resume-responsive-view={responsiveView ? "true" : "false"}
+            >
+              <article
+                className={`${styles.documentSurface} ${styles.sectionSurface}`}
+                style={styleVariables as CSSProperties}
+                data-resume-section-surface="true"
+              >
+                <div className={styles.pageContent}>
+                  {sectionLayouts.map((sectionLayout, sectionIndex) => {
+                    const section = sectionMap.get(sectionLayout.sectionId);
+
+                    if (!section) return null;
+
+                    return renderResumeSection(section, {
+                      t,
+                      sectionLayout,
+                      mode,
+                      editSurfaceMode,
+                      selection,
+                      styles,
+                      onSelectBlock,
+                      onChangeSectionTitle,
+                      onChangeTextBlock,
+                      onMoveBlock,
+                      textEditorRef,
+                      onTextEditorFormattingStateChange,
+                      instanceKey: `section-surface-${section.id}-${sectionIndex}`,
+                      anchorId: getResumeSectionAnchorId(section.id),
+                    });
+                  })}
+                </div>
+              </article>
+            </div>
+          </ResumeDiffProvider>
+        </TextPaginationRequestContext.Provider>
+      </TextEditingStateContext.Provider>
+    </BadgeEditContext.Provider>
+  );
+}
+
+export function ResumeRenderer({
+  document,
+  ...props
+}: ResumeRendererProps): ReactNode {
+  return (
+    <ResumePagedSectionRenderer
+      {...props}
+      settings={document.settings}
+      sections={document.sections}
+    />
   );
 }

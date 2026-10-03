@@ -66,6 +66,7 @@ import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
+import { SectionPresetCommands } from "@/components/editor/section-presets/SectionPresetCommands";
 import {
   ResumeLinkDialog,
   type ResumeLinkDraft,
@@ -2855,26 +2856,21 @@ export function ResumeEditorShell({
             content: (
               <div className={styles.ribbonControlGroup}>
                 <Button
-                  aria-label={t("editor.addSection")}
+                  aria-label={t("editor.addBlankSection")}
                   className={styles.ribbonLargeButton}
+                  data-ribbon-control="large"
                   icon={<FileAddOutlined />}
                   onClick={() => store.getState().addSection()}
                 >
-                  {t("editor.addSection")}
+                  {t("editor.addBlankSection")}
                 </Button>
-                <div className={styles.ribbonPresetGrid}>
-                  {quickInsertPresets.map((preset) => (
-                    <Button
-                      aria-label={t("editor.addSectionPreset", { label: preset.label })}
-                      className={styles.ribbonSmallCommand}
-                      icon={<PlusSquareOutlined />}
-                      key={preset.id}
-                      onClick={() => store.getState().addSection(preset.id)}
-                    >
-                      {t("editor.addSectionPreset", { label: preset.label })}
-                    </Button>
-                  ))}
-                </div>
+                <SectionPresetCommands
+                  className={styles.ribbonLargeButton}
+                  locale={locale}
+                  presets={quickInsertPresets}
+                  settings={document.settings}
+                  onInsert={(presetId) => store.getState().addSection(presetId)}
+                />
               </div>
             ),
           },
@@ -2915,6 +2911,7 @@ export function ResumeEditorShell({
               <Button
                 aria-label={t("editor.link")}
                 className={styles.ribbonLargeButton}
+                data-ribbon-control="large"
                 disabled={textToolsDisabled}
                 icon={<LinkOutlined />}
                 onMouseDown={preventToolbarMouseDown}
@@ -2938,16 +2935,27 @@ export function ResumeEditorShell({
             key: "reorder",
             label: t("editor.ribbon.group.mode"),
             content: (
-              <Button
-                aria-label={t("editor.layoutSorting")}
-                aria-pressed={activeEditSurfaceMode === "layout"}
-                className={styles.ribbonModeButton}
-                data-onboarding-anchor="editor-reorder-content"
-                icon={<AppstoreAddOutlined />}
-                onClick={() => handleEditSurfaceModeChange("layout")}
-              >
-                {t("editor.layoutSorting")}
-              </Button>
+              <div className={styles.ribbonCommandStack}>
+                <Button
+                  aria-label={t("editor.contentEditing")}
+                  aria-pressed={activeEditSurfaceMode === "content"}
+                  className={styles.ribbonModeButton}
+                  icon={<FileTextOutlined />}
+                  onClick={() => handleEditSurfaceModeChange("content")}
+                >
+                  {t("editor.contentEditing")}
+                </Button>
+                <Button
+                  aria-label={t("editor.layoutSorting")}
+                  aria-pressed={activeEditSurfaceMode === "layout"}
+                  className={styles.ribbonModeButton}
+                  data-onboarding-anchor="editor-reorder-content"
+                  icon={<AppstoreAddOutlined />}
+                  onClick={() => handleEditSurfaceModeChange("layout")}
+                >
+                  {t("editor.layoutSorting")}
+                </Button>
+              </div>
             ),
           },
           {

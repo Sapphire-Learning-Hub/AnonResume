@@ -42,18 +42,16 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.92);
   `,
-  page: css`
+  documentSurface: css`
     position: relative;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     width: 210mm;
-    min-height: 297mm;
     padding: var(--resume-page-padding);
     background: var(--resume-page-background);
     font-family: var(--resume-font-family);
     color: var(--resume-text-color);
-    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
     font-size: var(--resume-base-font-size);
     line-height: var(--resume-line-height);
     overflow: hidden;
@@ -76,6 +74,14 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
     }
+  `,
+  page: css`
+    min-height: 297mm;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
+  `,
+  sectionSurface: css`
+    min-height: 0;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.13);
   `,
   pageContent: css`
     display: flex;
