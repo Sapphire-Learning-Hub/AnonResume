@@ -108,6 +108,18 @@ const modelColumns = {
   supportsToolCalls: boolean("supports_tool_calls").notNull().default(false),
   contextWindow: integer("context_window").notNull(),
   maxOutputTokens: integer("max_output_tokens").notNull(),
+  connectionTimeoutSeconds: integer("connection_timeout_seconds")
+    .notNull()
+    .default(30),
+  firstChunkTimeoutSeconds: integer("first_chunk_timeout_seconds")
+    .notNull()
+    .default(300),
+  streamIdleTimeoutSeconds: integer("stream_idle_timeout_seconds")
+    .notNull()
+    .default(90),
+  totalTimeoutSeconds: integer("total_timeout_seconds")
+    .notNull()
+    .default(600),
   inputPointRate: bigint("input_point_rate", { mode: "number" }).notNull(),
   cachedInputPointRate: bigint("cached_input_point_rate", { mode: "number" }).notNull(),
   outputPointRate: bigint("output_point_rate", { mode: "number" }).notNull(),
@@ -134,6 +146,16 @@ export const aiModels =
           sql`${table.contextWindow} > 0 AND ${table.maxOutputTokens} > 0`,
         ),
         check(
+          "ai_models_timeout_limits_check",
+          sql`${table.connectionTimeoutSeconds} BETWEEN 1 AND 120
+            AND ${table.firstChunkTimeoutSeconds} BETWEEN 1 AND 600
+            AND ${table.streamIdleTimeoutSeconds} BETWEEN 1 AND 300
+            AND ${table.totalTimeoutSeconds} BETWEEN 10 AND 1800
+            AND ${table.totalTimeoutSeconds} >= ${table.connectionTimeoutSeconds}
+            AND ${table.totalTimeoutSeconds} >= ${table.firstChunkTimeoutSeconds}
+            AND ${table.totalTimeoutSeconds} >= ${table.streamIdleTimeoutSeconds}`,
+        ),
+        check(
           "ai_models_rates_check",
           sql`${table.inputPointRate} >= 0 AND ${table.cachedInputPointRate} >= 0 AND ${table.outputPointRate} >= 0`,
         ),
@@ -151,6 +173,16 @@ export const aiModels =
         check(
           "ai_models_limits_check",
           sql`${table.contextWindow} > 0 AND ${table.maxOutputTokens} > 0`,
+        ),
+        check(
+          "ai_models_timeout_limits_check",
+          sql`${table.connectionTimeoutSeconds} BETWEEN 1 AND 120
+            AND ${table.firstChunkTimeoutSeconds} BETWEEN 1 AND 600
+            AND ${table.streamIdleTimeoutSeconds} BETWEEN 1 AND 300
+            AND ${table.totalTimeoutSeconds} BETWEEN 10 AND 1800
+            AND ${table.totalTimeoutSeconds} >= ${table.connectionTimeoutSeconds}
+            AND ${table.totalTimeoutSeconds} >= ${table.firstChunkTimeoutSeconds}
+            AND ${table.totalTimeoutSeconds} >= ${table.streamIdleTimeoutSeconds}`,
         ),
         check(
           "ai_models_rates_check",

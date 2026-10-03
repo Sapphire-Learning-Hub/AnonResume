@@ -1,4 +1,5 @@
 import type { AiProviderEvent } from "@/lib/ai/runs/stream-events";
+import type { AiProviderTimeoutPolicy } from "@/lib/ai/providers/timeout-policy";
 
 export type AiProviderMessage =
   | {
@@ -41,6 +42,7 @@ export interface AiProviderRequest {
   model: string;
   messages: AiProviderMessage[];
   maxOutputTokens: number;
+  timeoutPolicy?: AiProviderTimeoutPolicy;
   latencyPreference?: "fast" | "provider_default";
   allowCrossOriginRedirects?: boolean;
   trustedEndpointHostnames?: readonly string[];
@@ -66,10 +68,12 @@ export type AiProviderErrorCode =
   | "invalid_response";
 
 export interface AiProviderErrorDiagnostics {
+  elapsedMs?: number;
   httpStatus?: number;
   protocolViolation?: "missing_tool_payload";
   responseExcerpt?: string;
   streamEventExcerpt?: string;
+  timeoutPhase?: "connection" | "first_chunk" | "stream_idle" | "total";
 }
 
 export class AiProviderError extends Error {

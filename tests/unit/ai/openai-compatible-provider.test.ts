@@ -1,5 +1,6 @@
 import { createOpenAiCompatibleAdapter } from "@/lib/ai/providers/openai-compatible";
 import type { AiProviderRequest } from "@/lib/ai/providers/types";
+import type { AiProviderEvent } from "@/lib/ai/runs/stream-events";
 
 function streamResponse(chunks: string[], init: ResponseInit = {}) {
   const encoder = new TextEncoder();
@@ -38,7 +39,12 @@ describe("OpenAI-compatible provider adapter", () => {
     vi.useFakeTimers();
     const adapter = createOpenAiCompatibleAdapter({
       resolver: publicResolver,
-      requestTimeoutMs: 50,
+      timeoutPolicy: {
+        connectionTimeoutMs: 50,
+        firstChunkTimeoutMs: 500,
+        streamIdleTimeoutMs: 500,
+        totalTimeoutMs: 1_000,
+      },
       fetchImpl: async (_input, init) => {
         await new Promise<void>((_resolve, reject) => {
           init?.signal?.addEventListener(
@@ -60,9 +66,155 @@ describe("OpenAI-compatible provider adapter", () => {
       }
     };
     const result = consume();
+    const expectation = expect(result).rejects.toMatchObject({
+      code: "timeout",
+      diagnostics: { timeoutPhase: "connection" },
+    });
     await vi.advanceTimersByTimeAsync(51);
 
-    await expect(result).rejects.toMatchObject({ code: "timeout" });
+    await expectation;
+    vi.useRealTimers();
+  });
+
+  it("identifies a timeout while waiting for the first stream event", async () => {
+    vi.useFakeTimers();
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      timeoutPolicy: {
+        connectionTimeoutMs: 500,
+        firstChunkTimeoutMs: 50,
+        streamIdleTimeoutMs: 500,
+        totalTimeoutMs: 1_000,
+      },
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start() {
+              // Keep the response open without producing a stream event.
+            },
+          }),
+          { status: 200 },
+        ),
+    });
+
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest(),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+    const result = consume();
+    const expectation = expect(result).rejects.toMatchObject({
+      code: "timeout",
+      diagnostics: { timeoutPhase: "first_chunk" },
+    });
+    await vi.advanceTimersByTimeAsync(51);
+
+    await expectation;
+    vi.useRealTimers();
+  });
+
+  it("resets the idle deadline after each stream event", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      timeoutPolicy: {
+        connectionTimeoutMs: 100,
+        firstChunkTimeoutMs: 30,
+        streamIdleTimeoutMs: 30,
+        totalTimeoutMs: 200,
+      },
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              setTimeout(() => {
+                controller.enqueue(encoder.encode(
+                  'data: {"choices":[{"delta":{"content":"one"}}]}\n\n',
+                ));
+              }, 20);
+              setTimeout(() => {
+                controller.enqueue(encoder.encode(
+                  'data: {"choices":[{"delta":{"content":"two"}}]}\n\n',
+                ));
+              }, 45);
+            },
+          }),
+          { status: 200 },
+        ),
+    });
+    const events: AiProviderEvent[] = [];
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest(),
+        new AbortController().signal,
+      )) {
+        events.push(event);
+      }
+    };
+    const result = consume();
+    const expectation = expect(result).rejects.toMatchObject({
+      code: "timeout",
+      diagnostics: { timeoutPhase: "stream_idle" },
+    });
+
+    await vi.advanceTimersByTimeAsync(76);
+
+    await expectation;
+    expect(events).toEqual([
+      { type: "text_delta", delta: "one" },
+      { type: "text_delta", delta: "two" },
+    ]);
+    vi.useRealTimers();
+  });
+
+  it("enforces an absolute deadline even while the stream stays active", async () => {
+    vi.useFakeTimers();
+    const encoder = new TextEncoder();
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      timeoutPolicy: {
+        connectionTimeoutMs: 100,
+        firstChunkTimeoutMs: 30,
+        streamIdleTimeoutMs: 30,
+        totalTimeoutMs: 70,
+      },
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              for (const delay of [20, 40, 60, 80]) {
+                setTimeout(() => {
+                  controller.enqueue(encoder.encode(
+                    `data: {"choices":[{"delta":{"content":"${delay}"}}]}\n\n`,
+                  ));
+                }, delay);
+              }
+            },
+          }),
+          { status: 200 },
+        ),
+    });
+    const consume = async () => {
+      for await (const event of adapter.start(
+        providerRequest(),
+        new AbortController().signal,
+      )) {
+        void event;
+      }
+    };
+    const result = consume();
+    const expectation = expect(result).rejects.toMatchObject({
+      code: "timeout",
+      diagnostics: { timeoutPhase: "total" },
+    });
+
+    await vi.advanceTimersByTimeAsync(71);
+
+    await expectation;
     vi.useRealTimers();
   });
 

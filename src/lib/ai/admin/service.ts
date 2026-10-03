@@ -61,6 +61,10 @@ export interface AiAdminModelInput {
   freeModel: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+  connectionTimeoutSeconds: number;
+  firstChunkTimeoutSeconds: number;
+  streamIdleTimeoutSeconds: number;
+  totalTimeoutSeconds: number;
   inputPointRate: number;
   cachedInputPointRate: number;
   outputPointRate: number;
@@ -153,6 +157,10 @@ export async function listAiAdminProviders(request: AiAdminListRequest) {
       supportsToolCalls: aiModels.supportsToolCalls,
       contextWindow: aiModels.contextWindow,
       maxOutputTokens: aiModels.maxOutputTokens,
+      connectionTimeoutSeconds: aiModels.connectionTimeoutSeconds,
+      firstChunkTimeoutSeconds: aiModels.firstChunkTimeoutSeconds,
+      streamIdleTimeoutSeconds: aiModels.streamIdleTimeoutSeconds,
+      totalTimeoutSeconds: aiModels.totalTimeoutSeconds,
       inputPointRate: aiModels.inputPointRate,
       cachedInputPointRate: aiModels.cachedInputPointRate,
       outputPointRate: aiModels.outputPointRate,
@@ -307,6 +315,10 @@ function adminModelValues(providerId: string, value: AiAdminModelInput) {
     supportsToolCalls: value.supportsToolCalls,
     contextWindow: value.contextWindow,
     maxOutputTokens: value.maxOutputTokens,
+    connectionTimeoutSeconds: value.connectionTimeoutSeconds,
+    firstChunkTimeoutSeconds: value.firstChunkTimeoutSeconds,
+    streamIdleTimeoutSeconds: value.streamIdleTimeoutSeconds,
+    totalTimeoutSeconds: value.totalTimeoutSeconds,
     inputPointRate: value.inputPointRate,
     cachedInputPointRate: value.cachedInputPointRate,
     outputPointRate: value.outputPointRate,
@@ -324,6 +336,10 @@ function adminModelResult(model: typeof aiModels.$inferSelect) {
     supportsToolCalls: model.supportsToolCalls,
     contextWindow: model.contextWindow,
     maxOutputTokens: model.maxOutputTokens,
+    connectionTimeoutSeconds: model.connectionTimeoutSeconds,
+    firstChunkTimeoutSeconds: model.firstChunkTimeoutSeconds,
+    streamIdleTimeoutSeconds: model.streamIdleTimeoutSeconds,
+    totalTimeoutSeconds: model.totalTimeoutSeconds,
     inputPointRate: String(model.inputPointRate),
     cachedInputPointRate: String(model.cachedInputPointRate),
     outputPointRate: String(model.outputPointRate),

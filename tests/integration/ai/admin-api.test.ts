@@ -184,6 +184,13 @@ describe("AI administration routes", () => {
       cachedInputPointRate: 5,
       outputPointRate: 20,
     };
+    const parsedValue = {
+      ...value,
+      connectionTimeoutSeconds: 30,
+      firstChunkTimeoutSeconds: 300,
+      streamIdleTimeoutSeconds: 90,
+      totalTimeoutSeconds: 600,
+    };
     vi.mocked(createAiAdminModel).mockResolvedValue({ modelId: "model-1" } as never);
     vi.mocked(updateAiAdminModel).mockResolvedValue({ modelId: "model-1" } as never);
 
@@ -199,7 +206,7 @@ describe("AI administration routes", () => {
     expect(createAiAdminModel).toHaveBeenCalledWith({
       actorUserId: "admin-1",
       providerId: "provider-1",
-      value,
+      value: parsedValue,
     });
 
     const updated = await PATCH_MODEL(
@@ -215,7 +222,7 @@ describe("AI administration routes", () => {
       actorUserId: "admin-1",
       providerId: "provider-1",
       modelId: "model-1",
-      value: { ...value, displayName: "Updated model" },
+      value: { ...parsedValue, displayName: "Updated model" },
     });
     expect(requireAdminApi).toHaveBeenLastCalledWith({
       permission: "ai.providers.manage",

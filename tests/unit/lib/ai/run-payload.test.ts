@@ -23,6 +23,12 @@ describe("AI run execution payload", () => {
         model: "example-model",
         messages: [{ role: "user", content: "Improve this resume" }],
         maxOutputTokens: 1_024,
+        timeoutPolicy: {
+          connectionTimeoutMs: 12_000,
+          firstChunkTimeoutMs: 240_000,
+          streamIdleTimeoutMs: 45_000,
+          totalTimeoutMs: 480_000,
+        },
         latencyPreference: "fast",
         trustedEndpointHostnames: ["models.example.com"],
       },
@@ -71,6 +77,7 @@ describe("AI run execution payload", () => {
         apiKey: prepared.request.apiKey,
         endpoint: new URL("https://models.example.com/v1"),
         model: "example-model",
+        timeoutPolicy: prepared.request.timeoutPolicy,
       },
       rates: prepared.rates,
       resumeDocument: prepared.resumeDocument,
@@ -78,6 +85,18 @@ describe("AI run execution payload", () => {
     expect(restored.configuration.credentialsEncryptionKey).toEqual(
       encryptionKey,
     );
+  });
+
+  it("accepts queued payloads created before timeout policies were added", () => {
+    const prepared = preparedRun();
+    prepared.request.timeoutPolicy = undefined;
+    const encrypted = encryptPreparedAiRunPayload(prepared, encryptionKey);
+
+    expect(() => decryptPreparedAiRunPayload({
+      encryptedPayload: encrypted,
+      encryptionKey,
+      expectedRunId: prepared.runId,
+    })).not.toThrow();
   });
 
   it("rejects a payload attached to a different run", () => {

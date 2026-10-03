@@ -39,6 +39,10 @@ export interface PersonalAiModelInput {
   supportsToolCalls: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+  connectionTimeoutSeconds: number;
+  firstChunkTimeoutSeconds: number;
+  streamIdleTimeoutSeconds: number;
+  totalTimeoutSeconds: number;
 }
 
 type AiCredentialInput = {
@@ -122,6 +126,10 @@ export async function listPersonalAiProviders(input: {
       supportsToolCalls: aiModels.supportsToolCalls,
       contextWindow: aiModels.contextWindow,
       maxOutputTokens: aiModels.maxOutputTokens,
+      connectionTimeoutSeconds: aiModels.connectionTimeoutSeconds,
+      firstChunkTimeoutSeconds: aiModels.firstChunkTimeoutSeconds,
+      streamIdleTimeoutSeconds: aiModels.streamIdleTimeoutSeconds,
+      totalTimeoutSeconds: aiModels.totalTimeoutSeconds,
     })
     .from(aiProviderCredentials)
     .leftJoin(
@@ -163,6 +171,10 @@ export async function listPersonalAiProviders(input: {
         supportsToolCalls: boolean;
         contextWindow: number;
         maxOutputTokens: number;
+        connectionTimeoutSeconds: number;
+        firstChunkTimeoutSeconds: number;
+        streamIdleTimeoutSeconds: number;
+        totalTimeoutSeconds: number;
       }>;
     }
   >();
@@ -198,6 +210,10 @@ export async function listPersonalAiProviders(input: {
         supportsToolCalls: row.supportsToolCalls!,
         contextWindow: row.contextWindow!,
         maxOutputTokens: row.maxOutputTokens!,
+        connectionTimeoutSeconds: row.connectionTimeoutSeconds!,
+        firstChunkTimeoutSeconds: row.firstChunkTimeoutSeconds!,
+        streamIdleTimeoutSeconds: row.streamIdleTimeoutSeconds!,
+        totalTimeoutSeconds: row.totalTimeoutSeconds!,
       });
     }
   }
@@ -353,6 +369,10 @@ export async function createPersonalAiModel(input: {
       supportsToolCalls: input.value.supportsToolCalls,
       contextWindow: input.value.contextWindow,
       maxOutputTokens: input.value.maxOutputTokens,
+      connectionTimeoutSeconds: input.value.connectionTimeoutSeconds,
+      firstChunkTimeoutSeconds: input.value.firstChunkTimeoutSeconds,
+      streamIdleTimeoutSeconds: input.value.streamIdleTimeoutSeconds,
+      totalTimeoutSeconds: input.value.totalTimeoutSeconds,
       inputPointRate: 0,
       cachedInputPointRate: 0,
       outputPointRate: 0,
@@ -368,6 +388,10 @@ export async function createPersonalAiModel(input: {
     supportsToolCalls: model!.supportsToolCalls,
     contextWindow: model!.contextWindow,
     maxOutputTokens: model!.maxOutputTokens,
+    connectionTimeoutSeconds: model!.connectionTimeoutSeconds,
+    firstChunkTimeoutSeconds: model!.firstChunkTimeoutSeconds,
+    streamIdleTimeoutSeconds: model!.streamIdleTimeoutSeconds,
+    totalTimeoutSeconds: model!.totalTimeoutSeconds,
   };
 }
 
@@ -391,6 +415,10 @@ export async function updatePersonalAiModel(input: {
       supportsToolCalls: input.value.supportsToolCalls,
       contextWindow: input.value.contextWindow,
       maxOutputTokens: input.value.maxOutputTokens,
+      connectionTimeoutSeconds: input.value.connectionTimeoutSeconds,
+      firstChunkTimeoutSeconds: input.value.firstChunkTimeoutSeconds,
+      streamIdleTimeoutSeconds: input.value.streamIdleTimeoutSeconds,
+      totalTimeoutSeconds: input.value.totalTimeoutSeconds,
       updatedAt: new Date(),
     })
     .where(
@@ -412,6 +440,10 @@ export async function updatePersonalAiModel(input: {
     supportsToolCalls: model.supportsToolCalls,
     contextWindow: model.contextWindow,
     maxOutputTokens: model.maxOutputTokens,
+    connectionTimeoutSeconds: model.connectionTimeoutSeconds,
+    firstChunkTimeoutSeconds: model.firstChunkTimeoutSeconds,
+    streamIdleTimeoutSeconds: model.streamIdleTimeoutSeconds,
+    totalTimeoutSeconds: model.totalTimeoutSeconds,
   };
 }
 
@@ -460,6 +492,7 @@ export async function testPersonalAiProvider(input: {
       model: input.modelKey,
       messages: [{ role: "user", content: "Reply with OK." }],
       maxOutputTokens: 8,
+      latencyPreference: "fast",
       allowCrossOriginRedirects: provider.allowCrossOriginRedirects,
       trustedEndpointHostnames: input.trustedEndpointHostnames,
     },

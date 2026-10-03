@@ -46,6 +46,11 @@ import {
   type AiAdminModelRateHistory,
   type AiAdminModelRateVersion,
 } from "@/lib/ai/admin/client";
+import {
+  AI_PROVIDER_TIMEOUT_LIMITS_SECONDS,
+  DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS,
+  isValidAiProviderTimeoutOrder,
+} from "@/lib/ai/providers/timeout-policy";
 import type { PageResult, PaginationSearchParams } from "@/lib/shared/pagination";
 
 interface ProviderDraft {
@@ -69,6 +74,10 @@ interface ModelDraft {
   supportsToolCalls: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+  connectionTimeoutSeconds: number;
+  firstChunkTimeoutSeconds: number;
+  streamIdleTimeoutSeconds: number;
+  totalTimeoutSeconds: number;
   inputPointRate: number;
   cachedInputPointRate: number;
   outputPointRate: number;
@@ -117,6 +126,10 @@ function createModelDraft(
     supportsToolCalls: model.supportsToolCalls,
     contextWindow: model.contextWindow,
     maxOutputTokens: model.maxOutputTokens,
+    connectionTimeoutSeconds: model.connectionTimeoutSeconds,
+    firstChunkTimeoutSeconds: model.firstChunkTimeoutSeconds,
+    streamIdleTimeoutSeconds: model.streamIdleTimeoutSeconds,
+    totalTimeoutSeconds: model.totalTimeoutSeconds,
     inputPointRate: Number(model.inputPointRate),
     cachedInputPointRate: Number(model.cachedInputPointRate),
     outputPointRate: Number(model.outputPointRate),
@@ -131,6 +144,10 @@ function createModelDraft(
     supportsToolCalls: true,
     contextWindow: 128_000,
     maxOutputTokens: 4_096,
+    connectionTimeoutSeconds: DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.connection,
+    firstChunkTimeoutSeconds: DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.firstChunk,
+    streamIdleTimeoutSeconds: DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.streamIdle,
+    totalTimeoutSeconds: DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.total,
     inputPointRate: 0,
     cachedInputPointRate: 0,
     outputPointRate: 0,
@@ -208,6 +225,10 @@ export function AdminAiProviders({
       toast.error(t("ai.meteredRateRequired"));
       return;
     }
+    if (!isValidAiProviderTimeoutOrder(draft)) {
+      toast.error(t("ai.totalTimeoutTooShort"));
+      return;
+    }
     const basePath = `/api/manage/ai/providers/${encodeURIComponent(draft.providerId)}/models`;
     const response = await runSensitive(() => fetch(
       draft.modelId ? `${basePath}/${encodeURIComponent(draft.modelId)}` : basePath,
@@ -222,6 +243,10 @@ export function AdminAiProviders({
           freeModel: draft.freeModel,
           contextWindow: draft.contextWindow,
           maxOutputTokens: draft.maxOutputTokens,
+          connectionTimeoutSeconds: draft.connectionTimeoutSeconds,
+          firstChunkTimeoutSeconds: draft.firstChunkTimeoutSeconds,
+          streamIdleTimeoutSeconds: draft.streamIdleTimeoutSeconds,
+          totalTimeoutSeconds: draft.totalTimeoutSeconds,
           inputPointRate: draft.inputPointRate,
           cachedInputPointRate: draft.cachedInputPointRate,
           outputPointRate: draft.outputPointRate,
@@ -281,6 +306,10 @@ export function AdminAiProviders({
           freeModel: isFreeModel(model),
           contextWindow: model.contextWindow,
           maxOutputTokens: model.maxOutputTokens,
+          connectionTimeoutSeconds: model.connectionTimeoutSeconds,
+          firstChunkTimeoutSeconds: model.firstChunkTimeoutSeconds,
+          streamIdleTimeoutSeconds: model.streamIdleTimeoutSeconds,
+          totalTimeoutSeconds: model.totalTimeoutSeconds,
           inputPointRate: Number(model.inputPointRate),
           cachedInputPointRate: Number(model.cachedInputPointRate),
           outputPointRate: Number(model.outputPointRate),
@@ -614,7 +643,7 @@ export function AdminAiProviders({
         onOk={() => void saveModel()}
         open={Boolean(modelDraft) && !reauthOpen}
         title={modelDraft?.modelId ? t("ai.editModel") : t("ai.addModel")}
-        width={680}
+        width={760}
       >
         {modelDraft ? (
           <Form className="admin-dialog-form admin-ai-provider-form" layout="vertical">
@@ -633,6 +662,55 @@ export function AdminAiProviders({
               </Form.Item>
               <Form.Item label={t("ai.maxOutputTokens")}>
                 <InputNumber min={1} onChange={(value) => setModelDraft({ ...modelDraft, maxOutputTokens: asNumber(value, 1) })} value={modelDraft.maxOutputTokens} />
+              </Form.Item>
+            </div>
+            <p className="admin-dialog-description">
+              {t("ai.timeoutSettings")}
+            </p>
+            <div className="admin-ai-provider-form__grid">
+              <Form.Item label={t("ai.connectionTimeoutSeconds")}>
+                <InputNumber
+                  max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.connection.max}
+                  min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.connection.min}
+                  onChange={(value) => setModelDraft({
+                    ...modelDraft,
+                    connectionTimeoutSeconds: asNumber(value, 1),
+                  })}
+                  value={modelDraft.connectionTimeoutSeconds}
+                />
+              </Form.Item>
+              <Form.Item label={t("ai.firstChunkTimeoutSeconds")}>
+                <InputNumber
+                  max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.firstChunk.max}
+                  min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.firstChunk.min}
+                  onChange={(value) => setModelDraft({
+                    ...modelDraft,
+                    firstChunkTimeoutSeconds: asNumber(value, 1),
+                  })}
+                  value={modelDraft.firstChunkTimeoutSeconds}
+                />
+              </Form.Item>
+              <Form.Item label={t("ai.streamIdleTimeoutSeconds")}>
+                <InputNumber
+                  max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.streamIdle.max}
+                  min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.streamIdle.min}
+                  onChange={(value) => setModelDraft({
+                    ...modelDraft,
+                    streamIdleTimeoutSeconds: asNumber(value, 1),
+                  })}
+                  value={modelDraft.streamIdleTimeoutSeconds}
+                />
+              </Form.Item>
+              <Form.Item label={t("ai.totalTimeoutSeconds")}>
+                <InputNumber
+                  max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.total.max}
+                  min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.total.min}
+                  onChange={(value) => setModelDraft({
+                    ...modelDraft,
+                    totalTimeoutSeconds: asNumber(value, 10),
+                  })}
+                  value={modelDraft.totalTimeoutSeconds}
+                />
               </Form.Item>
             </div>
             <div className="admin-ai-provider-form__billing">

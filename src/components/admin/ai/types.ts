@@ -7,6 +7,10 @@ export interface ProviderModelItem {
   supportsToolCalls: boolean;
   contextWindow: number;
   maxOutputTokens: number;
+  connectionTimeoutSeconds: number;
+  firstChunkTimeoutSeconds: number;
+  streamIdleTimeoutSeconds: number;
+  totalTimeoutSeconds: number;
   inputPointRate: string;
   cachedInputPointRate: string;
   outputPointRate: string;

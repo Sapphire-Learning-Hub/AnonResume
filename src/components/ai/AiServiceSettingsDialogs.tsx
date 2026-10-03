@@ -20,6 +20,10 @@ import type {
   PersonalAiProvider,
   PersonalAiProviderInput,
 } from "@/lib/ai/settings-client";
+import {
+  AI_PROVIDER_TIMEOUT_LIMITS_SECONDS,
+  DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS,
+} from "@/lib/ai/providers/timeout-policy";
 
 export function AiProviderEditorModal({
   busy,
@@ -173,6 +177,18 @@ export function AiModelEditorModal({
         initialValues={{
           contextWindow: model?.contextWindow ?? 128_000,
           maxOutputTokens: model?.maxOutputTokens ?? 4_096,
+          connectionTimeoutSeconds:
+            model?.connectionTimeoutSeconds
+            ?? DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.connection,
+          firstChunkTimeoutSeconds:
+            model?.firstChunkTimeoutSeconds
+            ?? DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.firstChunk,
+          streamIdleTimeoutSeconds:
+            model?.streamIdleTimeoutSeconds
+            ?? DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.streamIdle,
+          totalTimeoutSeconds:
+            model?.totalTimeoutSeconds
+            ?? DEFAULT_AI_PROVIDER_TIMEOUT_SECONDS.total,
           modelKey: model?.modelKey ?? "",
           modelName: model?.modelName ?? "",
           supportsStreaming: model?.supportsStreaming ?? true,
@@ -215,6 +231,83 @@ export function AiModelEditorModal({
             rules={[{ required: true }]}
           >
             <InputNumber min={1} precision={0} style={{ width: "100%" }} />
+          </Form.Item>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 16,
+          }}
+        >
+          <Form.Item
+            label={t("ai.settings.connectionTimeoutSeconds")}
+            name="connectionTimeoutSeconds"
+            rules={[{ required: true }]}
+          >
+            <InputNumber
+              max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.connection.max}
+              min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.connection.min}
+              precision={0}
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+          <Form.Item
+            label={t("ai.settings.firstChunkTimeoutSeconds")}
+            name="firstChunkTimeoutSeconds"
+            rules={[{ required: true }]}
+          >
+            <InputNumber
+              max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.firstChunk.max}
+              min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.firstChunk.min}
+              precision={0}
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+          <Form.Item
+            label={t("ai.settings.streamIdleTimeoutSeconds")}
+            name="streamIdleTimeoutSeconds"
+            rules={[{ required: true }]}
+          >
+            <InputNumber
+              max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.streamIdle.max}
+              min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.streamIdle.min}
+              precision={0}
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+          <Form.Item
+            dependencies={[
+              "connectionTimeoutSeconds",
+              "firstChunkTimeoutSeconds",
+              "streamIdleTimeoutSeconds",
+            ]}
+            label={t("ai.settings.totalTimeoutSeconds")}
+            name="totalTimeoutSeconds"
+            rules={[
+              { required: true },
+              ({ getFieldValue }) => ({
+                validator(_, value: number | null) {
+                  const phaseMaximum = Math.max(
+                    Number(getFieldValue("connectionTimeoutSeconds") ?? 0),
+                    Number(getFieldValue("firstChunkTimeoutSeconds") ?? 0),
+                    Number(getFieldValue("streamIdleTimeoutSeconds") ?? 0),
+                  );
+                  return value !== null && value >= phaseMaximum
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(t("ai.settings.totalTimeoutTooShort")),
+                      );
+                },
+              }),
+            ]}
+          >
+            <InputNumber
+              max={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.total.max}
+              min={AI_PROVIDER_TIMEOUT_LIMITS_SECONDS.total.min}
+              precision={0}
+              style={{ width: "100%" }}
+            />
           </Form.Item>
         </div>
         <Form.Item
