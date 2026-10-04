@@ -46,6 +46,7 @@ export const ADMIN_SYSTEM_ROLE_KEYS = [
   "content_reviewer",
   "system_operator",
   "ai_service_manager",
+  "platform_configuration_manager",
 ] as const;
 
 export type AdminSystemRoleKey = (typeof ADMIN_SYSTEM_ROLE_KEYS)[number];
@@ -103,7 +104,7 @@ export const ADMIN_SYSTEM_ROLES = {
   },
   system_operator: {
     name: "系统运维员",
-    description: "管理公告、AI 模型服务与平台配置，查看系统、AI 用量与导出队列状态。",
+    description: "管理公告与 AI 模型服务，查看系统、AI 用量、导出队列及平台配置历史。",
     permissions: [
       "overview.read",
       "exports.read",
@@ -116,10 +117,7 @@ export const ADMIN_SYSTEM_ROLES = {
       "audit.read",
       "system.read",
       "configuration.read",
-      "configuration.edit",
-      "configuration.publish",
       "configuration.history",
-      "configuration.rollback",
     ],
   },
   ai_service_manager: {
@@ -130,6 +128,20 @@ export const ADMIN_SYSTEM_ROLES = {
       "ai.providers.manage",
       "ai.quotas.manage",
       "ai.usage.read",
+    ],
+  },
+  platform_configuration_manager: {
+    name: "平台配置管理员",
+    description: "查看、编辑、发布和回滚平台配置，并查看系统状态与相关审计记录。",
+    permissions: [
+      "overview.read",
+      "audit.read",
+      "system.read",
+      "configuration.read",
+      "configuration.edit",
+      "configuration.publish",
+      "configuration.history",
+      "configuration.rollback",
     ],
   },
 } as const satisfies Record<AdminSystemRoleKey, AdminSystemRoleDefinition>;
