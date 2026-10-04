@@ -48,6 +48,25 @@ describe("TiptapTextBlockEditor", () => {
     vi.unstubAllGlobals();
   });
 
+  it("commits text cleanup when the editor loses focus", async () => {
+    const onBlur = vi.fn();
+
+    render(
+      <TiptapTextBlockEditor
+        content={initialContent}
+        onBlur={onBlur}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
+
+    fireEvent.focus(editor);
+    fireEvent.blur(editor);
+
+    expect(onBlur).toHaveBeenCalledOnce();
+  });
+
   it("shows inline formatting controls for a selected text range", async () => {
     const ref = createRef<TiptapTextBlockEditorHandle>();
 

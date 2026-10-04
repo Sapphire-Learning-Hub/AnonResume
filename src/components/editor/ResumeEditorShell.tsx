@@ -3366,9 +3366,14 @@ export function ResumeEditorShell({
                     onChangeSectionTitle={(params) =>
                       store.getState().updateSectionTitle(params)
                     }
-                    onChangeTextBlock={(params) =>
-                      store.getState().updateTextBlockContent(params)
-                    }
+                    onChangeTextBlock={(params) => {
+                      if (params.commit) {
+                        store.getState().commitTextBlock(params);
+                        return;
+                      }
+
+                      store.getState().updateTextBlockContent(params);
+                    }}
                     onCommitBadgeItem={commitBadgeItem}
                     onMoveBlock={(params) => store.getState().moveBlock(params)}
                     textEditorRef={textEditorRef}

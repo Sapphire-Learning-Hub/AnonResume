@@ -8,6 +8,64 @@ import { validateResumeDocument } from "@/domain/resume/validation";
 import { createResumeEditorStore } from "@/stores/resume-editor";
 
 describe("createResumeEditorStore", () => {
+  it("keeps an empty text block while editing and prunes its empty parent on commit", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0]!;
+    section.blocks = [
+      {
+        id: "emptyable-row",
+        type: "row",
+        children: [
+          {
+            id: "already-empty-text",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [{ type: "paragraph", content: [] }],
+            },
+          },
+          {
+            id: "only-text",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Clear me" }],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+    const target = {
+      sectionId: section.id,
+      blockPath: ["emptyable-row", "only-text"],
+    };
+
+    store.getState().updateTextBlockContent({
+      ...target,
+      content: {
+        type: "doc",
+        content: [{ type: "paragraph", content: [] }],
+      },
+    });
+
+    expect(store.getState().document.sections[0]?.blocks).toHaveLength(1);
+
+    store.getState().commitTextBlock(target);
+
+    expect(store.getState().document.sections[0]?.blocks).toEqual([]);
+  });
+
   it("applies selected AI changes as one undoable document transaction", () => {
     const document = createDefaultResumeDocument();
     const section = document.sections[0]!;

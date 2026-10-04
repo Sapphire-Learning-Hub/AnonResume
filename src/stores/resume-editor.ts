@@ -46,6 +46,7 @@ import {
   updateTextBlockInDocument,
   type ResumeBlockSettings,
 } from "@/domain/resume/operations";
+import { isRichTextContentEmpty } from "@/domain/resume/rich-text";
 import type {
   BadgeBlock,
   ResumeDocument,
@@ -112,6 +113,10 @@ export interface ResumeEditorActions {
     sectionId: string;
     blockPath: string[];
     content: RichTextContent;
+  }) => void;
+  commitTextBlock: (params: {
+    sectionId: string;
+    blockPath: string[];
   }) => void;
   updateSectionTitle: (params: {
     sectionId: string;
@@ -331,6 +336,18 @@ export function createResumeEditorStore({
           content,
         }),
       );
+    },
+    commitTextBlock: ({ sectionId, blockPath }) => {
+      const section = get().document.sections.find(
+        (item) => item.id === sectionId,
+      );
+      const block = section
+        ? findBlockByPath(section.blocks, blockPath)
+        : undefined;
+
+      if (block?.type === "text" && isRichTextContentEmpty(block.content)) {
+        get().deleteBlock({ sectionId, blockPath });
+      }
     },
     updateSectionTitle: ({ sectionId, content }) => {
       get().updateDocument((document) =>

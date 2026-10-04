@@ -7,6 +7,7 @@ import {
   getBlockSiblingPosition as getBlockSiblingPositionInBlocks,
   isContainerBlock,
   moveTreeItem,
+  normalizeResumeDocumentStructure,
   updateListItemChildren,
 } from "./block-tree";
 import type {
@@ -370,7 +371,7 @@ export function removeBlockFromDocument({
   sectionId: string;
   blockPath: string[];
 }): ResumeDocument {
-  return {
+  return normalizeResumeDocumentStructure({
     ...document,
     sections: document.sections.map((section) => {
       if (section.id !== sectionId) {
@@ -383,7 +384,7 @@ export function removeBlockFromDocument({
         ? section
         : { ...section, blocks: nextBlocks };
     }),
-  };
+  });
 }
 
 function removeListItemAtPathInBlocks(
