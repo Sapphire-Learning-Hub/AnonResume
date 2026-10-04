@@ -1,7 +1,7 @@
 import {
   Agent,
   buildConnector,
-  fetch as undiciFetch,
+  request as undiciRequest,
   type Dispatcher,
 } from "undici/index.js";
 
@@ -43,8 +43,27 @@ interface OpenAiChunk {
   };
 }
 
+type UndiciRequestOptions = NonNullable<Parameters<typeof undiciRequest>[1]>;
+
+interface PinnedResponseBody extends AsyncIterable<Uint8Array> {
+  destroy(): unknown;
+  text(): Promise<string>;
+}
+
+interface PinnedRequestResponse {
+  statusCode: number;
+  headers: Record<string, string | string[] | undefined>;
+  body: PinnedResponseBody;
+}
+
+type PinnedRequestImpl = (
+  target: URL,
+  options: UndiciRequestOptions,
+) => Promise<PinnedRequestResponse>;
+
 interface OpenAiCompatibleAdapterOptions {
   fetchImpl?: typeof fetch;
+  requestImpl?: PinnedRequestImpl;
   trustedProxyFetchImpl?: typeof fetch;
   resolver?: AiDnsResolver;
   maxRedirects?: number;
@@ -61,6 +80,18 @@ const MAX_SSE_EVENT_BYTES = 1 * 1_024 * 1_024;
 type AiProviderTimeoutPhase = NonNullable<
   NonNullable<AiProviderError["diagnostics"]>["timeoutPhase"]
 >;
+
+interface ProviderResponseReader {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  cancel(): Promise<void>;
+}
+
+interface ProviderHttpResponse {
+  status: number;
+  headers: Headers;
+  reader: ProviderResponseReader | null;
+  text(): Promise<string>;
+}
 
 function timeoutError(
   phase: AiProviderTimeoutPhase,
@@ -157,7 +188,7 @@ function serializeMessages(request: AiProviderRequest) {
 }
 
 async function* readSseData(
-  response: Response,
+  response: ProviderHttpResponse,
   maxResponseBytes: number,
   signal: AbortSignal,
   timeouts: Pick<
@@ -166,8 +197,8 @@ async function* readSseData(
   >,
   startedAt: number,
 ) {
-  if (!response.body) throw new AiProviderError("invalid_response");
-  const reader = response.body.getReader();
+  if (!response.reader) throw new AiProviderError("invalid_response");
+  const reader = response.reader;
   const decoder = new TextDecoder();
   let buffer = "";
   let receivedBytes = 0;
@@ -237,6 +268,67 @@ async function* readSseData(
   }
 }
 
+function normalizeFetchResponse(response: Response): ProviderHttpResponse {
+  const body = response.body;
+  let streamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  return {
+    status: response.status,
+    headers: response.headers,
+    reader: body
+      ? {
+          read: () => {
+            streamReader ??= body.getReader();
+            return streamReader.read();
+          },
+          cancel: async () => {
+            if (streamReader) await streamReader.cancel();
+            else await body.cancel();
+          },
+        }
+      : null,
+    text: () => response.text(),
+  };
+}
+
+function normalizeUndiciHeaders(
+  values: Record<string, string | string[] | undefined>,
+) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(values)) {
+    if (Array.isArray(value)) {
+      for (const item of value) headers.append(name, item);
+    } else if (value !== undefined) {
+      headers.append(name, value);
+    }
+  }
+  return headers;
+}
+
+function normalizeUndiciResponse(
+  response: PinnedRequestResponse,
+): ProviderHttpResponse {
+  const iterator = response.body[Symbol.asyncIterator]();
+  return {
+    status: response.statusCode,
+    headers: normalizeUndiciHeaders(response.headers),
+    reader: {
+      async read() {
+        const result = await iterator.next();
+        return {
+          done: Boolean(result.done),
+          ...(result.value === undefined
+            ? {}
+            : { value: new Uint8Array(result.value) }),
+        };
+      },
+      async cancel() {
+        response.body.destroy();
+      },
+    },
+    text: () => response.body.text(),
+  };
+}
+
 function createPinnedDispatcher({
   hostname,
   addresses,
@@ -273,6 +365,8 @@ function createPinnedDispatcher({
 
 async function fetchWithValidatedRedirects({
   fetchImpl,
+  requestImpl,
+  useRequestTransport,
   trustedProxyFetchImpl,
   resolver,
   request,
@@ -282,7 +376,9 @@ async function fetchWithValidatedRedirects({
   timeoutPolicy,
   startedAt,
 }: {
-  fetchImpl: typeof fetch;
+  fetchImpl?: typeof fetch;
+  requestImpl: PinnedRequestImpl;
+  useRequestTransport: boolean;
   trustedProxyFetchImpl: typeof fetch;
   resolver?: AiDnsResolver;
   request: AiProviderRequest;
@@ -345,7 +441,7 @@ async function fetchWithValidatedRedirects({
       signal,
     };
     if (dispatcher) fetchOptions.dispatcher = dispatcher;
-    let response: Response;
+    let response: ProviderHttpResponse;
     const connectionController = new AbortController();
     const connectionTimeout = setTimeout(
       () => connectionController.abort(),
@@ -357,7 +453,20 @@ async function fetchWithValidatedRedirects({
     ]);
     fetchOptions.signal = connectionSignal;
     try {
-      response = await transport(target, fetchOptions);
+      if (!resolved.trustedProxyResolution && useRequestTransport) {
+        response = normalizeUndiciResponse(await requestImpl(target, {
+          method: "POST",
+          headers: fetchOptions.headers as Record<string, string>,
+          body,
+          dispatcher,
+          headersTimeout: timeoutPolicy.connectionTimeoutMs,
+          bodyTimeout: 0,
+          signal: connectionSignal,
+        }));
+      } else {
+        if (!transport) throw new Error("AI provider transport is unavailable");
+        response = normalizeFetchResponse(await transport(target, fetchOptions));
+      }
     } catch (error) {
       await dispatcher?.destroy().catch(() => undefined);
       if (connectionController.signal.aborted && !signal.aborted) {
@@ -387,11 +496,11 @@ async function fetchWithValidatedRedirects({
       try {
         redirectTarget = new URL(location, target);
       } catch {
-        await response.body?.cancel().catch(() => undefined);
+        await response.reader?.cancel().catch(() => undefined);
         await dispatcher?.destroy().catch(() => undefined);
         throw new AiProviderError("invalid_response");
       }
-      await response.body?.cancel().catch(() => undefined);
+      await response.reader?.cancel().catch(() => undefined);
       await dispatcher?.destroy().catch(() => undefined);
       if (
         redirectTarget.origin !== target.origin &&
@@ -412,7 +521,10 @@ async function fetchWithValidatedRedirects({
 export function createOpenAiCompatibleAdapter(
   options: OpenAiCompatibleAdapterOptions = {},
 ): AiProviderAdapter {
-  const fetchImpl = options.fetchImpl ?? (undiciFetch as unknown as typeof fetch);
+  const fetchImpl = options.fetchImpl;
+  const requestImpl: PinnedRequestImpl = options.requestImpl ?? undiciRequest;
+  const useRequestTransport =
+    options.requestImpl !== undefined || options.fetchImpl === undefined;
   const trustedProxyFetchImpl = options.trustedProxyFetchImpl ?? globalThis.fetch;
   const maxRedirects = options.maxRedirects ?? 2;
   const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
@@ -431,6 +543,8 @@ export function createOpenAiCompatibleAdapter(
       try {
         const fetched = await fetchWithValidatedRedirects({
           fetchImpl,
+          requestImpl,
+          useRequestTransport,
           trustedProxyFetchImpl,
           resolver: options.resolver,
           request,
@@ -442,7 +556,7 @@ export function createOpenAiCompatibleAdapter(
         });
         const response = fetched.response;
         dispatcher = fetched.dispatcher;
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           throw new AiProviderError(providerErrorCode(response.status), {
             httpStatus: response.status,
             responseExcerpt: diagnosticExcerpt(await response.text()),
