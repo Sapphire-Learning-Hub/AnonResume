@@ -69,7 +69,7 @@ describe("database migrations", () => {
     ]);
   });
 
-  it("seeds the five immutable system roles", async () => {
+  it("seeds the six immutable system roles", async () => {
     const schemaName = getDatabaseSchemaName();
     const result = await getDatabasePool().query<{
       createdByUserId: string | null;
@@ -85,6 +85,7 @@ describe("database migrations", () => {
     expect(result.rows).toEqual([
       { createdByUserId: null, systemKey: "ai_service_manager" },
       { createdByUserId: null, systemKey: "content_reviewer" },
+      { createdByUserId: null, systemKey: "platform_configuration_manager" },
       { createdByUserId: null, systemKey: "read_only_auditor" },
       { createdByUserId: null, systemKey: "support_operator" },
       { createdByUserId: null, systemKey: "system_operator" },
@@ -157,6 +158,55 @@ describe("database migrations", () => {
         "announcements.manage",
       ]),
     );
+  });
+
+  it("separates platform configuration management from system operations", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      permissions: string[];
+      systemKey: string;
+    }>(
+      `SELECT system_key AS "systemKey", permissions
+         FROM "${schemaName}".admin_roles
+        WHERE system_key IN (
+          'read_only_auditor',
+          'system_operator',
+          'platform_configuration_manager'
+        )`,
+    );
+    const permissionsByRole = Object.fromEntries(
+      result.rows.map((role) => [role.systemKey, role.permissions]),
+    );
+
+    expect(permissionsByRole.read_only_auditor).toEqual(
+      expect.arrayContaining([
+        "configuration.read",
+        "configuration.history",
+      ]),
+    );
+    expect(permissionsByRole.system_operator).toEqual(
+      expect.arrayContaining([
+        "configuration.read",
+        "configuration.history",
+      ]),
+    );
+    expect(permissionsByRole.system_operator).not.toEqual(
+      expect.arrayContaining([
+        "configuration.edit",
+        "configuration.publish",
+        "configuration.rollback",
+      ]),
+    );
+    expect(permissionsByRole.platform_configuration_manager).toEqual([
+      "overview.read",
+      "audit.read",
+      "system.read",
+      "configuration.read",
+      "configuration.edit",
+      "configuration.publish",
+      "configuration.history",
+      "configuration.rollback",
+    ]);
   });
 
   it("adds the Better Auth account issuer required by credential sign-up", async () => {

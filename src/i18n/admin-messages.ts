@@ -263,9 +263,11 @@ const zhCN = {
   "systemRole.content_reviewer.name": "内容审核员",
   "systemRole.content_reviewer.description": "查看简历元数据和正文，并可撤回已公开简历。",
   "systemRole.system_operator.name": "系统运维员",
-  "systemRole.system_operator.description": "管理公告、AI 模型服务与平台配置，查看系统、AI 用量与导出队列状态。",
+  "systemRole.system_operator.description": "管理公告与 AI 模型服务，查看系统、AI 用量、导出队列及平台配置历史。",
   "systemRole.ai_service_manager.name": "AI 服务管理员",
   "systemRole.ai_service_manager.description": "管理 AI 模型服务、用户额度与结算，并查看 AI 用量，不读取敏感请求内容。",
+  "systemRole.platform_configuration_manager.name": "平台配置管理员",
+  "systemRole.platform_configuration_manager.description": "查看、编辑、发布和回滚平台配置，并查看系统状态与相关审计记录。",
   "ai.providers": "模型服务",
   "ai.addProvider": "添加模型服务",
   "ai.editProvider": "编辑模型服务",
@@ -772,6 +774,10 @@ export const adminSystemRoleMessageKeys: Record<
     name: "systemRole.ai_service_manager.name",
     description: "systemRole.ai_service_manager.description",
   },
+  platform_configuration_manager: {
+    name: "systemRole.platform_configuration_manager.name",
+    description: "systemRole.platform_configuration_manager.description",
+  },
 };
 
 const enUS: AdminMessages = {
@@ -1036,9 +1042,11 @@ const enUS: AdminMessages = {
   "systemRole.content_reviewer.name": "Content reviewer",
   "systemRole.content_reviewer.description": "View resume metadata and content, and unpublish public resumes.",
   "systemRole.system_operator.name": "System operator",
-  "systemRole.system_operator.description": "Manage announcements, AI model providers, and platform configuration, and view system, AI usage, and export queue status.",
+  "systemRole.system_operator.description": "Manage announcements and AI model providers, and view system, AI usage, export queue, and platform configuration history.",
   "systemRole.ai_service_manager.name": "AI service administrator",
   "systemRole.ai_service_manager.description": "Manage AI model providers, user quotas, and settlements, and view AI usage without accessing sensitive request content.",
+  "systemRole.platform_configuration_manager.name": "Platform configuration administrator",
+  "systemRole.platform_configuration_manager.description": "View, edit, publish, and roll back platform configuration, with access to system status and related audit records.",
   "ai.providers": "Model providers",
   "ai.addProvider": "Add provider",
   "ai.editProvider": "Edit provider",

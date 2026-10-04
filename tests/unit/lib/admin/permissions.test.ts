@@ -49,13 +49,14 @@ describe("admin permission catalog", () => {
     expect(normalizeAdminPermissions(null)).toEqual([]);
   });
 
-  it("defines five immutable system roles with least-privilege AI access", () => {
+  it("defines six immutable system roles with least-privilege access", () => {
     expect(Object.keys(ADMIN_SYSTEM_ROLES)).toEqual([
       "read_only_auditor",
       "support_operator",
       "content_reviewer",
       "system_operator",
       "ai_service_manager",
+      "platform_configuration_manager",
     ]);
 
     for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
@@ -101,9 +102,13 @@ describe("admin permission catalog", () => {
         "ai.providers.manage",
         "ai.usage.read",
         "configuration.read",
+        "configuration.history",
+      ]),
+    );
+    expect(ADMIN_SYSTEM_ROLES.system_operator.permissions).not.toEqual(
+      expect.arrayContaining([
         "configuration.edit",
         "configuration.publish",
-        "configuration.history",
         "configuration.rollback",
       ]),
     );
@@ -115,6 +120,18 @@ describe("admin permission catalog", () => {
       "ai.providers.manage",
       "ai.quotas.manage",
       "ai.usage.read",
+    ]);
+    expect(
+      ADMIN_SYSTEM_ROLES.platform_configuration_manager.permissions,
+    ).toEqual([
+      "overview.read",
+      "audit.read",
+      "system.read",
+      "configuration.read",
+      "configuration.edit",
+      "configuration.publish",
+      "configuration.history",
+      "configuration.rollback",
     ]);
     for (const role of Object.values(ADMIN_SYSTEM_ROLES)) {
       expect(role.permissions).not.toContain("ai.audit.sensitive.read");

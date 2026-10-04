@@ -422,7 +422,7 @@ export const adminRoles =
         uniqueIndex("admin_roles_system_key_unique").on(table.systemKey),
         check(
           "admin_roles_system_key_check",
-          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator', 'ai_service_manager')`,
+          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator', 'ai_service_manager', 'platform_configuration_manager')`,
         ),
         check(
           "admin_roles_origin_check",
@@ -436,7 +436,7 @@ export const adminRoles =
         uniqueIndex("admin_roles_system_key_unique").on(table.systemKey),
         check(
           "admin_roles_system_key_check",
-          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator', 'ai_service_manager')`,
+          sql`${table.systemKey} IS NULL OR ${table.systemKey} IN ('read_only_auditor', 'support_operator', 'content_reviewer', 'system_operator', 'ai_service_manager', 'platform_configuration_manager')`,
         ),
         check(
           "admin_roles_origin_check",
