@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 describe("OpenAI-compatible provider Bun runtime", () => {
   it("uses a real dispatcher and completes a streamed request under Bun", () => {
     const script = String.raw`
+      import { Readable } from "node:stream";
       import { Agent } from "undici/index.js";
       import { createOpenAiCompatibleAdapter } from "./src/lib/ai/providers/openai-compatible.ts";
 
@@ -18,10 +19,16 @@ describe("OpenAI-compatible provider Bun runtime", () => {
 
       const adapter = createOpenAiCompatibleAdapter({
         resolver: async () => [{ address: "93.184.216.34", family: 4 }],
-        fetchImpl: async () => new Response(
-          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-          { status: 200 },
-        ),
+        requestImpl: async () => ({
+          statusCode: 200,
+          headers: {},
+          body: Readable.from([
+            Buffer.from(
+              'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+            ),
+            Buffer.from('data: [DONE]\n\n'),
+          ]),
+        }),
       });
       const events = [];
       for await (const event of adapter.start({
@@ -55,18 +62,26 @@ describe("OpenAI-compatible provider Bun runtime", () => {
 
   it("interrupts a response body that remains open after receiving headers", () => {
     const script = String.raw`
+      import { Readable } from "node:stream";
       import { createOpenAiCompatibleAdapter } from "./src/lib/ai/providers/openai-compatible.ts";
 
+      let sent = false;
       const adapter = createOpenAiCompatibleAdapter({
         resolver: async () => [{ address: "93.184.216.34", family: 4 }],
         requestTimeoutMs: 50,
-        fetchImpl: async () => new Response(new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(
-              'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
-            ));
-          },
-        }), { status: 200 }),
+        requestImpl: async () => ({
+          statusCode: 200,
+          headers: {},
+          body: new Readable({
+            read() {
+              if (sent) return;
+              sent = true;
+              this.push(
+                'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+              );
+            },
+          }),
+        }),
       });
       try {
         for await (const event of adapter.start({

@@ -24,6 +24,7 @@
   <a href="https://anonresume.zqdesigned.city">Live Demo</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="#highlights">Highlights</a> ·
+  <a href="#technical-articles">Technical Articles</a> ·
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -188,6 +189,10 @@ If the only super-admin loses sign-in credentials and every recovery method, fir
 ## Technology
 
 AnonResume is built with Next.js 16, React 19, TypeScript, Ant Design, Tiptap, Zustand, Better Auth, Drizzle ORM, PostgreSQL, Playwright, and Bun.
+
+## Technical Articles
+
+- [When an AI streaming timeout was not really a timeout (Chinese)](./articles/2026-10-05-the-timeout-that-wasnt.mdx): the investigation that narrowed a production first-chunk timeout down to a Bun and Undici streaming interoperability issue.
 
 ## Commands
 

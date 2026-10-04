@@ -24,6 +24,7 @@
   <a href="https://anonresume.zqdesigned.city">在线体验</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#功能亮点">功能亮点</a> ·
+  <a href="#技术文章">技术文章</a> ·
   <a href="#参与贡献">参与贡献</a>
 </p>
 
@@ -188,6 +189,10 @@ bun run worker:ai
 ## 技术栈
 
 AnonResume 使用 Next.js 16、React 19、TypeScript、Ant Design、Tiptap、Zustand、Better Auth、Drizzle ORM、PostgreSQL 与 Playwright 构建，并使用 Bun 管理依赖和运行脚本。
+
+## 技术文章
+
+- [一次并非超时的 AI 流式请求超时](./articles/2026-10-05-the-timeout-that-wasnt.mdx)：从密钥、模型与网络排查，到定位 Bun 与 Undici 流式读取兼容问题的完整过程。
 
 ## 常用命令
 

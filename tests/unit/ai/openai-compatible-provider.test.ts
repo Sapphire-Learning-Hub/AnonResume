@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+
 import { createOpenAiCompatibleAdapter } from "@/lib/ai/providers/openai-compatible";
 import type { AiProviderRequest } from "@/lib/ai/providers/types";
 import type { AiProviderEvent } from "@/lib/ai/runs/stream-events";
@@ -35,6 +37,47 @@ const publicResolver = async () =>
   [{ address: "93.184.216.34", family: 4 }] as const;
 
 describe("OpenAI-compatible provider adapter", () => {
+  it("consumes pinned provider streams through the Undici request transport", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("the pinned transport must not use fetch");
+    });
+    const body = Object.assign(
+      Readable.from([
+        Buffer.from(
+          'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+        ),
+        Buffer.from("data: [DONE]\n\n"),
+      ]),
+      { text: async () => "" },
+    );
+    const requestImpl = vi.fn(async () => ({
+      statusCode: 200,
+      headers: { "x-request-id": "request-transport-id" },
+      body,
+    }));
+    const adapter = createOpenAiCompatibleAdapter({
+      resolver: publicResolver,
+      fetchImpl,
+      requestImpl,
+    });
+    const events: AiProviderEvent[] = [];
+
+    for await (const event of adapter.start(
+      providerRequest(),
+      new AbortController().signal,
+    )) {
+      events.push(event);
+    }
+
+    expect(requestImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(events).toEqual([
+      { type: "request_id", requestId: "request-transport-id" },
+      { type: "text_delta", delta: "ok" },
+      { type: "complete", finishReason: "stop" },
+    ]);
+  });
+
   it("aborts a provider request that exceeds the local deadline", async () => {
     vi.useFakeTimers();
     const adapter = createOpenAiCompatibleAdapter({
