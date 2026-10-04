@@ -324,9 +324,33 @@ function applyMarks(
   }, content);
 }
 
+function RichTextParagraph({
+  children,
+  paragraph,
+  style,
+}: {
+  children: ReactNode;
+  paragraph: RichTextContent["content"][number];
+  style?: CSSProperties;
+}) {
+  const empty = paragraph.content.length === 0;
+
+  return (
+    <p
+      data-resume-rich-empty-paragraph={empty ? "true" : undefined}
+      style={style}
+    >
+      {empty ? <br aria-hidden="true" /> : children}
+    </p>
+  );
+}
+
 function renderRichText(content: RichTextContent): ReactNode {
   return content.content.map((paragraph, paragraphIndex) => (
-    <p key={`${paragraphIndex}-${paragraph.type}`}>
+    <RichTextParagraph
+      key={`${paragraphIndex}-${paragraph.type}`}
+      paragraph={paragraph}
+    >
       {paragraph.content.map((node, nodeIndex) => {
         if (node.type === "hardBreak") {
           return (
@@ -378,7 +402,7 @@ function renderRichText(content: RichTextContent): ReactNode {
           </span>
         );
       })}
-    </p>
+    </RichTextParagraph>
   ));
 }
 
@@ -481,7 +505,10 @@ function RichTextView({
 
   return content.content.map((paragraph, paragraphIndex) => {
     const rendered = (
-      <p key={`${paragraphIndex}-${paragraph.type}`}>
+      <RichTextParagraph
+        key={`${paragraphIndex}-${paragraph.type}`}
+        paragraph={paragraph}
+      >
         {paragraph.content.map((node, nodeIndex) => {
           if (node.type === "hardBreak") {
             if (cursor) takeTextSegments(cursor, 1);
@@ -525,7 +552,7 @@ function RichTextView({
             </span>
           );
         })}
-      </p>
+      </RichTextParagraph>
     );
 
     if (cursor && paragraphIndex < content.content.length - 1) {
@@ -571,7 +598,11 @@ function StyledRichText({
   const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
   return block.content.content.map((paragraph, paragraphIndex) => (
-    <p key={`${block.id}-${paragraphIndex}`} style={getTextBlockStyle(block)}>
+    <RichTextParagraph
+      key={`${block.id}-${paragraphIndex}`}
+      paragraph={paragraph}
+      style={getTextBlockStyle(block)}
+    >
       {paragraph.content.map((node, nodeIndex) => {
         const nodeBreaks = pageBreaks
           .filter(
@@ -702,7 +733,7 @@ function StyledRichText({
           </span>
         );
       })}
-    </p>
+    </RichTextParagraph>
   ));
 }
 

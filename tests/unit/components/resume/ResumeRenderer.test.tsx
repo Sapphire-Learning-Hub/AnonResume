@@ -1373,6 +1373,70 @@ describe("ResumeRenderer", () => {
     expect(container.querySelector("br")).not.toBeNull();
   });
 
+  it("preserves empty paragraphs across view and selected edit surfaces", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.blocks[0] = {
+      id: "block-empty-paragraphs",
+      type: "text",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "第一行" }],
+          },
+          { type: "paragraph", content: [] },
+          { type: "paragraph", content: [] },
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "最后一行" }],
+          },
+        ],
+      },
+    };
+
+    const { container, rerender } = render(
+      <ResumeRenderer document={document} mode="view" />,
+    );
+
+    const viewEmptyParagraphs = container.querySelectorAll(
+      'p[data-resume-rich-empty-paragraph="true"]',
+    );
+
+    expect(viewEmptyParagraphs).toHaveLength(2);
+    expect(
+      Array.from(viewEmptyParagraphs).every((paragraph) =>
+        paragraph.querySelector(":scope > br"),
+      ),
+    ).toBe(true);
+
+    rerender(
+      <ResumeRenderer
+        document={document}
+        mode="edit"
+        selection={{
+          sectionId: "section-profile",
+          blockPath: ["block-empty-paragraphs"],
+          richTextField: "content",
+        }}
+      />,
+    );
+
+    const placeholder = screen.getByTestId(
+      "selected-editor-placeholder-section-profile-block-empty-paragraphs",
+    );
+    const editEmptyParagraphs = placeholder.querySelectorAll(
+      'p[data-resume-rich-empty-paragraph="true"]',
+    );
+
+    expect(editEmptyParagraphs).toHaveLength(2);
+    expect(
+      Array.from(editEmptyParagraphs).every((paragraph) =>
+        paragraph.querySelector(":scope > br"),
+      ),
+    ).toBe(true);
+  });
+
   it("renders inline tags in the same paragraph as adjacent text", () => {
     const document = createDefaultResumeDocument();
     document.sections[0]!.blocks[0] = {
