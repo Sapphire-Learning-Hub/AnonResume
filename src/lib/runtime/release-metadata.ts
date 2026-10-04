@@ -38,7 +38,8 @@ export function resolveReleaseMetadata(options?: {
   const git = options?.readGit ?? readGit;
   const embeddedTag = normalize(env.ANONRESUME_BUILD_TAG);
   const embeddedCommit = normalize(env.ANONRESUME_BUILD_COMMIT);
-  const tag = embeddedTag ?? git(["describe", "--tags", "--abbrev=0", "HEAD"]);
+  const tag = embeddedTag ??
+    git(["describe", "--tags", "--exact-match", "HEAD"]);
   const commit = embeddedCommit ?? git(["rev-parse", "HEAD"]);
   const packageVersion = normalize(packageMetadata.version);
 

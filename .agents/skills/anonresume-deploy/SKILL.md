@@ -200,6 +200,14 @@ On the server, fetch `RELEASE_REF` from the bundle, verify `FETCH_HEAD` equals
 a transport fallback; never copy a working tree or build output over the
 server checkout. Remove local and remote temporary bundles after verification.
 
+For a tag release, importing only `FETCH_HEAD` is insufficient because the
+build embeds the exact tag ref. Create the bundle from the full
+`refs/tags/<tag>` ref, fetch it on the server with
+`refs/tags/<tag>:refs/tags/<tag>`, and verify both that the tag peels to
+`TARGET_COMMIT` and that `git describe --tags --exact-match TARGET_COMMIT`
+returns the approved release tag. Stop before building when either check
+fails; never allow an older reachable tag to identify a newer commit.
+
 ### 4. Verify target-version credentials
 
 Before installing dependencies or starting the production build, inspect the
@@ -237,6 +245,10 @@ From `DEPLOY_PATH`, run:
 bun install --frozen-lockfile
 bun run build
 ```
+
+For a tag release, repeat the exact-tag check immediately before the build.
+Branch deployments may use an explicitly supplied build label, but must not
+derive their version from the nearest ancestor tag.
 
 Keep the currently running processes alive while these commands execute. If
 installation or build fails, do not restart services. Restore the checkout to
