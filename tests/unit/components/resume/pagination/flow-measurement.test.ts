@@ -179,11 +179,27 @@ describe("measureResumeFlow", () => {
       "data-height": "40",
     });
     text.textContent = "abcd";
-    stubRangeRects((offset) =>
-      offset <= 2
-        ? { top: 0, bottom: 20, left: offset * 5, right: offset * 5 }
-        : { top: 20, bottom: 40, left: (offset - 2) * 5, right: (offset - 2) * 5 },
-    );
+    stubRangeRects(({ start, end }) => {
+      if (start === end) {
+        return start <= 2
+          ? { top: 0, bottom: 20, left: start * 5, right: start * 5 }
+          : {
+              top: 20,
+              bottom: 40,
+              left: (start - 2) * 5,
+              right: (start - 2) * 5,
+            };
+      }
+
+      return start < 2
+        ? { top: 0, bottom: 20, left: start * 5, right: end * 5 }
+        : {
+            top: 20,
+            bottom: 40,
+            left: (start - 2) * 5,
+            right: (end - 2) * 5,
+          };
+    });
 
     const measured = measureResumeFlow({
       root,
@@ -195,14 +211,104 @@ describe("measureResumeFlow", () => {
     expect(measured?.[0]?.blocks[0]?.textLines).toEqual([
       {
         from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 },
-        to: { paragraphIndex: 0, nodeIndex: 0, offset: 3 },
+        to: { paragraphIndex: 0, nodeIndex: 0, offset: 2 },
         height: 20,
       },
       {
-        from: { paragraphIndex: 0, nodeIndex: 0, offset: 3 },
+        from: { paragraphIndex: 0, nodeIndex: 0, offset: 2 },
         to: { paragraphIndex: 0, nodeIndex: 0, offset: 4 },
         height: 20,
       },
+    ]);
+  });
+
+  it("does not charge an inline page spacer to an atomic rich-text node", () => {
+    const document = documentWithBlocks([
+      {
+        id: "contact",
+        type: "text",
+        content: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  type: "resumeIcon",
+                  attrs: { iconId: "lucide:mail" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const root = createSectionRoot(1);
+    const block = appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "contact",
+      "data-height": "100",
+    });
+    const atomic = appendMeasuredElement(block, "span", {
+      "data-resume-rich-paragraph-index": "0",
+      "data-resume-rich-node-index": "0",
+      "data-resume-rich-node-type": "resumeIcon",
+      "data-height": "100",
+    });
+    appendMeasuredElement(atomic, "span", {
+      "data-resume-page-break-id": "inline-break",
+      "data-height": "80",
+    });
+    appendMeasuredElement(atomic, "span", {
+      "data-resume-icon-id": "lucide:mail",
+      "data-height": "20",
+    });
+
+    const measured = measureResumeFlow({
+      root,
+      document,
+      zoom: 1,
+      committedSpacerHeights: new Map([["inline-break", 80]]),
+    });
+
+    expect(measured?.[0]?.blocks[0]?.textLines).toEqual([
+      {
+        from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: 0, nodeIndex: 0, offset: 1 },
+        height: 20,
+      },
+    ]);
+  });
+
+  it("tolerates a legacy zero-height row whose text children are empty", () => {
+    const document = documentWithBlocks([
+      {
+        id: "empty-row",
+        type: "row",
+        children: [
+          textBlock("empty-left", ""),
+          textBlock("empty-right", ""),
+        ],
+      },
+    ]);
+    const root = createSectionRoot(1);
+    appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "empty-row",
+      "data-height": "0",
+    });
+
+    const measured = measureResumeFlow({
+      root,
+      document,
+      zoom: 1,
+      committedSpacerHeights: new Map(),
+    });
+
+    expect(measured?.[0]?.blocks).toEqual([
+      expect.objectContaining({
+        path: ["empty-row"],
+        type: "row",
+        height: 0,
+      }),
     ]);
   });
 
@@ -308,21 +414,25 @@ function rect(height: number) {
 }
 
 function stubRangeRects(
-  resolve: (offset: number) => Pick<DOMRect, "top" | "bottom" | "left" | "right">,
+  resolve: (range: {
+    start: number;
+    end: number;
+  }) => Pick<DOMRect, "top" | "bottom" | "left" | "right">,
 ) {
   vi.spyOn(document, "createRange").mockImplementation(() => {
-    let offset = 0;
+    let start = 0;
+    let end = 0;
 
     return {
       setStart: (_node: Node, nextOffset: number) => {
-        offset = nextOffset;
+        start = nextOffset;
       },
       setEnd: (_node: Node, nextOffset: number) => {
-        offset = nextOffset;
+        end = nextOffset;
       },
       collapse: () => undefined,
       getBoundingClientRect: () => {
-        const value = resolve(offset);
+        const value = resolve({ start, end });
         return {
           ...rect(value.bottom - value.top),
           ...value,

@@ -202,6 +202,7 @@ export interface TiptapTextBlockEditorProps {
   className?: string;
   content: RichTextContent;
   inlineToolbarLabels?: TiptapInlineToolbarLabels;
+  onBlur?: (content: RichTextContent) => void;
   onChange: (content: RichTextContent) => void;
   onEditingStateChange?: (state: TiptapTextBlockEditorEditingState) => void;
   onFormattingStateChange?: (state: TiptapTextBlockEditorFormatState) => void;
@@ -320,6 +321,7 @@ export const TiptapTextBlockEditor = forwardRef<
   className,
   content,
   inlineToolbarLabels = defaultInlineToolbarLabels,
+  onBlur,
   onChange,
   onEditingStateChange,
   onFormattingStateChange,
@@ -747,9 +749,13 @@ export const TiptapTextBlockEditor = forwardRef<
             requestPagination("history");
           }
         }}
-        onBlurCapture={() =>
-          updateEditingState({ focused: false, composing: false })
-        }
+        onBlurCapture={() => {
+          updateEditingState({ focused: false, composing: false });
+
+          if (editor) {
+            onBlur?.(normalizeRichTextContent(editor.getJSON()));
+          }
+        }}
         onCompositionStartCapture={() =>
           updateEditingState({ focused: true, composing: true })
         }

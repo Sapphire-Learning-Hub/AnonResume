@@ -151,13 +151,14 @@ export function applyTiptapPageBreaks(
   );
 }
 
-interface DomainBoundary {
-  domain: RichTextPosition;
+interface DomainSegment {
+  from: RichTextPosition;
+  to: RichTextPosition;
   proseMirror: number;
 }
 
-function listDomainBoundaries(doc: ProseMirrorNode) {
-  const boundaries: DomainBoundary[] = [];
+function listDomainSegments(doc: ProseMirrorNode) {
+  const segments: DomainSegment[] = [];
 
   for (
     let paragraphIndex = 0;
@@ -172,49 +173,38 @@ function listDomainBoundaries(doc: ProseMirrorNode) {
       const node = paragraph.child(nodeIndex);
       const nodeSize = node.isText ? node.text?.length ?? 0 : 1;
 
-      for (let offset = 0; offset <= nodeSize; offset += 1) {
-        const proseMirror = nodeStart + offset;
-
-        if (boundaries.at(-1)?.proseMirror === proseMirror) {
-          continue;
-        }
-
-        boundaries.push({
-          domain: { paragraphIndex, nodeIndex, offset },
-          proseMirror,
+      for (let offset = 0; offset < nodeSize; offset += 1) {
+        segments.push({
+          from: { paragraphIndex, nodeIndex, offset },
+          to: { paragraphIndex, nodeIndex, offset: offset + 1 },
+          proseMirror: nodeStart + offset,
         });
       }
 
       nodeStart += node.nodeSize;
     }
-
-    if (paragraph.childCount === 0) {
-      boundaries.push({
-        domain: { paragraphIndex, nodeIndex: 0, offset: 0 },
-        proseMirror: paragraphStart,
-      });
-    }
   }
 
-  return boundaries;
+  return segments;
 }
 
 export function measureTiptapRichTextLines(
   editor: Editor,
 ): MeasuredRichTextLine[] | undefined {
-  const boundaries = listDomainBoundaries(editor.state.doc);
+  const segments = listDomainSegments(editor.state.doc);
 
-  if (boundaries.length < 2) {
+  if (segments.length === 0) {
     return [];
   }
 
   try {
-    const measured = boundaries.map((boundary) => ({
-      ...boundary,
-      rect: editor.view.coordsAtPos(boundary.proseMirror),
+    const measured = segments.map((segment) => ({
+      ...segment,
+      rect: editor.view.coordsAtPos(segment.proseMirror, 1),
     }));
     const lines: MeasuredRichTextLine[] = [];
     let lineStart = measured[0]!;
+    let lineEnd = lineStart.to;
     let lineBottom = lineStart.rect.bottom;
 
     for (let index = 1; index < measured.length; index += 1) {
@@ -222,26 +212,24 @@ export function measureTiptapRichTextLines(
 
       if (Math.abs(current.rect.top - lineStart.rect.top) > 1) {
         lines.push({
-          from: lineStart.domain,
-          to: current.domain,
+          from: lineStart.from,
+          to: lineEnd,
           height: Math.max(1, Math.ceil(lineBottom - lineStart.rect.top)),
         });
         lineStart = current;
+        lineEnd = current.to;
         lineBottom = current.rect.bottom;
       } else {
+        lineEnd = current.to;
         lineBottom = Math.max(lineBottom, current.rect.bottom);
       }
     }
 
-    const last = measured.at(-1)!;
-
-    if (lineStart.proseMirror < last.proseMirror) {
-      lines.push({
-        from: lineStart.domain,
-        to: last.domain,
-        height: Math.max(1, Math.ceil(lineBottom - lineStart.rect.top)),
-      });
-    }
+    lines.push({
+      from: lineStart.from,
+      to: lineEnd,
+      height: Math.max(1, Math.ceil(lineBottom - lineStart.rect.top)),
+    });
 
     return lines;
   } catch {

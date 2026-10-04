@@ -6,6 +6,7 @@ import type {
   MeasuredResumeSection,
   MeasuredRichTextLine,
 } from "@/domain/resume/pagination";
+import { isRichTextContentEmpty } from "@/domain/resume/rich-text";
 import type { ResumeBlock, ResumeDocument } from "@/domain/resume/schema";
 
 const BLOCK_PATH_SEPARATOR = "::";
@@ -21,8 +22,9 @@ export interface MeasureResumeFlowParams {
   committedSpacerHeights: ReadonlyMap<string, number>;
 }
 
-interface StaticBoundary {
-  position: RichTextPosition;
+interface StaticSegment {
+  from: RichTextPosition;
+  to: RichTextPosition;
   rect: Pick<DOMRect, "top" | "bottom">;
 }
 
@@ -77,11 +79,21 @@ function measureElementHeight(
 }
 
 function isStructurallyEmptyBlock(block: ResumeBlock): boolean {
-  if (block.type !== "group" && block.type !== "row") {
-    return false;
+  if (block.type === "text") {
+    return isRichTextContentEmpty(block.content);
   }
 
-  return block.children.every(isStructurallyEmptyBlock);
+  if (block.type === "group" || block.type === "row") {
+    return block.children.every(isStructurallyEmptyBlock);
+  }
+
+  if (block.type === "list") {
+    return block.items.every((item) =>
+      item.children.every(isStructurallyEmptyBlock),
+    );
+  }
+
+  return false;
 }
 
 function calculateWrapperHeight(
@@ -105,74 +117,56 @@ function pathsEqual(current: string[] | undefined, target: string[]) {
   );
 }
 
-function findTextNodeAtOffset(element: HTMLElement, targetOffset: number) {
+function findTextCharacterAtOffset(
+  element: HTMLElement,
+  targetOffset: number,
+) {
   const walker = element.ownerDocument.createTreeWalker(
     element,
     NodeFilter.SHOW_TEXT,
   );
   let traversed = 0;
-  let lastTextNode: Text | undefined;
 
   while (walker.nextNode()) {
     const textNode = walker.currentNode as Text;
     const length = textNode.data.length;
-    lastTextNode = textNode;
 
-    if (targetOffset <= traversed + length) {
+    if (targetOffset < traversed + length) {
       return {
         node: textNode,
-        offset: Math.max(0, targetOffset - traversed),
+        offset: targetOffset - traversed,
       };
     }
 
     traversed += length;
   }
 
-  return lastTextNode
-    ? { node: lastTextNode, offset: lastTextNode.data.length }
-    : undefined;
+  return undefined;
 }
 
-function measureCollapsedRange(
+function measureTextCharacter(
   element: HTMLElement,
   offset: number,
 ): Pick<DOMRect, "top" | "bottom"> | undefined {
-  const boundary = findTextNodeAtOffset(element, offset);
+  const character = findTextCharacterAtOffset(element, offset);
 
-  if (!boundary) {
+  if (!character) {
     return undefined;
   }
 
   const range = element.ownerDocument.createRange();
-  range.setStart(boundary.node, boundary.offset);
-  range.setEnd(boundary.node, boundary.offset);
-  range.collapse(true);
+  range.setStart(character.node, character.offset);
+  range.setEnd(character.node, character.offset + 1);
   return range.getBoundingClientRect();
 }
 
-function measureAtomicBoundary(
-  element: HTMLElement,
-  after: boolean,
-): Pick<DOMRect, "top" | "bottom"> {
-  const range = element.ownerDocument.createRange();
-
-  if (after) {
-    range.setStartAfter(element);
-  } else {
-    range.setStartBefore(element);
-  }
-
-  range.collapse(true);
-  return range.getBoundingClientRect();
-}
-
-function listStaticRichTextBoundaries(blockElement: HTMLElement) {
+function listStaticRichTextSegments(blockElement: HTMLElement) {
   const nodes = Array.from(
     blockElement.querySelectorAll<HTMLElement>(
       "[data-resume-rich-paragraph-index][data-resume-rich-node-index][data-resume-rich-node-type]",
     ),
   );
-  const boundaries: StaticBoundary[] = [];
+  const segments: StaticSegment[] = [];
 
   for (const element of nodes) {
     const paragraphIndex = Number(element.dataset.resumeRichParagraphIndex);
@@ -183,87 +177,88 @@ function listStaticRichTextBoundaries(blockElement: HTMLElement) {
       return undefined;
     }
 
-    const length = nodeType === "text" ? element.textContent?.length ?? 0 : 1;
+    if (nodeType === "text") {
+      const length = element.textContent?.length ?? 0;
 
-    for (let offset = 0; offset <= length; offset += 1) {
-      const rect =
-        nodeType === "text"
-          ? measureCollapsedRange(element, offset)
-          : measureAtomicBoundary(element, offset === 1);
+      for (let offset = 0; offset < length; offset += 1) {
+        const rect = measureTextCharacter(element, offset);
 
-      if (!rect) {
-        return undefined;
+        if (!rect) {
+          return undefined;
+        }
+
+        segments.push({
+          from: { paragraphIndex, nodeIndex, offset },
+          to: { paragraphIndex, nodeIndex, offset: offset + 1 },
+          rect,
+        });
       }
 
-      const previous = boundaries.at(-1);
-      const position = { paragraphIndex, nodeIndex, offset };
-
-      if (
-        previous &&
-        previous.position.paragraphIndex === position.paragraphIndex &&
-        previous.position.nodeIndex === position.nodeIndex &&
-        previous.position.offset === position.offset
-      ) {
-        continue;
-      }
-
-      boundaries.push({ position, rect });
+      continue;
     }
+
+    const atomicElement =
+      nodeType === "hardBreak"
+        ? element.querySelector<HTMLElement>(":scope > br")
+        : element.querySelector<HTMLElement>(
+            ":scope > [data-resume-icon-id]",
+          );
+
+    segments.push({
+      from: { paragraphIndex, nodeIndex, offset: 0 },
+      to: { paragraphIndex, nodeIndex, offset: 1 },
+      rect: (atomicElement ?? element).getBoundingClientRect(),
+    });
   }
 
-  return boundaries;
+  return segments;
 }
 
-function boundariesToLines(
-  boundaries: StaticBoundary[],
+function segmentsToLines(
+  segments: StaticSegment[],
   zoom: number,
 ): MeasuredRichTextLine[] {
-  if (boundaries.length < 2) {
+  if (segments.length === 0) {
     return [];
   }
 
   const lines: MeasuredRichTextLine[] = [];
-  let lineStart = boundaries[0]!;
+  let lineStart = segments[0]!;
+  let lineEnd = lineStart.to;
   let lineBottom = lineStart.rect.bottom;
 
-  for (let index = 1; index < boundaries.length; index += 1) {
-    const current = boundaries[index]!;
+  for (let index = 1; index < segments.length; index += 1) {
+    const current = segments[index]!;
 
     if (
       Math.abs(current.rect.top - lineStart.rect.top) >
       STATIC_LINE_TOLERANCE_PX
     ) {
       lines.push({
-        from: lineStart.position,
-        to: current.position,
+        from: lineStart.from,
+        to: lineEnd,
         height: Math.max(
           1,
           Math.ceil((lineBottom - lineStart.rect.top) / zoom),
         ),
       });
       lineStart = current;
+      lineEnd = current.to;
       lineBottom = current.rect.bottom;
     } else {
+      lineEnd = current.to;
       lineBottom = Math.max(lineBottom, current.rect.bottom);
     }
   }
 
-  const last = boundaries.at(-1)!;
-
-  if (
-    lineStart.position.paragraphIndex !== last.position.paragraphIndex ||
-    lineStart.position.nodeIndex !== last.position.nodeIndex ||
-    lineStart.position.offset !== last.position.offset
-  ) {
-    lines.push({
-      from: lineStart.position,
-      to: last.position,
-      height: Math.max(
-        1,
-        Math.ceil((lineBottom - lineStart.rect.top) / zoom),
-      ),
-    });
-  }
+  lines.push({
+    from: lineStart.from,
+    to: lineEnd,
+    height: Math.max(
+      1,
+      Math.ceil((lineBottom - lineStart.rect.top) / zoom),
+    ),
+  });
 
   return lines;
 }
@@ -273,8 +268,8 @@ function measureStaticRichTextLines(
   zoom: number,
 ) {
   try {
-    const boundaries = listStaticRichTextBoundaries(blockElement);
-    return boundaries ? boundariesToLines(boundaries, zoom) : undefined;
+    const segments = listStaticRichTextSegments(blockElement);
+    return segments ? segmentsToLines(segments, zoom) : undefined;
   } catch {
     return undefined;
   }

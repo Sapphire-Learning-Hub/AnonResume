@@ -168,3 +168,11 @@ export function areRichTextContentsEqual(
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
+
+export function isRichTextContentEmpty(content: RichTextContent) {
+  return content.content.every((paragraph) =>
+    paragraph.content.every(
+      (node) => node.type === "text" && node.text.length === 0,
+    ),
+  );
+}

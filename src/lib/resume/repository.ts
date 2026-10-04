@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@/db";
 import { resumes, resumeVersions } from "@/db/schema";
+import { normalizeResumeDocumentStructure } from "@/domain/resume/block-tree";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
 import type { ResumeBlock, ResumeDocument } from "@/domain/resume/schema";
 import {
@@ -184,7 +185,9 @@ function resolveSummary(record: {
 }
 
 function mapResumeRow(row: ResumeRow): ResumeRecord {
-  const document = validateResumeDocument(row.document);
+  const document = normalizeResumeDocumentStructure(
+    validateResumeDocument(row.document),
+  );
 
   return {
     id: row.id,
@@ -211,7 +214,9 @@ function mapResumeVersionRow(row: ResumeVersionRow): ResumeVersionSnapshot {
     userId: row.userId,
     resumeId: row.resumeId,
     version: row.version,
-    document: validateResumeDocument(row.document),
+    document: normalizeResumeDocumentStructure(
+      validateResumeDocument(row.document),
+    ),
     createdAt: row.createdAt.getTime(),
   };
 }
@@ -560,7 +565,9 @@ export async function createOnboardingResumeRecord(params: {
         params.userId,
         createId(),
         params.locale,
-        validateResumeDocument(params.document),
+        normalizeResumeDocumentStructure(
+          validateResumeDocument(params.document),
+        ),
         "onboarding",
       );
     } catch (error) {
@@ -602,7 +609,9 @@ export async function createGeneratedResumeRecord(params: {
   }
 
   const sourceDocument = hasDocument
-    ? validateResumeDocument(params.document)
+    ? normalizeResumeDocumentStructure(
+        validateResumeDocument(params.document),
+      )
     : createResumeDocumentFromTemplate(params.templateId ?? "blank", locale);
   let lastConflict: ResumeIdentifierConflictError | undefined;
 
@@ -729,7 +738,9 @@ export async function saveResumeRecord(params: {
   const document =
     params.document === undefined
       ? current.document
-      : validateResumeDocument(params.document);
+      : normalizeResumeDocumentStructure(
+          validateResumeDocument(params.document),
+        );
   const summary = buildResumeSummary({
     document,
     summary: current.summary,

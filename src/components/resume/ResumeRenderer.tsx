@@ -119,6 +119,7 @@ interface ResumeRendererSharedProps {
     sectionId: string;
     blockPath: string[];
     content: RichTextContent;
+    commit?: boolean;
   }) => void;
   onCommitBadgeItem?: (params: {
     sectionId: string;
@@ -919,6 +920,14 @@ function renderTextBlock(
             pageBreakAnchor={pageBreakAnchor}
             style={getTextBlockStyle(block)}
             wrapperClassName={context.styles.textEditorOverlay}
+            onBlur={(content) =>
+              context.onChangeTextBlock?.({
+                sectionId: context.sectionId,
+                blockPath: context.blockPath,
+                content,
+                commit: true,
+              })
+            }
             onChange={(content) =>
               context.onChangeTextBlock?.({
                 sectionId: context.sectionId,

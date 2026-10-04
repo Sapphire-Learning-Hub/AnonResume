@@ -2,14 +2,121 @@ import type {
   GroupBlock,
   ListBlock,
   ResumeBlock,
+  ResumeDocument,
   ResumeListItem,
   RowBlock,
 } from "./schema";
+import { isRichTextContentEmpty } from "./rich-text";
 
 export function isContainerBlock(
   block: ResumeBlock,
 ): block is GroupBlock | RowBlock {
   return block.type === "group" || block.type === "row";
+}
+
+function normalizeNestedBlock(
+  block: ResumeBlock,
+  removeEmptyText: boolean,
+): ResumeBlock | undefined {
+  if (block.type === "text") {
+    return removeEmptyText && isRichTextContentEmpty(block.content)
+      ? undefined
+      : block;
+  }
+
+  if (block.type === "badges") {
+    return block;
+  }
+
+  if (block.type === "list") {
+    let changed = false;
+    const items = block.items.flatMap((item) => {
+      const children = item.children.flatMap((child) => {
+        const normalized = normalizeNestedBlock(child, true);
+
+        if (!normalized) {
+          changed = true;
+          return [];
+        }
+
+        if (normalized !== child) {
+          changed = true;
+        }
+
+        return [normalized];
+      });
+
+      if (children.length === 0) {
+        changed = true;
+        return [];
+      }
+
+      return children.length === item.children.length &&
+        children.every((child, index) => child === item.children[index])
+        ? [item]
+        : [{ ...item, children }];
+    });
+
+    if (items.length === 0) {
+      return undefined;
+    }
+
+    return changed ? { ...block, items } : block;
+  }
+
+  let changed = false;
+  const children = block.children.flatMap((child) => {
+    const normalized = normalizeNestedBlock(child, true);
+
+    if (!normalized) {
+      changed = true;
+      return [];
+    }
+
+    if (normalized !== child) {
+      changed = true;
+    }
+
+    return [normalized];
+  });
+
+  if (children.length === 0) {
+    return undefined;
+  }
+
+  return changed ? { ...block, children } : block;
+}
+
+export function normalizeResumeDocumentStructure(
+  document: ResumeDocument,
+): ResumeDocument {
+  let documentChanged = false;
+  const sections = document.sections.map((section) => {
+    let sectionChanged = false;
+    const blocks = section.blocks.flatMap((block) => {
+      const normalized = normalizeNestedBlock(block, false);
+
+      if (!normalized) {
+        sectionChanged = true;
+        return [];
+      }
+
+      if (normalized !== block) {
+        sectionChanged = true;
+      }
+
+      return [normalized];
+    });
+
+    if (!sectionChanged) {
+      return section;
+    }
+
+    documentChanged = true;
+    return { ...section, blocks };
+  });
+
+  return documentChanged ? { ...document, sections } : document;
 }
 
 export function createFreshResumeNodeId(prefix: string) {

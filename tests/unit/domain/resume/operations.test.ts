@@ -18,6 +18,7 @@ import {
   updateTextBlockContentInDocument,
 } from "@/domain/resume/operations";
 import type { RichTextContent } from "@/domain/resume/schema";
+import { normalizeResumeDocumentStructure } from "@/domain/resume/block-tree";
 
 function richText(text: string): RichTextContent {
   return {
@@ -32,6 +33,49 @@ function richText(text: string): RichTextContent {
 }
 
 describe("resume operations", () => {
+  it("removes legacy structural containers that contain only empty text", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0]!;
+    section.blocks = [
+      {
+        id: "empty-row",
+        type: "row",
+        children: [
+          {
+            id: "empty-left",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [{ type: "paragraph", content: [] }],
+            },
+          },
+          {
+            id: "empty-right",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [{ type: "paragraph", content: [] }],
+            },
+          },
+        ],
+      },
+      {
+        id: "top-level-empty-text",
+        type: "text",
+        content: {
+          type: "doc",
+          content: [{ type: "paragraph", content: [] }],
+        },
+      },
+    ];
+
+    const normalized = normalizeResumeDocumentStructure(document);
+
+    expect(normalized.sections[0]?.blocks).toEqual([
+      expect.objectContaining({ id: "top-level-empty-text", type: "text" }),
+    ]);
+  });
+
   it("represents blank plain text without a whitespace placeholder", () => {
     expect(createRichTextFromPlainText("")).toEqual({
       type: "doc",
