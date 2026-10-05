@@ -2060,6 +2060,42 @@ describe("ResumeEditorShell", () => {
     );
   });
 
+  it("clears a text block override back to its semantic theme color", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]!.blocks[0];
+
+    if (!summary || summary.type !== "text") {
+      throw new Error("Expected the profile summary text block");
+    }
+
+    summary.style = { ...summary.style, color: "#2563eb", tone: "muted" };
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={document}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+
+    const colorPicker = screen.getByLabelText("文本颜色调色板");
+    fireEvent.click(colorPicker);
+    const clearButton = globalThis.document.querySelector<HTMLElement>(
+      ".ant-color-picker-clear",
+    );
+
+    expect(clearButton).not.toBeNull();
+    fireEvent.click(clearButton!);
+
+    expect(colorPicker).toHaveAttribute("data-color-value", "#475569");
+    expect(
+      screen
+        .getAllByText("共享渲染器基础")
+        .find((element) => element.tagName === "P"),
+    ).toHaveStyle({ color: "var(--resume-muted-color)" });
+  });
+
   it("opens the icon library for the active text editor and inserts an icon", async () => {
     render(
       <ResumeEditorShell

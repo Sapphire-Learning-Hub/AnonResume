@@ -156,7 +156,7 @@ export interface ResumeEditorActions {
   setTextBlockColor: (params: {
     sectionId: string;
     blockPath: string[];
-    color: string;
+    color?: string;
   }) => void;
   updateBadgeItems: (params: {
     sectionId: string;

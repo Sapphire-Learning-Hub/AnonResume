@@ -160,7 +160,7 @@ export function createDefaultResumeDocument(
                     type: "text",
                     content: richText("2026.01 - 2026.08"),
                     style: {
-                      color: "#475569",
+                      tone: "muted",
                     },
                   },
                 ],
@@ -170,7 +170,7 @@ export function createDefaultResumeDocument(
                 type: "text",
                 content: richText(messages["defaultDocument.experienceContext"]),
                 style: {
-                  color: "#475569",
+                  tone: "muted",
                 },
               },
               {

@@ -13,6 +13,7 @@ import {
   setSectionTitleInDocument,
   setSectionTitleColorInDocument,
   setSectionTitleFontSizeInDocument,
+  setTextBlockColorInDocument,
   updateBlockSettingsInDocument,
   updateSectionPaginationInDocument,
   updateTextBlockContentInDocument,
@@ -119,6 +120,83 @@ describe("resume operations", () => {
 
     expect(withoutColor.sections[0]?.titleStyle).toEqual({ fontSize: 28 });
     expect(resized.sections[0]?.titleStyle).toEqual({ fontSize: 32 });
+  });
+
+  it("clears a text block color without discarding its semantic or layout style", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]!.blocks[0];
+
+    if (summary.type !== "text") {
+      throw new Error("Expected the default summary text block.");
+    }
+
+    summary.style = {
+      fontSize: 18,
+      fontWeight: 700,
+      lineHeight: 1.4,
+      color: "#be123c",
+      tone: "muted",
+      align: "center",
+    };
+    summary.content.content[0]!.content = [
+      {
+        type: "text",
+        text: "局部颜色",
+        marks: [{ type: "textColor", attrs: { color: "#2563eb" } }],
+      },
+    ];
+
+    const updated = setTextBlockColorInDocument({
+      document,
+      sectionId: "section-profile",
+      blockPath: ["block-profile-summary"],
+    });
+    const updatedSummary = updated.sections[0]!.blocks[0];
+
+    expect(updatedSummary).toMatchObject({
+      type: "text",
+      style: {
+        fontSize: 18,
+        fontWeight: 700,
+        lineHeight: 1.4,
+        tone: "muted",
+        align: "center",
+      },
+      content: {
+        content: [
+          {
+            content: [
+              {
+                marks: [
+                  { type: "textColor", attrs: { color: "#2563eb" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(updatedSummary.type === "text" ? updatedSummary.style?.color : null).toBeUndefined();
+  });
+
+  it("removes an empty text block style after clearing its only color", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]!.blocks[0];
+
+    if (summary.type !== "text") {
+      throw new Error("Expected the default summary text block.");
+    }
+
+    summary.style = { color: "#be123c" };
+
+    const updated = setTextBlockColorInDocument({
+      document,
+      sectionId: "section-profile",
+      blockPath: ["block-profile-summary"],
+    });
+    const updatedSummary = updated.sections[0]!.blocks[0];
+
+    expect(updatedSummary.type === "text" ? updatedSummary.style : null).toBeUndefined();
   });
 
   it("adds and removes a section title without leaving stale title styles", () => {

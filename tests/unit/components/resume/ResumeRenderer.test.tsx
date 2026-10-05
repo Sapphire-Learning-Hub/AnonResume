@@ -409,6 +409,83 @@ describe("ResumeRenderer", () => {
     },
   );
 
+  it.each([
+    ["default", "var(--resume-text-color)"],
+    ["muted", "var(--resume-muted-color)"],
+    ["accent", "var(--resume-accent-foreground)"],
+  ] as const)("renders the %s semantic text tone", (tone, expectedColor) => {
+    const document = createDefaultResumeDocument();
+    const block = document.sections[0]!.blocks[0];
+
+    if (block.type !== "text") {
+      throw new Error("default summary block missing");
+    }
+
+    block.style = { ...block.style, tone };
+
+    render(<ResumeRenderer document={document} mode="view" />);
+
+    expect(
+      screen.getByText("共享渲染器基础").closest("p"),
+    ).toHaveStyle({ color: expectedColor });
+  });
+
+  it("keeps an explicit text color above the semantic tone", () => {
+    const document = createDefaultResumeDocument();
+    const block = document.sections[0]!.blocks[0];
+
+    if (block.type !== "text") {
+      throw new Error("default summary block missing");
+    }
+
+    block.style = { ...block.style, tone: "muted", color: "#be123c" };
+
+    render(<ResumeRenderer document={document} mode="view" />);
+
+    expect(
+      screen.getByText("共享渲染器基础").closest("p"),
+    ).toHaveStyle({ color: "#be123c" });
+  });
+
+  it("uses shared semantic accent tokens for resume-owned accent visuals", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.blocks[0] = {
+      id: "block-semantic-accent",
+      type: "text",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: "Theme link",
+                marks: [
+                  { type: "tag" },
+                  { type: "link", attrs: { href: "https://example.com" } },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const { container } = render(
+      <ResumeRenderer document={document} mode="view" />,
+    );
+    const title = container.querySelector('[data-resume-section-title="true"]');
+    const generatedStyles = globalThis.document.head.textContent ?? "";
+
+    expect(title).toHaveStyle({ color: "var(--resume-accent-foreground)" });
+    expect(generatedStyles).toContain("var(--resume-accent-foreground)");
+    expect(generatedStyles).toContain("var(--resume-accent-surface)");
+    expect(generatedStyles).toContain("var(--resume-accent-border)");
+    expect(generatedStyles).not.toContain("rgba(15,98,254,.18)");
+    expect(generatedStyles).not.toContain("rgba(15,98,254,.08)");
+  });
+
   it("renders badge wrapping and spacing from the document model", () => {
     const document = createDefaultResumeDocument();
     const badges = document.sections[0]?.blocks.find(

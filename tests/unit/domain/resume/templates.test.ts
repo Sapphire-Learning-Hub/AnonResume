@@ -1,5 +1,6 @@
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
 import { validateResumeDocument } from "@/domain/resume/validation";
+import type { ResumeBlock, TextBlock } from "@/domain/resume/schema";
 import {
   createResumeDocumentFromTemplate,
   isResumeTemplateId,
@@ -7,6 +8,19 @@ import {
   resumeTemplateCollectionIds,
   resumeTemplateIds,
 } from "@/domain/resume/templates";
+
+function collectTextBlocks(blocks: ResumeBlock[]): TextBlock[] {
+  return blocks.flatMap((block) => {
+    if (block.type === "text") return [block];
+    if (block.type === "group" || block.type === "row") {
+      return collectTextBlocks(block.children);
+    }
+    if (block.type === "list") {
+      return block.items.flatMap((item) => collectTextBlocks(item.children));
+    }
+    return [];
+  });
+}
 
 it("exposes the blank template and four visually distinct resume templates", () => {
   expect(resumeTemplateIds).toEqual([
@@ -138,4 +152,52 @@ it("builds each visual template from a materially different document structure",
   expect(compact.sections[0]?.blocks[0]).toMatchObject({
     type: "row",
   });
+});
+
+it.each(["centered", "classic", "modular", "compact"] as const)(
+  "keeps the %s visual template connected to its document theme",
+  (templateId) => {
+    const document = createResumeDocumentFromTemplate(templateId, "zh-CN");
+    const textBlocks = document.sections.flatMap((section) =>
+      collectTextBlocks(section.blocks),
+    );
+    const copiedThemeColors = new Set([
+      document.settings.theme.accent,
+      document.settings.theme.mutedColor,
+    ]);
+
+    expect(textBlocks.some((block) => block.style?.tone === "muted")).toBe(true);
+    expect(
+      textBlocks.some(
+        (block) =>
+          block.style?.color && copiedThemeColors.has(block.style.color),
+      ),
+    ).toBe(false);
+    expect(
+      document.sections.some(
+        (section) => section.titleStyle?.color === document.settings.theme.accent,
+      ),
+    ).toBe(false);
+  },
+);
+
+it("uses accent tones for accent text in visual templates", () => {
+  const centered = createResumeDocumentFromTemplate("centered", "zh-CN");
+  const modular = createResumeDocumentFromTemplate("modular", "zh-CN");
+  const centeredText = centered.sections.flatMap((section) =>
+    collectTextBlocks(section.blocks),
+  );
+  const modularText = modular.sections.flatMap((section) =>
+    collectTextBlocks(section.blocks),
+  );
+
+  expect(centeredText.find((block) => block.id === "centered-role")?.style).toMatchObject(
+    { tone: "accent" },
+  );
+  expect(modularText.find((block) => block.id === "modular-role")?.style).toMatchObject(
+    { tone: "accent" },
+  );
+  expect(
+    modularText.find((block) => block.id === "modular-metric-one-value")?.style,
+  ).toMatchObject({ tone: "accent" });
 });

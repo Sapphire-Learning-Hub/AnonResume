@@ -161,7 +161,7 @@ export function createSectionFromPreset(
                     type: "text",
                     content: richText(messages["preset.present"]),
                     style: {
-                      color: "#475569",
+                      tone: "muted",
                     },
                   },
                 ],
@@ -171,7 +171,7 @@ export function createSectionFromPreset(
                 type: "text",
                 content: richText(messages["preset.experienceContext"]),
                 style: {
-                  color: "#475569",
+                  tone: "muted",
                 },
               },
               {
@@ -229,7 +229,7 @@ export function createSectionFromPreset(
                     type: "text",
                     content: richText(messages["preset.projectYear"]),
                     style: {
-                      color: "#475569",
+                      tone: "muted",
                     },
                   },
                 ],
@@ -239,7 +239,7 @@ export function createSectionFromPreset(
                 type: "text",
                 content: richText(messages["preset.projectContext"]),
                 style: {
-                  color: "#475569",
+                  tone: "muted",
                 },
               },
               {
@@ -297,7 +297,7 @@ export function createSectionFromPreset(
                     type: "text",
                     content: richText(messages["preset.educationYear"]),
                     style: {
-                      color: "#475569",
+                      tone: "muted",
                     },
                   },
                 ],
@@ -307,7 +307,7 @@ export function createSectionFromPreset(
                 type: "text",
                 content: richText(messages["preset.educationDetail"]),
                 style: {
-                  color: "#475569",
+                  tone: "muted",
                 },
               },
             ],

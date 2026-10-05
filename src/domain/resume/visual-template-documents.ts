@@ -69,7 +69,6 @@ function section(
   options: {
     columns?: number;
     gap?: number;
-    titleColor?: string;
     titleSize?: number;
   } = {},
 ): ResumeSection {
@@ -79,7 +78,6 @@ function section(
     ...(title
       ? {
           titleStyle: {
-            ...(options.titleColor ? { color: options.titleColor } : {}),
             ...(options.titleSize ? { fontSize: options.titleSize } : {}),
           },
         }
@@ -137,7 +135,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
         }),
         text("centered-role", l("品牌策划与内容创意", "Brand strategy and content"), {
           align: "center",
-          color: "#9f3f52",
+          tone: "accent",
           fontSize: 16,
           fontWeight: 700,
         }),
@@ -147,7 +145,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
             "上海 · 138 0000 0000 · zhixia@example.com",
             "Shanghai · +86 138 0000 0000 · avery@example.com",
           ),
-          { align: "center", color: "#715f63", fontSize: 12 },
+          { align: "center", tone: "muted", fontSize: 12 },
         ),
         text(
           "centered-summary",
@@ -170,7 +168,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
                 { fontSize: 15, fontWeight: 700 },
               ),
               text("centered-job-one-date", l("2023 — 至今", "2023 — Present"), {
-                color: "#715f63",
+                tone: "muted",
                 fontSize: 12,
                 align: "right",
               }),
@@ -194,7 +192,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
                 { fontSize: 15, fontWeight: 700 },
               ),
               text("centered-job-two-date", "2021 — 2023", {
-                color: "#715f63",
+                tone: "muted",
                 fontSize: 12,
                 align: "right",
               }),
@@ -208,7 +206,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
             ),
           ]),
         ],
-        { gap: 14, titleColor: "#9f3f52", titleSize: 19 },
+        { gap: 14, titleSize: 19 },
       ),
       section(
         "centered-background",
@@ -222,7 +220,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
             text(
               "centered-education-body",
               l("城市大学 · 2017—2021", "City University · 2017—2021"),
-              { color: "#715f63" },
+              { tone: "muted" },
             ),
           ]),
           group("centered-skills", [
@@ -239,7 +237,7 @@ export function createCenteredResumeDocument(locale: AppLocale): ResumeDocument 
             ),
           ]),
         ],
-        { columns: 2, gap: 24, titleColor: "#9f3f52", titleSize: 19 },
+        { columns: 2, gap: 24, titleSize: 19 },
       ),
     ],
   );
@@ -273,7 +271,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
               fontWeight: 600,
             }),
             text("classic-role", l("运营管理 · 团队负责人", "Operations · Team Lead"), {
-              color: "#62716e",
+              tone: "muted",
               fontSize: 14,
             }),
           ], 5),
@@ -283,7 +281,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
               "上海\n138 0000 0000\nmingyuan@example.com",
               "Shanghai\n+86 138 0000 0000\nmorgan@example.com",
             ),
-            { align: "right", color: "#62716e", fontSize: 11, lineHeight: 1.45 },
+            { align: "right", tone: "muted", fontSize: 11, lineHeight: 1.45 },
           ),
         ]),
       ]),
@@ -300,7 +298,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
             { lineHeight: 1.65 },
           ),
         ],
-        { titleColor: "#18534b", titleSize: 18 },
+        { titleSize: 18 },
       ),
       section(
         "classic-experience",
@@ -315,7 +313,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
               ),
               text("classic-job-one-date", l("2021 — 至今", "2021 — Present"), {
                 align: "right",
-                color: "#62716e",
+                tone: "muted",
                 fontSize: 11,
               }),
             ]),
@@ -339,7 +337,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
               ),
               text("classic-job-two-date", "2017 — 2021", {
                 align: "right",
-                color: "#62716e",
+                tone: "muted",
                 fontSize: 11,
               }),
             ]),
@@ -352,7 +350,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ]),
         ],
-        { gap: 15, titleColor: "#18534b", titleSize: 18 },
+        { gap: 15, titleSize: 18 },
       ),
       section(
         "classic-background",
@@ -364,7 +362,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
               l("工商管理 · 华东大学", "Business Administration · East China University"),
               { fontSize: 14, fontWeight: 700 },
             ),
-            text("classic-education-date", "2013 — 2017", { color: "#62716e" }),
+            text("classic-education-date", "2013 — 2017", { tone: "muted" }),
           ]),
           text(
             "classic-skills",
@@ -375,7 +373,7 @@ export function createClassicResumeDocument(locale: AppLocale): ResumeDocument {
             { align: "right" },
           ),
         ],
-        { columns: 2, gap: 24, titleColor: "#18534b", titleSize: 18 },
+        { columns: 2, gap: 24, titleSize: 18 },
       ),
     ],
   );
@@ -409,7 +407,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
               fontWeight: 800,
             }),
             text("modular-role", l("市场与社区运营", "Community and marketing"), {
-              color: ACCENT_BLUE,
+              tone: "accent",
               fontSize: 15,
               fontWeight: 700,
             }),
@@ -420,7 +418,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
               "广州 · 138 0000 0000\nyuting@example.com",
               "Guangzhou · +86 138 0000 0000\ntaylor@example.com",
             ),
-            { align: "right", color: "#526173", fontSize: 11 },
+            { align: "right", tone: "muted", fontSize: 11 },
           ),
         ]),
       ]),
@@ -448,7 +446,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
             ].map((value, index) => ({ id: `modular-badge-${index}`, text: value })),
           },
         ],
-        { columns: 2, gap: 22, titleColor: ACCENT_BLUE, titleSize: 20 },
+        { columns: 2, gap: 22, titleSize: 20 },
       ),
       section(
         "modular-experience",
@@ -461,7 +459,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
               { fontSize: 15, fontWeight: 700 },
             ),
             text("modular-job-one-date", l("2024 — 至今", "2024 — Present"), {
-              color: "#526173",
+              tone: "muted",
               fontSize: 11,
             }),
             text(
@@ -479,7 +477,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
               { fontSize: 15, fontWeight: 700 },
             ),
             text("modular-job-two-date", "2022 — 2024", {
-              color: "#526173",
+              tone: "muted",
               fontSize: 11,
             }),
             text(
@@ -491,7 +489,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ]),
         ],
-        { columns: 2, gap: 22, titleColor: ACCENT_BLUE, titleSize: 20 },
+        { columns: 2, gap: 22, titleSize: 20 },
       ),
       section(
         "modular-project",
@@ -499,7 +497,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
         [
           group("modular-metric-one", [
             text("modular-metric-one-value", "20+", {
-              color: ACCENT_BLUE,
+              tone: "accent",
               fontSize: 26,
               fontWeight: 800,
             }),
@@ -510,7 +508,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
           ]),
           group("modular-metric-two", [
             text("modular-metric-two-value", "3,000", {
-              color: ACCENT_BLUE,
+              tone: "accent",
               fontSize: 26,
               fontWeight: 800,
             }),
@@ -520,7 +518,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ]),
         ],
-        { columns: 2, gap: 22, titleColor: ACCENT_BLUE, titleSize: 20 },
+        { columns: 2, gap: 22, titleSize: 20 },
       ),
       section(
         "modular-background",
@@ -535,7 +533,7 @@ export function createModularResumeDocument(locale: AppLocale): ResumeDocument {
             l("中文 · 母语\n英语 · 熟练", "Chinese · Native\nEnglish · Professional"),
           ),
         ],
-        { columns: 2, gap: 22, titleColor: ACCENT_BLUE, titleSize: 20 },
+        { columns: 2, gap: 22, titleSize: 20 },
       ),
     ],
   );
@@ -579,7 +577,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
               "北京 · 138 0000 0000\nyan@example.com · portfolio.example.com",
               "Beijing · +86 138 0000 0000\nyan@example.com · portfolio.example.com",
             ),
-            { align: "right", color: "#676767", fontSize: 10 },
+            { align: "right", tone: "muted", fontSize: 10 },
           ),
         ]),
       ], { gap: 6 }),
@@ -595,7 +593,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ),
         ],
-        { gap: 5, titleColor: "#232323", titleSize: 15 },
+        { gap: 5, titleSize: 15 },
       ),
       section(
         "compact-experience",
@@ -610,7 +608,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
               ),
               text("compact-job-one-date", l("2023 — 至今", "2023 — Present"), {
                 align: "right",
-                color: "#676767",
+                tone: "muted",
                 fontSize: 10,
               }),
             ]),
@@ -638,7 +636,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
               ),
               text("compact-job-two-date", "2022 — 2023", {
                 align: "right",
-                color: "#676767",
+                tone: "muted",
                 fontSize: 10,
               }),
             ]),
@@ -651,7 +649,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ], 4),
         ],
-        { gap: 9, titleColor: "#232323", titleSize: 15 },
+        { gap: 9, titleSize: 15 },
       ),
       section(
         "compact-projects",
@@ -686,7 +684,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ], 3),
         ],
-        { columns: 2, gap: 18, titleColor: "#232323", titleSize: 15 },
+        { columns: 2, gap: 18, titleSize: 15 },
       ),
       section(
         "compact-background",
@@ -707,7 +705,7 @@ export function createCompactResumeDocument(locale: AppLocale): ResumeDocument {
             ),
           ),
         ],
-        { columns: 2, gap: 18, titleColor: "#232323", titleSize: 15 },
+        { columns: 2, gap: 18, titleSize: 15 },
       ),
     ],
   );
