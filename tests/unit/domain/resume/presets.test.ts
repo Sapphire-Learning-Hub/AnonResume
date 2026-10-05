@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import { createSectionFromPreset, listSectionPresets } from "@/domain/resume/presets";
+import type { ResumeBlock, TextBlock } from "@/domain/resume/schema";
+
+function collectTextBlocks(blocks: ResumeBlock[]): TextBlock[] {
+  return blocks.flatMap((block) => {
+    if (block.type === "text") return [block];
+    if (block.type === "group" || block.type === "row") {
+      return collectTextBlocks(block.children);
+    }
+    if (block.type === "list") {
+      return block.items.flatMap((item) => collectTextBlocks(item.children));
+    }
+    return [];
+  });
+}
 
 describe("resume presets", () => {
   it("lists the supported section presets for quick insert actions", () => {
@@ -53,4 +67,22 @@ describe("resume presets", () => {
       ],
     });
   });
+
+  it.each(["experience", "projects", "education"] as const)(
+    "uses semantic muted text in the %s preset",
+    (presetId) => {
+      const textBlocks = collectTextBlocks(
+        createSectionFromPreset(presetId).blocks,
+      );
+      const mutedBlocks = textBlocks.filter(
+        (block) => block.style?.tone === "muted",
+      );
+
+      expect(mutedBlocks).toHaveLength(2);
+      expect(mutedBlocks.every((block) => !block.style?.color)).toBe(true);
+      expect(
+        textBlocks.some((block) => block.style?.color === "#475569"),
+      ).toBe(false);
+    },
+  );
 });

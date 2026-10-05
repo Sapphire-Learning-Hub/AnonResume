@@ -534,6 +534,38 @@ describe("createResumeEditorStore", () => {
     expect(store.getState().history.past).toHaveLength(1);
   });
 
+  it("restores a text block to its semantic theme color", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]!.blocks[0];
+
+    if (summary.type !== "text") {
+      throw new Error("Expected the profile summary text block");
+    }
+
+    summary.style = { ...summary.style, color: "#2563eb", tone: "muted" };
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+
+    store.getState().setTextBlockColor({
+      sectionId: "section-profile",
+      blockPath: ["block-profile-summary"],
+      color: undefined,
+    });
+
+    const nextSummary = store.getState().document.sections[0]!.blocks[0];
+
+    expect(nextSummary).toMatchObject({
+      type: "text",
+      style: { tone: "muted" },
+    });
+    expect(nextSummary.type === "text" ? nextSummary.style?.color : null).toBeUndefined();
+    expect(store.getState().history.past).toHaveLength(1);
+  });
+
   it("marks a dirty document as saved with the next server version", () => {
     const store = createResumeEditorStore({
       resumeId: "resume-demo",

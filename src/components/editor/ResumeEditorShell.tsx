@@ -966,7 +966,7 @@ export function ResumeEditorShell({
     });
   }
 
-  function setSelectedTextBlockColor(color: string) {
+  function setSelectedTextBlockColor(color?: string) {
     if (!selection.sectionId || !selection.blockPath) {
       return;
     }
@@ -2723,7 +2723,9 @@ export function ResumeEditorShell({
                 </div>
                 <div className={styles.ribbonCommandRow}>
                   <PaletteColorPicker
-                    allowClear={Boolean(selectedSectionTitle)}
+                    allowClear={Boolean(
+                      selectedSectionTitle || selectedTextBlock,
+                    )}
                     className={styles.ribbonColorControl}
                     disabled={textToolsDisabled}
                     label={
@@ -2740,14 +2742,22 @@ export function ResumeEditorShell({
                     placeholder={
                       selectedSectionTitle
                         ? document.settings.theme.accent
-                        : document.settings.theme.textColor
+                        : selectedTextBlock?.style?.tone === "muted"
+                          ? document.settings.theme.mutedColor
+                          : selectedTextBlock?.style?.tone === "accent"
+                            ? document.settings.theme.accent
+                            : document.settings.theme.textColor
                     }
                     onChange={(color) =>
                       selectedSectionTitle
                         ? setSelectedSectionTitleColor(color)
                         : setSelectedTextBlockColor(color)
                     }
-                    onClear={() => setSelectedSectionTitleColor(undefined)}
+                    onClear={() =>
+                      selectedSectionTitle
+                        ? setSelectedSectionTitleColor(undefined)
+                        : setSelectedTextBlockColor(undefined)
+                    }
                   />
                   <Button
                     aria-label={t("editor.iconLibrary.open")}

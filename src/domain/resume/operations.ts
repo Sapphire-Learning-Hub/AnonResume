@@ -564,12 +564,34 @@ function updateBlockStylesAtPath(
     if (block.id !== currentId) return block;
 
     if (rest.length === 0 && block.type === "text") {
+      const mergedStyle = {
+        ...block.style,
+        ...nextStyle,
+      };
+      const normalizedStyle: NonNullable<TextBlock["style"]> = {
+        ...(mergedStyle.fontSize !== undefined
+          ? { fontSize: mergedStyle.fontSize }
+          : {}),
+        ...(mergedStyle.fontWeight !== undefined
+          ? { fontWeight: mergedStyle.fontWeight }
+          : {}),
+        ...(mergedStyle.lineHeight !== undefined
+          ? { lineHeight: mergedStyle.lineHeight }
+          : {}),
+        ...(mergedStyle.color !== undefined ? { color: mergedStyle.color } : {}),
+        ...(mergedStyle.tone !== undefined ? { tone: mergedStyle.tone } : {}),
+        ...(mergedStyle.align !== undefined ? { align: mergedStyle.align } : {}),
+      };
+      const nextBlock = { ...block };
+
+      if (Object.keys(normalizedStyle).length === 0) {
+        delete nextBlock.style;
+        return nextBlock;
+      }
+
       return {
-        ...block,
-        style: {
-          ...block.style,
-          ...nextStyle,
-        },
+        ...nextBlock,
+        style: normalizedStyle,
       };
     }
 
@@ -739,7 +761,7 @@ export function setTextBlockColorInDocument({
   document: ResumeDocument;
   sectionId: string;
   blockPath: string[];
-  color: string;
+  color?: string;
 }): ResumeDocument {
   const section = document.sections.find((item) => item.id === sectionId);
   const block = section ? findBlockByPath(section.blocks, blockPath) : undefined;
@@ -749,12 +771,14 @@ export function setTextBlockColorInDocument({
   }
 
   return updateTextBlockStyleInDocument({
-    document: updateTextBlockContentInDocument({
-      document,
-      sectionId,
-      blockPath,
-      content: removeInlineTextColorMarks(block.content),
-    }),
+    document: color
+      ? updateTextBlockContentInDocument({
+          document,
+          sectionId,
+          blockPath,
+          content: removeInlineTextColorMarks(block.content),
+        })
+      : document,
     sectionId,
     blockPath,
     style: { color },

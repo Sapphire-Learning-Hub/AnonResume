@@ -75,6 +75,7 @@ const textBlockSchema = z.object({
       fontWeight: z.number().positive().optional(),
       lineHeight: z.number().positive().optional(),
       color: z.string().min(1).optional(),
+      tone: z.enum(["default", "muted", "accent"]).optional(),
       align: z.enum(["left", "center", "right"]).optional(),
     })
     .optional(),

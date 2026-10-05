@@ -59,20 +59,20 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     [data-resume-inline-tag="true"] {
       display: inline;
       padding: 0.12em 0.48em;
-      border: 1px solid
-        color-mix(in srgb, var(--resume-accent) 18%, transparent);
+      border: 1px solid var(--resume-accent-border);
       border-radius: 999px;
-      background: color-mix(
-        in srgb,
-        var(--resume-accent) 8%,
-        var(--resume-page-background)
-      );
-      color: var(--resume-accent);
+      background: var(--resume-accent-surface);
+      color: var(--resume-accent-foreground);
       font-size: 0.9em;
       font-weight: 600;
       line-height: 1;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
+    }
+
+    [data-resume-link="true"] {
+      color: var(--resume-accent-foreground);
+      text-decoration: underline;
     }
   `,
   page: css`
@@ -101,7 +101,7 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
   sectionTitle: css`
     margin: 0;
     margin-bottom: 12px;
-    color: var(--resume-accent);
+    color: var(--resume-accent-foreground);
     font-size: 24px;
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -247,7 +247,7 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
       }
 
       a {
-        color: var(--resume-accent);
+        color: var(--resume-accent-foreground);
         text-decoration: underline;
       }
     }
@@ -283,10 +283,10 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
     align-self: flex-start;
     align-items: center;
     padding: 6px 10px;
-    border: 1px solid rgba(15, 98, 254, 0.18);
+    border: 1px solid var(--resume-accent-border);
     border-radius: 999px;
-    background: rgba(15, 98, 254, 0.08);
-    color: var(--resume-accent);
+    background: var(--resume-accent-surface);
+    color: var(--resume-accent-foreground);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;

@@ -11,6 +11,60 @@ describe("resumeDocumentSchema", () => {
     expect(parsed.sections[1]?.semantic).toBe("experience");
   });
 
+  it("expresses default muted content as a semantic tone", () => {
+    const document = createDefaultResumeDocument();
+    const experience = document.sections.find(
+      (section) => section.semantic === "experience",
+    );
+    const group = experience?.blocks[0];
+
+    if (!group || group.type !== "group") {
+      throw new Error("Expected the default experience group.");
+    }
+
+    const row = group.children[0];
+    const context = group.children[1];
+
+    if (row?.type !== "row" || context?.type !== "text") {
+      throw new Error("Expected the default experience text structure.");
+    }
+
+    const range = row.children[1];
+
+    expect(range?.type === "text" ? range.style : undefined).toMatchObject({
+      tone: "muted",
+    });
+    expect(context.style).toMatchObject({ tone: "muted" });
+    expect(range?.type === "text" ? range.style?.color : undefined).toBeUndefined();
+    expect(context.style?.color).toBeUndefined();
+  });
+
+  it("accepts supported semantic text tones and rejects unknown tones", () => {
+    const document = createDefaultResumeDocument();
+    const firstBlock = document.sections[0]!.blocks[0];
+
+    if (firstBlock.type !== "text") {
+      throw new Error("Expected the first block to be text.");
+    }
+
+    firstBlock.style = { ...firstBlock.style, tone: "muted" };
+
+    const parsed = resumeDocumentSchema.parse(document);
+    const parsedBlock = parsed.sections[0]!.blocks[0];
+
+    expect(parsedBlock.type).toBe("text");
+    expect(parsedBlock.type === "text" ? parsedBlock.style?.tone : undefined).toBe(
+      "muted",
+    );
+
+    firstBlock.style = {
+      ...firstBlock.style,
+      tone: "secondary" as "muted",
+    };
+
+    expect(() => resumeDocumentSchema.parse(document)).toThrow();
+  });
+
   it("accepts nested group and row blocks", () => {
     const document = createDefaultResumeDocument();
 

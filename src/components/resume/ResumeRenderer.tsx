@@ -316,7 +316,12 @@ function applyMarks(
         }
 
         return (
-          <a key={key} href={mark.attrs.href} title={mark.attrs.title}>
+          <a
+            key={key}
+            data-resume-link="true"
+            href={mark.attrs.href}
+            title={mark.attrs.title}
+          >
             {current}
           </a>
         );
@@ -564,12 +569,18 @@ function RichTextView({
 }
 
 function getTextBlockStyle(block: TextBlock): CSSProperties {
+  const semanticColor = {
+    default: "var(--resume-text-color)",
+    muted: "var(--resume-muted-color)",
+    accent: "var(--resume-accent-foreground)",
+  }[block.style?.tone ?? "default"];
+
   return {
     margin: 0,
     fontSize: block.style?.fontSize,
     fontWeight: block.style?.fontWeight,
     lineHeight: block.style?.lineHeight,
-    color: block.style?.color,
+    color: block.style?.color ?? semanticColor,
     textAlign: block.style?.align,
   };
 }
@@ -813,7 +824,8 @@ function renderSectionTitle(
   }
 
   const plainText = getPlainTextFromRichText(section.title);
-  const titleColor = section.titleStyle?.color ?? "var(--resume-accent)";
+  const titleColor =
+    section.titleStyle?.color ?? "var(--resume-accent-foreground)";
   const titleFontSize = section.titleStyle?.fontSize ?? 24;
   const titleStyle: CSSProperties = {
     margin: 0,
