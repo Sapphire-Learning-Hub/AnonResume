@@ -8,9 +8,10 @@ import {
   type MeasuredRichTextLine,
   type ResumePageFragment,
 } from "./pagination-model";
-
-const DEFAULT_SECTION_TITLE_GAP_PX = 20;
-const DEFAULT_TOP_LEVEL_BLOCK_GAP_PX = 10;
+import {
+  RESUME_DEFAULT_BLOCK_GAP_PX,
+  RESUME_DEFAULT_SECTION_TITLE_GAP_PX,
+} from "./presentation/defaults";
 
 export type {
   MeasuredResumeNode,
@@ -75,11 +76,11 @@ function getPage(pages: ResumePageLayout[]) {
 }
 
 function getTopLevelGap(section: MeasuredResumeSection) {
-  return section.topLevelGap ?? DEFAULT_TOP_LEVEL_BLOCK_GAP_PX;
+  return section.topLevelGap ?? RESUME_DEFAULT_BLOCK_GAP_PX;
 }
 
 function getSectionTitleGap(section: MeasuredResumeSection) {
-  return section.titleGap ?? DEFAULT_SECTION_TITLE_GAP_PX;
+  return section.titleGap ?? RESUME_DEFAULT_SECTION_TITLE_GAP_PX;
 }
 
 function isBreakableVerticalNode(node: MeasuredResumeNode) {

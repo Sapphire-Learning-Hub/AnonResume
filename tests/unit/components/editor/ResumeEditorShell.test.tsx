@@ -1608,6 +1608,37 @@ describe("ResumeEditorShell", () => {
     });
   });
 
+  it("shows resolved section layout defaults as hints without setting explicit values", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.layout = undefined;
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人简介" }));
+    const sectionPanel = getInspectorPanel();
+
+    expect(within(sectionPanel).getByLabelText("分栏数")).toHaveValue(null);
+    expect(within(sectionPanel).getByLabelText("分栏数")).toHaveAttribute(
+      "placeholder",
+      "1",
+    );
+    expect(within(sectionPanel).getByLabelText("章节间距")).toHaveValue(null);
+    expect(within(sectionPanel).getByLabelText("章节间距")).toHaveAttribute(
+      "placeholder",
+      "10",
+    );
+
+    for (const label of ["上内边距", "右内边距", "下内边距", "左内边距"]) {
+      expect(within(sectionPanel).getByLabelText(label)).toHaveValue(null);
+      expect(within(sectionPanel).getByLabelText(label)).toHaveAttribute(
+        "placeholder",
+        "0",
+      );
+    }
+  });
+
   it("adds and removes an optional section title from section properties", () => {
     const document = createDefaultResumeDocument();
     document.sections[0]!.title = undefined;
@@ -1822,6 +1853,23 @@ describe("ResumeEditorShell", () => {
     ).toHaveStyle({ fontSize: "32px" });
   });
 
+  it("shows the effective section title size when it is not explicitly set", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.titleStyle = undefined;
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    const canvas = screen.getByRole("article");
+    fireEvent.click(within(canvas).getByText("个人简介").closest("button")!);
+    openRibbonTab("开始");
+
+    const sizeInput = screen.getByLabelText("章节标题字号");
+    expect(sizeInput).toHaveValue(null);
+    expect(sizeInput).toHaveAttribute("placeholder", "24");
+  });
+
   it("shows a tiptap editor when selecting a text block from the canvas", () => {
     render(
       <ResumeEditorShell
@@ -1900,6 +1948,106 @@ describe("ResumeEditorShell", () => {
       lineHeight: "1.25",
       textAlign: "center",
     });
+  });
+
+  it("shows the effective inherited text values and follows document typography", () => {
+    const document = createDefaultResumeDocument();
+    const summary = document.sections[0]!.blocks[0];
+
+    if (summary.type !== "text") {
+      throw new Error("Expected the profile summary to remain a text block.");
+    }
+
+    summary.style = undefined;
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    let homePanel = screen.getByRole("tabpanel", { name: "开始" });
+
+    expect(within(homePanel).getByLabelText("字号")).toHaveValue(null);
+    expect(within(homePanel).getByLabelText("字号")).toHaveAttribute(
+      "placeholder",
+      "14",
+    );
+    expect(within(homePanel).getByLabelText("字重")).toHaveValue(null);
+    expect(within(homePanel).getByLabelText("字重")).toHaveAttribute(
+      "placeholder",
+      "400",
+    );
+    expect(within(homePanel).getByLabelText("行高")).toHaveValue("");
+    expect(within(homePanel).getByLabelText("行高")).toHaveAttribute(
+      "placeholder",
+      "1.45",
+    );
+
+    openRibbonTab("设计");
+    fireEvent.change(screen.getByLabelText("基础字号"), {
+      target: { value: "16" },
+    });
+    fireEvent.change(screen.getByLabelText("基础行高"), {
+      target: { value: "1.6" },
+    });
+    openRibbonTab("开始");
+    homePanel = screen.getByRole("tabpanel", { name: "开始" });
+
+    expect(within(homePanel).getByLabelText("字号")).toHaveAttribute(
+      "placeholder",
+      "16",
+    );
+    expect(within(homePanel).getByLabelText("行高")).toHaveAttribute(
+      "placeholder",
+      "1.6",
+    );
+  });
+
+  it("shows the effective default gap for each structural content type", () => {
+    const document = createDefaultResumeDocument();
+
+    for (const block of document.sections[0]!.blocks) {
+      if (block.type !== "text") {
+        block.gap = undefined;
+      }
+    }
+    const experienceGroup = document.sections[1]!.blocks[0];
+
+    if (experienceGroup.type !== "group") {
+      throw new Error("Expected the experience content to remain a group.");
+    }
+
+    const experienceHeader = experienceGroup.children[0];
+
+    if (experienceHeader?.type !== "row") {
+      throw new Error("Expected the experience header to remain a row.");
+    }
+
+    experienceHeader.gap = undefined;
+
+    render(
+      <ResumeEditorShell resumeId="resume-demo" initialDocument={document} />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 列表内容" })[0]!);
+    expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
+      "placeholder",
+      "8",
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "拖动 标签内容" })[0]!);
+    expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
+      "placeholder",
+      "8",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "拖动 双列内容" }));
+    expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
+      "placeholder",
+      "10",
+    );
   });
 
   it("provides a palette for every editable color field", () => {

@@ -109,6 +109,14 @@ import {
 import { listBlockPresets } from "@/domain/resume/block-presets";
 import { listSectionPresets } from "@/domain/resume/presets";
 import {
+  getResumeStructuralBlockGap,
+  RESUME_DEFAULT_BLOCK_GAP_PX,
+  RESUME_DEFAULT_SECTION_COLUMNS,
+  RESUME_DEFAULT_SECTION_PADDING_PX,
+  RESUME_DEFAULT_SECTION_TITLE_FONT_SIZE_PX,
+  RESUME_DEFAULT_TEXT_FONT_WEIGHT,
+} from "@/domain/resume/presentation/defaults";
+import {
   applyResumeVisualPreset,
   getMatchingResumeVisualPresetId,
   listResumeVisualPresets,
@@ -1761,6 +1769,9 @@ export function ResumeEditorShell({
             <DraftInput
               aria-label={t("editor.contentGap")}
               min={0}
+              placeholder={getResumeStructuralBlockGap(
+                selectedStructuralBlock,
+              ).toString()}
               type="number"
               value={selectedStructuralBlock.gap?.toString() ?? ""}
               parseValue={parseNonNegativeNumber}
@@ -1976,6 +1987,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.sectionColumns")}</span>
           <DraftInput
             aria-label={t("common.sectionColumns")}
+            placeholder={RESUME_DEFAULT_SECTION_COLUMNS.toString()}
             type="number"
             value={selectedSection.layout?.columns?.toString() ?? ""}
             parseValue={parsePositiveInteger}
@@ -1988,6 +2000,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.sectionGap")}</span>
           <DraftInput
             aria-label={t("common.sectionGap")}
+            placeholder={RESUME_DEFAULT_BLOCK_GAP_PX.toString()}
             type="number"
             value={selectedSection.layout?.gap?.toString() ?? ""}
             parseValue={parseNonNegativeNumber}
@@ -2023,6 +2036,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.paddingTop")}</span>
           <DraftInput
             aria-label={t("common.paddingTop")}
+            placeholder={RESUME_DEFAULT_SECTION_PADDING_PX.toString()}
             type="number"
             value={selectedSection.layout?.padding?.top?.toString() ?? ""}
             parseValue={parseNonNegativeNumber}
@@ -2042,6 +2056,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.paddingRight")}</span>
           <DraftInput
             aria-label={t("common.paddingRight")}
+            placeholder={RESUME_DEFAULT_SECTION_PADDING_PX.toString()}
             type="number"
             value={selectedSection.layout?.padding?.right?.toString() ?? ""}
             parseValue={parseNonNegativeNumber}
@@ -2061,6 +2076,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.paddingBottom")}</span>
           <DraftInput
             aria-label={t("common.paddingBottom")}
+            placeholder={RESUME_DEFAULT_SECTION_PADDING_PX.toString()}
             type="number"
             value={selectedSection.layout?.padding?.bottom?.toString() ?? ""}
             parseValue={parseNonNegativeNumber}
@@ -2080,6 +2096,7 @@ export function ResumeEditorShell({
           <span className={styles.inspectorControlLabel}>{t("common.paddingLeft")}</span>
           <DraftInput
             aria-label={t("common.paddingLeft")}
+            placeholder={RESUME_DEFAULT_SECTION_PADDING_PX.toString()}
             type="number"
             value={selectedSection.layout?.padding?.left?.toString() ?? ""}
             parseValue={parseNonNegativeNumber}
@@ -2790,6 +2807,10 @@ export function ResumeEditorShell({
                           aria-label={selectedSectionTitle ? t("editor.sectionTitleFontSize") : t("editor.fontSize")}
                           min={selectedSectionTitle ? 8 : undefined}
                           max={selectedSectionTitle ? 72 : undefined}
+                          placeholder={(selectedSectionTitle
+                            ? RESUME_DEFAULT_SECTION_TITLE_FONT_SIZE_PX
+                            : document.settings.typography.baseFontSize
+                          ).toString()}
                           type="number"
                           value={selectedSectionTitle
                             ? selectedSection?.titleStyle?.fontSize?.toString() ?? ""
@@ -2814,6 +2835,7 @@ export function ResumeEditorShell({
                             <span className={styles.inspectorControlLabel}>{t("editor.fontWeight")}</span>
                             <DraftInput
                               aria-label={t("editor.fontWeight")}
+                              placeholder={RESUME_DEFAULT_TEXT_FONT_WEIGHT.toString()}
                               type="number"
                               value={selectedTextBlock?.style?.fontWeight?.toString() ?? ""}
                               parseValue={parsePositiveNumber}
@@ -2825,6 +2847,7 @@ export function ResumeEditorShell({
                             <DraftInput
                               aria-label={t("editor.lineHeight")}
                               inputMode="decimal"
+                              placeholder={document.settings.typography.lineHeight.toString()}
                               value={selectedTextBlock?.style?.lineHeight?.toString() ?? ""}
                               parseValue={parseCommittedPositiveDecimal}
                               onValidValueChange={(lineHeight) => updateSelectedTextBlockStyle({ lineHeight })}
