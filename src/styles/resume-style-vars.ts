@@ -1,6 +1,10 @@
 import type { CSSProperties } from "react";
 
 import { resolveResumeFontFamily } from "@/domain/resume/font-presets";
+import {
+  RESUME_DEFAULT_BLOCK_GAP_PX,
+  RESUME_DEFAULT_PAGE_SECTION_GAP_PX,
+} from "@/domain/resume/presentation/defaults";
 import type { ResumeDocument } from "@/domain/resume/schema";
 import { deriveResumeThemePalette } from "@/domain/resume/theme/palette";
 
@@ -27,7 +31,7 @@ export function getResumeStyleVariables(
     "--resume-base-font-size": `${settings.typography.baseFontSize}px`,
     "--resume-line-height": `${settings.typography.lineHeight}`,
     "--resume-page-padding": `${settings.page.margin.top}px ${settings.page.margin.right}px ${settings.page.margin.bottom}px ${settings.page.margin.left}px`,
-    "--resume-section-gap": "20px",
-    "--resume-block-gap": "10px",
+    "--resume-section-gap": `${RESUME_DEFAULT_PAGE_SECTION_GAP_PX}px`,
+    "--resume-block-gap": `${RESUME_DEFAULT_BLOCK_GAP_PX}px`,
   };
 }

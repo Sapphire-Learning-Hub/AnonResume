@@ -6,11 +6,14 @@ import type {
   MeasuredResumeSection,
   MeasuredRichTextLine,
 } from "@/domain/resume/pagination";
+import {
+  getResumeStructuralBlockGap,
+  RESUME_DEFAULT_BLOCK_GAP_PX,
+} from "@/domain/resume/presentation/defaults";
 import { isRichTextContentEmpty } from "@/domain/resume/rich-text";
 import type { ResumeBlock, ResumeDocument } from "@/domain/resume/schema";
 
 const BLOCK_PATH_SEPARATOR = "::";
-const DEFAULT_BLOCK_GAP_PX = 10;
 const STATIC_LINE_TOLERANCE_PX = 1;
 
 export interface MeasureResumeFlowParams {
@@ -344,7 +347,7 @@ function measureResumeBlock(params: {
     }
 
     const measuredChildren = children as MeasuredResumeNode[];
-    const childGap = params.block.gap ?? DEFAULT_BLOCK_GAP_PX;
+    const childGap = getResumeStructuralBlockGap(params.block);
 
     return {
       id: params.block.id,
@@ -395,12 +398,12 @@ function measureResumeBlock(params: {
         type: "listItem" as const,
         height: itemHeight,
         direction: "vertical" as const,
-        childGap: DEFAULT_BLOCK_GAP_PX,
+        childGap: RESUME_DEFAULT_BLOCK_GAP_PX,
         wrapperHeight: measuredEveryChild
           ? calculateWrapperHeight(
               itemHeight,
               measuredChildren,
-              DEFAULT_BLOCK_GAP_PX,
+              RESUME_DEFAULT_BLOCK_GAP_PX,
             )
           : itemHeight,
         children: measuredEveryChild ? measuredChildren : undefined,
@@ -412,7 +415,7 @@ function measureResumeBlock(params: {
     }
 
     const measuredChildren = children as MeasuredResumeNode[];
-    const childGap = params.block.gap ?? 8;
+    const childGap = getResumeStructuralBlockGap(params.block);
 
     return {
       id: params.block.id,
@@ -510,7 +513,7 @@ export function measureResumeSectionFlow(
     titleHeight,
     titleGap,
     keepTogether: section.pagination?.keepTogether,
-    topLevelGap: section.layout?.gap ?? DEFAULT_BLOCK_GAP_PX,
+    topLevelGap: section.layout?.gap ?? RESUME_DEFAULT_BLOCK_GAP_PX,
     blocks: blocks as MeasuredResumeNode[],
   };
 }

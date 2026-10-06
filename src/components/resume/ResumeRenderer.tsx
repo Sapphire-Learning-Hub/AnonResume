@@ -48,6 +48,12 @@ import {
   type ResumePageSectionLayout,
 } from "@/domain/resume/pagination";
 import {
+  getResumeStructuralBlockGap,
+  RESUME_DEFAULT_BLOCK_GAP_PX,
+  RESUME_DEFAULT_PAGE_SECTION_GAP_PX,
+  RESUME_DEFAULT_SECTION_TITLE_FONT_SIZE_PX,
+} from "@/domain/resume/presentation/defaults";
+import {
   createResumePageBreakMap,
 } from "@/domain/resume/page-flow/break-map";
 import { sliceRichTextContent } from "@/domain/resume/page-flow/rich-text-range";
@@ -176,8 +182,6 @@ const TextPaginationRequestContext = createContext<
 type SortableBlockAxis = "vertical" | "horizontal" | "grid";
 const A4_PAGE_HEIGHT_PX = (297 / 25.4) * 96;
 const A4_PAGE_WIDTH_PX = (210 / 25.4) * 96;
-const DEFAULT_SECTION_GAP_PX = 20;
-const DEFAULT_BLOCK_GAP_PX = 10;
 const EDIT_PAGE_GAP_PX = 24;
 const BLOCK_PATH_SEPARATOR = "::";
 const UNSAFE_LINK_PROTOCOL_PATTERN = /^\s*(?:javascript|data):/i;
@@ -826,7 +830,9 @@ function renderSectionTitle(
   const plainText = getPlainTextFromRichText(section.title);
   const titleColor =
     section.titleStyle?.color ?? "var(--resume-accent-foreground)";
-  const titleFontSize = section.titleStyle?.fontSize ?? 24;
+  const titleFontSize =
+    section.titleStyle?.fontSize ??
+    RESUME_DEFAULT_SECTION_TITLE_FONT_SIZE_PX;
   const titleStyle: CSSProperties = {
     margin: 0,
     fontSize: titleFontSize,
@@ -1217,7 +1223,7 @@ function renderListBlock(
         const itemContent = itemFragment?.children?.length && context.section ? (
               <div
                 className={context.styles.group}
-                style={{ gap: DEFAULT_BLOCK_GAP_PX }}
+                style={{ gap: RESUME_DEFAULT_BLOCK_GAP_PX }}
               >
                 {itemFragment.children.map((childFragment) =>
                   renderBlockFragment(
@@ -1236,7 +1242,7 @@ function renderListBlock(
                 t={context.t}
                 axis="vertical"
                 className={context.styles.group}
-                style={{ gap: DEFAULT_BLOCK_GAP_PX }}
+                style={{ gap: RESUME_DEFAULT_BLOCK_GAP_PX }}
                 mode={context.mode}
                 editSurfaceMode={context.editSurfaceMode}
                 selection={context.selection}
@@ -1263,7 +1269,7 @@ function renderListBlock(
               <SortableListItem
                 item={item}
                 itemPath={itemPath}
-                marginBottom={block.gap ?? 8}
+                marginBottom={getResumeStructuralBlockGap(block)}
                 sectionId={context.sectionId}
                 styles={context.styles}
                 t={context.t}
@@ -1275,7 +1281,7 @@ function renderListBlock(
               <li
                 className={context.styles.listItem}
                 style={{
-                  marginBottom: block.gap ?? 8,
+                  marginBottom: getResumeStructuralBlockGap(block),
                   ...(itemFragment?.continuation ? { listStyleType: "none" } : {}),
                 }}
                 data-resume-list-continuation={
@@ -1435,7 +1441,7 @@ function renderBadgeBlock(
       className={context.styles.badges}
       style={{
         flexWrap: block.wrap ? "wrap" : "nowrap",
-        gap: block.gap ?? 8,
+        gap: getResumeStructuralBlockGap(block),
       }}
     >
       {block.items.map((item) => {
@@ -1550,14 +1556,14 @@ function getSectionContainerStyle(
 function getGroupBlockStyle(block: GroupBlock): CSSProperties {
   return {
     flexDirection: block.direction === "horizontal" ? "row" : "column",
-    gap: block.gap ?? DEFAULT_BLOCK_GAP_PX,
+    gap: getResumeStructuralBlockGap(block),
     alignItems: mapAlign(block.align),
   };
 }
 
 function getRowBlockStyle(block: RowBlock): CSSProperties {
   return {
-    gap: block.gap ?? DEFAULT_BLOCK_GAP_PX,
+    gap: getResumeStructuralBlockGap(block),
     alignItems: mapAlign(block.align),
     justifyContent: mapJustify(block.justify),
   };
@@ -2495,7 +2501,7 @@ function ResumePagedSectionRenderer({
 
           const pages = paginateMeasuredSections({
             pageHeight: pageContentHeight,
-            sectionGap: DEFAULT_SECTION_GAP_PX,
+            sectionGap: RESUME_DEFAULT_PAGE_SECTION_GAP_PX,
             sections: measuredSections,
           }).pages;
 
@@ -2508,7 +2514,7 @@ function ResumePagedSectionRenderer({
                 sections: measuredSections,
                 pageHeight: pageContentHeight,
                 pageGap: EDIT_PAGE_GAP_PX,
-                sectionGap: DEFAULT_SECTION_GAP_PX,
+                sectionGap: RESUME_DEFAULT_PAGE_SECTION_GAP_PX,
                 pagePadding: settings.page.margin,
                 revision: revisionKey,
               }),
