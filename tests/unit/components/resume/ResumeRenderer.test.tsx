@@ -486,6 +486,66 @@ describe("ResumeRenderer", () => {
     expect(generatedStyles).not.toContain("rgba(15,98,254,.08)");
   });
 
+  it("renders explicit link appearance without browser visited-state colors", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.blocks[0] = {
+      id: "block-link-appearance",
+      type: "text",
+      content: {
+        type: "doc",
+        content: [{
+          type: "paragraph",
+          content: [
+            {
+              type: "text",
+              text: "主题链接",
+              marks: [{ type: "link", attrs: { href: "https://example.com/theme" } }],
+            },
+            {
+              type: "text",
+              text: "跟随文字",
+              marks: [{
+                type: "link",
+                attrs: {
+                  href: "https://example.com/inherit",
+                  color: "inherit",
+                  underline: false,
+                },
+              }],
+            },
+            {
+              type: "text",
+              text: "自定义链接",
+              marks: [{
+                type: "link",
+                attrs: {
+                  href: "https://example.com/custom",
+                  color: "#be123c",
+                  underline: true,
+                },
+              }],
+            },
+          ],
+        }],
+      },
+    };
+
+    render(<ResumeRenderer document={document} mode="view" />);
+
+    expect(screen.getByRole("link", { name: "主题链接" })).toHaveStyle({
+      color: "var(--resume-accent-foreground)",
+      textDecoration: "none",
+    });
+    expect(screen.getByRole("link", { name: "跟随文字" })).toHaveStyle({
+      color: "var(--resume-text-color)",
+      textDecoration: "none",
+    });
+    expect(screen.getByRole("link", { name: "自定义链接" })).toHaveStyle({
+      color: "#be123c",
+      textDecoration: "underline",
+    });
+  });
+
   it("renders badge wrapping and spacing from the document model", () => {
     const document = createDefaultResumeDocument();
     const badges = document.sections[0]?.blocks.find(

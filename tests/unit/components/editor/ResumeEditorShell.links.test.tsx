@@ -109,6 +109,42 @@ describe("ResumeEditorShell link editing", () => {
     ).toHaveAttribute("href", "mailto:hello@example.com?subject=%E7%AE%80%E5%8E%86%E5%92%A8%E8%AF%A2");
   });
 
+  it("edits a link to follow the surrounding text without an underline", () => {
+    const initialDocument = createDefaultResumeDocument();
+    initialDocument.sections[0].blocks[0] = {
+      ...initialDocument.sections[0].blocks[0],
+      type: "text",
+      content: richText("共享渲染器基础", [
+        { type: "link", attrs: { href: "https://example.com" } },
+      ]),
+    };
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={initialDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: "链接" }));
+
+    const linkDialog = within(screen.getByRole("dialog"));
+    expect(
+      linkDialog.getByRole("switch", { name: "显示下划线" }),
+    ).not.toBeChecked();
+    fireEvent.click(linkDialog.getByRole("radio", { name: "跟随文字" }));
+    fireEvent.click(linkDialog.getByRole("button", { name: spacedLabel("确定") }));
+
+    const link = within(
+      screen.getByRole("textbox", { name: "文本编辑器" }),
+    ).getByRole("link", { name: "共享渲染器基础" });
+
+    expect(link).toHaveAttribute("data-resume-link-color", "inherit");
+    expect(link).toHaveAttribute("data-resume-link-underline", "false");
+  });
+
   it("can remove an existing link from the link dialog", () => {
     const initialDocument = createDefaultResumeDocument();
     initialDocument.sections[0].blocks[0] = {

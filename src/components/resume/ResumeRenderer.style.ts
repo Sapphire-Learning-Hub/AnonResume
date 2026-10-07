@@ -72,7 +72,11 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
 
     [data-resume-link="true"] {
       color: var(--resume-accent-foreground);
-      text-decoration: underline;
+      text-decoration: none;
+
+      &[data-resume-link-underline="true"] {
+        text-decoration: underline;
+      }
     }
   `,
   page: css`
@@ -248,7 +252,11 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
 
       a {
         color: var(--resume-accent-foreground);
-        text-decoration: underline;
+        text-decoration: none;
+
+        &[data-resume-link-underline="true"] {
+          text-decoration: underline;
+        }
       }
     }
   `,

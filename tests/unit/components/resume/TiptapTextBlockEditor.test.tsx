@@ -619,7 +619,11 @@ describe("TiptapTextBlockEditor", () => {
     render(<TiptapTextBlockEditor ref={ref} content={initialContent} onChange={onChange} />);
     await waitFor(() => expect(ref.current).not.toBeNull());
 
-    expect(ref.current?.prepareLink()).toMatchObject({ text: "", href: "" });
+    expect(ref.current?.prepareLink()).toMatchObject({
+      text: "",
+      href: "",
+      underline: false,
+    });
     act(() => {
       ref.current?.applyCommand({
         type: "upsertLink",
@@ -661,6 +665,7 @@ describe("TiptapTextBlockEditor", () => {
     expect(ref.current?.prepareLink()).toMatchObject({
       text: "旧名称",
       href: "https://old.example.com",
+      underline: false,
     });
     act(() => {
       ref.current?.applyCommand({
@@ -677,6 +682,68 @@ describe("TiptapTextBlockEditor", () => {
     );
     expect(within(editor).queryByText("旧名称")).not.toBeInTheDocument();
     expect(within(editor).getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("reads and updates link appearance attributes", async () => {
+    const ref = createRef<TiptapTextBlockEditorHandle>();
+    const onChange = vi.fn();
+    const content: RichTextContent = {
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [{
+          type: "text",
+          text: "作品集",
+          marks: [{
+            type: "link",
+            attrs: {
+              href: "https://old.example.com",
+              color: "#be123c",
+              underline: false,
+            },
+          }],
+        }],
+      }],
+    };
+
+    render(<TiptapTextBlockEditor ref={ref} content={content} onChange={onChange} />);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    expect(ref.current?.prepareLink()).toMatchObject({
+      color: "#be123c",
+      underline: false,
+    });
+
+    act(() => {
+      ref.current?.applyCommand({
+        type: "upsertLink",
+        text: "作品集",
+        href: "https://new.example.com",
+        color: "inherit",
+        underline: true,
+      });
+    });
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenLastCalledWith({
+        type: "doc",
+        content: [{
+          type: "paragraph",
+          content: [{
+            type: "text",
+            text: "作品集",
+            marks: [{
+              type: "link",
+              attrs: {
+                href: "https://new.example.com",
+                color: "inherit",
+                underline: true,
+              },
+            }],
+          }],
+        }],
+      }),
+    );
   });
 
   it("inserts a structured resume icon at the current caret", async () => {

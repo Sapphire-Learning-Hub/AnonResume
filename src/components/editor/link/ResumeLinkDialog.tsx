@@ -7,8 +7,9 @@ import {
   MailOutlined,
   ProfileOutlined,
 } from "@ant-design/icons";
-import { Button, Input, Modal } from "antd";
+import { Button, Input, Modal, Radio, Switch } from "antd";
 
+import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import {
   getResumeSectionHref,
   getSectionIdFromResumeHref,
@@ -21,17 +22,27 @@ export interface ResumeLinkDraft {
   text: string;
   href: string;
   title: string;
+  color: string;
+  underline: boolean;
 }
 
 interface ResumeLinkDialogProps {
   initial: ResumeLinkDraft;
   sections: Array<{ id: string; title: string }>;
+  themeColor: string;
   onApply: (draft: ResumeLinkDraft) => boolean;
   onCancel: () => void;
   onRemove: () => void;
 }
 
 type LinkTarget = "web" | "section" | "email";
+type LinkColorMode = "theme" | "inherit" | "custom";
+
+function getInitialColorMode(color: string): LinkColorMode {
+  if (color === "inherit") return "inherit";
+  if (color) return "custom";
+  return "theme";
+}
 
 function getInitialTarget(href: string, sections: ResumeLinkDialogProps["sections"]): LinkTarget {
   const sectionId = getSectionIdFromResumeHref(href);
@@ -59,6 +70,7 @@ function parseMailto(href: string) {
 export function ResumeLinkDialog({
   initial,
   sections,
+  themeColor,
   onApply,
   onCancel,
   onRemove,
@@ -73,6 +85,13 @@ export function ResumeLinkDialog({
   const [sectionId, setSectionId] = useState(getSectionIdFromResumeHref(initial.href) ?? "");
   const [email, setEmail] = useState(mailto.email);
   const [subject, setSubject] = useState(mailto.subject);
+  const [colorMode, setColorMode] = useState<LinkColorMode>(() =>
+    getInitialColorMode(initial.color),
+  );
+  const [customColor, setCustomColor] = useState(
+    initial.color.startsWith("#") ? initial.color : themeColor,
+  );
+  const [underline, setUnderline] = useState(initial.underline);
   const [error, setError] = useState("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -115,7 +134,18 @@ export function ResumeLinkDialog({
       return;
     }
 
-    if (!onApply({ text, href, title: title.trim() })) {
+    if (!onApply({
+      text,
+      href,
+      title: title.trim(),
+      color:
+        colorMode === "theme"
+          ? ""
+          : colorMode === "inherit"
+            ? "inherit"
+            : customColor,
+      underline,
+    })) {
       setError(t("editor.linkDialog.applyFailed"));
     }
   }
@@ -226,6 +256,54 @@ export function ResumeLinkDialog({
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
+
+          <fieldset className={styles.appearance}>
+            <legend className={styles.appearanceTitle}>
+              {t("editor.linkDialog.appearance")}
+            </legend>
+            <div className={styles.appearanceControls}>
+              <Radio.Group
+                aria-label={t("editor.linkDialog.color")}
+                optionType="button"
+                options={[
+                  {
+                    label: t("editor.linkDialog.colorTheme"),
+                    value: "theme",
+                  },
+                  {
+                    label: t("editor.linkDialog.colorInherit"),
+                    value: "inherit",
+                  },
+                  {
+                    label: t("editor.linkDialog.colorCustom"),
+                    value: "custom",
+                  },
+                ]}
+                value={colorMode}
+                onChange={(event) =>
+                  setColorMode(event.target.value as LinkColorMode)
+                }
+              />
+              {colorMode === "custom" ? (
+                <PaletteColorPicker
+                  className={styles.colorPicker}
+                  label={t("editor.linkDialog.customColor")}
+                  paletteLabel={t("common.colorPalette")}
+                  placeholder={themeColor}
+                  value={customColor}
+                  onChange={setCustomColor}
+                />
+              ) : null}
+              <label className={styles.underlineControl}>
+                <span>{t("editor.linkDialog.underline")}</span>
+                <Switch
+                  aria-label={t("editor.linkDialog.underline")}
+                  checked={underline}
+                  onChange={setUnderline}
+                />
+              </label>
+            </div>
+          </fieldset>
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
 
           <div className={styles.footer}>

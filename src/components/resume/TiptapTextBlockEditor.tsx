@@ -25,6 +25,7 @@ import { CloseIcon, LinkIcon } from "@/components/ui/InlineIcons";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import {
   areRichTextContentsEqual,
+  normalizeLinkColor,
   normalizeLinkHref,
   normalizeRichTextContent,
   normalizeTextColor,
@@ -98,7 +99,14 @@ export type TiptapTextBlockEditorCommand =
   | { type: "setTextColor"; color: string }
   | { type: "unsetTextColor" }
   | { type: "setLink"; href: string }
-  | { type: "upsertLink"; text: string; href: string; title?: string }
+  | {
+      type: "upsertLink";
+      text: string;
+      href: string;
+      title?: string;
+      color?: string;
+      underline?: boolean;
+    }
   | { type: "unsetLink" }
   | { type: "insertIcon"; iconId: string };
 
@@ -114,6 +122,8 @@ export interface TiptapLinkContext {
   text: string;
   href: string;
   title: string;
+  color: string;
+  underline: boolean;
 }
 
 export const ResumeLinkDialogContext = createContext<
@@ -194,6 +204,9 @@ function prepareLinkForEditor(
     text: editor.state.doc.textBetween(from, to, " "),
     href: typeof attributes.href === "string" ? attributes.href : "",
     title: typeof attributes.title === "string" ? attributes.title : "",
+    color: normalizeLinkColor(attributes.color) ?? "",
+    underline:
+      typeof attributes.underline === "boolean" ? attributes.underline : false,
   };
 }
 
@@ -418,6 +431,31 @@ export const TiptapTextBlockEditor = forwardRef<
               renderHTML: (attributes) =>
                 attributes.title ? { title: attributes.title } : {},
             },
+            color: {
+              default: null,
+              parseHTML: (element) =>
+                element.getAttribute("data-resume-link-color"),
+              renderHTML: (attributes) => {
+                const color = normalizeLinkColor(attributes.color);
+
+                return {
+                  "data-resume-link-color": color ?? "theme",
+                  style: `color: ${color ?? "var(--resume-accent-foreground)"}`,
+                };
+              },
+            },
+            underline: {
+              default: null,
+              parseHTML: (element) => {
+                const value = element.getAttribute("data-resume-link-underline");
+
+                return value === "false" ? false : value === "true" ? true : null;
+              },
+              renderHTML: (attributes) => ({
+                "data-resume-link-underline":
+                  attributes.underline === true ? "true" : "false",
+              }),
+            },
           };
         },
       }).configure({
@@ -524,6 +562,7 @@ export const TiptapTextBlockEditor = forwardRef<
           }
           case "upsertLink": {
             const href = normalizeLinkHref(command.href);
+            const color = normalizeLinkColor(command.color);
             const text = command.text.trim();
 
             if (!href || !text) return false;
@@ -538,9 +577,14 @@ export const TiptapTextBlockEditor = forwardRef<
 
             applied = linkChain
               .setTextSelection({ from: range.from, to: range.from + text.length })
-              .setLink({
+              .setMark("link", {
                 href,
                 title: command.title?.trim() || null,
+                color: color ?? null,
+                underline:
+                  typeof command.underline === "boolean"
+                    ? command.underline
+                    : null,
               })
               .run();
 

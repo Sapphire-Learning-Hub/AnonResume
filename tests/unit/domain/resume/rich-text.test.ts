@@ -146,6 +146,87 @@ describe("normalizeRichTextContent", () => {
     });
   });
 
+  it("preserves supported link appearance attributes and drops invalid colors", () => {
+    const normalized = normalizeRichTextContent({
+      type: "doc",
+      content: [{
+        type: "paragraph",
+        content: [
+          {
+            type: "text",
+            text: "跟随文字",
+            marks: [{
+              type: "link",
+              attrs: {
+                href: "https://example.com/inherit",
+                color: "inherit",
+                underline: false,
+              },
+            }],
+          },
+          {
+            type: "text",
+            text: "自定义颜色",
+            marks: [{
+              type: "link",
+              attrs: {
+                href: "https://example.com/custom",
+                color: "#BE123C",
+                underline: true,
+              },
+            }],
+          },
+          {
+            type: "text",
+            text: "无效颜色",
+            marks: [{
+              type: "link",
+              attrs: {
+                href: "https://example.com/invalid",
+                color: "red",
+              },
+            }],
+          },
+        ],
+      }],
+    });
+
+    expect(normalized.content[0]?.content).toEqual([
+      {
+        type: "text",
+        text: "跟随文字",
+        marks: [{
+          type: "link",
+          attrs: {
+            href: "https://example.com/inherit",
+            color: "inherit",
+            underline: false,
+          },
+        }],
+      },
+      {
+        type: "text",
+        text: "自定义颜色",
+        marks: [{
+          type: "link",
+          attrs: {
+            href: "https://example.com/custom",
+            color: "#BE123C",
+            underline: true,
+          },
+        }],
+      },
+      {
+        type: "text",
+        text: "无效颜色",
+        marks: [{
+          type: "link",
+          attrs: { href: "https://example.com/invalid" },
+        }],
+      },
+    ]);
+  });
+
   it("preserves non-empty custom links before they become link marks", () => {
     expect(normalizeLinkHref("my-resume-app://portfolio/42")).toBe(
       "my-resume-app://portfolio/42",
