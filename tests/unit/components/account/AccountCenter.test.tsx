@@ -198,4 +198,38 @@ describe("AccountCenter", () => {
     expect(screen.queryByRole("button", { name: "申请注销账号" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "导出个人数据" })).toBeInTheDocument();
   });
+
+  it("shows a specific localized message for a known account error", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/account/profile" && !init?.method) {
+        return jsonResponse({ profile });
+      }
+      if (url === "/api/account/sessions" && !init?.method) {
+        return jsonResponse({ sessions });
+      }
+      if (url === "/api/account/password") {
+        return jsonResponse({ error: "password_incorrect" }, 400);
+      }
+      return jsonResponse({ ok: true });
+    });
+
+    render(<AccountCenter />);
+    await screen.findByDisplayValue("Current User");
+    fireEvent.change(screen.getByLabelText("当前密码"), {
+      target: { value: "wrong-password" },
+    });
+    fireEvent.change(screen.getByLabelText("新密码"), {
+      target: { value: "new-password-123" },
+    });
+    fireEvent.change(screen.getByLabelText("确认新密码"), {
+      target: { value: "new-password-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "更新密码" }));
+
+    await waitFor(() => expect(feedbackMocks.error).toHaveBeenCalledWith({
+      key: "account-action-error",
+      content: "当前密码不正确。",
+    }));
+  });
 });

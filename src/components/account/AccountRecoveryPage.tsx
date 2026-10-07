@@ -12,6 +12,11 @@ import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
+import {
+  accountRequestErrorMessage,
+  requestAccountJson,
+} from "./account-request";
+
 const useStyles = createStyles(({ token, css }) => ({
   content: css`
     display: grid;
@@ -74,12 +79,11 @@ function remainingTime(deadline: number, now: number) {
 }
 
 async function postJson(url: string, body: unknown) {
-  const response = await fetch(url, {
+  await requestAccountJson(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error("account_recovery_failed");
 }
 
 export function AccountRecoveryPage({
@@ -117,8 +121,8 @@ export function AccountRecoveryPage({
       });
       setCodeSent(true);
       toast.success(t("account.email.codeSent"));
-    } catch {
-      toast.error(t("account.error.action"));
+    } catch (error) {
+      toast.error(accountRequestErrorMessage(error, t));
     } finally {
       setBusy(undefined);
     }
@@ -135,8 +139,8 @@ export function AccountRecoveryPage({
       toast.success(t("account.recovery.restored"));
       router.push("/app");
       router.refresh();
-    } catch {
-      toast.error(t("account.error.action"));
+    } catch (error) {
+      toast.error(accountRequestErrorMessage(error, t));
     } finally {
       setBusy(undefined);
     }

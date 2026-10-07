@@ -5,7 +5,7 @@ import { accountLifecycle, db } from "@/db";
 import type { AccountLifecycleSnapshot } from "./types";
 
 const ACCOUNT_DELETION_COOLING_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
-const ACCOUNT_LIFECYCLE_LOCK_PREFIX = "anonresume:account-lifecycle:";
+const ACCOUNT_LIFECYCLE_LOCK_PREFIX = "anonresume:account-deletion:";
 
 type AccountTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type AccountLifecycleRow = typeof accountLifecycle.$inferSelect;

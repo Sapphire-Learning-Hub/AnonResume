@@ -8,6 +8,10 @@ import { useRouter } from "next/navigation";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
 
+import {
+  accountRequestErrorMessage,
+  requestAccountJson,
+} from "./account-request";
 import { useAccountCenterStyles } from "./AccountCenter.style";
 
 type AccountProfile = {
@@ -26,12 +30,6 @@ type AccountSession = {
   ipAddress: string | null;
   userAgent: string | null;
 };
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) throw new Error("account_request_failed");
-  return response.json() as Promise<T>;
-}
 
 function jsonRequest(method: string, body?: unknown): RequestInit {
   return {
@@ -68,7 +66,7 @@ export function AccountCenter() {
     toast.error(t("account.error.load"));
   });
   const loadSessions = useCallback(async () => {
-    const result = await requestJson<{ sessions: AccountSession[] }>(
+    const result = await requestAccountJson<{ sessions: AccountSession[] }>(
       "/api/account/sessions",
     );
     setSessions(result.sessions);
@@ -77,8 +75,8 @@ export function AccountCenter() {
   useEffect(() => {
     let active = true;
     void Promise.all([
-      requestJson<{ profile: AccountProfile }>("/api/account/profile"),
-      requestJson<{ sessions: AccountSession[] }>("/api/account/sessions"),
+      requestAccountJson<{ profile: AccountProfile }>("/api/account/profile"),
+      requestAccountJson<{ sessions: AccountSession[] }>("/api/account/sessions"),
     ]).then(([profileResult, sessionResult]) => {
       if (!active) return;
       setProfile(profileResult.profile);
@@ -103,8 +101,11 @@ export function AccountCenter() {
     try {
       await operation();
       toast.success(success);
-    } catch {
-      toast.error({ key: "account-action-error", content: t("account.error.action") });
+    } catch (error) {
+      toast.error({
+        key: "account-action-error",
+        content: accountRequestErrorMessage(error, t),
+      });
     } finally {
       setBusy(undefined);
     }
@@ -112,7 +113,7 @@ export function AccountCenter() {
 
   async function saveProfile() {
     await runOperation("profile", async () => {
-      await requestJson("/api/account/profile", jsonRequest("PATCH", { name }));
+      await requestAccountJson("/api/account/profile", jsonRequest("PATCH", { name }));
       setProfile((current) => current ? { ...current, name } : current);
     }, t("account.profile.saved"));
   }
@@ -123,7 +124,7 @@ export function AccountCenter() {
       return;
     }
     await runOperation("password", async () => {
-      await requestJson("/api/account/password", jsonRequest("POST", {
+      await requestAccountJson("/api/account/password", jsonRequest("POST", {
         currentPassword,
         newPassword,
         locale,
@@ -135,7 +136,7 @@ export function AccountCenter() {
   }
 
   async function sendEmailCode(stage: "old" | "new") {
-    await runOperation(`email-${stage}`, () => requestJson(
+    await runOperation(`email-${stage}`, () => requestAccountJson(
       "/api/account/email/challenge",
       jsonRequest("POST", {
         stage,
@@ -148,7 +149,7 @@ export function AccountCenter() {
 
   async function changeEmail() {
     await runOperation("email-change", async () => {
-      await requestJson("/api/account/email", jsonRequest("POST", {
+      await requestAccountJson("/api/account/email", jsonRequest("POST", {
         currentPassword: emailPassword,
         newEmail,
         oldEmailCode,
@@ -164,21 +165,21 @@ export function AccountCenter() {
 
   async function revokeSession(sessionId: string) {
     await runOperation(`session-${sessionId}`, async () => {
-      await requestJson("/api/account/sessions", jsonRequest("DELETE", { sessionId }));
+      await requestAccountJson("/api/account/sessions", jsonRequest("DELETE", { sessionId }));
       await loadSessions();
     }, t("account.sessions.removed"));
   }
 
   async function revokeOtherSessions() {
     await runOperation("sessions-other", async () => {
-      await requestJson("/api/account/sessions", jsonRequest("POST"));
+      await requestAccountJson("/api/account/sessions", jsonRequest("POST"));
       await loadSessions();
     }, t("account.sessions.removed"));
   }
 
   async function sendDeletionCode() {
     await runOperation("deletion-code", async () => {
-      await requestJson("/api/account/deletion/challenge", jsonRequest("POST", {
+      await requestAccountJson("/api/account/deletion/challenge", jsonRequest("POST", {
         purpose: "delete",
         password: deletionPassword,
         locale,
@@ -189,7 +190,7 @@ export function AccountCenter() {
 
   async function submitDeletion() {
     await runOperation("deletion-submit", async () => {
-      await requestJson("/api/account/deletion", jsonRequest("POST", {
+      await requestAccountJson("/api/account/deletion", jsonRequest("POST", {
         password: deletionPassword,
         code: deletionCode,
         locale,

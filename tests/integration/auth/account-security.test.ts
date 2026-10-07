@@ -9,6 +9,7 @@ import {
   adminSessions,
   db,
 } from "@/db";
+import { getDatabaseSchemaName } from "@/db";
 import {
   consumeAccountEmailChallenge,
   issueAccountEmailChallenge,
@@ -18,11 +19,14 @@ import {
   changeAccountEmail,
   changeAccountPassword,
   isPasswordResetAllowedForToken,
+  revokeAccountSession,
+  updateAccountProfile,
 } from "@/lib/auth/account/security";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 describe("account security", () => {
   const userIds: string[] = [];
+  const schema = `"${getDatabaseSchemaName().replaceAll('"', '""')}"`;
 
   async function createCredentialUser(label: string) {
     const userId = `account-security-${label}-${randomUUID()}`;
@@ -231,8 +235,9 @@ describe("account security", () => {
 
   it("changes a password while keeping only the current ordinary session", async () => {
     const user = await createCredentialUser("password");
-    await addSession(user.userId, "current-session");
-    const otherSessionId = await addSession(user.userId, "other-session");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+    const otherSessionId = await addSession(user.userId, `${user.userId}-other`);
     await db.insert(adminSessions).values({
       userId: user.userId,
       baseSessionId: otherSessionId,
@@ -245,7 +250,7 @@ describe("account security", () => {
 
     await changeAccountPassword({
       userId: user.userId,
-      currentSessionToken: "current-session",
+      currentSessionToken: currentSession,
       currentPassword: user.password,
       newPassword: "replacement-password-456",
       notify: async () => undefined,
@@ -255,7 +260,7 @@ describe("account security", () => {
       `SELECT token FROM "session" WHERE "userId" = $1`,
       [user.userId],
     );
-    expect(sessions.rows).toEqual([{ token: "current-session" }]);
+    expect(sessions.rows).toEqual([{ token: currentSession }]);
     await expect(
       db
         .select()
@@ -273,6 +278,152 @@ describe("account security", () => {
         password: "replacement-password-456",
       }),
     ).resolves.toBe(true);
+  });
+
+  it("revokes the management session associated with a removed device", async () => {
+    const user = await createCredentialUser("session-revoke");
+    const currentSessionId = await addSession(
+      user.userId,
+      `${user.userId}-current`,
+    );
+    const removedSessionId = await addSession(
+      user.userId,
+      `${user.userId}-removed`,
+    );
+    await db.insert(adminSessions).values({
+      userId: user.userId,
+      baseSessionId: removedSessionId,
+      tokenHash: `admin-${randomUUID()}`,
+      accessVersion: 1,
+      lastSeenAt: new Date("2026-10-07T00:00:00.000Z"),
+      idleExpiresAt: new Date("2026-10-07T01:00:00.000Z"),
+      absoluteExpiresAt: new Date("2026-10-08T00:00:00.000Z"),
+    });
+
+    await revokeAccountSession({
+      userId: user.userId,
+      currentSessionId,
+      sessionId: removedSessionId,
+    });
+
+    await expect(
+      db
+        .select()
+        .from(adminSessions)
+        .where(eq(adminSessions.userId, user.userId)),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("does not report a committed password change as failed when the notice cannot be delivered", async () => {
+    const user = await createCredentialUser("password-notice");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+
+    await expect(changeAccountPassword({
+      userId: user.userId,
+      currentSessionToken: currentSession,
+      currentPassword: user.password,
+      newPassword: "replacement-password-456",
+      notify: async () => {
+        throw new Error("mail unavailable");
+      },
+    })).resolves.toBeUndefined();
+
+    const credential = await getDatabasePool().query<{ password: string }>(
+      `SELECT password FROM "account"
+        WHERE "userId" = $1 AND "providerId" = 'credential'`,
+      [user.userId],
+    );
+    await expect(verifyPassword({
+      hash: credential.rows[0]!.password,
+      password: "replacement-password-456",
+    })).resolves.toBe(true);
+  });
+
+  it("rechecks lifecycle state after waiting for an account deletion transaction", async () => {
+    const user = await createCredentialUser("password-deletion-race");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+    const locker = await getDatabasePool().connect();
+
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `anonresume:account-deletion:${user.userId}`,
+      ]);
+      const passwordChange = changeAccountPassword({
+        userId: user.userId,
+        currentSessionToken: currentSession,
+        currentPassword: user.password,
+        newPassword: "replacement-password-456",
+        notify: async () => undefined,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      const requestedAt = new Date("2026-10-07T00:00:00.000Z");
+      await locker.query(
+        `INSERT INTO ${schema}.account_lifecycle
+          (user_id, status, deletion_requested_at, deletion_due_at,
+           created_at, updated_at)
+         VALUES ($1, 'pending_deletion', $2, $3, $2, $2)`,
+        [
+          user.userId,
+          requestedAt,
+          new Date("2026-10-14T00:00:00.000Z"),
+        ],
+      );
+      await locker.query("COMMIT");
+
+      await expect(passwordChange).rejects.toMatchObject({
+        code: "account_unavailable",
+      });
+    } finally {
+      await locker.query("ROLLBACK").catch(() => undefined);
+      locker.release();
+    }
+  });
+
+  it("does not write profile data after a concurrent deletion request", async () => {
+    const user = await createCredentialUser("profile-deletion-race");
+    const locker = await getDatabasePool().connect();
+
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `anonresume:account-deletion:${user.userId}`,
+      ]);
+      const profileUpdate = updateAccountProfile({
+        userId: user.userId,
+        name: "Late profile value",
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      const requestedAt = new Date("2026-10-07T00:00:00.000Z");
+      await locker.query(
+        `INSERT INTO ${schema}.account_lifecycle
+          (user_id, status, deletion_requested_at, deletion_due_at,
+           created_at, updated_at)
+         VALUES ($1, 'pending_deletion', $2, $3, $2, $2)`,
+        [
+          user.userId,
+          requestedAt,
+          new Date("2026-10-14T00:00:00.000Z"),
+        ],
+      );
+      await locker.query("COMMIT");
+
+      await expect(profileUpdate).rejects.toMatchObject({
+        code: "account_unavailable",
+      });
+      const identity = await getDatabasePool().query<{ name: string }>(
+        `SELECT name FROM "user" WHERE id = $1`,
+        [user.userId],
+      );
+      expect(identity.rows[0]?.name).not.toBe("Late profile value");
+    } finally {
+      await locker.query("ROLLBACK").catch(() => undefined);
+      locker.release();
+    }
   });
 
   it("changes email only after old and new address challenges are consumed", async () => {

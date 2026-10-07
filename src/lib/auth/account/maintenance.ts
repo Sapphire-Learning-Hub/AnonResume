@@ -110,6 +110,20 @@ async function deleteProjectOwnedData(
   );
   await client.query(
     `UPDATE ${table("user_invitations")}
+        SET token_hash = NULL,
+            invalidated_at = COALESCE(invalidated_at, $2),
+            invalidation_reason = COALESCE(
+              invalidation_reason,
+              'inviter_account_deleted'
+            ),
+            updated_at = $2
+      WHERE inviter_user_id = $1
+        AND accepted_at IS NULL
+        AND revoked_at IS NULL`,
+    [userId, now],
+  );
+  await client.query(
+    `UPDATE ${table("user_invitations")}
         SET invited_email = $1, token_hash = NULL,
             invalidated_at = COALESCE(invalidated_at, $2), updated_at = $2
       WHERE lower(invited_email) = lower($3)`,

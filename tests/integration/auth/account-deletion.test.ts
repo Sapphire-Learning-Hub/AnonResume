@@ -11,6 +11,7 @@ import {
   db,
   pdfExportJobs,
   resumes,
+  userInvitations,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { issueAccountEmailChallenge } from "@/lib/auth/account/challenges";
@@ -75,6 +76,9 @@ describe("account deletion lifecycle", () => {
   afterEach(async () => {
     for (const userId of userIds.splice(0)) {
       await db
+        .delete(userInvitations)
+        .where(eq(userInvitations.inviterUserId, userId));
+      await db
         .delete(accountEmailChallenges)
         .where(eq(accountEmailChallenges.userId, userId));
       await db
@@ -101,8 +105,9 @@ describe("account deletion lifecycle", () => {
 
   it("immediately unpublishes resumes, cancels work, and keeps only the current session", async () => {
     const user = await createUser("submit");
-    await addSession(user.userId, "current-session");
-    await addSession(user.userId, "other-session");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+    await addSession(user.userId, `${user.userId}-other`);
     const resumeId = `resume-${randomUUID()}`;
     const document = createEditorOnboardingDocument("zh-CN");
     await db.insert(resumes).values({
@@ -135,7 +140,7 @@ describe("account deletion lifecycle", () => {
 
     const result = await submitAccountDeletion({
       userId: user.userId,
-      currentSessionToken: "current-session",
+      currentSessionToken: currentSession,
       password: user.password,
       code,
       now,
@@ -161,12 +166,97 @@ describe("account deletion lifecycle", () => {
       `SELECT token FROM "session" WHERE "userId" = $1`,
       [user.userId],
     );
-    expect(sessions.rows).toEqual([{ token: "current-session" }]);
+    expect(sessions.rows).toEqual([{ token: currentSession }]);
+  });
+
+  it("does not report a committed deletion request as failed when the notice cannot be delivered", async () => {
+    const user = await createUser("submit-notice");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+    const now = new Date("2026-10-07T00:00:00.000Z");
+    const code = await issueCode({
+      userId: user.userId,
+      email: user.email,
+      purpose: "delete_account",
+      now,
+    });
+
+    await expect(submitAccountDeletion({
+      userId: user.userId,
+      currentSessionToken: currentSession,
+      password: user.password,
+      code,
+      now,
+      notify: async () => {
+        throw new Error("mail unavailable");
+      },
+    })).resolves.toEqual({
+      deletionDueAt: new Date("2026-10-14T00:00:00.000Z"),
+    });
+    await expect(getAccountLifecycle(user.userId)).resolves.toMatchObject({
+      status: "pending_deletion",
+    });
+  });
+
+  it("rechecks the password after waiting for the deletion transaction", async () => {
+    const user = await createUser("password-race");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
+    const now = new Date("2026-10-07T00:00:00.000Z");
+    const code = await issueCode({
+      userId: user.userId,
+      email: user.email,
+      purpose: "delete_account",
+      now,
+    });
+    const replacementHash = await hashPassword("replacement-password-456");
+    const locker = await getDatabasePool().connect();
+
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `anonresume:account-deletion:${user.userId}`,
+      ]);
+      const deletion = submitAccountDeletion({
+        userId: user.userId,
+        currentSessionToken: currentSession,
+        password: user.password,
+        code,
+        now,
+        notify: async () => undefined,
+      });
+
+      await expect.poll(async () => {
+        const challenge = await db
+          .select({ consumedAt: accountEmailChallenges.consumedAt })
+          .from(accountEmailChallenges)
+          .where(eq(accountEmailChallenges.userId, user.userId))
+          .limit(1);
+        return Boolean(challenge[0]?.consumedAt);
+      }).toBe(true);
+      await locker.query(
+        `UPDATE "account" SET password = $2, "updatedAt" = now()
+          WHERE "userId" = $1 AND "providerId" = 'credential'`,
+        [user.userId, replacementHash],
+      );
+      await locker.query("COMMIT");
+
+      await expect(deletion).rejects.toMatchObject({
+        code: "password_incorrect",
+      });
+      await expect(getAccountLifecycle(user.userId)).resolves.toMatchObject({
+        status: "active",
+      });
+    } finally {
+      await locker.query("ROLLBACK").catch(() => undefined);
+      locker.release();
+    }
   });
 
   it("restores during the cooling period without republishing content", async () => {
     const user = await createUser("restore");
-    await addSession(user.userId, "current-session");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
     const resumeId = `resume-${randomUUID()}`;
     await db.insert(resumes).values({
       id: resumeId,
@@ -180,7 +270,7 @@ describe("account deletion lifecycle", () => {
     const requestedAt = new Date("2026-10-07T00:00:00.000Z");
     await submitAccountDeletion({
       userId: user.userId,
-      currentSessionToken: "current-session",
+      currentSessionToken: currentSession,
       password: user.password,
       code: await issueCode({
         userId: user.userId,
@@ -201,7 +291,7 @@ describe("account deletion lifecycle", () => {
 
     await restoreAccountDeletion({
       userId: user.userId,
-      currentSessionToken: "current-session",
+      currentSessionToken: currentSession,
       password: user.password,
       code: recoveryCode,
       now: recoveryTime,
@@ -221,7 +311,8 @@ describe("account deletion lifecycle", () => {
 
   it("anonymizes due accounts, clears delegated access, and releases the email", async () => {
     const user = await createUser("maintenance");
-    await addSession(user.userId, "current-session");
+    const currentSession = `${user.userId}-current`;
+    await addSession(user.userId, currentSession);
     await db.insert(adminPrincipals).values({
       userId: user.userId,
       kind: "delegated_admin",
@@ -241,10 +332,17 @@ describe("account deletion lifecycle", () => {
       summary: "",
       document: createEditorOnboardingDocument("zh-CN"),
     });
+    const [invitation] = await db.insert(userInvitations).values({
+      inviterUserId: user.userId,
+      invitedEmail: `invitee-${randomUUID()}@example.com`,
+      tokenHash: `invitation-${randomUUID()}`,
+      lastSentAt: new Date("2026-10-07T00:00:00.000Z"),
+      expiresAt: new Date("2026-10-14T00:00:00.000Z"),
+    }).returning({ id: userInvitations.id });
     const requestedAt = new Date("2026-10-07T00:00:00.000Z");
     await submitAccountDeletion({
       userId: user.userId,
-      currentSessionToken: "current-session",
+      currentSessionToken: currentSession,
       password: user.password,
       code: await issueCode({
         userId: user.userId,
@@ -296,6 +394,20 @@ describe("account deletion lifecycle", () => {
         .from(aiProviderCredentials)
         .where(eq(aiProviderCredentials.ownerUserId, user.userId)),
     ).resolves.toHaveLength(0);
+    await expect(
+      db
+        .select({
+          invalidatedAt: userInvitations.invalidatedAt,
+          invalidationReason: userInvitations.invalidationReason,
+          tokenHash: userInvitations.tokenHash,
+        })
+        .from(userInvitations)
+        .where(eq(userInvitations.id, invitation!.id)),
+    ).resolves.toEqual([{
+      invalidatedAt: new Date("2026-10-14T00:00:00.000Z"),
+      invalidationReason: "inviter_account_deleted",
+      tokenHash: null,
+    }]);
     await expect(
       db
         .select()

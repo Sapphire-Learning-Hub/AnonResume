@@ -12,7 +12,8 @@ import { getDatabaseSchemaName } from "./schema";
 
 export type UserInvitationInvalidationReason =
   | "registered_independently"
-  | "accepted_via_other_invitation";
+  | "accepted_via_other_invitation"
+  | "inviter_account_deleted";
 
 const schemaName = getDatabaseSchemaName();
 

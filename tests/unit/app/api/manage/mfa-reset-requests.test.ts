@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth/session", () => ({
-  getOptionalIdentitySession: mocks.getSession,
+  getOptionalSession: mocks.getSession,
 }));
 
 vi.mock("@/lib/admin/api", () => ({
@@ -50,7 +50,7 @@ describe("management MFA reset request routes", () => {
     mocks.review.mockResolvedValue({ id: "request-1", status: "approved" });
   });
 
-  it("uses the product identity session for self-service request access", async () => {
+  it("uses the active product session for self-service request access", async () => {
     const getResponse = await getRequest();
     expect(getResponse.status).toBe(200);
     expect(mocks.getOwn).toHaveBeenCalledWith("delegated");
@@ -87,7 +87,7 @@ describe("management MFA reset request routes", () => {
     });
   });
 
-  it("rejects self-service access without a product identity session", async () => {
+  it("rejects self-service access without an active product session", async () => {
     mocks.getSession.mockResolvedValue(null);
 
     const response = await getRequest();

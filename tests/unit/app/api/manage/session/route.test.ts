@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   getAccess: vi.fn(),
   getIdentity: vi.fn(),
+  getLifecycle: vi.fn(),
   hasMfaDevice: vi.fn(),
   verifyEnrollment: vi.fn(),
 }));
@@ -16,6 +17,9 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/lib/auth/session", () => ({
   getOptionalIdentitySession: mocks.getIdentity,
+}));
+vi.mock("@/lib/auth/account/repository", () => ({
+  getAccountLifecycle: mocks.getLifecycle,
 }));
 
 vi.mock("@/lib/admin/store", async (importOriginal) => {
@@ -48,6 +52,7 @@ describe("management session route", () => {
       user: { id: "user-admin", email: "user@example.com" },
     });
     mocks.getAccess.mockResolvedValue({ kind: "delegated_admin" });
+    mocks.getLifecycle.mockResolvedValue({ status: "active" });
     mocks.hasMfaDevice.mockResolvedValue(false);
   });
 
@@ -123,5 +128,17 @@ describe("management session route", () => {
       error: "mfa_already_configured",
     });
     expect(mocks.beginEnrollment).not.toHaveBeenCalled();
+  });
+
+  it("does not create a management session during account deletion cooling", async () => {
+    mocks.getLifecycle.mockResolvedValue({ status: "pending_deletion" });
+
+    const response = await POST(
+      request({ action: "begin_enrollment", deviceName: "主验证器" }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.beginEnrollment).not.toHaveBeenCalled();
+    expect(mocks.createSession).not.toHaveBeenCalled();
   });
 });

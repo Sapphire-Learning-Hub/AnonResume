@@ -168,6 +168,9 @@ export async function resendUserInvitation(input: {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+      `anonresume:account-deletion:${input.userId}`,
+    ]);
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtext('admin-invite-user:' || $1))",
       [input.userId],

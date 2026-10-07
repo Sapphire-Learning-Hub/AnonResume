@@ -7,6 +7,7 @@ import { getDatabasePool } from "@/lib/runtime/database";
 import { assertActiveProductAccount } from "./access";
 import { consumeAccountEmailChallenge } from "./challenges";
 import { AccountSecurityError } from "./errors";
+import { deliverPostCommitAccountNotice } from "./notifications";
 import { getAccountLifecycle } from "./repository";
 
 type AccountIdentityRow = {
@@ -54,7 +55,7 @@ async function getCredential(client: PoolClient, userId: string) {
   return credential;
 }
 
-async function verifyCurrentPassword(
+export async function verifyAccountPasswordWithClient(
   client: PoolClient,
   userId: string,
   password: string,
@@ -92,8 +93,16 @@ async function withSecurityTransaction<T>(
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-      `anonresume:account-security:${userId}`,
+      `anonresume:account-deletion:${userId}`,
     ]);
+    const lifecycle = await client.query<{ status: string }>(
+      `SELECT status FROM ${projectTable("account_lifecycle")}
+        WHERE user_id = $1`,
+      [userId],
+    );
+    if (lifecycle.rows[0] && lifecycle.rows[0].status !== "active") {
+      throw new AccountSecurityError("account_unavailable");
+    }
     const result = await callback(client);
     await client.query("COMMIT");
     return result;
@@ -133,18 +142,19 @@ export async function updateAccountProfile(input: {
   userId: string;
   name: string;
 }) {
-  await assertActiveProductAccount(input.userId);
   const name = input.name.trim();
   if (!name || name.length > 100) {
     throw new AccountSecurityError("account_unavailable");
   }
-  const result = await getDatabasePool().query<{ name: string }>(
-    `UPDATE "user" SET name = $2, "updatedAt" = now()
-      WHERE id = $1 RETURNING name`,
-    [input.userId, name],
-  );
-  if (!result.rows[0]) throw new AccountSecurityError("account_unavailable");
-  return result.rows[0];
+  return withSecurityTransaction(input.userId, async (client) => {
+    const result = await client.query<{ name: string }>(
+      `UPDATE "user" SET name = $2, "updatedAt" = now()
+        WHERE id = $1 RETURNING name`,
+      [input.userId, name],
+    );
+    if (!result.rows[0]) throw new AccountSecurityError("account_unavailable");
+    return result.rows[0];
+  });
 }
 
 export async function verifyAccountPassword(input: {
@@ -162,7 +172,7 @@ export async function verifyAccountPassword(input: {
   }
   const client = await getDatabasePool().connect();
   try {
-    await verifyCurrentPassword(client, input.userId, input.password);
+    await verifyAccountPasswordWithClient(client, input.userId, input.password);
   } finally {
     client.release();
   }
@@ -184,7 +194,7 @@ export async function changeAccountPassword(input: {
     input.userId,
     async (client) => {
       const identity = await getIdentity(client, input.userId, true);
-      const credential = await verifyCurrentPassword(
+      const credential = await verifyAccountPasswordWithClient(
         client,
         input.userId,
         input.currentPassword,
@@ -202,7 +212,10 @@ export async function changeAccountPassword(input: {
       return identity;
     },
   );
-  await input.notify({ email: identity.email, name: identity.name });
+  await deliverPostCommitAccountNotice(
+    () => input.notify({ email: identity.email, name: identity.name }),
+    "password_changed",
+  );
 }
 
 export async function changeAccountEmail(input: {
@@ -226,7 +239,7 @@ export async function changeAccountEmail(input: {
   let originalIdentity: AccountIdentityRow;
   try {
     originalIdentity = await getIdentity(identityClient, input.userId);
-    await verifyCurrentPassword(
+    await verifyAccountPasswordWithClient(
       identityClient,
       input.userId,
       input.currentPassword,
@@ -257,7 +270,7 @@ export async function changeAccountEmail(input: {
       if (identity.email !== originalIdentity.email) {
         throw new AccountSecurityError("account_unavailable");
       }
-      await verifyCurrentPassword(
+      await verifyAccountPasswordWithClient(
         client,
         input.userId,
         input.currentPassword,
@@ -288,11 +301,14 @@ export async function changeAccountEmail(input: {
       return identity;
     },
   );
-  await input.notifyOldAddress({
-    email: oldIdentity.email,
-    name: oldIdentity.name,
-    newEmail,
-  });
+  await deliverPostCommitAccountNotice(
+    () => input.notifyOldAddress({
+      email: oldIdentity.email,
+      name: oldIdentity.name,
+      newEmail,
+    }),
+    "email_changed",
+  );
 }
 
 export async function listAccountSessions(input: {

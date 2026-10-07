@@ -5,8 +5,12 @@ import { getDatabasePool } from "@/lib/runtime/database";
 
 import { consumeAccountEmailChallenge } from "./challenges";
 import { AccountSecurityError } from "./errors";
+import { deliverPostCommitAccountNotice } from "./notifications";
 import { getAccountLifecycle } from "./repository";
-import { verifyAccountPassword } from "./security";
+import {
+  verifyAccountPassword,
+  verifyAccountPasswordWithClient,
+} from "./security";
 
 const COOLING_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -39,14 +43,23 @@ async function withDeletionTransaction<T>(
   }
 }
 
-async function getIdentity(userId: string) {
-  const result = await getDatabasePool().query<{
+async function getIdentityWithClient(client: PoolClient, userId: string) {
+  const result = await client.query<{
     email: string;
     name: string;
   }>(`SELECT email, name FROM "user" WHERE id = $1`, [userId]);
   const identity = result.rows[0];
   if (!identity) throw new AccountSecurityError("account_unavailable");
   return identity;
+}
+
+async function getIdentity(userId: string) {
+  const client = await getDatabasePool().connect();
+  try {
+    return await getIdentityWithClient(client, userId);
+  } finally {
+    client.release();
+  }
 }
 
 async function keepOnlyCurrentSession(
@@ -93,54 +106,70 @@ export async function submitAccountDeletion(input: {
   });
   const deletionDueAt = new Date(now.getTime() + COOLING_PERIOD_MS);
 
-  await withDeletionTransaction(input.userId, async (client) => {
-    const lifecycle = await client.query<{ status: string }>(
-      `SELECT status FROM ${table("account_lifecycle")}
-        WHERE user_id = $1 FOR UPDATE`,
-      [input.userId],
-    );
-    if (lifecycle.rows[0] && lifecycle.rows[0].status !== "active") {
-      throw new AccountSecurityError("account_unavailable");
-    }
-    await client.query(
-      `INSERT INTO ${table("account_lifecycle")}
-        (user_id, status, deletion_requested_at, deletion_due_at, deleted_at,
-         created_at, updated_at)
-       VALUES ($1, 'pending_deletion', $2, $3, NULL, $2, $2)
-       ON CONFLICT (user_id) DO UPDATE SET
-         status = 'pending_deletion', deletion_requested_at = EXCLUDED.deletion_requested_at,
-         deletion_due_at = EXCLUDED.deletion_due_at, deleted_at = NULL,
-         updated_at = EXCLUDED.updated_at`,
-      [input.userId, now, deletionDueAt],
-    );
-    await client.query(
-      `UPDATE ${table("resumes")}
-          SET published = false, slug = NULL, updated_at = $2
-        WHERE user_id = $1`,
-      [input.userId, now],
-    );
-    await client.query(
-      `UPDATE ${table("pdf_export_jobs")}
-          SET status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,
-              cancel_requested = CASE WHEN status = 'running' THEN true ELSE cancel_requested END,
-              completed_at = CASE WHEN status = 'queued' THEN $2 ELSE completed_at END
-        WHERE requester_user_id = $1 OR resume_user_id = $1`,
-      [input.userId, now],
-    );
-    await client.query(
-      `UPDATE ${table("ai_runs")}
-          SET stop_requested_at = COALESCE(stop_requested_at, $2), updated_at = $2
-        WHERE user_id = $1 AND status IN ('queued', 'preparing', 'streaming')`,
-      [input.userId, now],
-    );
-    await keepOnlyCurrentSession(
-      client,
-      input.userId,
-      input.currentSessionToken,
-    );
-  });
+  const committedIdentity = await withDeletionTransaction(
+    input.userId,
+    async (client) => {
+      const lifecycle = await client.query<{ status: string }>(
+        `SELECT status FROM ${table("account_lifecycle")}
+          WHERE user_id = $1 FOR UPDATE`,
+        [input.userId],
+      );
+      if (lifecycle.rows[0] && lifecycle.rows[0].status !== "active") {
+        throw new AccountSecurityError("account_unavailable");
+      }
+      const currentIdentity = await getIdentityWithClient(client, input.userId);
+      if (currentIdentity.email !== identity.email) {
+        throw new AccountSecurityError("account_unavailable");
+      }
+      await verifyAccountPasswordWithClient(
+        client,
+        input.userId,
+        input.password,
+      );
+      await client.query(
+        `INSERT INTO ${table("account_lifecycle")}
+          (user_id, status, deletion_requested_at, deletion_due_at, deleted_at,
+           created_at, updated_at)
+         VALUES ($1, 'pending_deletion', $2, $3, NULL, $2, $2)
+         ON CONFLICT (user_id) DO UPDATE SET
+           status = 'pending_deletion', deletion_requested_at = EXCLUDED.deletion_requested_at,
+           deletion_due_at = EXCLUDED.deletion_due_at, deleted_at = NULL,
+           updated_at = EXCLUDED.updated_at`,
+        [input.userId, now, deletionDueAt],
+      );
+      await client.query(
+        `UPDATE ${table("resumes")}
+            SET published = false, slug = NULL, updated_at = $2
+          WHERE user_id = $1`,
+        [input.userId, now],
+      );
+      await client.query(
+        `UPDATE ${table("pdf_export_jobs")}
+            SET status = CASE WHEN status = 'queued' THEN 'cancelled' ELSE status END,
+                cancel_requested = CASE WHEN status = 'running' THEN true ELSE cancel_requested END,
+                completed_at = CASE WHEN status = 'queued' THEN $2 ELSE completed_at END
+          WHERE requester_user_id = $1 OR resume_user_id = $1`,
+        [input.userId, now],
+      );
+      await client.query(
+        `UPDATE ${table("ai_runs")}
+            SET stop_requested_at = COALESCE(stop_requested_at, $2), updated_at = $2
+          WHERE user_id = $1 AND status IN ('queued', 'preparing', 'streaming')`,
+        [input.userId, now],
+      );
+      await keepOnlyCurrentSession(
+        client,
+        input.userId,
+        input.currentSessionToken,
+      );
+      return currentIdentity;
+    },
+  );
 
-  await input.notify({ ...identity, deletionDueAt });
+  await deliverPostCommitAccountNotice(
+    () => input.notify({ ...committedIdentity, deletionDueAt }),
+    "deletion_requested",
+  );
   return { deletionDueAt };
 }
 
@@ -176,6 +205,15 @@ export async function restoreAccountDeletion(input: {
   });
 
   await withDeletionTransaction(input.userId, async (client) => {
+    const currentIdentity = await getIdentityWithClient(client, input.userId);
+    if (currentIdentity.email !== identity.email) {
+      throw new AccountSecurityError("account_unavailable");
+    }
+    await verifyAccountPasswordWithClient(
+      client,
+      input.userId,
+      input.password,
+    );
     const restored = await client.query(
       `UPDATE ${table("account_lifecycle")}
           SET status = 'active', deletion_requested_at = NULL,
@@ -193,5 +231,8 @@ export async function restoreAccountDeletion(input: {
       input.currentSessionToken,
     );
   });
-  await input.notify(identity);
+  await deliverPostCommitAccountNotice(
+    () => input.notify(identity),
+    "account_restored",
+  );
 }

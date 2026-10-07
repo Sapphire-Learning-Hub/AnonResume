@@ -17,9 +17,20 @@ const MAX_CELL_TEXT_LENGTH = 30_000;
 
 function jsonChunks(value: unknown) {
   const text = JSON.stringify(value, null, 2);
+  return textChunks(text);
+}
+
+function textChunks(text: string) {
   const chunks: string[] = [];
-  for (let start = 0; start < text.length; start += MAX_CELL_TEXT_LENGTH) {
-    chunks.push(text.slice(start, start + MAX_CELL_TEXT_LENGTH));
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(start + MAX_CELL_TEXT_LENGTH, text.length);
+    const endsWithHighSurrogate = end < text.length &&
+      text.charCodeAt(end - 1) >= 0xd800 &&
+      text.charCodeAt(end - 1) <= 0xdbff;
+    if (endsWithHighSurrogate) end -= 1;
+    chunks.push(text.slice(start, end));
+    start = end;
   }
   return chunks.length ? chunks : [""];
 }
@@ -141,22 +152,25 @@ function localizedSheets(
         { header: zh ? "标题" : "Title", key: "title", width: 30 },
         { header: zh ? "范围" : "Scope", key: "contextScope", width: 14 },
         { header: zh ? "消息序号" : "Sequence", key: "sequence", width: 12 },
+        { header: zh ? "内容段" : "Part", key: "part", width: 10 },
         { header: zh ? "角色" : "Role", key: "role", width: 14 },
         { header: zh ? "消息内容" : "Message", key: "text", width: 100 },
         { header: zh ? "状态" : "State", key: "completionState", width: 16 },
         { header: zh ? "创建时间" : "Created at", key: "messageCreatedAt", width: 22 },
       ],
-      rows: data.conversations.map((row) => ({
-        conversationId: row.conversationId,
-        resumeId: row.resumeId,
-        title: row.title,
-        contextScope: row.contextScope,
-        sequence: row.sequence,
-        role: row.role,
-        text: row.text?.slice(0, MAX_CELL_TEXT_LENGTH) ?? null,
-        completionState: row.completionState,
-        messageCreatedAt: row.messageCreatedAt ?? row.conversationCreatedAt,
-      })),
+      rows: data.conversations.flatMap((row) =>
+        textChunks(row.text ?? "").map((text, index) => ({
+          conversationId: row.conversationId,
+          resumeId: row.resumeId,
+          title: row.title,
+          contextScope: row.contextScope,
+          sequence: row.sequence,
+          part: index + 1,
+          role: row.role,
+          text,
+          completionState: row.completionState,
+          messageCreatedAt: row.messageCreatedAt ?? row.conversationCreatedAt,
+        }))),
     },
     {
       name: names[5]!,
@@ -214,7 +228,7 @@ export async function streamAccountExport(
   const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
     stream: output,
     useStyles: true,
-    useSharedStrings: true,
+    useSharedStrings: false,
   });
 
   void (async () => {
