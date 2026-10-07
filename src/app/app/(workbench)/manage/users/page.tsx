@@ -54,8 +54,10 @@ export default async function ManagementUsersPage({
           totalPages: users.totalPages,
         }}
         rows={users.items.map((user) => {
+          const lifecycleActive = user.lifecycleStatus === "active";
           const canOperateTarget =
-            context.kind === "super_admin" || user.principalKind === null;
+            lifecycleActive &&
+            (context.kind === "super_admin" || user.principalKind === null);
           const assignedRoleNames = user.roles.map((role) =>
             role.systemKey
               ? getAdminSystemRolePresentation(t, role.systemKey).name
@@ -79,14 +81,27 @@ export default async function ManagementUsersPage({
               : assignedRoleNames.length > 0
                 ? assignedRoleNames.join("、")
                 : t("users.regular"),
-            <AdminStatus
-              key="status"
-              tone={user.suspended ? "danger" : "success"}
-            >
-              {user.suspended ? t("users.suspended") : t("users.normal")}
-            </AdminStatus>,
+            user.lifecycleStatus === "pending_deletion" ? (
+              <AdminStatus key="status" tone="warning">
+                {t("users.pendingDeletion")}
+                {user.deletionDueAt
+                  ? ` · ${t("users.pendingDeletionDue", { time: user.deletionDueAt.toLocaleString(locale) })}`
+                  : null}
+              </AdminStatus>
+            ) : user.lifecycleStatus === "deleted" ? (
+              <AdminStatus key="status" tone="danger">
+                {t("users.deleted")}
+              </AdminStatus>
+            ) : (
+              <AdminStatus
+                key="status"
+                tone={user.suspended ? "danger" : "success"}
+              >
+                {user.suspended ? t("users.suspended") : t("users.normal")}
+              </AdminStatus>
+            ),
             user.createdAt.toLocaleString(locale),
-            user.principalKind === "super_admin" ? "-" : (
+            user.principalKind === "super_admin" || !lifecycleActive ? "-" : (
               <AdminUserActions
                 canResendInvitation={canInviteAdministrator && canOperateTarget && user.invitationPending}
                 canRevokeSessions={canOperateTarget && (context.kind === "super_admin" || context.permissions.includes("users.sessions.revoke"))}

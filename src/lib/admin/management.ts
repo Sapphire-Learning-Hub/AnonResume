@@ -70,6 +70,9 @@ async function assertUserOperationAllowed({
   actorUserId: string;
   targetUserId: string;
 }) {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+    `anonresume:account-deletion:${targetUserId}`,
+  ]);
   const actor = await client.query<{ kind: string }>(
     `SELECT kind FROM ${schema}.admin_principals
       WHERE user_id = $1 AND quarantined_at IS NULL`,
@@ -85,17 +88,26 @@ async function assertUserOperationAllowed({
     email: string;
     name: string;
     principalKind: string | null;
+    lifecycleStatus: string;
   }>(
     `SELECT identity.name, identity.email,
-        principal.kind AS "principalKind"
+        principal.kind AS "principalKind",
+        coalesce(lifecycle.status, 'active') AS "lifecycleStatus"
        FROM "user" AS identity
        LEFT JOIN ${schema}.admin_principals AS principal
          ON principal.user_id = identity.id
+       LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+         ON lifecycle.user_id = identity.id
       WHERE identity.id = $1
       FOR UPDATE OF identity`,
     [targetUserId],
   );
   if (!target.rows[0]) throw new AdminManagementNotFoundError();
+  if (target.rows[0].lifecycleStatus !== "active") {
+    throw new AdminManagementConflictError(
+      "Pending or deleted accounts cannot be changed through user operations",
+    );
+  }
   if (target.rows[0].principalKind === "super_admin") {
     throw new AdminManagementConflictError(
       "The super-admin cannot be changed through user operations",
@@ -299,11 +311,30 @@ export async function setAdminRoles(input: {
   const roleIds = [...new Set(input.roleIds)].sort();
   try {
     await client.query("BEGIN");
-    const user = await client.query<{ email: string; id: string; name: string }>(
-      `SELECT id, name, email FROM "user" WHERE id = $1 FOR UPDATE`,
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+      `anonresume:account-deletion:${input.userId}`,
+    ]);
+    const user = await client.query<{
+      email: string;
+      id: string;
+      lifecycleStatus: string;
+      name: string;
+    }>(
+      `SELECT identity.id, identity.name, identity.email,
+              coalesce(lifecycle.status, 'active') AS "lifecycleStatus"
+         FROM "user" AS identity
+         LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+           ON lifecycle.user_id = identity.id
+        WHERE identity.id = $1
+        FOR UPDATE OF identity`,
       [input.userId],
     );
     if (user.rowCount !== 1) throw new AdminManagementNotFoundError();
+    if (user.rows[0]!.lifecycleStatus !== "active") {
+      throw new AdminManagementConflictError(
+        "Pending or deleted accounts cannot receive management roles",
+      );
+    }
     const principal = await client.query<{
       accessVersion: number;
       kind: string;
