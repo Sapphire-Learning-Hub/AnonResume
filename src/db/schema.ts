@@ -728,6 +728,7 @@ const accountEmailChallengeColumns = {
     >()
     .notNull(),
   emailHash: text("email_hash").notNull(),
+  sourceHash: text("source_hash"),
   bindingHash: text("binding_hash"),
   codeHash: text("code_hash").notNull(),
   failedAttempts: integer("failed_attempts").notNull().default(0),

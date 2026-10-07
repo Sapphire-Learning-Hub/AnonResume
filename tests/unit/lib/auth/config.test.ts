@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   getRuntimeConfig: vi.fn(),
   invalidateInvitations: vi.fn(),
   isSuperAdminPrincipal: vi.fn(),
+  isPasswordResetAllowedForUser: vi.fn(),
+  invalidatePasswordResetToken: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
 }));
 
@@ -19,6 +21,10 @@ vi.mock("@/lib/runtime/email", () => ({
 }));
 vi.mock("@/lib/admin/store", () => ({
   isSuperAdminPrincipal: mocks.isSuperAdminPrincipal,
+}));
+vi.mock("@/lib/auth/account/security", () => ({
+  isPasswordResetAllowedForUser: mocks.isPasswordResetAllowedForUser,
+  invalidatePasswordResetToken: mocks.invalidatePasswordResetToken,
 }));
 vi.mock("@/lib/invitations/registration", () => ({
   invalidateInvitationsForIndependentRegistration: mocks.invalidateInvitations,
@@ -68,6 +74,7 @@ describe("restart-scoped Better Auth configuration", () => {
     }).__anonResumeAuthPromise;
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues());
     mocks.isSuperAdminPrincipal.mockResolvedValue(false);
+    mocks.isPasswordResetAllowedForUser.mockResolvedValue(true);
   });
 
   it("creates one auth instance for concurrent callers", async () => {
@@ -143,6 +150,7 @@ describe("restart-scoped Better Auth configuration", () => {
       emailAndPassword: {
         sendResetPassword: (input: {
           user: { id: string; email: string; name: string };
+          token: string;
           url: string;
         }) => Promise<void>;
         revokeSessionsOnPasswordReset: boolean;
@@ -151,6 +159,7 @@ describe("restart-scoped Better Auth configuration", () => {
 
     await options.emailAndPassword.sendResetPassword({
       user: { id: "user-1", email: "user@example.com", name: "User" },
+      token: "reset-token",
       url: "https://resume.example.com/api/auth/reset-password/token",
     });
 
@@ -169,6 +178,7 @@ describe("restart-scoped Better Auth configuration", () => {
       emailAndPassword: {
         sendResetPassword: (input: {
           user: { id: string; email: string; name: string };
+          token: string;
           url: string;
         }) => Promise<void>;
       };
@@ -176,9 +186,35 @@ describe("restart-scoped Better Auth configuration", () => {
 
     await options.emailAndPassword.sendResetPassword({
       user: { id: "super-admin", email: "admin@example.com", name: "Admin" },
+      token: "super-token",
       url: "https://resume.example.com/api/auth/reset-password/token",
     });
 
     expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it("silently discards reset tokens for pending deletion accounts", async () => {
+    mocks.isPasswordResetAllowedForUser.mockResolvedValue(false);
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      emailAndPassword: {
+        sendResetPassword: (input: {
+          user: { id: string; email: string; name: string };
+          token: string;
+          url: string;
+        }) => Promise<void>;
+      };
+    };
+
+    await options.emailAndPassword.sendResetPassword({
+      user: { id: "pending-user", email: "user@example.com", name: "User" },
+      token: "pending-token",
+      url: "https://resume.example.com/api/auth/reset-password/pending-token",
+    });
+
+    expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
+    expect(mocks.invalidatePasswordResetToken).toHaveBeenCalledWith(
+      "pending-token",
+    );
   });
 });
