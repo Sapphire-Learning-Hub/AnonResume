@@ -168,6 +168,9 @@ export async function resendUserInvitation(input: {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+      `anonresume:account-deletion:${input.userId}`,
+    ]);
     await client.query(
       "SELECT pg_advisory_xact_lock(hashtext('admin-invite-user:' || $1))",
       [input.userId],
@@ -186,12 +189,14 @@ export async function resendUserInvitation(input: {
       email: string;
       emailVerified: boolean;
       hasCredential: boolean;
+      lifecycleStatus: string;
       name: string;
       principalKind: "super_admin" | "delegated_admin" | null;
     }>(
       `SELECT identity.name, identity.email,
               identity."emailVerified" AS "emailVerified",
               principal.kind AS "principalKind",
+              coalesce(lifecycle.status, 'active') AS "lifecycleStatus",
               EXISTS (
                 SELECT 1 FROM "account"
                  WHERE "userId" = identity.id AND "providerId" = 'credential'
@@ -199,6 +204,8 @@ export async function resendUserInvitation(input: {
          FROM "user" AS identity
          LEFT JOIN ${schema}.admin_principals AS principal
            ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
+         LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+           ON lifecycle.user_id = identity.id
         WHERE identity.id = $1
         FOR UPDATE OF identity`,
       [input.userId],
@@ -209,6 +216,7 @@ export async function resendUserInvitation(input: {
     if (
       target.emailVerified ||
       target.hasCredential ||
+      target.lifecycleStatus !== "active" ||
       purpose !== "delegated_admin" ||
       target.principalKind !== "delegated_admin"
     ) {

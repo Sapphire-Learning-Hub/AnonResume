@@ -5,6 +5,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
 import { getBootstrapNodeEnvironment } from "@/lib/config/bootstrap";
+import type { AccountEmailChallengePurpose } from "@/lib/auth/account/types";
 
 export type EmailDeliveryConfig =
   | {
@@ -51,6 +52,31 @@ interface ProductInvitationEmailInput {
   replacesPreviousLink: boolean;
   to: string;
   url: string;
+}
+
+interface AccountVerificationCodeEmailInput {
+  from: string;
+  name: string;
+  to: string;
+  code: string;
+  purpose: AccountEmailChallengePurpose;
+  locale: "zh-CN" | "en-US";
+}
+
+export type AccountSecurityNoticeEvent =
+  | "password_changed"
+  | "email_changed"
+  | "deletion_requested"
+  | "account_restored"
+  | "account_deleted";
+
+interface AccountSecurityNoticeEmailInput {
+  from: string;
+  name: string;
+  to: string;
+  event: AccountSecurityNoticeEvent;
+  newEmail?: string;
+  locale: "zh-CN" | "en-US";
 }
 
 declare global {
@@ -191,6 +217,144 @@ export function buildPasswordResetEmail({
         <a href="${safeUrl}" style="display:inline-block;border-radius:999px;background:#d73b72;color:#ffffff;padding:12px 22px;text-decoration:none;font-weight:700;">设置新密码</a>
         <p style="margin:28px 0 8px;color:#8a7c83;font-size:13px;line-height:1.6;">如果按钮无法打开，请复制以下地址：</p>
         <p style="margin:0;word-break:break-all;color:#6f6068;font-size:13px;line-height:1.6;">${safeUrl}</p>
+      </div>
+    </div>
+  </body>
+</html>`,
+  };
+}
+
+export function buildAccountVerificationCodeEmail({
+  from,
+  name,
+  to,
+  code,
+  purpose,
+  locale,
+}: AccountVerificationCodeEmailInput) {
+  const copy = locale === "en-US"
+    ? {
+        greeting: `Hello ${name || "AnonResume user"},`,
+        subjects: {
+          change_email_old: "Confirm your current email address",
+          change_email_new: "Confirm your new email address",
+          delete_account: "Confirm your AnonResume account deletion",
+          restore_account: "Confirm your AnonResume account recovery",
+        },
+        instruction: "Enter this verification code in AnonResume:",
+        expiry: "The code expires in 10 minutes. Ignore this email if you did not request it.",
+      }
+    : {
+        greeting: `${name || "AnonResume 用户"}，你好。`,
+        subjects: {
+          change_email_old: "确认当前 AnonResume 邮箱",
+          change_email_new: "确认新的 AnonResume 邮箱",
+          delete_account: "确认注销 AnonResume 账号",
+          restore_account: "确认恢复 AnonResume 账号",
+        },
+        instruction: "请在 AnonResume 中输入以下验证码：",
+        expiry: "验证码将在 10 分钟后失效。如果不是你发起的操作，请忽略这封邮件。",
+      };
+  const subject = copy.subjects[purpose];
+  const safeName = escapeHtml(copy.greeting);
+  const safeCode = escapeHtml(code);
+
+  return {
+    from,
+    to,
+    subject,
+    text: [copy.greeting, "", copy.instruction, code, "", copy.expiry].join(
+      "\n",
+    ),
+    html: `<!doctype html>
+<html lang="${locale}">
+  <body style="margin:0;background:#f7f3f5;color:#261d22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+      <div style="border:1px solid #eadfe4;border-radius:22px;background:#ffffff;padding:34px;">
+        <h1 style="margin:0 0 14px;font-size:25px;line-height:1.3;">${escapeHtml(subject)}</h1>
+        <p style="margin:0 0 12px;line-height:1.7;">${safeName}</p>
+        <p style="margin:0 0 16px;color:#6f6068;line-height:1.7;">${escapeHtml(copy.instruction)}</p>
+        <p style="margin:0 0 18px;font-size:32px;font-weight:750;letter-spacing:.18em;">${safeCode}</p>
+        <p style="margin:0;color:#8a7c83;font-size:13px;line-height:1.6;">${escapeHtml(copy.expiry)}</p>
+      </div>
+    </div>
+  </body>
+</html>`,
+  };
+}
+
+export function buildAccountSecurityNoticeEmail({
+  from,
+  name,
+  to,
+  event,
+  newEmail,
+  locale,
+}: AccountSecurityNoticeEmailInput) {
+  const english = {
+    password_changed: {
+      subject: "Your AnonResume password was changed",
+      body: "Your account password has been changed and other signed-in sessions were revoked.",
+    },
+    email_changed: {
+      subject: "Your AnonResume email address changed",
+      body: `Your sign-in email address was changed${newEmail ? ` to ${newEmail}` : ""}.`,
+    },
+    deletion_requested: {
+      subject: "AnonResume account deletion requested",
+      body: "Your account entered the 7-day recovery period.",
+    },
+    account_restored: {
+      subject: "Your AnonResume account was restored",
+      body: "The pending account deletion was cancelled.",
+    },
+    account_deleted: {
+      subject: "Your AnonResume account was deleted",
+      body: "The account deletion recovery period ended and deletion is complete.",
+    },
+  } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
+  const chinese = {
+    password_changed: {
+      subject: "你的 AnonResume 密码已修改",
+      body: "账号密码已修改，其他已登录会话已被撤销。",
+    },
+    email_changed: {
+      subject: "你的 AnonResume 邮箱已修改",
+      body: `登录邮箱已修改${newEmail ? `为 ${newEmail}` : ""}。`,
+    },
+    deletion_requested: {
+      subject: "AnonResume 账号注销申请已提交",
+      body: "账号已进入 7 天冷静期。",
+    },
+    account_restored: {
+      subject: "你的 AnonResume 账号已恢复",
+      body: "待处理的账号注销已取消。",
+    },
+    account_deleted: {
+      subject: "你的 AnonResume 账号已注销",
+      body: "账号注销冷静期已结束，注销处理已完成。",
+    },
+  } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
+  const copy = (locale === "en-US" ? english : chinese)[event];
+  const greeting = locale === "en-US"
+    ? `Hello ${name || "AnonResume user"},`
+    : `${name || "AnonResume 用户"}，你好。`;
+
+  return {
+    from,
+    to,
+    subject: copy.subject,
+    text: [greeting, "", copy.body, "", locale === "en-US"
+      ? "If this was not you, contact the instance administrator immediately."
+      : "如果不是你本人操作，请立即联系实例管理员。"].join("\n"),
+    html: `<!doctype html>
+<html lang="${locale}">
+  <body style="margin:0;background:#f7f3f5;color:#261d22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+      <div style="border:1px solid #eadfe4;border-radius:22px;background:#ffffff;padding:34px;">
+        <h1 style="margin:0 0 14px;font-size:25px;line-height:1.3;">${escapeHtml(copy.subject)}</h1>
+        <p style="margin:0 0 12px;line-height:1.7;">${escapeHtml(greeting)}</p>
+        <p style="margin:0;color:#6f6068;line-height:1.7;">${escapeHtml(copy.body)}</p>
       </div>
     </div>
   </body>
@@ -495,6 +659,50 @@ export async function sendProductInvitationEmail({
     return;
   }
 
+  await getSmtpTransporter(config).sendMail(message);
+}
+
+export async function sendAccountVerificationCode(input: {
+  email: string;
+  name: string;
+  code: string;
+  purpose: AccountEmailChallengePurpose;
+  locale: "zh-CN" | "en-US";
+}) {
+  const config = await getEmailDeliveryConfig();
+  const message = buildAccountVerificationCodeEmail({
+    from: config.from,
+    to: input.email,
+    ...input,
+  });
+  if (config.transport === "console") {
+    console.info(
+      `[AnonResume] Account verification code for ${input.email}: ${input.code}`,
+    );
+    return;
+  }
+  await getSmtpTransporter(config).sendMail(message);
+}
+
+export async function sendAccountSecurityNotice(input: {
+  email: string;
+  name: string;
+  event: AccountSecurityNoticeEvent;
+  newEmail?: string;
+  locale: "zh-CN" | "en-US";
+}) {
+  const config = await getEmailDeliveryConfig();
+  const message = buildAccountSecurityNoticeEmail({
+    from: config.from,
+    to: input.email,
+    ...input,
+  });
+  if (config.transport === "console") {
+    console.info(
+      `[AnonResume] Account security notice for ${input.email}: ${input.event}`,
+    );
+    return;
+  }
   await getSmtpTransporter(config).sendMail(message);
 }
 

@@ -49,6 +49,10 @@ describe("administrator invitations", () => {
 
   afterAll(async () => {
     if (createdUserIds.length > 0) {
+      await getDatabasePool().query(
+        `DELETE FROM ${schema}.account_lifecycle WHERE user_id = ANY($1::text[])`,
+        [createdUserIds],
+      );
       for (const table of [
         "admin_sessions",
         "admin_recovery_codes",
@@ -208,6 +212,51 @@ describe("administrator invitations", () => {
       email,
       purpose: "delegated_admin",
     });
+  });
+
+  it("does not resend an invitation after a concurrent deletion request wins the account lock", async () => {
+    const invited = await createAdministrator(
+      `deletion-race-${randomUUID()}@example.com`,
+      vi.fn(),
+    );
+    const locker = await getDatabasePool().connect();
+    const deliverInvitation = vi.fn();
+
+    try {
+      await locker.query("BEGIN");
+      await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `anonresume:account-deletion:${invited.userId}`,
+      ]);
+      const resend = resendUserInvitation({
+        actorUserId,
+        actorKind: "super_admin",
+        userId: invited.userId,
+        deliverInvitation,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      const requestedAt = new Date("2026-10-07T00:00:00.000Z");
+      await locker.query(
+        `INSERT INTO ${schema}.account_lifecycle
+          (user_id, status, deletion_requested_at, deletion_due_at,
+           created_at, updated_at)
+         VALUES ($1, 'pending_deletion', $2, $3, $2, $2)`,
+        [
+          invited.userId,
+          requestedAt,
+          new Date("2026-10-14T00:00:00.000Z"),
+        ],
+      );
+      await locker.query("COMMIT");
+
+      await expect(resend).rejects.toBeInstanceOf(
+        AdminInvitationConflictError,
+      );
+      expect(deliverInvitation).not.toHaveBeenCalled();
+    } finally {
+      await locker.query("ROLLBACK").catch(() => undefined);
+      locker.release();
+    }
   });
 
   it("does not let a delegated administrator resend a management invitation", async () => {

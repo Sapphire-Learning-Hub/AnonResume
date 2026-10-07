@@ -636,6 +636,155 @@ export const accountRestrictions =
         accountRestrictionColumns,
       );
 
+const accountLifecycleColumns = {
+  userId: text("user_id").primaryKey(),
+  status: text("status")
+    .$type<"active" | "pending_deletion" | "deleted">()
+    .notNull()
+    .default("active"),
+  deletionRequestedAt: timestamp("deletion_requested_at", {
+    withTimezone: true,
+  }),
+  deletionDueAt: timestamp("deletion_due_at", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const accountLifecycle =
+  schemaName === "public"
+    ? pgTable("account_lifecycle", accountLifecycleColumns, (table) => [
+        check(
+          "account_lifecycle_status_check",
+          sql`${table.status} IN ('active', 'pending_deletion', 'deleted')`,
+        ),
+        check(
+          "account_lifecycle_dates_check",
+          sql`(
+            ${table.status} = 'active'
+            AND ${table.deletionRequestedAt} IS NULL
+            AND ${table.deletionDueAt} IS NULL
+            AND ${table.deletedAt} IS NULL
+          ) OR (
+            ${table.status} = 'pending_deletion'
+            AND ${table.deletionRequestedAt} IS NOT NULL
+            AND ${table.deletionDueAt} IS NOT NULL
+            AND ${table.deletedAt} IS NULL
+          ) OR (
+            ${table.status} = 'deleted'
+            AND ${table.deletionRequestedAt} IS NOT NULL
+            AND ${table.deletionDueAt} IS NOT NULL
+            AND ${table.deletedAt} IS NOT NULL
+          )`,
+        ),
+        index("account_lifecycle_status_due_idx").on(
+          table.status,
+          table.deletionDueAt,
+        ),
+      ])
+    : pgSchema(schemaName).table(
+        "account_lifecycle",
+        accountLifecycleColumns,
+        (table) => [
+          check(
+            "account_lifecycle_status_check",
+            sql`${table.status} IN ('active', 'pending_deletion', 'deleted')`,
+          ),
+          check(
+            "account_lifecycle_dates_check",
+            sql`(
+              ${table.status} = 'active'
+              AND ${table.deletionRequestedAt} IS NULL
+              AND ${table.deletionDueAt} IS NULL
+              AND ${table.deletedAt} IS NULL
+            ) OR (
+              ${table.status} = 'pending_deletion'
+              AND ${table.deletionRequestedAt} IS NOT NULL
+              AND ${table.deletionDueAt} IS NOT NULL
+              AND ${table.deletedAt} IS NULL
+            ) OR (
+              ${table.status} = 'deleted'
+              AND ${table.deletionRequestedAt} IS NOT NULL
+              AND ${table.deletionDueAt} IS NOT NULL
+              AND ${table.deletedAt} IS NOT NULL
+            )`,
+          ),
+          index("account_lifecycle_status_due_idx").on(
+            table.status,
+            table.deletionDueAt,
+          ),
+        ],
+      );
+
+const accountEmailChallengeColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  purpose: text("purpose")
+    .$type<
+      | "change_email_old"
+      | "change_email_new"
+      | "delete_account"
+      | "restore_account"
+    >()
+    .notNull(),
+  emailHash: text("email_hash").notNull(),
+  sourceHash: text("source_hash"),
+  bindingHash: text("binding_hash"),
+  codeHash: text("code_hash").notNull(),
+  failedAttempts: integer("failed_attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  resendAvailableAt: timestamp("resend_available_at", {
+    withTimezone: true,
+  }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+export const accountEmailChallenges =
+  schemaName === "public"
+    ? pgTable(
+        "account_email_challenges",
+        accountEmailChallengeColumns,
+        (table) => [
+          check(
+            "account_email_challenges_purpose_check",
+            sql`${table.purpose} IN ('change_email_old', 'change_email_new', 'delete_account', 'restore_account')`,
+          ),
+          check(
+            "account_email_challenges_failed_attempts_check",
+            sql`${table.failedAttempts} >= 0 AND ${table.failedAttempts} <= 5`,
+          ),
+          index("account_email_challenges_user_purpose_idx").on(
+            table.userId,
+            table.purpose,
+            table.createdAt.desc(),
+          ),
+          index("account_email_challenges_expiry_idx").on(table.expiresAt),
+        ],
+      )
+    : pgSchema(schemaName).table(
+        "account_email_challenges",
+        accountEmailChallengeColumns,
+        (table) => [
+          check(
+            "account_email_challenges_purpose_check",
+            sql`${table.purpose} IN ('change_email_old', 'change_email_new', 'delete_account', 'restore_account')`,
+          ),
+          check(
+            "account_email_challenges_failed_attempts_check",
+            sql`${table.failedAttempts} >= 0 AND ${table.failedAttempts} <= 5`,
+          ),
+          index("account_email_challenges_user_purpose_idx").on(
+            table.userId,
+            table.purpose,
+            table.createdAt.desc(),
+          ),
+          index("account_email_challenges_expiry_idx").on(table.expiresAt),
+        ],
+      );
+
 const adminSessionColumns = {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id").notNull(),

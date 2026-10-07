@@ -9,7 +9,7 @@ import {
   getAdminMfaResetRequestForUser,
   submitAdminMfaResetRequest,
 } from "@/lib/admin/mfa-reset-requests";
-import { getOptionalIdentitySession } from "@/lib/auth/session";
+import { getOptionalSession } from "@/lib/auth/session";
 
 const submissionSchema = z.object({
   reason: z.string().trim().min(10).max(1000),
@@ -33,7 +33,7 @@ function requestErrorResponse(error: unknown) {
 }
 
 export async function GET() {
-  const session = await getOptionalIdentitySession();
+  const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -48,7 +48,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getOptionalIdentitySession();
+  const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await getOptionalIdentitySession();
+  const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

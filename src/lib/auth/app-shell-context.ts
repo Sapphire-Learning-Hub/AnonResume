@@ -11,6 +11,7 @@ import {
   hasVerifiedAdminMfaDevice,
   isAccountSuspended,
 } from "@/lib/admin/store";
+import { getAccountLifecycle } from "@/lib/auth/account/repository";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
 
 export async function requireAppShellContext() {
@@ -22,6 +23,12 @@ export async function requireAppShellContext() {
     isAccountSuspended(identity.user.id),
   ]);
   if (suspended) redirect("/sign-in?suspended=1");
+
+  const lifecycle = await getAccountLifecycle(identity.user.id);
+  if (lifecycle.status === "pending_deletion") {
+    redirect("/account-recovery");
+  }
+  if (lifecycle.status === "deleted") redirect("/sign-in");
 
   const mfaConfigured = assignedManagement
     ? await hasVerifiedAdminMfaDevice(identity.user.id)

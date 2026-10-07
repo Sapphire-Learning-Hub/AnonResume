@@ -1,6 +1,11 @@
 "use client";
 
-import { RightOutlined, UserAddOutlined, UserOutlined } from "@ant-design/icons";
+import {
+  IdcardOutlined,
+  RightOutlined,
+  UserAddOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 import { Button, Popover, Tooltip } from "antd";
 import { createStyles } from "antd-style";
 import { useState } from "react";
@@ -230,6 +235,17 @@ export function WorkbenchAccountMenu({
               </span>
             </div>
             <div className={styles.actions}>
+              {access.productAccess ? (
+                <Button
+                  className={styles.actionButton}
+                  href="/app/account"
+                  icon={<IdcardOutlined aria-hidden="true" />}
+                  onClick={() => setMenuOpen(false)}
+                  type="text"
+                >
+                  {t("account.navigation")}
+                </Button>
+              ) : null}
               {access.productAccess ? (
                 <Button
                   className={styles.actionButton}

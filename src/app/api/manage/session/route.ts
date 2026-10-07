@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getOptionalIdentitySession } from "@/lib/auth/session";
+import { getAccountLifecycle } from "@/lib/auth/account/repository";
 import {
   AdminMfaDeviceConflictError,
   createAdminSession,
@@ -54,7 +55,11 @@ async function setManagementSessionCookie(
 
 export async function POST(request: Request) {
   const session = await getOptionalIdentitySession();
-  if (!session || !(await getAdminAccessForUser(session.user.id))) {
+  if (
+    !session ||
+    (await getAccountLifecycle(session.user.id)).status !== "active" ||
+    !(await getAdminAccessForUser(session.user.id))
+  ) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

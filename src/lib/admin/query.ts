@@ -434,6 +434,9 @@ export async function listAdminUsers(request: AdminListRequest) {
     principalKind: string | null;
     roles: unknown;
     suspended: boolean;
+    lifecycleStatus: "active" | "pending_deletion" | "deleted";
+    deletionDueAt: Date | null;
+    deletedAt: Date | null;
   }>(
     request,
     `SELECT count(*)::text AS total FROM "user" AS identity ${search.clause}`,
@@ -450,6 +453,9 @@ export async function listAdminUsers(request: AdminListRequest) {
         WHERE resume.user_id = identity.id) AS resumes,
       principal.kind AS "principalKind",
       coalesce(assigned_roles.roles, '[]'::jsonb) AS roles,
+      coalesce(lifecycle.status, 'active') AS "lifecycleStatus",
+      lifecycle.deletion_due_at AS "deletionDueAt",
+      lifecycle.deleted_at AS "deletedAt",
       (restriction.user_id IS NOT NULL AND
        (restriction.suspended_until IS NULL OR restriction.suspended_until > now())) AS suspended
     FROM "user" AS identity
@@ -478,6 +484,8 @@ export async function listAdminUsers(request: AdminListRequest) {
     ) AS assigned_roles ON true
     LEFT JOIN ${schema}.account_restrictions AS restriction
       ON restriction.user_id = identity.id
+    LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+      ON lifecycle.user_id = identity.id
     ${search.clause}
     ORDER BY identity."createdAt" DESC, identity.id DESC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
@@ -500,7 +508,10 @@ export async function listAssignableAdminUsers(request: AdminListRequest) {
     normalizeSearchQuery(request.query),
   );
   const where = appendCondition(
-    search.clause,
+    appendCondition(
+      search.clause,
+      "(lifecycle.user_id IS NULL OR lifecycle.status = 'active')",
+    ),
     "principal.user_id IS NULL",
   );
 
@@ -514,11 +525,15 @@ export async function listAssignableAdminUsers(request: AdminListRequest) {
        FROM "user" AS identity
        LEFT JOIN ${schema}.admin_principals AS principal
          ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
+       LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+         ON lifecycle.user_id = identity.id
        ${where}`,
     `SELECT identity.id, identity.name, identity.email
        FROM "user" AS identity
        LEFT JOIN ${schema}.admin_principals AS principal
          ON principal.user_id = identity.id AND principal.quarantined_at IS NULL
+       LEFT JOIN ${schema}.account_lifecycle AS lifecycle
+         ON lifecycle.user_id = identity.id
        ${where}
        ORDER BY lower(identity.name) ASC, identity.id ASC
        LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,

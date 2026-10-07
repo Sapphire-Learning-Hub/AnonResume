@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   handlerGet: vi.fn(),
   handlerPost: vi.fn(),
   getAuth: vi.fn(),
+  isPasswordResetAllowedForToken: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/setup/access", () => ({
@@ -13,6 +14,9 @@ vi.mock("@/lib/admin/setup/access", () => ({
 
 vi.mock("@/lib/auth/config", () => ({
   getAuth: mocks.getAuth,
+}));
+vi.mock("@/lib/auth/account/security", () => ({
+  isPasswordResetAllowedForToken: mocks.isPasswordResetAllowedForToken,
 }));
 
 vi.mock("better-auth/next-js", () => ({
@@ -30,6 +34,30 @@ describe("authentication setup gate", () => {
     mocks.getAuth.mockResolvedValue({});
     mocks.handlerGet.mockResolvedValue(new Response(null, { status: 204 }));
     mocks.handlerPost.mockResolvedValue(new Response(null, { status: 204 }));
+    mocks.isPasswordResetAllowedForToken.mockResolvedValue(true);
+  });
+
+  it("rejects a previously issued reset token after deletion becomes pending", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+    mocks.isPasswordResetAllowedForToken.mockResolvedValue(false);
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: "issued-before-deletion",
+          newPassword: "replacement-password-456",
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      code: "INVALID_TOKEN",
+      message: "Invalid token",
+    });
+    expect(mocks.handlerPost).not.toHaveBeenCalled();
   });
 
   it("blocks auth mutations while initial setup is pending", async () => {

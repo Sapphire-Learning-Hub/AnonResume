@@ -4,6 +4,11 @@ import { after } from "next/server";
 
 import { isSuperAdminPrincipal } from "@/lib/admin/store";
 import {
+  invalidatePasswordResetToken,
+  isPasswordResetAllowedForUser,
+} from "@/lib/auth/account/security";
+import { sessionDeviceAdditionalFields } from "@/lib/auth/account/session-device";
+import {
   getBootstrapNodeEnvironment,
   readBootstrapConfig,
 } from "@/lib/config/bootstrap";
@@ -67,8 +72,14 @@ function createAuth(configuration: {
       requireEmailVerification: true,
       resetPasswordTokenExpiresIn: 3600,
       revokeSessionsOnPasswordReset: true,
-      sendResetPassword: async ({ user, url }) => {
-        if (await isSuperAdminPrincipal(user.id)) return;
+      sendResetPassword: async ({ user, url, token }) => {
+        if (
+          (await isSuperAdminPrincipal(user.id)) ||
+          !(await isPasswordResetAllowedForUser(user.id))
+        ) {
+          await invalidatePasswordResetToken(token);
+          return;
+        }
         await sendPasswordResetEmail({
           email: user.email,
           name: user.name,
@@ -78,6 +89,9 @@ function createAuth(configuration: {
     },
     rateLimit: {
       enabled: true,
+    },
+    session: {
+      additionalFields: sessionDeviceAdditionalFields,
     },
     socialProviders,
     plugins: [nextCookies()],

@@ -1,0 +1,1 @@
+ALTER TABLE "account_email_challenges" ADD COLUMN "source_hash" text;

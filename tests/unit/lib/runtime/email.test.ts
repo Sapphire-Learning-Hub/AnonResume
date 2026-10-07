@@ -1,4 +1,6 @@
 import {
+  buildAccountSecurityNoticeEmail,
+  buildAccountVerificationCodeEmail,
   buildProductInvitationEmail,
   buildPasswordResetEmail,
   buildVerificationEmail,
@@ -147,5 +149,45 @@ describe("password recovery email", () => {
     expect(message.text).toContain("callbackURL=%2Freset-password&lang=zh");
     expect(message.html).toContain("&lt;User&gt;");
     expect(message.html).toContain("callbackURL=%2Freset-password&amp;lang=zh");
+  });
+});
+
+describe("account security email", () => {
+  it("renders a purpose-specific verification code in both locales", () => {
+    const chinese = buildAccountVerificationCodeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "用户",
+      to: "user@example.com",
+      code: "123456",
+      purpose: "delete_account",
+      locale: "zh-CN",
+    });
+    const english = buildAccountVerificationCodeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "User",
+      to: "user@example.com",
+      code: "123456",
+      purpose: "change_email_new",
+      locale: "en-US",
+    });
+
+    expect(chinese.subject).toContain("注销");
+    expect(chinese.text).toContain("123456");
+    expect(english.subject).toContain("email address");
+    expect(english.html).toContain("123456");
+  });
+
+  it("notifies the old address after an email change", () => {
+    const message = buildAccountSecurityNoticeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "User",
+      to: "old@example.com",
+      event: "email_changed",
+      newEmail: "new@example.com",
+      locale: "en-US",
+    });
+
+    expect(message.subject).toContain("email address changed");
+    expect(message.text).toContain("new@example.com");
   });
 });
