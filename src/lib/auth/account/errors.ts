@@ -10,6 +10,7 @@ export type AccountSecurityErrorCode =
   | "password_incorrect"
   | "password_invalid"
   | "password_unavailable"
+  | "recovery_period_ended"
   | "session_not_found";
 
 export class AccountSecurityError extends Error {

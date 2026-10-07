@@ -66,10 +66,12 @@ function equalHash(left: string, right: string) {
 async function assertChallengeLifecycle(
   userId: string,
   purpose: AccountEmailChallengePurpose,
+  now: Date,
 ) {
   const lifecycle = await getAccountLifecycle(userId);
   const allowed = purpose === "restore_account"
-    ? lifecycle.status === "pending_deletion"
+    ? lifecycle.status === "pending_deletion" &&
+      Boolean(lifecycle.deletionDueAt && lifecycle.deletionDueAt > now)
     : lifecycle.status === "active";
   if (!allowed) throw new AccountSecurityError("account_unavailable");
 }
@@ -110,8 +112,8 @@ export async function issueAccountEmailChallenge(input: {
   now?: Date;
   deliver: (value: { code: string; expiresAt: Date }) => Promise<void>;
 }) {
-  await assertChallengeLifecycle(input.userId, input.purpose);
   const now = input.now ?? new Date();
+  await assertChallengeLifecycle(input.userId, input.purpose, now);
   const id = randomUUID();
   const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
   const emailHash = secretHash(
@@ -289,6 +291,6 @@ export async function consumeAccountEmailChallenge(input: {
   };
 
   if (input.client) return consume(input.client);
-  await assertChallengeLifecycle(input.userId, input.purpose);
+  await assertChallengeLifecycle(input.userId, input.purpose, input.now ?? new Date());
   return withChallengeTransaction(input.userId, input.purpose, consume);
 }

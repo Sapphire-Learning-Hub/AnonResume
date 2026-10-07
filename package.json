@@ -22,6 +22,7 @@
     "worker:ai": "bun run scripts/ai-worker.ts",
     "worker:pdf": "bun run scripts/pdf-worker.ts",
     "ai:maintenance": "bun run scripts/ai-maintenance.ts",
+    "account:maintenance": "bun run scripts/account-maintenance.ts",
     "auth:migrate": "bun run scripts/auth-migrate.ts",
     "deploy:migrate": "bun run auth:migrate -- --yes && bun run db:migrate",
     "deploy:bootstrap-admin": "bun run scripts/bootstrap-admin-link.ts",

@@ -150,8 +150,16 @@ export async function updateAccountProfile(input: {
 export async function verifyAccountPassword(input: {
   userId: string;
   password: string;
+  allowPendingDeletion?: boolean;
 }) {
-  await assertActiveProductAccount(input.userId);
+  if (input.allowPendingDeletion) {
+    const lifecycle = await getAccountLifecycle(input.userId);
+    if (lifecycle.status === "deleted") {
+      throw new AccountSecurityError("account_unavailable");
+    }
+  } else {
+    await assertActiveProductAccount(input.userId);
+  }
   const client = await getDatabasePool().connect();
   try {
     await verifyCurrentPassword(client, input.userId, input.password);

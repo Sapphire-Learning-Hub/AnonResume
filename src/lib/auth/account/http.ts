@@ -10,6 +10,8 @@ export function accountErrorResponse(error: unknown) {
         ? 429
         : error.code === "email_in_use"
           ? 409
+          : error.code === "recovery_period_ended"
+            ? 409
           : error.code === "session_not_found"
             ? 404
             : error.code === "account_unavailable"
