@@ -103,6 +103,48 @@ export const useResumeLinkDialogStyles = createStyles(({ token, css }) => ({
     font-size: 12px;
     font-weight: 400;
   `,
+  appearance: css`
+    min-width: 0;
+    margin: 18px 0 0;
+    padding: 14px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
+  `,
+  appearanceTitle: css`
+    padding: 0 5px;
+    color: ${token.colorText};
+    font-size: 13px;
+    font-weight: 600;
+  `,
+  appearanceControls: css`
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+
+    @media (max-width: 650px) {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  `,
+  colorPicker: css`
+    width: 34px;
+    height: 28px;
+    flex: none;
+  `,
+  underlineControl: css`
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    color: ${token.colorText};
+    font-size: 13px;
+
+    @media (max-width: 650px) {
+      justify-content: space-between;
+      margin-left: 0;
+    }
+  `,
   footer: css`
     display: flex;
     align-items: center;

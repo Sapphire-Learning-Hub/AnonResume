@@ -19,6 +19,10 @@ export function normalizeTextColor(value: unknown): string | undefined {
     : undefined;
 }
 
+export function normalizeLinkColor(value: unknown): string | undefined {
+  return value === "inherit" ? value : normalizeTextColor(value);
+}
+
 function sanitizeRuntimeRichTextContent(content: unknown): unknown {
   if (!isRecord(content) || !Array.isArray(content.content)) {
     return content;
@@ -65,6 +69,13 @@ function sanitizeRuntimeRichTextContent(content: unknown): unknown {
               const title = normalizeLinkHref(
                 isRecord(mark.attrs) ? mark.attrs.title : undefined,
               );
+              const color = normalizeLinkColor(
+                isRecord(mark.attrs) ? mark.attrs.color : undefined,
+              );
+              const underline = isRecord(mark.attrs)
+                && typeof mark.attrs.underline === "boolean"
+                ? mark.attrs.underline
+                : undefined;
 
               return href
                 ? [
@@ -73,6 +84,8 @@ function sanitizeRuntimeRichTextContent(content: unknown): unknown {
                       attrs: {
                         href,
                         ...(title ? { title } : {}),
+                        ...(color ? { color } : {}),
+                        ...(underline !== undefined ? { underline } : {}),
                       },
                     },
                   ]
@@ -128,6 +141,10 @@ export function normalizeRichTextContent(content: unknown): RichTextContent {
                   attrs: {
                     href: mark.attrs.href,
                     ...(mark.attrs.title ? { title: mark.attrs.title } : {}),
+                    ...(mark.attrs.color ? { color: mark.attrs.color } : {}),
+                    ...(mark.attrs.underline !== undefined
+                      ? { underline: mark.attrs.underline }
+                      : {}),
                   },
                 }
               : { type: "link" };

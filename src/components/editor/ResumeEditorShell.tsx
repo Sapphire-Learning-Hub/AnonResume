@@ -3076,6 +3076,7 @@ export function ResumeEditorShell({
       {linkDialogDraft ? (
         <ResumeLinkDialog
           initial={linkDialogDraft}
+          themeColor={document.settings.theme.accent}
           sections={document.sections
             .filter((section) => section.visible)
             .map((section) => ({
@@ -3090,6 +3091,8 @@ export function ResumeEditorShell({
               text: draft.text,
               href: draft.href,
               title: draft.title,
+              color: draft.color,
+              underline: draft.underline,
             });
 
             if (applied) setLinkDialogDraft(undefined);

@@ -12,6 +12,13 @@ const richTextMarkSchema = z.discriminatedUnion("type", [
       .object({
         href: z.string().min(1).optional(),
         title: z.string().min(1).optional(),
+        color: z
+          .union([
+            z.literal("inherit"),
+            z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
+          ])
+          .optional(),
+        underline: z.boolean().optional(),
       })
       .optional(),
   }),

@@ -323,7 +323,14 @@ function applyMarks(
           <a
             key={key}
             data-resume-link="true"
+            data-resume-link-underline={
+              mark.attrs.underline === true ? "true" : "false"
+            }
             href={mark.attrs.href}
+            style={{
+              color: mark.attrs.color ?? "var(--resume-accent-foreground)",
+              textDecoration: mark.attrs.underline === true ? "underline" : "none",
+            }}
             title={mark.attrs.title}
           >
             {current}
