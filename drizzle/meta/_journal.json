@@ -239,6 +239,13 @@
       "when": 1791139291547,
       "tag": "0033_next_alice",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791354091508,
+      "tag": "0034_wealthy_psylocke",
+      "breakpoints": true
     }
   ]
 }

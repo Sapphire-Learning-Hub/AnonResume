@@ -7,6 +7,8 @@ import { configDatabaseTables } from "./config-schema";
 import { invitationDatabaseTables } from "./invitation-schema";
 
 import {
+  accountEmailChallenges,
+  accountLifecycle,
   accountRestrictions,
   adminActivationTokens,
   adminAssignments,
@@ -49,6 +51,8 @@ export {
 } from "./config-schema";
 export { userInvitations } from "./invitation-schema";
 export {
+  accountEmailChallenges,
+  accountLifecycle,
   accountRestrictions,
   adminActivationTokens,
   adminAssignments,
@@ -77,6 +81,8 @@ export const db = drizzle({
     ...aiDatabaseTables,
     ...configDatabaseTables,
     ...invitationDatabaseTables,
+    accountEmailChallenges,
+    accountLifecycle,
     accountRestrictions,
     onboardingRuns,
     resumes,

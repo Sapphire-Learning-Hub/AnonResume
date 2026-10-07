@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { getAccountLifecycle } from "@/lib/auth/account/repository";
 import { getAuth, type AuthInstance } from "@/lib/auth/config";
 import {
   isAccountSuspended,
@@ -26,7 +27,8 @@ export async function getOptionalSession() {
   if (
     session &&
     ((await isManagementOnlyIdentity(session.user.id)) ||
-      (await isAccountSuspended(session.user.id)))
+      (await isAccountSuspended(session.user.id)) ||
+      (await getAccountLifecycle(session.user.id)).status !== "active")
   ) {
     return null;
   }
@@ -46,6 +48,13 @@ export async function requireSession() {
   }
   if (await isAccountSuspended(session.user.id)) {
     redirect("/sign-in?suspended=1");
+  }
+  const lifecycle = await getAccountLifecycle(session.user.id);
+  if (lifecycle.status === "pending_deletion") {
+    redirect("/account-recovery");
+  }
+  if (lifecycle.status === "deleted") {
+    redirect("/sign-in");
   }
 
   return session;
