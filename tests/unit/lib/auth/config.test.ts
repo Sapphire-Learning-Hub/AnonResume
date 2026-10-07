@@ -85,6 +85,37 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(mocks.getRuntimeConfig).toHaveBeenCalledOnce();
   });
 
+  it("keeps client-hint device metadata private on session records", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      session: { additionalFields: Record<string, unknown> };
+    };
+
+    expect(options.session.additionalFields).toEqual({
+      deviceModel: {
+        fieldName: "deviceModel",
+        input: false,
+        required: false,
+        returned: false,
+        type: "string",
+      },
+      platform: {
+        fieldName: "platform",
+        input: false,
+        required: false,
+        returned: false,
+        type: "string",
+      },
+      platformVersion: {
+        fieldName: "platformVersion",
+        input: false,
+        required: false,
+        returned: false,
+        type: "string",
+      },
+    });
+  });
+
   it("holds restart-scoped settings until a new process initializes", async () => {
     const first = await getAuth();
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues({

@@ -8,6 +8,19 @@ const release = resolveReleaseMetadata();
 const nextConfig: NextConfig = {
   output: "standalone",
   pageExtensions: ["js", "jsx", "md", "mdx", "ts", "tsx"],
+  headers() {
+    return [
+      {
+        source: "/app/:path*",
+        headers: [
+          {
+            key: "Accept-CH",
+            value: "Sec-CH-UA-Platform-Version, Sec-CH-UA-Model",
+          },
+        ],
+      },
+    ];
+  },
   env: {
     ANONRESUME_BUILD_COMMIT: release.commit ?? "",
     ANONRESUME_BUILD_TAG: release.tag,

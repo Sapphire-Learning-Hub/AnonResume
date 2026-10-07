@@ -81,12 +81,22 @@ async function withChallengeTransaction<T>(
   purpose: AccountEmailChallengePurpose,
   callback: (client: PoolClient) => Promise<T>,
 ) {
+  return withChallengePurposesTransaction(userId, [purpose], callback);
+}
+
+async function withChallengePurposesTransaction<T>(
+  userId: string,
+  purposes: readonly AccountEmailChallengePurpose[],
+  callback: (client: PoolClient) => Promise<T>,
+) {
   const client = await getDatabasePool().connect();
   try {
     await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-      `${CHALLENGE_LOCK_PREFIX}${userId}:${purpose}`,
-    ]);
+    for (const purpose of [...new Set(purposes)].sort()) {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+        `${CHALLENGE_LOCK_PREFIX}${userId}:${purpose}`,
+      ]);
+    }
     const value = await callback(client);
     await client.query("COMMIT");
     return value;
@@ -211,6 +221,136 @@ export async function issueAccountEmailChallenge(input: {
   return { expiresAt, resendAvailableAt };
 }
 
+type ChallengeVerification = {
+  purpose: AccountEmailChallengePurpose;
+  email: string;
+  code: string;
+  binding?: string;
+};
+
+async function validateAccountEmailChallenge(
+  client: PoolClient,
+  input: ChallengeVerification & { userId: string; now?: Date },
+) {
+  const result = await client.query<ChallengeRow>(
+    `SELECT id, email_hash AS "emailHash", binding_hash AS "bindingHash",
+            code_hash AS "codeHash", failed_attempts AS "failedAttempts",
+            expires_at AS "expiresAt",
+            resend_available_at AS "resendAvailableAt"
+       FROM ${challengeTable()}
+      WHERE user_id = $1 AND purpose = $2
+        AND consumed_at IS NULL AND invalidated_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE`,
+    [input.userId, input.purpose],
+  );
+  const challenge = result.rows[0];
+  if (!challenge) throw new AccountSecurityError("challenge_invalid");
+
+  const now = input.now ?? new Date();
+  if (challenge.expiresAt <= now) {
+    await client.query(
+      `UPDATE ${challengeTable()}
+          SET invalidated_at = $2, updated_at = $2 WHERE id = $1`,
+      [challenge.id, now],
+    );
+    throw new AccountSecurityError("challenge_expired");
+  }
+
+  const expectedEmailHash = secretHash(
+    "account-email-challenge-address",
+    normalizeEmail(input.email),
+  );
+  const expectedBindingHash = input.binding
+    ? secretHash("account-email-challenge-binding", input.binding)
+    : null;
+  if (
+    !equalHash(challenge.emailHash, expectedEmailHash) ||
+    challenge.bindingHash !== expectedBindingHash
+  ) {
+    throw new AccountSecurityError("challenge_invalid");
+  }
+
+  if (!/^\d{6}$/.test(input.code) || !equalHash(challenge.codeHash, codeHash(challenge.id, input.code))) {
+    const failedAttempts = challenge.failedAttempts + 1;
+    await client.query(
+      `UPDATE ${challengeTable()}
+          SET failed_attempts = $2::integer,
+              invalidated_at = CASE
+                WHEN $2::integer >= $3::integer
+                THEN $4::timestamptz
+                ELSE invalidated_at
+              END,
+              updated_at = $4::timestamptz
+        WHERE id = $1`,
+      [challenge.id, failedAttempts, CHALLENGE_MAX_ATTEMPTS, now],
+    );
+    throw new AccountSecurityError(
+      failedAttempts >= CHALLENGE_MAX_ATTEMPTS
+        ? "challenge_invalid"
+        : "challenge_code_invalid",
+    );
+  }
+
+  return { id: challenge.id, now };
+}
+
+export async function verifyAccountEmailChallenge(input: {
+  userId: string;
+  purpose: AccountEmailChallengePurpose;
+  email: string;
+  code: string;
+  binding?: string;
+  now?: Date;
+}) {
+  await assertChallengeLifecycle(input.userId, input.purpose, input.now ?? new Date());
+  return withChallengeTransaction(input.userId, input.purpose, async (client) => {
+    await validateAccountEmailChallenge(client, input);
+    return { verified: true as const };
+  });
+}
+
+export async function consumeAccountEmailChallenges(input: {
+  userId: string;
+  challenges: readonly ChallengeVerification[];
+  now?: Date;
+  client?: PoolClient;
+}) {
+  const consume = async (client: PoolClient) => {
+    const validated = [];
+    for (const challenge of input.challenges) {
+      validated.push(await validateAccountEmailChallenge(client, {
+        ...challenge,
+        userId: input.userId,
+        now: input.now,
+      }));
+    }
+    for (const challenge of validated) {
+      await client.query(
+        `UPDATE ${challengeTable()}
+            SET consumed_at = $2, updated_at = $2 WHERE id = $1`,
+        [challenge.id, challenge.now],
+      );
+    }
+    return { consumed: true as const };
+  };
+
+  if (input.client) return consume(input.client);
+  for (const challenge of input.challenges) {
+    await assertChallengeLifecycle(
+      input.userId,
+      challenge.purpose,
+      input.now ?? new Date(),
+    );
+  }
+  return withChallengePurposesTransaction(
+    input.userId,
+    input.challenges.map((challenge) => challenge.purpose),
+    consume,
+  );
+}
+
 export async function consumeAccountEmailChallenge(input: {
   userId: string;
   purpose: AccountEmailChallengePurpose;
@@ -220,77 +360,15 @@ export async function consumeAccountEmailChallenge(input: {
   now?: Date;
   client?: PoolClient;
 }) {
-  const consume = async (client: PoolClient) => {
-    const result = await client.query<ChallengeRow>(
-      `SELECT id, email_hash AS "emailHash", binding_hash AS "bindingHash",
-              code_hash AS "codeHash", failed_attempts AS "failedAttempts",
-              expires_at AS "expiresAt",
-              resend_available_at AS "resendAvailableAt"
-         FROM ${challengeTable()}
-        WHERE user_id = $1 AND purpose = $2
-          AND consumed_at IS NULL AND invalidated_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT 1
-        FOR UPDATE`,
-      [input.userId, input.purpose],
-    );
-    const challenge = result.rows[0];
-    if (!challenge) throw new AccountSecurityError("challenge_invalid");
-
-    const now = input.now ?? new Date();
-    if (challenge.expiresAt <= now) {
-      await client.query(
-        `UPDATE ${challengeTable()}
-            SET invalidated_at = $2, updated_at = $2 WHERE id = $1`,
-        [challenge.id, now],
-      );
-      throw new AccountSecurityError("challenge_expired");
-    }
-
-    const expectedEmailHash = secretHash(
-      "account-email-challenge-address",
-      normalizeEmail(input.email),
-    );
-    const expectedBindingHash = input.binding
-      ? secretHash("account-email-challenge-binding", input.binding)
-      : null;
-    if (
-      !equalHash(challenge.emailHash, expectedEmailHash) ||
-      challenge.bindingHash !== expectedBindingHash
-    ) {
-      throw new AccountSecurityError("challenge_invalid");
-    }
-
-    if (!/^\d{6}$/.test(input.code) || !equalHash(challenge.codeHash, codeHash(challenge.id, input.code))) {
-      const failedAttempts = challenge.failedAttempts + 1;
-      await client.query(
-        `UPDATE ${challengeTable()}
-            SET failed_attempts = $2::integer,
-                invalidated_at = CASE
-                  WHEN $2::integer >= $3::integer
-                  THEN $4::timestamptz
-                  ELSE invalidated_at
-                END,
-                updated_at = $4::timestamptz
-          WHERE id = $1`,
-        [challenge.id, failedAttempts, CHALLENGE_MAX_ATTEMPTS, now],
-      );
-      throw new AccountSecurityError(
-        failedAttempts >= CHALLENGE_MAX_ATTEMPTS
-          ? "challenge_invalid"
-          : "challenge_code_invalid",
-      );
-    }
-
-    await client.query(
-      `UPDATE ${challengeTable()}
-          SET consumed_at = $2, updated_at = $2 WHERE id = $1`,
-      [challenge.id, now],
-    );
-    return { consumed: true as const };
-  };
-
-  if (input.client) return consume(input.client);
-  await assertChallengeLifecycle(input.userId, input.purpose, input.now ?? new Date());
-  return withChallengeTransaction(input.userId, input.purpose, consume);
+  return consumeAccountEmailChallenges({
+    userId: input.userId,
+    challenges: [{
+      purpose: input.purpose,
+      email: input.email,
+      code: input.code,
+      binding: input.binding,
+    }],
+    now: input.now,
+    client: input.client,
+  });
 }

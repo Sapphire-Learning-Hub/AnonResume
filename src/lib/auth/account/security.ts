@@ -5,7 +5,7 @@ import { getDatabaseSchemaName } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 import { assertActiveProductAccount } from "./access";
-import { consumeAccountEmailChallenge } from "./challenges";
+import { consumeAccountEmailChallenges } from "./challenges";
 import { AccountSecurityError } from "./errors";
 import { deliverPostCommitAccountNotice } from "./notifications";
 import { getAccountLifecycle } from "./repository";
@@ -247,20 +247,21 @@ export async function changeAccountEmail(input: {
   } finally {
     identityClient.release();
   }
-  await consumeAccountEmailChallenge({
+  await consumeAccountEmailChallenges({
     userId: input.userId,
-    purpose: "change_email_old",
-    email: originalIdentity.email,
-    binding,
-    code: input.oldEmailCode,
-    now: input.now,
-  });
-  await consumeAccountEmailChallenge({
-    userId: input.userId,
-    purpose: "change_email_new",
-    email: newEmail,
-    binding,
-    code: input.newEmailCode,
+    challenges: [
+      {
+        purpose: "change_email_old",
+        email: originalIdentity.email,
+        code: input.oldEmailCode,
+      },
+      {
+        purpose: "change_email_new",
+        email: newEmail,
+        binding,
+        code: input.newEmailCode,
+      },
+    ],
     now: input.now,
   });
   const oldIdentity = await withSecurityTransaction(
@@ -323,10 +324,15 @@ export async function listAccountSessions(input: {
     expiresAt: Date;
     ipAddress: string | null;
     userAgent: string | null;
+    platform: string | null;
+    platformVersion: string | null;
+    deviceModel: string | null;
   }>(
     `SELECT id, "createdAt" AS "createdAt", "updatedAt" AS "updatedAt",
             "expiresAt" AS "expiresAt", "ipAddress" AS "ipAddress",
-            "userAgent" AS "userAgent"
+            "userAgent" AS "userAgent", platform,
+            "platformVersion" AS "platformVersion",
+            "deviceModel" AS "deviceModel"
        FROM "session" WHERE "userId" = $1
        ORDER BY "updatedAt" DESC, id ASC`,
     [input.userId],
@@ -335,6 +341,28 @@ export async function listAccountSessions(input: {
     ...session,
     current: session.id === input.currentSessionId,
   }));
+}
+
+export async function updateCurrentAccountSessionDevice(input: {
+  userId: string;
+  sessionId: string;
+  platform: string;
+  platformVersion: string;
+  model: string | null;
+}) {
+  await assertActiveProductAccount(input.userId);
+  await getDatabasePool().query(
+    `UPDATE "session"
+        SET platform = $3, "platformVersion" = $4, "deviceModel" = $5
+      WHERE id = $1 AND "userId" = $2`,
+    [
+      input.sessionId,
+      input.userId,
+      input.platform,
+      input.platformVersion,
+      input.model,
+    ],
+  );
 }
 
 export async function revokeAccountSession(input: {

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import { AuthExperienceShell } from "@/components/auth/AuthExperienceShell";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { useVerificationCooldown } from "@/components/ui/useVerificationCooldown";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { authClient } from "@/lib/auth/client";
@@ -250,7 +251,11 @@ export function AuthPanel({
   const [verificationEmail, setVerificationEmail] = useState<string | null>(
     null,
   );
-  const [resendSeconds, setResendSeconds] = useState(0);
+  const {
+    remainingSeconds: resendSeconds,
+    resetCooldown: resetResendCooldown,
+    startCooldown: startResendCooldown,
+  } = useVerificationCooldown();
   const [isPending, setIsPending] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [recoveryRequested, setRecoveryRequested] = useState(false);
@@ -281,18 +286,6 @@ export function AuthPanel({
   useEffect(() => {
     return () => notification.destroy("authentication-email-verification");
   }, [notification]);
-
-  useEffect(() => {
-    if (resendSeconds <= 0) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setResendSeconds((value) => Math.max(0, value - 1));
-    }, 1000);
-
-    return () => window.clearTimeout(timer);
-  }, [resendSeconds]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -337,7 +330,7 @@ export function AuthPanel({
         }
 
         setVerificationEmail(email);
-        setResendSeconds(60);
+        startResendCooldown();
         return;
       } else {
         const result = await authClient.signIn.email({
@@ -394,7 +387,7 @@ export function AuthPanel({
 
       notification.destroy("authentication-email-verification");
       toast.success(t("auth.verificationResent"));
-      setResendSeconds(60);
+      startResendCooldown();
     } catch {
       toast.error(t("auth.resendVerificationFailed"));
     } finally {
@@ -501,7 +494,7 @@ export function AuthPanel({
                   block
                 >
                   {resendSeconds > 0
-                    ? t("auth.resendVerificationCountdown", {
+                    ? t("common.resendAvailableIn", {
                         seconds: resendSeconds,
                       })
                     : t("auth.resendVerification")}
@@ -513,7 +506,7 @@ export function AuthPanel({
                     notification.destroy("authentication-email-verification");
                     setMode("sign-in");
                     setVerificationEmail(null);
-                    setResendSeconds(0);
+                    resetResendCooldown();
                   }}
                 >
                   {t("auth.backToSignIn")}
@@ -592,7 +585,7 @@ export function AuthPanel({
                     block
                   >
                     {resendSeconds > 0
-                      ? t("auth.resendVerificationCountdown", {
+                      ? t("common.resendAvailableIn", {
                           seconds: resendSeconds,
                         })
                       : t("auth.resendVerification")}

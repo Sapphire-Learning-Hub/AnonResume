@@ -168,6 +168,9 @@ describe("AuthPanel email verification", () => {
     expect(feedbackMocks.toastSuccess).toHaveBeenCalledWith(
       "验证邮件已重新发送。",
     );
+    await waitFor(() => expect(screen.getByRole("button", {
+      name: /60 秒后可重新发送/,
+    })).toBeDisabled());
   });
 
   it.each([

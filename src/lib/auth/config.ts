@@ -7,6 +7,7 @@ import {
   invalidatePasswordResetToken,
   isPasswordResetAllowedForUser,
 } from "@/lib/auth/account/security";
+import { sessionDeviceAdditionalFields } from "@/lib/auth/account/session-device";
 import {
   getBootstrapNodeEnvironment,
   readBootstrapConfig,
@@ -88,6 +89,9 @@ function createAuth(configuration: {
     },
     rateLimit: {
       enabled: true,
+    },
+    session: {
+      additionalFields: sessionDeviceAdditionalFields,
     },
     socialProviders,
     plugins: [nextCookies()],

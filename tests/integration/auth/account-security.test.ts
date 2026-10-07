@@ -12,14 +12,18 @@ import {
 import { getDatabaseSchemaName } from "@/db";
 import {
   consumeAccountEmailChallenge,
+  consumeAccountEmailChallenges,
   issueAccountEmailChallenge,
+  verifyAccountEmailChallenge,
 } from "@/lib/auth/account/challenges";
 import { AccountSecurityError } from "@/lib/auth/account/errors";
 import {
   changeAccountEmail,
   changeAccountPassword,
   isPasswordResetAllowedForToken,
+  listAccountSessions,
   revokeAccountSession,
+  updateCurrentAccountSessionDevice,
   updateAccountProfile,
 } from "@/lib/auth/account/security";
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -192,6 +196,77 @@ describe("account security", () => {
     }
   });
 
+  it("verifies a challenge without consuming it", async () => {
+    const user = await createCredentialUser("verify-only");
+    let code = "";
+    await issueAccountEmailChallenge({
+      userId: user.userId,
+      purpose: "change_email_old",
+      email: user.email,
+      source: "127.0.0.1",
+      deliver: async (value) => {
+        code = value.code;
+      },
+    });
+
+    await expect(verifyAccountEmailChallenge({
+      userId: user.userId,
+      purpose: "change_email_old",
+      email: user.email,
+      code,
+    })).resolves.toEqual({ verified: true });
+    await expect(consumeAccountEmailChallenge({
+      userId: user.userId,
+      purpose: "change_email_old",
+      email: user.email,
+      code,
+    })).resolves.toEqual({ consumed: true });
+  });
+
+  it("does not consume either challenge when one code is invalid", async () => {
+    const user = await createCredentialUser("atomic-challenges");
+    const newEmail = `new-${user.email}`;
+    const codes = new Map<string, string>();
+    for (const [purpose, email, binding] of [
+      ["change_email_old", user.email, undefined],
+      ["change_email_new", newEmail, `email-change:${newEmail}`],
+    ] as const) {
+      await issueAccountEmailChallenge({
+        userId: user.userId,
+        purpose,
+        email,
+        binding,
+        source: "127.0.0.1",
+        deliver: async ({ code }) => {
+          codes.set(purpose, code);
+        },
+      });
+    }
+
+    await expect(consumeAccountEmailChallenges({
+      userId: user.userId,
+      challenges: [
+        {
+          purpose: "change_email_old",
+          email: user.email,
+          code: codes.get("change_email_old")!,
+        },
+        {
+          purpose: "change_email_new",
+          email: newEmail,
+          binding: `email-change:${newEmail}`,
+          code: "000000",
+        },
+      ],
+    })).rejects.toMatchObject({ code: "challenge_code_invalid" });
+    await expect(consumeAccountEmailChallenge({
+      userId: user.userId,
+      purpose: "change_email_old",
+      email: user.email,
+      code: codes.get("change_email_old")!,
+    })).resolves.toEqual({ consumed: true });
+  });
+
   it("enforces resend delay and replaces the previous code", async () => {
     const user = await createCredentialUser("resend");
     const codes: string[] = [];
@@ -314,6 +389,43 @@ describe("account security", () => {
     ).resolves.toHaveLength(0);
   });
 
+  it("stores client-hint metadata only on the owned current session", async () => {
+    const user = await createCredentialUser("session-device");
+    const currentSessionId = await addSession(
+      user.userId,
+      `${user.userId}-current`,
+    );
+    const otherSessionId = await addSession(
+      user.userId,
+      `${user.userId}-other`,
+    );
+
+    await updateCurrentAccountSessionDevice({
+      userId: user.userId,
+      sessionId: currentSessionId,
+      platform: "macOS",
+      platformVersion: "26.0.1",
+      model: null,
+    });
+
+    const sessions = await listAccountSessions({
+      userId: user.userId,
+      currentSessionId,
+    });
+    expect(sessions.find((session) => session.id === currentSessionId)).toMatchObject({
+      current: true,
+      platform: "macOS",
+      platformVersion: "26.0.1",
+      deviceModel: null,
+    });
+    expect(sessions.find((session) => session.id === otherSessionId)).toMatchObject({
+      current: false,
+      platform: null,
+      platformVersion: null,
+      deviceModel: null,
+    });
+  });
+
   it("does not report a committed password change as failed when the notice cannot be delivered", async () => {
     const user = await createCredentialUser("password-notice");
     const currentSession = `${user.userId}-current`;
@@ -429,7 +541,6 @@ describe("account security", () => {
   it("changes email only after old and new address challenges are consumed", async () => {
     const user = await createCredentialUser("email");
     const newEmail = `new-${user.email}`;
-    const binding = `email-change:${newEmail.toLowerCase()}`;
     const codes = new Map<string, string>();
     for (const [purpose, email] of [
       ["change_email_old", user.email],
@@ -439,7 +550,9 @@ describe("account security", () => {
         userId: user.userId,
         purpose,
         email,
-        binding,
+        binding: purpose === "change_email_new"
+          ? `email-change:${newEmail.toLowerCase()}`
+          : undefined,
         source: "127.0.0.1",
         deliver: async ({ code }) => {
           codes.set(purpose, code);

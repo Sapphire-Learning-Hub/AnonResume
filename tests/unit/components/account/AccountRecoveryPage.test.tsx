@@ -63,6 +63,9 @@ describe("AccountRecoveryPage", () => {
       "/api/account/deletion/challenge",
       expect.objectContaining({ method: "POST" }),
     ));
+    await waitFor(() => expect(screen.getByRole("button", {
+      name: /60 秒后可重新发送/,
+    })).toBeDisabled());
     fireEvent.change(screen.getByLabelText("邮箱验证码"), {
       target: { value: "123456" },
     });

@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
 import { getDatabasePool } from "@/lib/runtime/database";
+import { sessionDeviceAdditionalFields } from "@/lib/auth/account/session-device";
 
 // Schema migration must not depend on platform configuration tables that may
 // not exist yet. Runtime authentication remains configured in src/lib/auth.
@@ -11,5 +12,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+  },
+  session: {
+    additionalFields: sessionDeviceAdditionalFields,
   },
 });
