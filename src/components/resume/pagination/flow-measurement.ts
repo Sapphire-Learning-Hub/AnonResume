@@ -76,7 +76,7 @@ function measureElementHeight(
 
   return Math.max(
     0,
-    Math.ceil(element.getBoundingClientRect().height / zoom) -
+    element.getBoundingClientRect().height / zoom -
       getCommittedSpacerHeight(element, committedSpacerHeights),
   );
 }
@@ -166,7 +166,7 @@ function measureTextCharacter(
 function listStaticRichTextSegments(blockElement: HTMLElement) {
   const nodes = Array.from(
     blockElement.querySelectorAll<HTMLElement>(
-      "[data-resume-rich-paragraph-index][data-resume-rich-node-index][data-resume-rich-node-type]",
+      '[data-resume-rich-empty-paragraph="true"][data-resume-rich-paragraph-index], [data-resume-rich-paragraph-index][data-resume-rich-node-index][data-resume-rich-node-type]',
     ),
   );
   const segments: StaticSegment[] = [];
@@ -175,6 +175,31 @@ function listStaticRichTextSegments(blockElement: HTMLElement) {
     const paragraphIndex = Number(element.dataset.resumeRichParagraphIndex);
     const nodeIndex = Number(element.dataset.resumeRichNodeIndex);
     const nodeType = element.dataset.resumeRichNodeType;
+
+    if (element.dataset.resumeRichEmptyParagraph === "true") {
+      const nextParagraph = element.nextElementSibling;
+      const nextParagraphIndex = Number(
+        nextParagraph instanceof HTMLElement
+          ? nextParagraph.dataset.resumeRichParagraphIndex
+          : undefined,
+      );
+
+      if (
+        !Number.isInteger(paragraphIndex) ||
+        !Number.isInteger(nextParagraphIndex)
+      ) {
+        continue;
+      }
+
+      const lineBreak = element.querySelector<HTMLElement>(":scope > br");
+
+      segments.push({
+        from: { paragraphIndex, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: nextParagraphIndex, nodeIndex: 0, offset: 0 },
+        rect: (lineBreak ?? element).getBoundingClientRect(),
+      });
+      continue;
+    }
 
     if (!Number.isInteger(paragraphIndex) || !Number.isInteger(nodeIndex)) {
       return undefined;
@@ -278,6 +303,59 @@ function measureStaticRichTextLines(
   }
 }
 
+function measureTrailingEmptyParagraphs(params: {
+  element: HTMLElement;
+  zoom: number;
+  committedSpacerHeights: ReadonlyMap<string, number>;
+}) {
+  const paragraphs = Array.from(
+    params.element.querySelectorAll<HTMLElement>(
+      "p[data-resume-rich-paragraph-index]",
+    ),
+  );
+  let height = 0;
+
+  for (let index = paragraphs.length - 1; index >= 0; index -= 1) {
+    const paragraph = paragraphs[index]!;
+
+    if (paragraph.dataset.resumeRichEmptyParagraph !== "true") {
+      break;
+    }
+
+    height += measureElementHeight(
+      paragraph,
+      params.zoom,
+      params.committedSpacerHeights,
+    );
+  }
+
+  return height;
+}
+
+function normalizeTextLineHeights(
+  lines: MeasuredRichTextLine[],
+  availableHeight: number,
+) {
+  const measuredHeight = lines.reduce((total, line) => total + line.height, 0);
+
+  if (lines.length === 0 || measuredHeight <= 0 || availableHeight <= 0) {
+    return lines;
+  }
+
+  const ratio = availableHeight / measuredHeight;
+  let allocatedHeight = 0;
+
+  return lines.map((line, index) => {
+    const height =
+      index === lines.length - 1
+        ? Math.max(0, availableHeight - allocatedHeight)
+        : line.height * ratio;
+
+    allocatedHeight += height;
+    return { ...line, height };
+  });
+}
+
 function getTextMeasurements(params: {
   element: HTMLElement;
   height: number;
@@ -286,6 +364,7 @@ function getTextMeasurements(params: {
   blockPath: string[];
   activeEditor?: TiptapTextBlockEditorHandle | null;
   activeSelection?: ResumeEditorSelection;
+  committedSpacerHeights: ReadonlyMap<string, number>;
 }) {
   const selected =
     params.activeSelection?.sectionId === params.sectionId &&
@@ -299,12 +378,23 @@ function getTextMeasurements(params: {
     return {};
   }
 
-  const lineHeight = textLines.reduce((total, line) => total + line.height, 0);
+  const trailingHeight = Math.min(
+    params.height,
+    measureTrailingEmptyParagraphs({
+      element: params.element,
+      zoom: params.zoom,
+      committedSpacerHeights: params.committedSpacerHeights,
+    }),
+  );
+  const normalizedTextLines = normalizeTextLineHeights(
+    textLines,
+    Math.max(0, params.height - trailingHeight),
+  );
 
   return {
-    textLines,
+    textLines: normalizedTextLines,
     leadingHeight: 0,
-    trailingHeight: Math.max(0, params.height - lineHeight),
+    trailingHeight,
   };
 }
 
@@ -443,6 +533,7 @@ function measureResumeBlock(params: {
           blockPath: params.blockPath,
           activeEditor: params.activeEditor,
           activeSelection: params.activeSelection,
+          committedSpacerHeights: params.committedSpacerHeights,
         })
       : {}),
     ...(params.block.type === "group" || params.block.type === "row"

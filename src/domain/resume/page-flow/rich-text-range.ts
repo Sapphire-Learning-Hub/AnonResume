@@ -171,14 +171,18 @@ export function sliceRichTextContent(
       ? { nodeIndex: to.nodeIndex, offset: to.offset }
       : { nodeIndex: paragraph.content.length, offset: 0 };
     const nodes = sliceParagraphNodes(paragraph, paragraphFrom, paragraphTo);
-    const isEmptyBoundaryParagraph =
+    const endsAtParagraphStart =
+      endsHere && to.nodeIndex === 0 && to.offset === 0;
+    const startsAfterParagraphContent =
+      startsHere &&
+      paragraph.content.length > 0 &&
+      from.nodeIndex === paragraph.content.length &&
+      from.offset === 0;
+    const isExcludedBoundaryParagraph =
       nodes.length === 0 &&
-      ((endsHere && to.nodeIndex === 0 && to.offset === 0) ||
-        (startsHere &&
-          from.nodeIndex === paragraph.content.length &&
-          from.offset === 0));
+      (endsAtParagraphStart || startsAfterParagraphContent);
 
-    if (!isEmptyBoundaryParagraph) {
+    if (!isExcludedBoundaryParagraph) {
       paragraphs.push({ type: "paragraph", content: nodes });
     }
   }

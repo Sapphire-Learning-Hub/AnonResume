@@ -343,10 +343,12 @@ function applyMarks(
 function RichTextParagraph({
   children,
   paragraph,
+  paragraphIndex,
   style,
 }: {
   children: ReactNode;
   paragraph: RichTextContent["content"][number];
+  paragraphIndex: number;
   style?: CSSProperties;
 }) {
   const empty = paragraph.content.length === 0;
@@ -354,9 +356,17 @@ function RichTextParagraph({
   return (
     <p
       data-resume-rich-empty-paragraph={empty ? "true" : undefined}
+      data-resume-rich-paragraph-index={paragraphIndex}
       style={style}
     >
-      {empty ? <br aria-hidden="true" /> : children}
+      {empty ? (
+        <>
+          {children}
+          <br aria-hidden="true" />
+        </>
+      ) : (
+        children
+      )}
     </p>
   );
 }
@@ -366,6 +376,7 @@ function renderRichText(content: RichTextContent): ReactNode {
     <RichTextParagraph
       key={`${paragraphIndex}-${paragraph.type}`}
       paragraph={paragraph}
+      paragraphIndex={paragraphIndex}
     >
       {paragraph.content.map((node, nodeIndex) => {
         if (node.type === "hardBreak") {
@@ -524,6 +535,7 @@ function RichTextView({
       <RichTextParagraph
         key={`${paragraphIndex}-${paragraph.type}`}
         paragraph={paragraph}
+        paragraphIndex={paragraphIndex}
       >
         {paragraph.content.map((node, nodeIndex) => {
           if (node.type === "hardBreak") {
@@ -619,97 +631,137 @@ function StyledRichText({
       : undefined;
   const { text: pageBreaks } = useResumePageBreaks(pageBreakAnchor);
 
-  return block.content.content.map((paragraph, paragraphIndex) => (
-    <RichTextParagraph
-      key={`${block.id}-${paragraphIndex}`}
-      paragraph={paragraph}
-      style={getTextBlockStyle(block)}
-    >
-      {paragraph.content.map((node, nodeIndex) => {
-        const nodeBreaks = pageBreaks
-          .filter(
+  return block.content.content.map((paragraph, paragraphIndex) => {
+    const emptyParagraphBreaks =
+      paragraph.content.length === 0
+        ? pageBreaks.filter(
             (pageBreak) =>
               pageBreak.position.paragraphIndex === paragraphIndex &&
-              pageBreak.position.nodeIndex === nodeIndex,
+              pageBreak.position.nodeIndex === 0 &&
+              pageBreak.position.offset === 0,
           )
-          .sort(
-            (left, right) => left.position.offset - right.position.offset,
-          );
+        : [];
 
-        if (node.type === "hardBreak") {
-          if (cursor) takeTextSegments(cursor, 1);
-          return (
-            <span
-              key={`hard-break-${block.id}-${nodeIndex}`}
-              data-resume-rich-node-index={nodeIndex}
-              data-resume-rich-node-type="hardBreak"
-              data-resume-rich-paragraph-index={paragraphIndex}
-            >
-              {nodeBreaks
-                .filter((pageBreak) => pageBreak.position.offset === 0)
-                .map((pageBreak) => (
-                  <ResumeInlinePageBreak
-                    key={pageBreak.id}
-                    pageBreak={pageBreak}
-                  />
-                ))}
-              <br />
-              {nodeBreaks
-                .filter((pageBreak) => pageBreak.position.offset === 1)
-                .map((pageBreak) => (
-                  <ResumeInlinePageBreak
-                    key={pageBreak.id}
-                    pageBreak={pageBreak}
-                  />
-                ))}
-            </span>
-          );
-        }
+    return (
+      <RichTextParagraph
+        key={`${block.id}-${paragraphIndex}`}
+        paragraph={paragraph}
+        paragraphIndex={paragraphIndex}
+        style={getTextBlockStyle(block)}
+      >
+        {emptyParagraphBreaks.map((pageBreak) => (
+          <ResumeInlinePageBreak key={pageBreak.id} pageBreak={pageBreak} />
+        ))}
+        {paragraph.content.map((node, nodeIndex) => {
+          const nodeBreaks = pageBreaks
+            .filter(
+              (pageBreak) =>
+                pageBreak.position.paragraphIndex === paragraphIndex &&
+                pageBreak.position.nodeIndex === nodeIndex,
+            )
+            .sort(
+              (left, right) => left.position.offset - right.position.offset,
+            );
 
-        if (node.type === "resumeIcon") {
-          return (
-            <span
-              key={`resume-icon-${block.id}-${nodeIndex}`}
-              data-resume-rich-node-index={nodeIndex}
-              data-resume-rich-node-type="resumeIcon"
-              data-resume-rich-paragraph-index={paragraphIndex}
-            >
-              {nodeBreaks
-                .filter((pageBreak) => pageBreak.position.offset === 0)
-                .map((pageBreak) => (
-                  <ResumeInlinePageBreak
-                    key={pageBreak.id}
-                    pageBreak={pageBreak}
-                  />
-                ))}
-              <ResumeInlineIcon iconId={node.attrs.iconId} />
-              {nodeBreaks
-                .filter((pageBreak) => pageBreak.position.offset === 1)
-                .map((pageBreak) => (
-                  <ResumeInlinePageBreak
-                    key={pageBreak.id}
-                    pageBreak={pageBreak}
-                  />
-                ))}
-            </span>
-          );
-        }
+          if (node.type === "hardBreak") {
+            if (cursor) takeTextSegments(cursor, 1);
+            return (
+              <span
+                key={`hard-break-${block.id}-${nodeIndex}`}
+                data-resume-rich-node-index={nodeIndex}
+                data-resume-rich-node-type="hardBreak"
+                data-resume-rich-paragraph-index={paragraphIndex}
+              >
+                {nodeBreaks
+                  .filter((pageBreak) => pageBreak.position.offset === 0)
+                  .map((pageBreak) => (
+                    <ResumeInlinePageBreak
+                      key={pageBreak.id}
+                      pageBreak={pageBreak}
+                    />
+                  ))}
+                <br />
+                {nodeBreaks
+                  .filter((pageBreak) => pageBreak.position.offset === 1)
+                  .map((pageBreak) => (
+                    <ResumeInlinePageBreak
+                      key={pageBreak.id}
+                      pageBreak={pageBreak}
+                    />
+                  ))}
+              </span>
+            );
+          }
 
-        let offset = 0;
-        const textParts: ReactNode[] = [];
+          if (node.type === "resumeIcon") {
+            return (
+              <span
+                key={`resume-icon-${block.id}-${nodeIndex}`}
+                data-resume-rich-node-index={nodeIndex}
+                data-resume-rich-node-type="resumeIcon"
+                data-resume-rich-paragraph-index={paragraphIndex}
+              >
+                {nodeBreaks
+                  .filter((pageBreak) => pageBreak.position.offset === 0)
+                  .map((pageBreak) => (
+                    <ResumeInlinePageBreak
+                      key={pageBreak.id}
+                      pageBreak={pageBreak}
+                    />
+                  ))}
+                <ResumeInlineIcon iconId={node.attrs.iconId} />
+                {nodeBreaks
+                  .filter((pageBreak) => pageBreak.position.offset === 1)
+                  .map((pageBreak) => (
+                    <ResumeInlinePageBreak
+                      key={pageBreak.id}
+                      pageBreak={pageBreak}
+                    />
+                  ))}
+              </span>
+            );
+          }
 
-        for (const pageBreak of nodeBreaks) {
-          const nextOffset = Math.max(
-            offset,
-            Math.min(node.text.length, pageBreak.position.offset),
-          );
-          const value = node.text.slice(offset, nextOffset);
+          let offset = 0;
+          const textParts: ReactNode[] = [];
 
-          if (value) {
+          for (const pageBreak of nodeBreaks) {
+            const nextOffset = Math.max(
+              offset,
+              Math.min(node.text.length, pageBreak.position.offset),
+            );
+            const value = node.text.slice(offset, nextOffset);
+
+            if (value) {
+              textParts.push(
+                <span key={`${pageBreak.id}-text`}>
+                  {renderDiffAwareText(
+                    value,
+                    node.marks,
+                    cursor,
+                    annotation?.side,
+                    `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
+                  )}
+                </span>,
+              );
+            }
+
             textParts.push(
-              <span key={`${pageBreak.id}-text`}>
+              <ResumeInlinePageBreak
+                key={pageBreak.id}
+                pageBreak={pageBreak}
+              />,
+            );
+            offset = nextOffset;
+          }
+
+          const remainder = node.text.slice(offset);
+
+          if (remainder || textParts.length === 0) {
+            textParts.push(
+              <span key={`${block.id}-${paragraphIndex}-${nodeIndex}-remainder`}>
                 {renderDiffAwareText(
-                  value,
+                  remainder,
                   node.marks,
                   cursor,
                   annotation?.side,
@@ -719,44 +771,20 @@ function StyledRichText({
             );
           }
 
-          textParts.push(
-            <ResumeInlinePageBreak
-              key={pageBreak.id}
-              pageBreak={pageBreak}
-            />,
+          return (
+            <span
+              key={`${block.id}-text-${nodeIndex}`}
+              data-resume-rich-node-index={nodeIndex}
+              data-resume-rich-node-type="text"
+              data-resume-rich-paragraph-index={paragraphIndex}
+            >
+              {textParts}
+            </span>
           );
-          offset = nextOffset;
-        }
-
-        const remainder = node.text.slice(offset);
-
-        if (remainder || textParts.length === 0) {
-          textParts.push(
-            <span key={`${block.id}-${paragraphIndex}-${nodeIndex}-remainder`}>
-              {renderDiffAwareText(
-                remainder,
-                node.marks,
-                cursor,
-                annotation?.side,
-                `${block.id}-${paragraphIndex}-${nodeIndex}-${offset}`,
-              )}
-            </span>,
-          );
-        }
-
-        return (
-          <span
-            key={`${block.id}-text-${nodeIndex}`}
-            data-resume-rich-node-index={nodeIndex}
-            data-resume-rich-node-type="text"
-            data-resume-rich-paragraph-index={paragraphIndex}
-          >
-            {textParts}
-          </span>
-        );
-      })}
-    </RichTextParagraph>
-  ));
+        })}
+      </RichTextParagraph>
+    );
+  });
 }
 
 function isSelectedBlock(

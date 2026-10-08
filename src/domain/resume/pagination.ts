@@ -229,7 +229,9 @@ function takeVerticalChildren(
   const fragments: ResumePageFragment[] = [];
   const remainingChildren: MeasuredResumeNode[] = [];
   const childGap = node.childGap ?? 0;
-  let height = node.wrapperHeight ?? 0;
+  const wrapperHeight = node.wrapperHeight ?? 0;
+  let height = wrapperHeight;
+  let splitWithinChild = false;
 
   if (height > availableSpace) {
     return { height: 0 };
@@ -253,6 +255,7 @@ function takeVerticalChildren(
       height += gapBeforeChild + placement.height;
 
       if (placement.remainingNode) {
+        splitWithinChild = true;
         remainingChildren.push(
           placement.remainingNode,
           ...children.slice(childIndex + 1),
@@ -288,10 +291,17 @@ function takeVerticalChildren(
     return { height: 0 };
   }
 
+  if (splitWithinChild) {
+    height -= wrapperHeight;
+  }
+
   return {
     fragment: {
       path: [...node.path],
       children: fragments,
+      ...(splitWithinChild && wrapperHeight > 0
+        ? { includeWrapper: false }
+        : {}),
       ...(node.continuation ? { continuation: true } : {}),
     },
     height,
