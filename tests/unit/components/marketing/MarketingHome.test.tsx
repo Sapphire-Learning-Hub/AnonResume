@@ -1,10 +1,27 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { vi } from "vitest";
 
+import {
+  DEFAULT_PUBLIC_RUNTIME_CONFIG,
+  PublicRuntimeConfigProvider,
+  type PublicRuntimeConfig,
+} from "@/components/config/PublicRuntimeConfigProvider";
 import { MarketingHome } from "@/components/marketing/MarketingHome";
 import { MarketingTemplateShowcase } from "@/components/marketing/MarketingTemplateShowcase";
 
 describe("MarketingHome", () => {
+  function renderWithConfiguration(
+    overrides: Partial<PublicRuntimeConfig> = {},
+  ) {
+    return render(
+      <PublicRuntimeConfigProvider
+        value={{ ...DEFAULT_PUBLIC_RUNTIME_CONFIG, ...overrides }}
+      >
+        <MarketingHome />
+      </PublicRuntimeConfigProvider>,
+    );
+  }
+
   it("runs in-page navigation through the controlled scroll animation", () => {
     Object.defineProperty(window, "scrollY", {
       configurable: true,
@@ -74,6 +91,40 @@ describe("MarketingHome", () => {
     fireEvent.scroll(window);
 
     expect(header).toHaveAttribute("data-scrolled", "true");
+  });
+
+  it("groups product, legal, and open-source footer destinations", () => {
+    renderWithConfiguration();
+
+    const footer = screen.getByRole("contentinfo");
+    expect(within(footer).getByRole("heading", { name: "产品" }))
+      .toBeInTheDocument();
+    expect(within(footer).getByRole("heading", { name: "法律" }))
+      .toBeInTheDocument();
+    expect(within(footer).getByRole("heading", { name: "开源" }))
+      .toBeInTheDocument();
+    expect(within(footer).getByRole("link", { name: "帮助中心" }))
+      .toHaveAttribute("href", "/docs");
+    expect(within(footer).getByRole("link", { name: "获取支持" }))
+      .toHaveAttribute("href", "/docs/support");
+    expect(within(footer).getByRole("link", { name: "隐私政策" }))
+      .toHaveAttribute("href", "/privacy");
+    expect(within(footer).getByRole("link", { name: "服务条款" }))
+      .toHaveAttribute("href", "/terms");
+  });
+
+  it("marks configured legal and support destinations as external", () => {
+    renderWithConfiguration({
+      privacyPolicyUrl: "https://legal.example.com/privacy",
+      supportUrl: "https://support.example.com",
+      termsOfServiceUrl: "https://legal.example.com/terms",
+    });
+
+    const footer = screen.getByRole("contentinfo");
+    for (const name of ["获取支持", "隐私政策", "服务条款"]) {
+      expect(within(footer).getByRole("link", { name: new RegExp(name) }))
+        .toHaveAttribute("target", "_blank");
+    }
   });
 
   it("keeps template indicators non-interactive and omits the preview kicker", async () => {
