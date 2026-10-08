@@ -26,6 +26,10 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
     @media (max-width: 720px) {
       padding: 0 18px;
     }
+
+    @media (max-width: 520px) {
+      padding: 0 12px;
+    }
   `,
   brandCluster: css`
     display: flex;
@@ -42,11 +46,19 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
       width: 100%;
       height: auto;
     }
+
+    @media (max-width: 520px) {
+      width: 120px;
+    }
   `,
   brandDivider: css`
     width: 1px;
     height: 21px;
     background: ${token.colorBorder};
+
+    @media (max-width: 620px) {
+      display: none;
+    }
   `,
   siteTitle: css`
     overflow: hidden;
@@ -55,6 +67,10 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    @media (max-width: 620px) {
+      display: none;
+    }
   `,
   headerActions: css`
     display: flex;
@@ -66,6 +82,8 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
     }
 
     @media (max-width: 520px) {
+      gap: 2px;
+
       .ant-btn > span:not(.ant-btn-icon) {
         display: none;
       }
@@ -85,6 +103,14 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
       background: ${token.colorFillTertiary};
       color: ${token.colorText};
     }
+
+    @media (max-width: 520px) {
+      padding: 6px;
+
+      &[data-header-destination="home"] {
+        display: none;
+      }
+    }
   `,
   accountLink: css`
     display: inline-flex;
@@ -101,6 +127,10 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
     &:focus-visible {
       background: ${token.colorFillTertiary};
       color: ${token.colorText};
+    }
+
+    @media (max-width: 520px) {
+      padding: 4px;
     }
   `,
   accountIcon: css`

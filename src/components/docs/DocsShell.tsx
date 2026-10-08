@@ -149,7 +149,11 @@ export function DocsShell({
                 {labels.support}
               </Link>
             )}
-            <Link className={styles.backLink} href="/">
+            <Link
+              className={styles.backLink}
+              data-header-destination="home"
+              href="/"
+            >
               {labels.backHome}
             </Link>
             {viewer ? (
