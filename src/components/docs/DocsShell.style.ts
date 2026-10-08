@@ -194,12 +194,19 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
     }
   `,
   navigationGroup: css`
-    margin: 0 10px 9px;
+    margin: 0 10px 7px;
     color: ${token.colorText};
     font-size: 13px;
     font-weight: 700;
   `,
   navigation: css`
+    display: grid;
+    gap: 18px;
+  `,
+  navigationSection: css`
+    display: grid;
+  `,
+  navigationLinks: css`
     display: grid;
     gap: 2px;
 

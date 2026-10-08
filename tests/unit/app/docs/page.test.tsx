@@ -13,6 +13,10 @@ const docsViewerState = vi.hoisted(() => ({
     name: string;
   },
 }));
+const runtimeState = vi.hoisted(() => ({
+  aiEnabled: false,
+  supportUrl: "",
+}));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => navigationState.pathname,
@@ -28,6 +32,17 @@ vi.mock("@/lib/auth/docs-context", () => ({
   getDocsViewerContext: () => Promise.resolve(docsViewerState.viewer),
 }));
 
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: () => Promise.resolve({
+    values: {
+      aiEnabled: runtimeState.aiEnabled,
+      privacyPolicyUrl: "",
+      supportUrl: runtimeState.supportUrl,
+      termsOfServiceUrl: "",
+    },
+  }),
+}));
+
 vi.mock("@/components/ui/useAppFeedback", () => ({
   useAppFeedback: () => ({
     toast: { error: vi.fn(), success: vi.fn() },
@@ -38,6 +53,8 @@ describe("documentation routes", () => {
   beforeEach(() => {
     navigationState.pathname = "/docs";
     docsViewerState.viewer = null;
+    runtimeState.aiEnabled = false;
+    runtimeState.supportUrl = "";
   });
 
   it("uses the management-only documentation state for a super administrator", async () => {
@@ -73,7 +90,7 @@ describe("documentation routes", () => {
       screen.getByRole("navigation", { name: "文档导航" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("帮助中心")).not.toHaveLength(0);
-    expect(screen.getByText("公开简历")).toBeInTheDocument();
+    expect(screen.getByText("产品帮助")).toBeInTheDocument();
     expect(
       screen.getByRole("searchbox", { name: "搜索文档" }),
     ).toBeInTheDocument();
@@ -102,6 +119,22 @@ describe("documentation routes", () => {
       target: { value: "不存在" },
     });
     expect(screen.getAllByText("没有匹配的文档")).not.toHaveLength(0);
+  });
+
+  it("only exposes AI help when the platform enables AI", async () => {
+    runtimeState.aiEnabled = true;
+    const { unmount } = render(await DocsLayout({ children: await DocsPage() }));
+
+    expect(screen.getByRole("link", { name: "使用 AI 助手" })).toHaveAttribute(
+      "href",
+      "/docs/ai-assistant",
+    );
+    unmount();
+
+    runtimeState.aiEnabled = false;
+    render(await DocsLayout({ children: await DocsPage() }));
+    expect(screen.queryByRole("link", { name: "使用 AI 助手" }))
+      .not.toBeInTheDocument();
   });
 
   it("generates the complete public appearance parameter reference", async () => {

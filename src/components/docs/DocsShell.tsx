@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ExportOutlined,
   GlobalOutlined,
   MenuOutlined,
   SearchOutlined,
@@ -14,32 +15,45 @@ import { useDeferredValue, useState, type ReactNode } from "react";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { DocsViewerContext } from "@/lib/auth/docs-context";
+import type { PublicDestination } from "@/lib/public-info/destinations";
 
 import { useDocsShellStyles } from "./DocsShell.style";
 
 export interface DocsShellLabels {
   backHome: string;
   documentGuide: string;
-  guideSection: string;
-  home: string;
   navigation: string;
   noResults: string;
   productArea: string;
-  publicAppearance: string;
   search: string;
   signIn: string;
   siteTitle: string;
   superAdmin: string;
+  support: string;
   switchLocale: string;
+}
+
+export interface DocsNavigationGroup {
+  entries: readonly {
+    href: string;
+    label: string;
+    searchText: string;
+  }[];
+  id: string;
+  label: string;
 }
 
 export function DocsShell({
   children,
   labels,
+  navigationGroups,
+  supportDestination,
   viewer,
 }: {
   children: ReactNode;
   labels: DocsShellLabels;
+  navigationGroups: readonly DocsNavigationGroup[];
+  supportDestination: PublicDestination;
   viewer: DocsViewerContext | null;
 }) {
   const { styles } = useDocsShellStyles();
@@ -47,16 +61,16 @@ export function DocsShell({
   const pathname = usePathname();
   const [searchValue, setSearchValue] = useState("");
   const deferredSearchValue = useDeferredValue(searchValue.trim().toLowerCase());
-  const entries = [
-    { href: "/docs", label: labels.home },
-    {
-      href: "/docs/public-resume-customization",
-      label: labels.publicAppearance,
-    },
-  ];
-  const filteredEntries = entries.filter((entry) =>
-    entry.label.toLowerCase().includes(deferredSearchValue),
-  );
+  const filteredGroups = navigationGroups.flatMap((group) => {
+    const filteredEntries = group.entries.filter((entry) =>
+      `${entry.label} ${entry.searchText}`
+        .toLowerCase()
+        .includes(deferredSearchValue),
+    );
+    return filteredEntries.length > 0
+      ? [{ ...group, entries: filteredEntries }]
+      : [];
+  });
   const navigation = (
     <div>
       <Input
@@ -69,24 +83,30 @@ export function DocsShell({
         type="search"
         value={searchValue}
       />
-      <p className={styles.navigationGroup}>{labels.guideSection}</p>
       <nav
         aria-label={labels.navigation}
         className={styles.navigation}
-        hidden={filteredEntries.length === 0}
+        hidden={filteredGroups.length === 0}
       >
-        {filteredEntries.map((entry) => (
-          <Link
-            aria-current={pathname === entry.href ? "page" : undefined}
-            data-active={pathname === entry.href}
-            href={entry.href}
-            key={entry.href}
-          >
-            {entry.label}
-          </Link>
+        {filteredGroups.map((group) => (
+          <section className={styles.navigationSection} key={group.id}>
+            <p className={styles.navigationGroup}>{group.label}</p>
+            <div className={styles.navigationLinks}>
+              {group.entries.map((entry) => (
+                <Link
+                  aria-current={pathname === entry.href ? "page" : undefined}
+                  data-active={pathname === entry.href}
+                  href={entry.href}
+                  key={entry.href}
+                >
+                  {entry.label}
+                </Link>
+              ))}
+            </div>
+          </section>
         ))}
       </nav>
-      <p className={styles.noResults} hidden={filteredEntries.length > 0}>
+      <p className={styles.noResults} hidden={filteredGroups.length > 0}>
         {labels.noResults}
       </p>
     </div>
@@ -114,6 +134,21 @@ export function DocsShell({
             >
               {locale === "zh-CN" ? "简体" : "English"}
             </Button>
+            {supportDestination.external ? (
+              <a
+                className={styles.backLink}
+                href={supportDestination.href}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {labels.support}
+                <ExportOutlined aria-hidden="true" />
+              </a>
+            ) : (
+              <Link className={styles.backLink} href={supportDestination.href}>
+                {labels.support}
+              </Link>
+            )}
             <Link className={styles.backLink} href="/">
               {labels.backHome}
             </Link>
