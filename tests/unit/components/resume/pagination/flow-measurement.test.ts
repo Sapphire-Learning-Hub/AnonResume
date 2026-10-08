@@ -56,6 +56,30 @@ describe("measureResumeFlow", () => {
     });
   });
 
+  it("preserves fractional DOM heights instead of accumulating rounded pixels", () => {
+    const document = documentWithBlocks([textBlock("summary", "Summary")]);
+    const root = createSectionRoot(1);
+    const section = root.querySelector<HTMLElement>(
+      '[data-resume-section-id="section"]',
+    );
+
+    section?.setAttribute("data-height", "100.25");
+    appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "summary",
+      "data-height": "20.25",
+    });
+
+    const measured = measureResumeFlow({
+      root,
+      document,
+      zoom: 1,
+      committedSpacerHeights: new Map(),
+    });
+
+    expect(measured?.[0]?.height).toBe(100.25);
+    expect(measured?.[0]?.blocks[0]?.height).toBe(20.25);
+  });
+
   it("subtracts multiple list spacers without charging them to list items", () => {
     const document = documentWithBlocks([
       {
@@ -118,7 +142,7 @@ describe("measureResumeFlow", () => {
     });
   });
 
-  it("uses active Tiptap line measurements for the selected text block", () => {
+  it("distributes the active Tiptap line box height across measured lines", () => {
     const document = documentWithBlocks([textBlock("summary", "abcdefghij")]);
     const root = createSectionRoot(1);
     appendMeasuredElement(root, "div", {
@@ -157,10 +181,10 @@ describe("measureResumeFlow", () => {
     expect(measured?.[0]?.blocks[0]).toMatchObject({
       height: 48,
       leadingHeight: 0,
-      trailingHeight: 8,
+      trailingHeight: 0,
       textLines: [
-        { height: 20 },
-        { height: 20 },
+        { height: 24 },
+        { height: 24 },
       ],
     });
   });
@@ -220,6 +244,88 @@ describe("measureResumeFlow", () => {
         height: 20,
       },
     ]);
+  });
+
+  it("keeps middle empty paragraphs in their measured text position", () => {
+    const document = documentWithBlocks([
+      {
+        id: "summary",
+        type: "text",
+        content: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "A" }],
+            },
+            { type: "paragraph", content: [] },
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "B" }],
+            },
+          ],
+        },
+      },
+    ]);
+    const root = createSectionRoot(1);
+    const block = appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "summary",
+      "data-height": "60",
+    });
+    const first = appendMeasuredElement(block, "span", {
+      "data-resume-rich-paragraph-index": "0",
+      "data-resume-rich-node-index": "0",
+      "data-resume-rich-node-type": "text",
+    });
+    first.textContent = "A";
+    const emptyParagraph = appendMeasuredElement(block, "p", {
+      "data-resume-rich-empty-paragraph": "true",
+      "data-resume-rich-paragraph-index": "1",
+    });
+    appendMeasuredElement(emptyParagraph, "br", {
+      "data-height": "20",
+      "data-top": "20",
+    });
+    const last = appendMeasuredElement(block, "span", {
+      "data-resume-rich-paragraph-index": "2",
+      "data-resume-rich-node-index": "0",
+      "data-resume-rich-node-type": "text",
+    });
+    last.textContent = "B";
+    let characterIndex = 0;
+    stubRangeRects(() => {
+      const top = characterIndex === 0 ? 0 : 40;
+      characterIndex += 1;
+      return { top, bottom: top + 20, left: 0, right: 5 };
+    });
+
+    const measured = measureResumeFlow({
+      root,
+      document,
+      zoom: 1,
+      committedSpacerHeights: new Map(),
+    });
+
+    expect(measured?.[0]?.blocks[0]).toMatchObject({
+      trailingHeight: 0,
+      textLines: [
+        {
+          from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 },
+          to: { paragraphIndex: 0, nodeIndex: 0, offset: 1 },
+          height: 20,
+        },
+        {
+          from: { paragraphIndex: 1, nodeIndex: 0, offset: 0 },
+          to: { paragraphIndex: 2, nodeIndex: 0, offset: 0 },
+          height: 20,
+        },
+        {
+          from: { paragraphIndex: 2, nodeIndex: 0, offset: 0 },
+          to: { paragraphIndex: 2, nodeIndex: 0, offset: 1 },
+          height: 20,
+        },
+      ],
+    });
   });
 
   it("does not charge an inline page spacer to an atomic rich-text node", () => {
@@ -377,7 +483,10 @@ function createSectionRoot(zoom: number) {
   document.body.append(root);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
     function getBoundingClientRect(this: HTMLElement) {
-      return rect(Number(this.dataset.height ?? 0));
+      return rect(
+        Number(this.dataset.height ?? 0),
+        Number(this.dataset.top ?? 0),
+      );
     },
   );
 
@@ -399,13 +508,13 @@ function appendMeasuredElement<K extends keyof HTMLElementTagNameMap>(
   return element;
 }
 
-function rect(height: number) {
+function rect(height: number, top = 0) {
   return {
     x: 0,
-    y: 0,
-    top: 0,
+    y: top,
+    top,
     right: 100,
-    bottom: height,
+    bottom: top + height,
     left: 0,
     width: 100,
     height,

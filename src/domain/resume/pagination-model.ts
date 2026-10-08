@@ -39,6 +39,7 @@ export interface ResumePageFragment {
   path: string[];
   children?: ResumePageFragment[];
   continuation?: boolean;
+  includeWrapper?: boolean;
   textRange?: RichTextRange;
 }
 
@@ -134,7 +135,7 @@ export function calculateFragmentHeight(
   const childGap = getChildGap(node);
 
   return (
-    (node.wrapperHeight ?? 0) +
+    (fragment.includeWrapper === false ? 0 : (node.wrapperHeight ?? 0)) +
     fragment.children.reduce((total, childFragment, index) => {
       const childNode = node.children?.find((child) =>
         pathsEqual(child.path, childFragment.path),

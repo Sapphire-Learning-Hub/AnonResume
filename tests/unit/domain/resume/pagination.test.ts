@@ -422,6 +422,91 @@ describe("paginateMeasuredSections", () => {
     ]);
   });
 
+  it("does not charge a list trailing wrapper before a split item finishes", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 28,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-experience",
+          height: 66,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "list-highlights",
+              path: ["list-highlights"],
+              type: "list",
+              height: 66,
+              direction: "vertical",
+              childGap: 8,
+              wrapperHeight: 8,
+              children: [
+                {
+                  id: "item-1",
+                  path: ["list-highlights", "item-1"],
+                  type: "listItem",
+                  direction: "vertical",
+                  height: 40,
+                  childGap: 0,
+                  wrapperHeight: 0,
+                  children: [
+                    {
+                      id: "item-1-text",
+                      path: ["list-highlights", "item-1", "item-1-text"],
+                      type: "text",
+                      height: 40,
+                      textLines: [textLine(0, 1, 20), textLine(1, 2, 20)],
+                    },
+                  ],
+                },
+                measuredListItem(["list-highlights", "item-2"], 10),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages.map((page) => page.totalHeight)).toEqual([20, 28, 18]);
+    expect(
+      result.pages.reduce((total, page) => total + page.totalHeight, 0),
+    ).toBe(66);
+  });
+
+  it("keeps the list item gap on the page before a structural split", () => {
+    const result = paginateMeasuredSections({
+      pageHeight: 48,
+      sectionGap: 0,
+      sections: [
+        {
+          id: "section-experience",
+          height: 96,
+          titleHeight: 0,
+          blocks: [
+            {
+              id: "list-highlights",
+              path: ["list-highlights"],
+              type: "list",
+              height: 96,
+              direction: "vertical",
+              childGap: 8,
+              wrapperHeight: 8,
+              children: [
+                measuredListItem(["list-highlights", "item-1"], 40),
+                measuredListItem(["list-highlights", "item-2"], 40),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.pages.map((page) => page.totalHeight)).toEqual([48, 48]);
+    expect(
+      result.pages.reduce((total, page) => total + page.totalHeight, 0),
+    ).toBe(96);
+  });
+
   it("moves a trailing row with its list when no complete item fits", () => {
     const result = paginateMeasuredSections({
       pageHeight: 100,

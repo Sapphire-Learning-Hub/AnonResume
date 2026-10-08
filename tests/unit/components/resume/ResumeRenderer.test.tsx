@@ -1541,6 +1541,14 @@ describe("ResumeRenderer", () => {
     );
 
     expect(viewEmptyParagraphs).toHaveLength(2);
+    expect(viewEmptyParagraphs[0]).toHaveAttribute(
+      "data-resume-rich-paragraph-index",
+      "1",
+    );
+    expect(viewEmptyParagraphs[1]).toHaveAttribute(
+      "data-resume-rich-paragraph-index",
+      "2",
+    );
     expect(
       Array.from(viewEmptyParagraphs).every((paragraph) =>
         paragraph.querySelector(":scope > br"),
@@ -1567,6 +1575,14 @@ describe("ResumeRenderer", () => {
     );
 
     expect(editEmptyParagraphs).toHaveLength(2);
+    expect(editEmptyParagraphs[0]).toHaveAttribute(
+      "data-resume-rich-paragraph-index",
+      "1",
+    );
+    expect(editEmptyParagraphs[1]).toHaveAttribute(
+      "data-resume-rich-paragraph-index",
+      "2",
+    );
     expect(
       Array.from(editEmptyParagraphs).every((paragraph) =>
         paragraph.querySelector(":scope > br"),

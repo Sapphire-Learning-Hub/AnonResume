@@ -128,6 +128,27 @@ describe("rich text pagination ranges", () => {
     expectValidSlices(slices);
   });
 
+  it("keeps a real empty paragraph at the start of a continuation", () => {
+    const contentWithLeadingEmptyParagraph: RichTextContent = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [] },
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "After" }],
+        },
+      ],
+    };
+
+    const slice = sliceRichTextContent(contentWithLeadingEmptyParagraph, {
+      from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 },
+      to: { paragraphIndex: 1, nodeIndex: 0, offset: 5 },
+    });
+
+    expect(slice).toEqual(contentWithLeadingEmptyParagraph);
+    expectValidSlices([slice]);
+  });
+
   it("splits around an icon and deduplicates repeated break positions", () => {
     const beforeIcon: RichTextPosition = {
       paragraphIndex: 0,

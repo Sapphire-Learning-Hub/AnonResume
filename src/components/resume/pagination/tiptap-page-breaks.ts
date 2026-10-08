@@ -169,6 +169,15 @@ function listDomainSegments(doc: ProseMirrorNode) {
     const paragraphStart = getParagraphStart(doc, paragraphIndex);
     let nodeStart = paragraphStart;
 
+    if (paragraph.childCount === 0 && paragraphIndex < doc.childCount - 1) {
+      segments.push({
+        from: { paragraphIndex, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
+        proseMirror: paragraphStart,
+      });
+      continue;
+    }
+
     for (let nodeIndex = 0; nodeIndex < paragraph.childCount; nodeIndex += 1) {
       const node = paragraph.child(nodeIndex);
       const nodeSize = node.isText ? node.text?.length ?? 0 : 1;

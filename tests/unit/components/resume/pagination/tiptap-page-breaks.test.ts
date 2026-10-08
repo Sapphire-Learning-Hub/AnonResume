@@ -45,4 +45,60 @@ describe("measureTiptapRichTextLines", () => {
       },
     ]);
   });
+
+  it("measures an empty paragraph between two text paragraphs", () => {
+    const textNode = {
+      isText: true,
+      nodeSize: 1,
+      text: "A",
+    };
+    const paragraphs = [
+      {
+        childCount: 1,
+        child: () => textNode,
+        nodeSize: 3,
+      },
+      {
+        childCount: 0,
+        child: () => undefined,
+        nodeSize: 2,
+      },
+      {
+        childCount: 1,
+        child: () => ({ ...textNode, text: "B" }),
+        nodeSize: 3,
+      },
+    ];
+    const coordsAtPos = vi.fn((position: number) => {
+      const top = position === 1 ? 0 : position === 4 ? 20 : 40;
+      return { top, bottom: top + 20, left: 0, right: 0 };
+    });
+    const editor = {
+      state: {
+        doc: {
+          childCount: paragraphs.length,
+          child: (index: number) => paragraphs[index],
+        },
+      },
+      view: { coordsAtPos },
+    } as unknown as Editor;
+
+    expect(measureTiptapRichTextLines(editor)).toEqual([
+      {
+        from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: 0, nodeIndex: 0, offset: 1 },
+        height: 20,
+      },
+      {
+        from: { paragraphIndex: 1, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: 2, nodeIndex: 0, offset: 0 },
+        height: 20,
+      },
+      {
+        from: { paragraphIndex: 2, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: 2, nodeIndex: 0, offset: 1 },
+        height: 20,
+      },
+    ]);
+  });
 });
