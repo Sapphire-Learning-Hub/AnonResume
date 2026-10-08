@@ -22,6 +22,11 @@ describe("managed configuration registry", () => {
       "ai-worker",
     );
     expect(CONFIG_REGISTRY.sourceCodeUrl.public).toBe(true);
+    expect(CONFIG_REGISTRY.aiEnabled.public).toBe(true);
+    expect(CONFIG_REGISTRY.privacyPolicyUrl.group).toBe("legal");
+    expect(CONFIG_REGISTRY.privacyPolicyUrl.applyMode).toBe("hot");
+    expect(CONFIG_REGISTRY.privacyPolicyUrl.public).toBe(true);
+    expect(CONFIG_REGISTRY.legalOperatorName.public).toBe(true);
   });
 
   it("builds a complete safe snapshot from defaults and partial input", () => {
@@ -59,5 +64,43 @@ describe("managed configuration registry", () => {
     expect(() =>
       parseManagedConfig({ aiWorkerRetentionIntervalMs: 86_400_001 }),
     ).toThrow("aiWorkerRetentionIntervalMs");
+  });
+
+  it("accepts valid legal and support settings", () => {
+    const configuration = parseManagedConfig({
+      legalContactEmail: "support@example.com",
+      legalEffectiveDate: "2026-10-09",
+      legalOperatorName: "Example Operator",
+      privacyPolicyUrl: "https://example.com/privacy",
+      supportUrl: "https://example.com/support",
+      termsOfServiceUrl: "https://example.com/terms",
+    });
+
+    expect(configuration).toMatchObject({
+      legalContactEmail: "support@example.com",
+      legalEffectiveDate: "2026-10-09",
+      legalOperatorName: "Example Operator",
+      privacyPolicyUrl: "https://example.com/privacy",
+      supportUrl: "https://example.com/support",
+      termsOfServiceUrl: "https://example.com/terms",
+    });
+  });
+
+  it("rejects unsafe or malformed public information settings", () => {
+    expect(() =>
+      parseManagedConfig({ privacyPolicyUrl: "http://example.com/privacy" }),
+    ).toThrow("privacyPolicyUrl");
+    expect(() =>
+      parseManagedConfig({ termsOfServiceUrl: "/terms" }),
+    ).toThrow("termsOfServiceUrl");
+    expect(() =>
+      parseManagedConfig({ supportUrl: "mailto:support@example.com" }),
+    ).toThrow("supportUrl");
+    expect(() =>
+      parseManagedConfig({ legalContactEmail: "not-an-email" }),
+    ).toThrow("legalContactEmail");
+    expect(() =>
+      parseManagedConfig({ legalEffectiveDate: "09/10/2026" }),
+    ).toThrow("legalEffectiveDate");
   });
 });

@@ -28,8 +28,12 @@ function renderShell(
   access: AppShellAccess = productAccess,
   announcements: readonly LocalizedAnnouncement[] = [],
   configuration: PublicRuntimeConfig = {
+    aiEnabled: false,
     configurationHealth: "healthy",
+    privacyPolicyUrl: "",
     sourceCodeUrl: "",
+    supportUrl: "",
+    termsOfServiceUrl: "",
   },
 ) {
   return render(
@@ -198,8 +202,12 @@ describe("AppShell", () => {
       },
       [],
       {
+        aiEnabled: false,
         configurationHealth: "restart_required",
+        privacyPolicyUrl: "",
         sourceCodeUrl: "",
+        supportUrl: "",
+        termsOfServiceUrl: "",
       },
     );
 
