@@ -374,7 +374,6 @@ const messages = {
     "home.font.sourceSerif.description": "沉稳易读",
     "home.font.notoMono.description": "清晰利落",
     "home.font.playfair.description": "醒目优雅",
-    "home.open.eyebrow": "开放与自主",
     "home.open.title": "开源，也把选择权留给你",
     "home.open.description":
       "AnonResume 不把你的简历、部署方式和模型选择锁在单一服务里。个人使用保持简单，需要更多掌控时也有清晰路径。",
@@ -1814,7 +1813,6 @@ const messages = {
     "home.font.sourceSerif.description": "Calm and readable",
     "home.font.notoMono.description": "Clear and focused",
     "home.font.playfair.description": "Distinctive and elegant",
-    "home.open.eyebrow": "Open and in your control",
     "home.open.title": "Open source, with the important choices left to you",
     "home.open.description":
       "AnonResume does not lock your resumes, deployment, or model choice into one service. It stays simple for individual use while leaving a clear path to more control.",

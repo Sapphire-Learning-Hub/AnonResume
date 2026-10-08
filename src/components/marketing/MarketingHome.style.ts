@@ -371,20 +371,6 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     letter-spacing: -0.04em;
     line-height: 1.16;
   `,
-  sectionEyebrow: css`
-    display: inline-flex;
-    width: fit-content;
-    align-items: center;
-    padding: 6px 10px;
-    border: 1px solid ${token.colorPrimaryBorder};
-    border-radius: 999px;
-    background: ${token.colorPrimaryBg};
-    color: ${token.colorPrimary};
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  `,
   sectionLead: css`
     margin: 0;
     color: ${token.colorTextSecondary};
