@@ -532,7 +532,6 @@ export function MarketingHome({
         >
           <div className={styles.sectionInner}>
             <div className={styles.openIntro}>
-              <span className={styles.sectionEyebrow}>{t("home.open.eyebrow")}</span>
               <h2 className={styles.sectionTitle}>{t("home.open.title")}</h2>
               <p className={styles.sectionLead}>{t("home.open.description")}</p>
             </div>
