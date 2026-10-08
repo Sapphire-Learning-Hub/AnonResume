@@ -8,6 +8,8 @@ import CustomizationChinese from "@/content/docs/public-resume-customization.zh-
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
 import { getDocsViewerContext } from "@/lib/auth/docs-context";
+import { getAdjacentDocsEntries } from "@/lib/docs/catalog";
+import { getDocsRuntimeConfiguration } from "@/lib/docs/runtime";
 
 export async function generateMetadata(): Promise<Metadata> {
   const messages = getMessages(await getRequestLocale());
@@ -19,25 +21,42 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PublicResumeCustomizationPage() {
-  const [locale, viewer] = await Promise.all([
+  const [locale, viewer, runtimeConfig] = await Promise.all([
     getRequestLocale(),
     getDocsViewerContext(),
+    getDocsRuntimeConfiguration(),
   ]);
   const messages = getMessages(locale);
   const Content =
     locale === "en-US" ? CustomizationEnglish : CustomizationChinese;
+  const adjacent = getAdjacentDocsEntries(
+    "/docs/public-resume-customization",
+    runtimeConfig.aiEnabled,
+  );
 
   return (
     <DocsArticleLayout
       breadcrumbLabel={messages["docs.breadcrumb"]}
       currentLabel={messages["docs.appearance.title"]}
       nextLabel={messages["docs.next"]}
+      nextPage={
+        adjacent.next
+          ? {
+              href: adjacent.next.href,
+              label: messages[adjacent.next.titleKey],
+            }
+          : undefined
+      }
       paginationLabel={messages["docs.pagination"]}
       previousLabel={messages["docs.previous"]}
-      previousPage={{
-        href: "/docs",
-        label: messages["docs.navigation.home"],
-      }}
+      previousPage={
+        adjacent.previous
+          ? {
+              href: adjacent.previous.href,
+              label: messages[adjacent.previous.titleKey],
+            }
+          : undefined
+      }
       rootLabel={messages["docs.navigation.home"]}
       toc={[
         {

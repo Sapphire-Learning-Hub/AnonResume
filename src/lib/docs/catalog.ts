@@ -16,6 +16,7 @@ export interface DocsCatalogEntry {
   id: DocsArticleId;
   requiresAi?: boolean;
   searchTermsKey: MessageKey;
+  summaryKey: MessageKey;
   titleKey: MessageKey;
 }
 
@@ -30,18 +31,21 @@ const entries = {
     href: "/docs",
     id: "home",
     searchTermsKey: "docs.searchTerms.home",
+    summaryKey: "docs.summary.home",
     titleKey: "docs.navigation.home",
   },
   editor: {
     href: "/docs/editor",
     id: "editor",
     searchTermsKey: "docs.searchTerms.editor",
+    summaryKey: "docs.summary.editor",
     titleKey: "docs.navigation.editor",
   },
   "section-templates": {
     href: "/docs/section-templates",
     id: "section-templates",
     searchTermsKey: "docs.searchTerms.sectionTemplates",
+    summaryKey: "docs.summary.sectionTemplates",
     titleKey: "docs.navigation.sectionTemplates",
   },
   "ai-assistant": {
@@ -49,36 +53,42 @@ const entries = {
     id: "ai-assistant",
     requiresAi: true,
     searchTermsKey: "docs.searchTerms.aiAssistant",
+    summaryKey: "docs.summary.aiAssistant",
     titleKey: "docs.navigation.aiAssistant",
   },
   "import-export": {
     href: "/docs/import-export",
     id: "import-export",
     searchTermsKey: "docs.searchTerms.importExport",
+    summaryKey: "docs.summary.importExport",
     titleKey: "docs.navigation.importExport",
   },
   "public-appearance": {
     href: "/docs/public-resume-customization",
     id: "public-appearance",
     searchTermsKey: "docs.searchTerms.publicAppearance",
+    summaryKey: "docs.summary.publicAppearance",
     titleKey: "docs.navigation.publicAppearance",
   },
   "account-security": {
     href: "/docs/account-security",
     id: "account-security",
     searchTermsKey: "docs.searchTerms.accountSecurity",
+    summaryKey: "docs.summary.accountSecurity",
     titleKey: "docs.navigation.accountSecurity",
   },
   troubleshooting: {
     href: "/docs/troubleshooting",
     id: "troubleshooting",
     searchTermsKey: "docs.searchTerms.troubleshooting",
+    summaryKey: "docs.summary.troubleshooting",
     titleKey: "docs.navigation.troubleshooting",
   },
   support: {
     href: "/docs/support",
     id: "support",
     searchTermsKey: "docs.searchTerms.support",
+    summaryKey: "docs.summary.support",
     titleKey: "docs.navigation.support",
   },
 } as const satisfies Record<DocsArticleId, DocsCatalogEntry>;

@@ -4,28 +4,9 @@ import { DocsShell } from "@/components/docs/DocsShell";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
 import { getDocsViewerContext } from "@/lib/auth/docs-context";
-import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getVisibleDocsGroups } from "@/lib/docs/catalog";
+import { getDocsRuntimeConfiguration } from "@/lib/docs/runtime";
 import { resolvePublicInformationDestinations } from "@/lib/public-info/destinations";
-
-async function getDocsRuntimeConfiguration() {
-  try {
-    const runtime = await getRuntimeConfig("web");
-    return {
-      aiEnabled: runtime.values.aiEnabled,
-      privacyPolicyUrl: runtime.values.privacyPolicyUrl,
-      supportUrl: runtime.values.supportUrl,
-      termsOfServiceUrl: runtime.values.termsOfServiceUrl,
-    };
-  } catch {
-    return {
-      aiEnabled: false,
-      privacyPolicyUrl: "",
-      supportUrl: "",
-      termsOfServiceUrl: "",
-    };
-  }
-}
 
 export default async function DocsLayout({ children }: { children: ReactNode }) {
   const [locale, viewer, runtimeConfig] = await Promise.all([

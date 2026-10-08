@@ -474,6 +474,40 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
         color: ${token.colorPrimary};
       }
 
+      [data-docs-task-grid] {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      [data-docs-task-card] {
+        display: grid;
+        min-width: 0;
+        gap: 7px;
+        padding: 18px;
+        border: 1px solid ${token.colorBorderSecondary};
+        border-radius: ${token.borderRadiusLG}px;
+        color: ${token.colorText};
+        text-decoration: none;
+      }
+
+      [data-docs-task-card]:hover,
+      [data-docs-task-card]:focus-visible {
+        border-color: ${token.colorPrimaryBorder};
+        background: ${token.colorPrimaryBg};
+      }
+
+      [data-docs-task-card] > strong {
+        font-size: 15px;
+      }
+
+      [data-docs-task-card] > span {
+        color: ${token.colorTextSecondary};
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
       table {
         width: 100%;
         border-spacing: 0;
@@ -547,6 +581,10 @@ export const useDocsShellStyles = createStyles(({ token, css }) => ({
           display: block;
           overflow-x: auto;
           white-space: nowrap;
+        }
+
+        [data-docs-task-grid] {
+          grid-template-columns: 1fr;
         }
       }
     }
