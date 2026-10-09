@@ -9,11 +9,21 @@ const mocks = vi.hoisted(() => ({
   isPasswordResetAllowedForUser: vi.fn(),
   invalidatePasswordResetToken: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  captureSocialLinkProviderSubject: vi.fn(),
+  socialLinkAttemptCookie: "anonresume_social_link_attempt",
+  cookieValue: "attempt-token",
 }));
 
 vi.mock("better-auth", () => ({ betterAuth: mocks.betterAuth }));
 vi.mock("better-auth/next-js", () => ({ nextCookies: () => "next-cookies" }));
 vi.mock("next/server", () => ({ after: vi.fn() }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => name === mocks.socialLinkAttemptCookie
+      ? { value: mocks.cookieValue }
+      : undefined,
+  }),
+}));
 vi.mock("@/lib/runtime/database", () => ({ getDatabasePool: () => "database" }));
 vi.mock("@/lib/runtime/email", () => ({
   sendVerificationEmail: vi.fn(),
@@ -25,6 +35,10 @@ vi.mock("@/lib/admin/store", () => ({
 vi.mock("@/lib/auth/account/security", () => ({
   isPasswordResetAllowedForUser: mocks.isPasswordResetAllowedForUser,
   invalidatePasswordResetToken: mocks.invalidatePasswordResetToken,
+}));
+vi.mock("@/lib/auth/account/merge/link-attempts", () => ({
+  SOCIAL_LINK_ATTEMPT_COOKIE: mocks.socialLinkAttemptCookie,
+  captureSocialLinkProviderSubject: mocks.captureSocialLinkProviderSubject,
 }));
 vi.mock("@/lib/invitations/registration", () => ({
   invalidateInvitationsForIndependentRegistration: mocks.invalidateInvitations,
@@ -125,6 +139,26 @@ describe("restart-scoped Better Auth configuration", () => {
     };
 
     expect(options.socialProviders.github.disableImplicitSignUp).toBe(true);
+  });
+
+  it("captures only the GitHub provider subject during a pending link callback", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      socialProviders: {
+        github: {
+          mapProfileToUser: (profile: { id: string }) => Promise<Record<string, never>>;
+        };
+      };
+    };
+
+    await expect(options.socialProviders.github.mapProfileToUser({
+      id: "github-42",
+    })).resolves.toEqual({});
+    expect(mocks.captureSocialLinkProviderSubject).toHaveBeenCalledWith({
+      providerAccountId: "github-42",
+      providerId: "github",
+      rawToken: "attempt-token",
+    });
   });
 
   it("allows an authenticated user to link a GitHub account with a different email", async () => {

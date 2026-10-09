@@ -9,6 +9,7 @@ import { readBootstrapConfig } from "@/lib/config/bootstrap";
 
 export type AccountMergeTokenKind =
   | "link-attempt"
+  | "link-result-proof"
   | "operation-status"
   | "session-binding";
 

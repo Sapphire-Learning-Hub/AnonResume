@@ -29,8 +29,19 @@ const githubAccount = {
 describe("ConnectedAccounts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      callbackURL: "/api/account/social-link/result?provider=github&outcome=success",
+      errorCallbackURL: "/api/account/social-link/result?provider=github&outcome=error",
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })));
     authMocks.linkSocial.mockResolvedValue({ data: { redirect: true }, error: null });
     authMocks.unlinkAccount.mockResolvedValue({ data: { status: true }, error: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("starts GitHub account linking and returns to the account connections section", async () => {
@@ -42,9 +53,13 @@ describe("ConnectedAccounts", () => {
     render(<ConnectedAccounts />);
     fireEvent.click(await screen.findByRole("button", { name: "关联 GitHub" }));
 
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/account/social-link/attempt",
+      expect.objectContaining({ method: "POST" }),
+    ));
     await waitFor(() => expect(authMocks.linkSocial).toHaveBeenCalledWith({
-      callbackURL: "/app/account?section=connections&linked=github",
-      errorCallbackURL: "/app/account?section=connections&linkError=github",
+      callbackURL: "/api/account/social-link/result?provider=github&outcome=success",
+      errorCallbackURL: "/api/account/social-link/result?provider=github&outcome=error",
       provider: "github",
     }));
   });

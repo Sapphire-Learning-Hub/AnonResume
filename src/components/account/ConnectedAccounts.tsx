@@ -61,9 +61,25 @@ export function ConnectedAccounts() {
   async function linkGitHub() {
     setBusy(true);
     try {
+      const attemptResponse = await fetch("/api/account/social-link/attempt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "github" }),
+      });
+      const attempt = await attemptResponse.json() as {
+        callbackURL?: string;
+        errorCallbackURL?: string;
+      };
+      if (
+        !attemptResponse.ok ||
+        !attempt.callbackURL ||
+        !attempt.errorCallbackURL
+      ) {
+        throw new Error("link attempt failed");
+      }
       const result = await authClient.linkSocial({
-        callbackURL: "/app/account?section=connections&linked=github",
-        errorCallbackURL: "/app/account?section=connections&linkError=github",
+        callbackURL: attempt.callbackURL,
+        errorCallbackURL: attempt.errorCallbackURL,
         provider: "github",
       });
       if (result.error) {
