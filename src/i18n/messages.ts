@@ -50,6 +50,8 @@ const messages = {
     "common.settings.brandNotice": "品牌声明",
     "common.settings.brandNoticeDescription":
       "了解 logo 品牌资产与项目代码许可证的边界。",
+    "common.settings.privacyDescription": "查看当前实例适用的隐私政策。",
+    "common.settings.termsDescription": "查看当前实例适用的服务条款。",
     "common.settings.appearanceDescription":
       "选择界面的明暗模式与品牌强调色。简历文档样式不会随之改变。",
     "common.settings.languageDescription":
@@ -1556,6 +1558,10 @@ const messages = {
     "common.settings.brandNotice": "Brand notice",
     "common.settings.brandNoticeDescription":
       "Learn how brand assets are separated from the project code license.",
+    "common.settings.privacyDescription":
+      "Review the privacy policy that applies to this instance.",
+    "common.settings.termsDescription":
+      "Review the terms of service that apply to this instance.",
     "common.settings.appearanceDescription":
       "Choose the interface color mode and brand accent. Resume document styling stays independent.",
     "common.settings.languageDescription":
