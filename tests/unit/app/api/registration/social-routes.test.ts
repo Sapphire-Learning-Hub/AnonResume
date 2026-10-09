@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   inspectIntent: vi.fn(),
   isGitHubAuthEnabled: vi.fn(),
   requireSameOrigin: vi.fn(),
+  sendEmailChallenge: vi.fn(),
+  sendVerificationCode: vi.fn(),
+  verifyEmail: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/setup/access", () => ({
@@ -34,10 +37,19 @@ vi.mock("@/lib/auth/social-registration/repository", () => ({
   findSocialRegistrationConflict: mocks.findConflict,
   inspectSocialRegistrationIntent: mocks.inspectIntent,
 }));
+vi.mock("@/lib/auth/social-registration/email", () => ({
+  sendSocialRegistrationEmailChallenge: mocks.sendEmailChallenge,
+  verifySocialRegistrationEmail: mocks.verifyEmail,
+}));
+vi.mock("@/lib/runtime/email", () => ({
+  sendSocialRegistrationVerificationCode: mocks.sendVerificationCode,
+}));
 
 import { POST as createAttempt } from "@/app/api/registration/social/attempt/route";
 import { GET as inspectIntent } from "@/app/api/registration/social/intent/route";
 import { GET as resolveResult } from "@/app/api/registration/social/result/route";
+import { POST as sendEmailChallenge } from "@/app/api/registration/social/email/challenge/route";
+import { POST as verifyEmail } from "@/app/api/registration/social/email/verify/route";
 
 const cookieName = "anonresume_social_registration_attempt";
 
@@ -82,6 +94,8 @@ describe("social registration routes", () => {
       imageUrl: "https://avatars.example/github",
       email: "github@example.com",
     });
+    mocks.sendEmailChallenge.mockResolvedValue({ retryAfterSeconds: 60 });
+    mocks.verifyEmail.mockResolvedValue({ email: "new@example.com" });
   });
 
   it("rejects attempt creation without explicit legal consent", async () => {
@@ -240,5 +254,38 @@ describe("social registration routes", () => {
       email: "github@example.com",
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("sends and verifies a user-supplied email through cookie-bound routes", async () => {
+    const challengeResponse = await sendEmailChallenge(request(
+      "https://resume.example.com/api/registration/social/email/challenge",
+      {
+        method: "POST",
+        cookie: "registration-token",
+        body: { email: "New@Example.com", locale: "en-US" },
+      },
+    ));
+
+    expect(challengeResponse.status).toBe(200);
+    await expect(challengeResponse.json()).resolves.toEqual({
+      retryAfterSeconds: 60,
+    });
+    expect(mocks.sendEmailChallenge).toHaveBeenCalledWith(expect.objectContaining({
+      rawToken: "registration-token",
+      email: "new@example.com",
+    }));
+
+    const verifyResponse = await verifyEmail(request(
+      "https://resume.example.com/api/registration/social/email/verify",
+      {
+        method: "POST",
+        cookie: "registration-token",
+        body: { code: "123456" },
+      },
+    ));
+    expect(verifyResponse.status).toBe(200);
+    await expect(verifyResponse.json()).resolves.toEqual({
+      email: "new@example.com",
+    });
   });
 });

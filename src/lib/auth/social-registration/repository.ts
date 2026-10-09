@@ -1,6 +1,8 @@
 import { and, eq, gt, inArray, lte } from "drizzle-orm";
+import type { PoolClient } from "pg";
 
 import { db, socialRegistrationAttempts } from "@/db";
+import { getDatabaseSchemaName } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 import { SocialRegistrationError } from "./errors";
@@ -25,6 +27,28 @@ type DatabaseTransaction = Parameters<
   Parameters<typeof db.transaction>[0]
 >[0];
 
+type EmailChallengeAttemptRow = {
+  id: string;
+  state: SocialRegistrationAttempt["state"];
+  providerEmailVerified: boolean;
+  selectedEmail: string | null;
+  emailCodeHash: string | null;
+  emailCodeExpiresAt: Date | null;
+  emailCodeSentAt: Date | null;
+  emailCodeAttempts: number;
+  expiresAt: Date;
+};
+
+function quoteIdentifier(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function socialRegistrationTable() {
+  return `${quoteIdentifier(getDatabaseSchemaName())}.${quoteIdentifier(
+    "account_social_registration_attempts",
+  )}`;
+}
+
 function normalizeOptionalEmail(email: string | null) {
   const normalized = email?.trim().toLowerCase() ?? "";
   return normalized || null;
@@ -32,6 +56,43 @@ function normalizeOptionalEmail(email: string | null) {
 
 function intentDigest(rawToken: string) {
   return hashSocialRegistrationToken("intent", rawToken);
+}
+
+async function withEmailChallengeTransaction<T>(
+  rawToken: string,
+  callback: (
+    client: PoolClient,
+    attempt: EmailChallengeAttemptRow,
+  ) => Promise<T>,
+) {
+  const client = await getDatabasePool().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<EmailChallengeAttemptRow>(
+      `SELECT id, state,
+              provider_email_verified AS "providerEmailVerified",
+              selected_email AS "selectedEmail",
+              email_code_hash AS "emailCodeHash",
+              email_code_expires_at AS "emailCodeExpiresAt",
+              email_code_sent_at AS "emailCodeSentAt",
+              email_code_attempts AS "emailCodeAttempts",
+              expires_at AS "expiresAt"
+         FROM ${socialRegistrationTable()}
+        WHERE token_hash = $1
+        FOR UPDATE`,
+      [intentDigest(rawToken)],
+    );
+    const attempt = result.rows[0];
+    if (!attempt) throw new SocialRegistrationError("intent_invalid");
+    const value = await callback(client, attempt);
+    await client.query("COMMIT");
+    return value;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function createSocialRegistrationAttempt(input: {
@@ -226,6 +287,176 @@ export async function findSocialRegistrationConflict(input: {
   if (provider.rows[0]) return "provider";
   if (email.rows[0]) return "email";
   return null;
+}
+
+export async function storeSocialRegistrationEmailChallenge(input: {
+  rawToken: string;
+  email: string;
+  codeHash: string;
+  codeExpiresAt: Date;
+  now: Date;
+  resendDelayMs: number;
+}) {
+  const outcome = await withEmailChallengeTransaction(
+    input.rawToken,
+    async (client, attempt) => {
+      if (attempt.expiresAt <= input.now) {
+        await client.query(
+          `UPDATE ${socialRegistrationTable()}
+              SET state = 'expired', consumed_at = $2, updated_at = $2
+            WHERE id = $1`,
+          [attempt.id, input.now],
+        );
+        return { error: "intent_expired" as const };
+      }
+      if (attempt.providerEmailVerified || attempt.state === "profile_captured") {
+        return { error: "email_not_required" as const };
+      }
+      if (attempt.state !== "email_pending") {
+        return { error: "intent_invalid" as const };
+      }
+      if (
+        attempt.emailCodeSentAt &&
+        attempt.emailCodeSentAt.getTime() + input.resendDelayMs >
+          input.now.getTime()
+      ) {
+        return { error: "email_resend_too_soon" as const };
+      }
+
+      await client.query(
+        `UPDATE ${socialRegistrationTable()}
+            SET selected_email = $2,
+                email_code_hash = $3,
+                email_code_expires_at = $4,
+                email_code_sent_at = $5,
+                email_code_attempts = 0,
+                updated_at = $5
+          WHERE id = $1`,
+        [
+          attempt.id,
+          input.email,
+          input.codeHash,
+          input.codeExpiresAt,
+          input.now,
+        ],
+      );
+      return { error: null };
+    },
+  );
+  if (outcome.error) throw new SocialRegistrationError(outcome.error);
+}
+
+export async function invalidateSocialRegistrationEmailChallenge(input: {
+  rawToken: string;
+  codeHash: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  await db.update(socialRegistrationAttempts).set({
+    emailCodeHash: null,
+    emailCodeExpiresAt: null,
+    updatedAt: now,
+  }).where(and(
+    eq(socialRegistrationAttempts.tokenHash, intentDigest(input.rawToken)),
+    eq(socialRegistrationAttempts.emailCodeHash, input.codeHash),
+    eq(socialRegistrationAttempts.state, "email_pending"),
+  ));
+}
+
+export async function verifyStoredSocialRegistrationEmail(input: {
+  rawToken: string;
+  expectedCodeHash: string;
+  now: Date;
+  maxAttempts: number;
+}) {
+  const outcome = await withEmailChallengeTransaction(
+    input.rawToken,
+    async (client, attempt) => {
+      if (attempt.expiresAt <= input.now) {
+        await client.query(
+          `UPDATE ${socialRegistrationTable()}
+              SET state = 'expired', consumed_at = $2, updated_at = $2
+            WHERE id = $1`,
+          [attempt.id, input.now],
+        );
+        return { error: "intent_expired" as const };
+      }
+      if (attempt.state !== "email_pending" || !attempt.selectedEmail) {
+        return {
+          error: attempt.providerEmailVerified
+            ? "email_not_required" as const
+            : "intent_invalid" as const,
+        };
+      }
+      if (attempt.emailCodeAttempts >= input.maxAttempts) {
+        return { error: "email_attempts_exhausted" as const };
+      }
+      if (!attempt.emailCodeHash || !attempt.emailCodeExpiresAt) {
+        return { error: "email_code_invalid" as const };
+      }
+      if (attempt.emailCodeExpiresAt <= input.now) {
+        await client.query(
+          `UPDATE ${socialRegistrationTable()}
+              SET email_code_hash = NULL,
+                  email_code_expires_at = NULL,
+                  updated_at = $2
+            WHERE id = $1`,
+          [attempt.id, input.now],
+        );
+        return { error: "email_code_expired" as const };
+      }
+      if (attempt.emailCodeHash !== input.expectedCodeHash) {
+        const failedAttempts = attempt.emailCodeAttempts + 1;
+        await client.query(
+          `UPDATE ${socialRegistrationTable()}
+              SET email_code_attempts = $2::integer,
+                  email_code_hash = CASE
+                    WHEN $2::integer >= $3::integer THEN NULL
+                    ELSE email_code_hash END,
+                  email_code_expires_at = CASE
+                    WHEN $2::integer >= $3::integer THEN NULL
+                    ELSE email_code_expires_at END,
+                  updated_at = $4::timestamptz
+            WHERE id = $1`,
+          [attempt.id, failedAttempts, input.maxAttempts, input.now],
+        );
+        return {
+          error: failedAttempts >= input.maxAttempts
+            ? "email_attempts_exhausted" as const
+            : "email_code_invalid" as const,
+        };
+      }
+
+      const existing = await client.query<{ id: string }>(
+        `SELECT id FROM "user" WHERE lower(email) = $1 LIMIT 1`,
+        [attempt.selectedEmail],
+      );
+      if (existing.rows[0]) {
+        await client.query(
+          `UPDATE ${socialRegistrationTable()}
+              SET email_code_hash = NULL,
+                  email_code_expires_at = NULL,
+                  updated_at = $2
+            WHERE id = $1`,
+          [attempt.id, input.now],
+        );
+        return { error: "email_conflict" as const };
+      }
+
+      await client.query(
+        `UPDATE ${socialRegistrationTable()}
+            SET state = 'email_verified',
+                email_code_hash = NULL,
+                email_code_expires_at = NULL,
+                updated_at = $2
+          WHERE id = $1`,
+        [attempt.id, input.now],
+      );
+      return { error: null, email: attempt.selectedEmail };
+    },
+  );
+  if (outcome.error) throw new SocialRegistrationError(outcome.error);
+  return { email: outcome.email };
 }
 
 export async function lockSocialRegistrationAttempt(

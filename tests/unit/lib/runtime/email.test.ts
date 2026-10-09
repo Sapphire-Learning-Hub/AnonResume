@@ -3,6 +3,7 @@ import {
   buildAccountVerificationCodeEmail,
   buildProductInvitationEmail,
   buildPasswordResetEmail,
+  buildSocialRegistrationVerificationCodeEmail,
   buildVerificationEmail,
   closeEmailTransporter,
   resolveEmailDeliveryConfig,
@@ -209,5 +210,30 @@ describe("account security email", () => {
 
     expect(completed.subject).toContain("合并");
     expect(timedOut.subject).toContain("timed out");
+  });
+});
+
+describe("social registration email", () => {
+  it("renders the registration code in both supported locales", () => {
+    const chinese = buildSocialRegistrationVerificationCodeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "<用户>",
+      to: "user@example.com",
+      code: "123456",
+      locale: "zh-CN",
+    });
+    const english = buildSocialRegistrationVerificationCodeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "User",
+      to: "user@example.com",
+      code: "654321",
+      locale: "en-US",
+    });
+
+    expect(chinese.subject).toContain("创建 AnonResume 账号");
+    expect(chinese.html).toContain("&lt;用户&gt;");
+    expect(chinese.text).toContain("123456");
+    expect(english.subject).toContain("create an AnonResume account");
+    expect(english.text).toContain("654321");
   });
 });
