@@ -26,6 +26,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const section = firstSearchParam(params.section);
   const linked = firstSearchParam(params.linked);
   const linkError = firstSearchParam(params.linkError);
+  const merge = firstSearchParam(params.merge);
 
   return (
     <AccountCenter
@@ -38,6 +39,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
       initialSection={githubEnabled && section === "connections"
         ? "connections"
         : "profile"}
+      mergeRequested={githubEnabled && merge === "github"}
     />
   );
 }

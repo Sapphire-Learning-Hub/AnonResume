@@ -16,6 +16,7 @@ import {
   resolveSocialLinkAttempt,
 } from "@/lib/auth/account/merge/link-attempts";
 import {
+  cancelVerifiedAccountMerge,
   confirmVerifiedAccountMerge,
   getAccountMergeIntentMetadata,
   verifyAccountMergeIntent,
@@ -181,5 +182,29 @@ describe("account merge verification", () => {
       targetPassword: fixture.target.password,
       locale: "en-US",
     })).rejects.toBeInstanceOf(AccountMergeError);
+  });
+
+  it("cancels a verified operation before confirmation", async () => {
+    const fixture = await createIntent();
+    const verified = await verifyAccountMergeIntent({
+      rawIntentToken: fixture.rawIntentToken,
+      userId: fixture.current.id,
+      sessionToken: fixture.sessionToken,
+      currentPassword: fixture.current.password,
+      targetEmail: fixture.target.email,
+      targetPassword: fixture.target.password,
+      locale: "zh-CN",
+    });
+
+    await expect(cancelVerifiedAccountMerge({
+      rawStatusToken: verified.rawStatusToken,
+      userId: fixture.current.id,
+    })).resolves.toEqual({ state: "cancelled" });
+    await expect(confirmVerifiedAccountMerge({
+      rawStatusToken: verified.rawStatusToken,
+      userId: fixture.current.id,
+      primaryChoice: "current",
+      now: verified.confirmNotBefore,
+    })).rejects.toMatchObject({ code: "operation_invalid" });
   });
 });

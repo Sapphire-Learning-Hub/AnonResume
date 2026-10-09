@@ -13,6 +13,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 import { authClient } from "@/lib/auth/client";
 
 import { useAccountCenterStyles } from "./AccountCenter.style";
+import { AccountMergeFlow } from "./merge/AccountMergeFlow";
 
 type LinkedAccount = {
   id: string;
@@ -21,7 +22,13 @@ type LinkedAccount = {
 
 type LoadState = "loading" | "ready" | "error";
 
-export function ConnectedAccounts() {
+export function ConnectedAccounts({
+  mergeRequested = false,
+  onMergeDismissed,
+}: {
+  mergeRequested?: boolean;
+  onMergeDismissed?: () => void;
+}) {
   const { styles } = useAccountCenterStyles();
   const { t } = useI18n();
   const { toast } = useAppFeedback();
@@ -29,6 +36,8 @@ export function ConnectedAccounts() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [busy, setBusy] = useState(false);
   const [unlinkOpen, setUnlinkOpen] = useState(false);
+  const [mergeDismissed, setMergeDismissed] = useState(false);
+  const mergeOpen = mergeRequested && !mergeDismissed;
 
   const loadAccounts = useCallback(async () => {
     try {
@@ -57,6 +66,15 @@ export function ConnectedAccounts() {
 
   const githubAccount = accounts.find((account) => account.providerId === "github");
   const canUnlink = accounts.some((account) => account.providerId !== "github");
+  const mergeFlow = (
+    <AccountMergeFlow
+      onCancel={() => {
+        setMergeDismissed(true);
+        onMergeDismissed?.();
+      }}
+      open={mergeOpen}
+    />
+  );
 
   async function linkGitHub() {
     setBusy(true);
@@ -123,27 +141,33 @@ export function ConnectedAccounts() {
 
   if (loadState === "loading") {
     return (
-      <div aria-label={t("account.loading")} className={styles.sectionLoading} role="status">
-        <Spin size="small" />
-      </div>
+      <>
+        <div aria-label={t("account.loading")} className={styles.sectionLoading} role="status">
+          <Spin size="small" />
+        </div>
+        {mergeFlow}
+      </>
     );
   }
 
   if (loadState === "error") {
     return (
-      <div className={styles.sectionError} role="status">
-        <ExclamationCircleOutlined aria-hidden="true" className={styles.sectionErrorIcon} />
-        <span>{t("account.connections.loadFailed")}</span>
-        <Button
-          icon={<ReloadOutlined aria-hidden="true" />}
-          onClick={() => {
-            setLoadState("loading");
-            void loadAccounts();
-          }}
-        >
-          {t("account.connections.retry")}
-        </Button>
-      </div>
+      <>
+        <div className={styles.sectionError} role="status">
+          <ExclamationCircleOutlined aria-hidden="true" className={styles.sectionErrorIcon} />
+          <span>{t("account.connections.loadFailed")}</span>
+          <Button
+            icon={<ReloadOutlined aria-hidden="true" />}
+            onClick={() => {
+              setLoadState("loading");
+              void loadAccounts();
+            }}
+          >
+            {t("account.connections.retry")}
+          </Button>
+        </div>
+        {mergeFlow}
+      </>
     );
   }
 
@@ -199,6 +223,7 @@ export function ConnectedAccounts() {
       >
         <p className={styles.warningText}>{t("account.connections.disconnectBody")}</p>
       </Modal>
+      {mergeFlow}
     </>
   );
 }

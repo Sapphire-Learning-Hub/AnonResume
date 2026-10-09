@@ -31,11 +31,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   try {
-    return NextResponse.json(await confirmVerifiedAccountMerge({
+    const result = await confirmVerifiedAccountMerge({
       rawStatusToken,
       userId: session.user.id,
       primaryChoice: parsed.data.primaryChoice,
-    }));
+    });
+    const response = NextResponse.json(result);
+    if (["completed", "failed", "expired", "cancelled"].includes(result.state)) {
+      response.cookies.set(ACCOUNT_MERGE_STATUS_COOKIE, "", {
+        maxAge: 0,
+        path: "/api/account/social-merge",
+      });
+    }
+    return response;
   } catch (error) {
     if (error instanceof AccountMergeError) {
       return NextResponse.json(

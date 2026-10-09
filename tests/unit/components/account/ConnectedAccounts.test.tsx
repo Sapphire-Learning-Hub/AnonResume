@@ -64,6 +64,32 @@ describe("ConnectedAccounts", () => {
     }));
   });
 
+  it("opens the passive merge flow only after a GitHub collision callback", async () => {
+    authMocks.listAccounts.mockResolvedValue({
+      data: [credentialAccount],
+      error: null,
+    });
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      providerId: "github",
+      requiresAdminMfa: false,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    const { rerender } = render(<ConnectedAccounts />);
+    expect(await screen.findByText("GitHub")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "合并账号" })).not.toBeInTheDocument();
+
+    rerender(<ConnectedAccounts mergeRequested />);
+
+    expect(await screen.findByRole("dialog", { name: "合并账号" })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/account/social-merge/intent",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it("unlinks GitHub when another sign-in method remains", async () => {
     authMocks.listAccounts
       .mockResolvedValueOnce({

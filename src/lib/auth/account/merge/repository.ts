@@ -178,6 +178,37 @@ export async function getMergeOperationByStatusToken(rawStatusToken: string) {
   return operation;
 }
 
+export async function cancelCreatedMergeOperation(input: {
+  operationId: string;
+  userId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  return db.transaction(async (transaction) => {
+    const [operation] = await transaction.select()
+      .from(accountMergeOperations)
+      .where(eq(accountMergeOperations.id, input.operationId))
+      .for("update")
+      .limit(1);
+    if (!operation || operation.initiatingUserId !== input.userId) {
+      throw new AccountMergeError("operation_invalid");
+    }
+    if (operation.state === "cancelled") return operation;
+    if (operation.state !== "created") {
+      throw new AccountMergeError("operation_invalid");
+    }
+    const [cancelled] = await transaction.update(accountMergeOperations).set({
+      state: "cancelled",
+      updatedAt: now,
+    }).where(and(
+      eq(accountMergeOperations.id, operation.id),
+      eq(accountMergeOperations.state, "created"),
+    )).returning();
+    if (!cancelled) throw new AccountMergeError("operation_invalid");
+    return cancelled;
+  });
+}
+
 export async function confirmMergeOperation(input: {
   operationId: string;
   primaryUserId: string;

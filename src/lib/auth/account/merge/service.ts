@@ -10,6 +10,7 @@ import { AccountMergeError } from "./errors";
 import { advanceAccountMergeOperation } from "./executor";
 import { evaluateAccountMergePolicy } from "./policy";
 import {
+  cancelCreatedMergeOperation,
   confirmMergeOperation,
   createVerifiedMergeOperation,
   getCollisionIntent,
@@ -187,6 +188,20 @@ export async function confirmVerifiedAccountMerge(input: {
     return advanceAccountMergeOperation({ operationId: confirmed.id, now });
   }
   return { state: confirmed.state };
+}
+
+export async function cancelVerifiedAccountMerge(input: {
+  rawStatusToken: string;
+  userId: string;
+  now?: Date;
+}) {
+  const operation = await getMergeOperationByStatusToken(input.rawStatusToken);
+  const cancelled = await cancelCreatedMergeOperation({
+    operationId: operation.id,
+    userId: input.userId,
+    now: input.now,
+  });
+  return { state: cancelled.state };
 }
 
 export async function getAccountMergeOperationStatus(rawStatusToken: string) {

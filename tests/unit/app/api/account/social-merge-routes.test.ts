@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({
   getMetadata: vi.fn(),
   verifyIntent: vi.fn(),
   confirm: vi.fn(),
+  cancel: vi.fn(),
   getStatus: vi.fn(),
 }));
 
@@ -16,12 +17,14 @@ vi.mock("@/lib/auth/account/merge/service", () => ({
   getAccountMergeIntentMetadata: mocks.getMetadata,
   verifyAccountMergeIntent: mocks.verifyIntent,
   confirmVerifiedAccountMerge: mocks.confirm,
+  cancelVerifiedAccountMerge: mocks.cancel,
   getAccountMergeOperationStatus: mocks.getStatus,
 }));
 
 import { GET as getIntent } from "@/app/api/account/social-merge/intent/route";
 import { POST as verifyIntent } from "@/app/api/account/social-merge/verify/route";
 import { POST as confirmMerge } from "@/app/api/account/social-merge/confirm/route";
+import { POST as cancelMerge } from "@/app/api/account/social-merge/cancel/route";
 import { GET as getStatus } from "@/app/api/account/social-merge/status/route";
 
 describe("social merge routes", () => {
@@ -121,6 +124,46 @@ describe("social merge routes", () => {
       state: "completed",
       failureCode: null,
     });
+    expect(response.headers.get("set-cookie")).toContain(
+      "anonresume_account_merge_status=",
+    );
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
     expect(mocks.getOptionalSession).not.toHaveBeenCalled();
+  });
+
+  it("expires the status capability after immediate completion", async () => {
+    mocks.confirm.mockResolvedValue({ state: "completed" });
+    const response = await confirmMerge(new Request(
+      "http://localhost/api/account/social-merge/confirm",
+      {
+        method: "POST",
+        headers: { cookie: "anonresume_account_merge_status=status-token" },
+        body: JSON.stringify({ primaryChoice: "current" }),
+      },
+    ) as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain(
+      "anonresume_account_merge_status=",
+    );
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("cancels only through the authenticated status capability", async () => {
+    mocks.cancel.mockResolvedValue({ state: "cancelled" });
+    const response = await cancelMerge(new Request(
+      "http://localhost/api/account/social-merge/cancel",
+      {
+        method: "POST",
+        headers: { cookie: "anonresume_account_merge_status=status-token" },
+      },
+    ) as never);
+
+    expect(response.status).toBe(200);
+    expect(mocks.cancel).toHaveBeenCalledWith({
+      rawStatusToken: "status-token",
+      userId: "current-user",
+    });
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 });
