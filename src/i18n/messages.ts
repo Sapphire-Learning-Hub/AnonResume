@@ -515,8 +515,13 @@ const messages = {
     "auth.signInUnavailable": "邮箱密码登录暂时不可用。",
     "auth.signUpUnavailable": "邮箱密码注册暂时不可用。",
     "auth.socialSignInUnavailable": "GitHub 登录暂时不可用。",
+    "auth.socialRegistrationRequired":
+      "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
     "auth.rateLimited": "尝试次数过多，请稍后再试。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
+    "auth.registrationConsentPrefix": "我已阅读并同意",
+    "auth.registrationConsentJoin": "和",
+    "auth.registrationConsentRequired": "请先阅读并同意隐私政策与服务条款。",
     "auth.verificationSent": "验证邮件已发送",
     "auth.verificationSentDescription":
       "请打开邮件中的链接完成验证，验证后会自动进入工作台。",
@@ -2065,8 +2070,14 @@ const messages = {
       "Email and password registration is temporarily unavailable.",
     "auth.socialSignInUnavailable":
       "GitHub sign-in is temporarily unavailable.",
+    "auth.socialRegistrationRequired":
+      "This GitHub account is not registered. Switch to Create account and agree to the privacy policy and terms of service.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
+    "auth.registrationConsentPrefix": "I have read and agree to the ",
+    "auth.registrationConsentJoin": " and ",
+    "auth.registrationConsentRequired":
+      "Read and agree to the privacy policy and terms of service before creating an account.",
     "auth.verificationSent": "Verification email sent",
     "auth.verificationSentDescription":
       "Open the link in the email to verify your address and continue to the workspace.",

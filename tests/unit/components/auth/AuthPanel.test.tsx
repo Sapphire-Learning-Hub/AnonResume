@@ -56,7 +56,13 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 }));
 
 import { AuthPanel } from "@/components/auth/AuthPanel";
+import {
+  DEFAULT_PUBLIC_RUNTIME_CONFIG,
+  PublicRuntimeConfigProvider,
+} from "@/components/config/PublicRuntimeConfigProvider";
 import { PasswordResetPanel } from "@/components/auth/PasswordResetPanel";
+
+const REGISTRATION_CONSENT_HEADER = "x-anonresume-registration-consent";
 
 function fillEmailPasswordForm() {
   fireEvent.change(screen.getByTestId("auth-email-input"), {
@@ -101,6 +107,33 @@ describe("AuthPanel email verification", () => {
     ).toBeInTheDocument();
   });
 
+  it("requires agreement to the configured privacy policy and terms before registration", () => {
+    render(
+      <PublicRuntimeConfigProvider
+        value={{
+          ...DEFAULT_PUBLIC_RUNTIME_CONFIG,
+          privacyPolicyUrl: "https://legal.example.com/privacy",
+          termsOfServiceUrl: "https://legal.example.com/terms",
+        }}
+      >
+        <AuthPanel githubEnabled />
+      </PublicRuntimeConfigProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("auth-switch-sign-up"));
+
+    expect(screen.getByRole("checkbox", {
+      name: /我已阅读并同意隐私政策和服务条款/,
+    })).not.toBeChecked();
+    expect(screen.getByRole("link", { name: "隐私政策" }))
+      .toHaveAttribute("href", "https://legal.example.com/privacy");
+    expect(screen.getByRole("link", { name: "服务条款" }))
+      .toHaveAttribute("href", "https://legal.example.com/terms");
+    expect(screen.getByTestId("auth-submit")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /使用 GitHub 继续/ }))
+      .toBeDisabled();
+  });
+
   it("shows a verification state after email registration instead of entering the app", async () => {
     authMocks.signUpEmail.mockResolvedValue({
       data: { token: null, user: { email: "user@example.com" } },
@@ -117,6 +150,9 @@ describe("AuthPanel email verification", () => {
     fireEvent.change(screen.getByTestId("auth-confirm-password-input"), {
       target: { value: "strong-password" },
     });
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: /我已阅读并同意隐私政策和服务条款/,
+    }));
     fireEvent.click(screen.getByTestId("auth-submit"));
 
     expect(await screen.findByText("验证邮件已发送")).toBeInTheDocument();
@@ -128,8 +164,38 @@ describe("AuthPanel email verification", () => {
     expect(feedbackMocks.toastError).not.toHaveBeenCalled();
     expect(routerMocks.push).not.toHaveBeenCalled();
     expect(authMocks.signUpEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ callbackURL: "/sign-in?verified=1" }),
+      expect.objectContaining({
+        callbackURL: "/sign-in?verified=1",
+        fetchOptions: {
+          headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
+        },
+      }),
     );
+  });
+
+  it("marks GitHub registration as explicit after legal consent", async () => {
+    authMocks.signInSocial.mockResolvedValue({
+      data: { redirect: true, url: "https://github.com/login/oauth/authorize" },
+      error: null,
+    });
+
+    render(<AuthPanel githubEnabled />);
+    fireEvent.click(screen.getByTestId("auth-switch-sign-up"));
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: /我已阅读并同意隐私政策和服务条款/,
+    }));
+    fireEvent.click(screen.getByRole("button", { name: /使用 GitHub 继续/ }));
+
+    await waitFor(() => {
+      expect(authMocks.signInSocial).toHaveBeenCalledWith({
+        callbackURL: "/sign-in",
+        fetchOptions: {
+          headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
+        },
+        provider: "github",
+        requestSignUp: true,
+      });
+    });
   });
 
   it("offers a resend action when an unverified user signs in", async () => {
@@ -290,6 +356,21 @@ describe("AuthPanel email verification", () => {
 
     expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
       expect.objectContaining({ title: "该账户已被停用，请联系管理员。" }),
+    );
+  });
+
+  it("explains how to register when social sign-in cannot create an account", () => {
+    render(
+      <AuthPanel
+        githubEnabled
+        verificationError="signup_disabled"
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
+      }),
     );
   });
 });

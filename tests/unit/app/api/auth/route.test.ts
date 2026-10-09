@@ -74,6 +74,65 @@ describe("authentication setup gate", () => {
     expect(mocks.handlerPost).not.toHaveBeenCalled();
   });
 
+  it("rejects email registration without explicit legal consent", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "user@example.com",
+          name: "User",
+          password: "strong-password",
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      code: "REGISTRATION_CONSENT_REQUIRED",
+      message: "Privacy policy and terms consent is required",
+    });
+    expect(mocks.handlerPost).not.toHaveBeenCalled();
+  });
+
+  it("rejects explicit social registration without legal consent", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/sign-in/social", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "github", requestSignUp: true }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.handlerPost).not.toHaveBeenCalled();
+  });
+
+  it("forwards registration after legal consent", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+
+    await expect(POST(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-anonresume-registration-consent": "true",
+        },
+        body: JSON.stringify({
+          email: "user@example.com",
+          name: "User",
+          password: "strong-password",
+        }),
+      }) as never,
+    )).resolves.toMatchObject({ status: 204 });
+
+    expect(mocks.handlerPost).toHaveBeenCalledOnce();
+  });
+
   it("blocks auth callbacks while initial setup is pending", async () => {
     mocks.decision.mockResolvedValue("require_setup");
 

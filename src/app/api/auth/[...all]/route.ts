@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { getSetupAccessDecision } from "@/lib/admin/setup/access";
 import { isPasswordResetAllowedForToken } from "@/lib/auth/account/security";
 import { getAuth } from "@/lib/auth/config";
+import {
+  hasRegistrationConsent,
+  requiresRegistrationConsent,
+} from "@/lib/auth/registration-consent";
 
 export async function GET(request: NextRequest) {
   const blocked = await blockAuthDuringInitialSetup(request);
@@ -15,9 +19,28 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const blocked = await blockAuthDuringInitialSetup(request);
   if (blocked) return blocked;
+  const missingConsent = await blockRegistrationWithoutConsent(request);
+  if (missingConsent) return missingConsent;
   const inactiveReset = await blockInactivePasswordReset(request);
   if (inactiveReset) return inactiveReset;
   return toNextJsHandler(await getAuth()).POST(request);
+}
+
+async function blockRegistrationWithoutConsent(request: NextRequest) {
+  if (
+    !(await requiresRegistrationConsent(request)) ||
+    hasRegistrationConsent(request)
+  ) {
+    return null;
+  }
+
+  return NextResponse.json(
+    {
+      code: "REGISTRATION_CONSENT_REQUIRED",
+      message: "Privacy policy and terms consent is required",
+    },
+    { status: 400, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 async function blockInactivePasswordReset(request: NextRequest) {

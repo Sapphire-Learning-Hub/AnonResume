@@ -34,14 +34,24 @@ describe("AcceptInvitationPanel", () => {
     render(<AcceptInvitationPanel email="fixed@example.com" token="raw-token" />);
 
     expect(screen.getByDisplayValue("fixed@example.com")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "接受邀请" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "New user" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "new-user-password" } });
     fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "new-user-password" } });
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: /我已阅读并同意隐私政策和服务条款/,
+    }));
     fireEvent.click(screen.getByRole("button", { name: "接受邀请" }));
 
     await waitFor(() => expect(mocks.signIn).toHaveBeenCalledWith({
       email: "fixed@example.com",
       password: "new-user-password",
+    }));
+    expect(fetch).toHaveBeenCalledWith("/api/invitations/accept", expect.objectContaining({
+      headers: {
+        "content-type": "application/json",
+        "x-anonresume-registration-consent": "true",
+      },
     }));
     expect(mocks.replace).toHaveBeenCalledWith("/app");
   });
@@ -51,6 +61,9 @@ describe("AcceptInvitationPanel", () => {
     fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "New user" } });
     fireEvent.change(screen.getByLabelText("密码"), { target: { value: "new-user-password" } });
     fireEvent.change(screen.getByLabelText("确认密码"), { target: { value: "different-password" } });
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: /我已阅读并同意隐私政策和服务条款/,
+    }));
     fireEvent.click(screen.getByRole("button", { name: "接受邀请" }));
 
     await waitFor(() => expect(mocks.error).toHaveBeenCalled());
