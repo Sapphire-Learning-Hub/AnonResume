@@ -1,4 +1,6 @@
 export type SocialRegistrationErrorCode =
+  | "account_conflict"
+  | "display_name_invalid"
   | "email_attempts_exhausted"
   | "email_code_expired"
   | "email_code_invalid"
@@ -8,6 +10,7 @@ export type SocialRegistrationErrorCode =
   | "email_resend_too_soon"
   | "intent_expired"
   | "intent_invalid"
+  | "password_invalid"
   | "profile_missing";
 
 export class SocialRegistrationError extends Error {
@@ -23,6 +26,7 @@ export function getSocialRegistrationErrorStatus(
   switch (code) {
     case "intent_expired":
       return 410;
+    case "account_conflict":
     case "email_conflict":
       return 409;
     case "email_resend_too_soon":

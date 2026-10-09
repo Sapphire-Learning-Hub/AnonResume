@@ -482,3 +482,63 @@ export async function lockSocialRegistrationAttempt(
   }
   return attempt;
 }
+
+export async function lockSocialRegistrationAttemptForUpdate(
+  client: PoolClient,
+  input: { rawToken: string; now: Date },
+) {
+  const result = await client.query<{
+    avatarUrl: string | null;
+    displayName: string | null;
+    expiresAt: Date;
+    id: string;
+    providerAccountId: string | null;
+    providerEmail: string | null;
+    providerEmailVerified: boolean;
+    providerId: string;
+    selectedEmail: string | null;
+    state: SocialRegistrationAttempt["state"];
+  }>(
+    `SELECT id,
+            provider_id AS "providerId",
+            provider_account_id AS "providerAccountId",
+            provider_email AS "providerEmail",
+            provider_email_verified AS "providerEmailVerified",
+            selected_email AS "selectedEmail",
+            display_name AS "displayName",
+            avatar_url AS "avatarUrl",
+            state,
+            expires_at AS "expiresAt"
+       FROM ${socialRegistrationTable()}
+      WHERE token_hash = $1
+      FOR UPDATE`,
+    [intentDigest(input.rawToken)],
+  );
+  const attempt = result.rows[0];
+  if (!attempt) throw new SocialRegistrationError("intent_invalid");
+  if (attempt.expiresAt <= input.now) {
+    throw new SocialRegistrationError("intent_expired");
+  }
+  return attempt;
+}
+
+export async function consumeLockedSocialRegistrationAttempt(
+  client: PoolClient,
+  input: { attemptId: string; now: Date },
+) {
+  const result = await client.query(
+    `UPDATE ${socialRegistrationTable()}
+        SET state = 'completed',
+            consumed_at = $2,
+            email_code_hash = NULL,
+            email_code_expires_at = NULL,
+            updated_at = $2
+      WHERE id = $1
+        AND state IN ('profile_captured', 'email_verified')
+        AND consumed_at IS NULL`,
+    [input.attemptId, input.now],
+  );
+  if (result.rowCount !== 1) {
+    throw new SocialRegistrationError("intent_invalid");
+  }
+}

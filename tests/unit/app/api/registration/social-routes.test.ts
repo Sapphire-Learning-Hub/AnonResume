@@ -4,6 +4,7 @@ import { SocialRegistrationError } from "@/lib/auth/social-registration/errors";
 
 const mocks = vi.hoisted(() => ({
   cancelAttempt: vi.fn(),
+  completeRegistration: vi.fn(),
   createAttempt: vi.fn(),
   findConflict: vi.fn(),
   getOptionalSession: vi.fn(),
@@ -41,6 +42,9 @@ vi.mock("@/lib/auth/social-registration/email", () => ({
   sendSocialRegistrationEmailChallenge: mocks.sendEmailChallenge,
   verifySocialRegistrationEmail: mocks.verifyEmail,
 }));
+vi.mock("@/lib/auth/social-registration/completion", () => ({
+  completeSocialRegistration: mocks.completeRegistration,
+}));
 vi.mock("@/lib/runtime/email", () => ({
   sendSocialRegistrationVerificationCode: mocks.sendVerificationCode,
 }));
@@ -50,6 +54,7 @@ import { GET as inspectIntent } from "@/app/api/registration/social/intent/route
 import { GET as resolveResult } from "@/app/api/registration/social/result/route";
 import { POST as sendEmailChallenge } from "@/app/api/registration/social/email/challenge/route";
 import { POST as verifyEmail } from "@/app/api/registration/social/email/verify/route";
+import { POST as completeRegistration } from "@/app/api/registration/social/complete/route";
 
 const cookieName = "anonresume_social_registration_attempt";
 
@@ -87,6 +92,10 @@ describe("social registration routes", () => {
       expiresAt: new Date("2026-10-10T00:15:00.000Z"),
     });
     mocks.cancelAttempt.mockResolvedValue(true);
+    mocks.completeRegistration.mockResolvedValue({
+      email: "github@example.com",
+      userId: "new-user",
+    });
     mocks.findConflict.mockResolvedValue(null);
     mocks.inspectIntent.mockResolvedValue({
       state: "password",
@@ -287,5 +296,31 @@ describe("social registration routes", () => {
     await expect(verifyResponse.json()).resolves.toEqual({
       email: "new@example.com",
     });
+  });
+
+  it("completes registration and clears the one-time cookie", async () => {
+    const response = await completeRegistration(request(
+      "https://resume.example.com/api/registration/social/complete",
+      {
+        method: "POST",
+        cookie: "registration-token",
+        body: {
+          displayName: "GitHub User",
+          password: "secure-password-123",
+        },
+      },
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "created",
+      email: "github@example.com",
+    });
+    expect(mocks.completeRegistration).toHaveBeenCalledWith({
+      rawToken: "registration-token",
+      displayName: "GitHub User",
+      password: "secure-password-123",
+    });
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 });
