@@ -13,7 +13,10 @@ import {
   setAdminRoles,
   updateAdminRole,
 } from "@/lib/admin/management";
-import { getAdminAccessForUser } from "@/lib/admin/store";
+import {
+  getAdminAccessForUser,
+  getAdminPrincipalKindForAccountMerge,
+} from "@/lib/admin/store";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 function quoteIdentifier(value: string) {
@@ -167,6 +170,12 @@ describe("admin role management", () => {
     await expect(getAdminAccessForUser(userId)).resolves.toBeNull();
     await db.delete(adminRoles).where(eq(adminRoles.id, supportRole.id));
     await db.delete(adminRoles).where(eq(adminRoles.id, auditRole.id));
+  });
+
+  it("keeps an unassigned administrator classified for account merges", async () => {
+    await expect(getAdminAccessForUser(delegatedTargetId)).resolves.toBeNull();
+    await expect(getAdminPrincipalKindForAccountMerge(delegatedTargetId))
+      .resolves.toBe("delegated_admin");
   });
 
   it("never overwrites the singleton super-admin with a delegated role", async () => {

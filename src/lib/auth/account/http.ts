@@ -8,7 +8,7 @@ export function accountErrorResponse(error: unknown) {
       error.code === "challenge_rate_limited" ||
       error.code === "challenge_resend_too_soon"
         ? 429
-        : error.code === "email_in_use"
+        : error.code === "email_in_use" || error.code === "merge_in_progress"
           ? 409
           : error.code === "recovery_period_ended"
             ? 409

@@ -7,6 +7,7 @@ export type AccountSecurityErrorCode =
   | "challenge_resend_too_soon"
   | "current_session_required"
   | "email_in_use"
+  | "merge_in_progress"
   | "password_incorrect"
   | "password_invalid"
   | "password_unavailable"
