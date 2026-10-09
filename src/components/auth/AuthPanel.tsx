@@ -423,18 +423,39 @@ export function AuthPanel({
     setIsPending(true);
 
     try {
+      let callbackURL = "/sign-in";
+      let errorCallbackURL = "/sign-in";
+
+      if (requestSignUp) {
+        const response = await fetch("/api/registration/social/attempt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [REGISTRATION_CONSENT_HEADER]: "true",
+          },
+          body: JSON.stringify({ provider: "github" }),
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        if (
+          !response.ok ||
+          !payload ||
+          typeof payload !== "object" ||
+          !("callbackURL" in payload) ||
+          typeof payload.callbackURL !== "string" ||
+          !("errorCallbackURL" in payload) ||
+          typeof payload.errorCallbackURL !== "string"
+        ) {
+          toast.error(t("auth.socialSignInUnavailable"));
+          return;
+        }
+        callbackURL = payload.callbackURL;
+        errorCallbackURL = payload.errorCallbackURL;
+      }
+
       const result = await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/sign-in",
-        errorCallbackURL: "/sign-in",
-        ...(requestSignUp
-          ? {
-              requestSignUp: true,
-              fetchOptions: {
-                headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
-              },
-            }
-          : {}),
+        callbackURL,
+        errorCallbackURL,
       });
 
       if (result.error) {
@@ -442,6 +463,7 @@ export function AuthPanel({
       }
     } catch (error) {
       toast.error(getAuthFeedbackMessage(error, t));
+    } finally {
       setIsPending(false);
     }
   }

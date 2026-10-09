@@ -528,6 +528,30 @@ const messages = {
       "该邮箱已注册，请使用原登录方式登录后在账号中心绑定 GitHub。",
     "auth.socialRegistration.error.resendTooSoon":
       "请稍后再重新发送验证码。",
+    "auth.socialRegistration.error.emailAttemptsExhausted":
+      "验证码尝试次数过多，请重新获取。",
+    "auth.socialRegistration.error.emailInvalid": "请输入有效的邮箱地址。",
+    "auth.socialRegistration.loading": "正在读取注册信息",
+    "auth.socialRegistration.heading": "完成 GitHub 注册",
+    "auth.socialRegistration.lead": "设置登录信息，完成账号创建。",
+    "auth.socialRegistration.emailHeading": "验证登录邮箱",
+    "auth.socialRegistration.emailLead":
+      "GitHub 未提供可用邮箱，请验证一个邮箱作为登录账号。",
+    "auth.socialRegistration.displayName": "显示名称",
+    "auth.socialRegistration.loginEmail": "登录邮箱",
+    "auth.socialRegistration.emailCode": "邮箱验证码",
+    "auth.socialRegistration.sendCode": "发送验证码",
+    "auth.socialRegistration.resendCode": "重新发送",
+    "auth.socialRegistration.verifyEmail": "验证邮箱",
+    "auth.socialRegistration.expiredHeading": "注册流程已失效",
+    "auth.socialRegistration.expiredDescription":
+      "请返回登录页，重新使用 GitHub 创建账号。",
+    "auth.socialRegistration.conflictHeading": "该账号已存在",
+    "auth.socialRegistration.conflictDescription":
+      "请使用原登录方式登录，再前往账号中心绑定 GitHub。",
+    "auth.socialRegistration.createdHeading": "账号已创建",
+    "auth.socialRegistration.createdDescription":
+      "自动登录未完成，请使用刚刚设置的邮箱和密码登录。",
     "auth.rateLimited": "尝试次数过多，请稍后再试。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
     "auth.registrationConsentPrefix": "我已阅读并同意",
@@ -2150,6 +2174,33 @@ const messages = {
       "This email is already registered. Sign in using the original method, then link GitHub from Account Center.",
     "auth.socialRegistration.error.resendTooSoon":
       "Wait before requesting another verification code.",
+    "auth.socialRegistration.error.emailAttemptsExhausted":
+      "Too many incorrect attempts. Request a new verification code.",
+    "auth.socialRegistration.error.emailInvalid":
+      "Enter a valid email address.",
+    "auth.socialRegistration.loading": "Loading registration details",
+    "auth.socialRegistration.heading": "Complete GitHub registration",
+    "auth.socialRegistration.lead":
+      "Set your sign-in details to finish creating your account.",
+    "auth.socialRegistration.emailHeading": "Verify your sign-in email",
+    "auth.socialRegistration.emailLead":
+      "GitHub did not provide a usable email. Verify an email address to use for sign-in.",
+    "auth.socialRegistration.displayName": "Display name",
+    "auth.socialRegistration.loginEmail": "Sign-in email",
+    "auth.socialRegistration.emailCode": "Email verification code",
+    "auth.socialRegistration.sendCode": "Send verification code",
+    "auth.socialRegistration.resendCode": "Resend",
+    "auth.socialRegistration.verifyEmail": "Verify email",
+    "auth.socialRegistration.expiredHeading":
+      "Registration session expired",
+    "auth.socialRegistration.expiredDescription":
+      "Return to sign in and start GitHub registration again.",
+    "auth.socialRegistration.conflictHeading": "This account already exists",
+    "auth.socialRegistration.conflictDescription":
+      "Sign in using the original method, then link GitHub from Account Center.",
+    "auth.socialRegistration.createdHeading": "Account created",
+    "auth.socialRegistration.createdDescription":
+      "Automatic sign-in did not complete. Sign in with the email and password you just set.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.registrationConsentPrefix": "I have read and agree to the ",

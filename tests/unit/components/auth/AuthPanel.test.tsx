@@ -78,6 +78,10 @@ describe("AuthPanel email verification", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("eagerly loads the above-the-fold brand image", () => {
     render(<AuthPanel githubEnabled={false} />);
 
@@ -173,7 +177,17 @@ describe("AuthPanel email verification", () => {
     );
   });
 
-  it("marks GitHub registration as explicit after legal consent", async () => {
+  it("creates a registration intent before starting GitHub registration", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      callbackURL:
+        "/api/registration/social/result?provider=github&outcome=success",
+      errorCallbackURL:
+        "/api/registration/social/result?provider=github&outcome=error",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
     authMocks.signInSocial.mockResolvedValue({
       data: { redirect: true, url: "https://github.com/login/oauth/authorize" },
       error: null,
@@ -187,14 +201,22 @@ describe("AuthPanel email verification", () => {
     fireEvent.click(screen.getByRole("button", { name: /使用 GitHub 继续/ }));
 
     await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/registration/social/attempt",
+        expect.objectContaining({
+          body: JSON.stringify({ provider: "github" }),
+          headers: expect.objectContaining({
+            [REGISTRATION_CONSENT_HEADER]: "true",
+          }),
+          method: "POST",
+        }),
+      );
       expect(authMocks.signInSocial).toHaveBeenCalledWith({
-        callbackURL: "/sign-in",
-        errorCallbackURL: "/sign-in",
-        fetchOptions: {
-          headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
-        },
+        callbackURL:
+          "/api/registration/social/result?provider=github&outcome=success",
+        errorCallbackURL:
+          "/api/registration/social/result?provider=github&outcome=error",
         provider: "github",
-        requestSignUp: true,
       });
     });
   });
