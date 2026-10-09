@@ -6,6 +6,7 @@ import { aiDatabaseTables } from "./ai-schema";
 import { accountMergeDatabaseTables } from "./account-merge-schema";
 import { configDatabaseTables } from "./config-schema";
 import { invitationDatabaseTables } from "./invitation-schema";
+import { socialRegistrationDatabaseTables } from "./social-registration-schema";
 
 import {
   accountEmailChallenges,
@@ -58,6 +59,10 @@ export {
 } from "./config-schema";
 export { userInvitations } from "./invitation-schema";
 export {
+  socialRegistrationAttempts,
+  type SocialRegistrationAttemptState,
+} from "./social-registration-schema";
+export {
   accountEmailChallenges,
   accountLifecycle,
   accountRestrictions,
@@ -89,6 +94,7 @@ export const db = drizzle({
     ...aiDatabaseTables,
     ...configDatabaseTables,
     ...invitationDatabaseTables,
+    ...socialRegistrationDatabaseTables,
     accountEmailChallenges,
     accountLifecycle,
     accountRestrictions,
