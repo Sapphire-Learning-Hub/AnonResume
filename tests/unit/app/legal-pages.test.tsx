@@ -6,6 +6,7 @@ import TermsPage from "@/app/terms/page";
 const state = vi.hoisted(() => ({
   locale: "zh-CN" as "en-US" | "zh-CN",
   rejectRuntime: false,
+  requestReady: false,
   values: {
     legalContactEmail: "privacy@example.com",
     legalEffectiveDate: "2026-10-09",
@@ -25,13 +26,22 @@ vi.mock("next/navigation", () => ({
   redirect: navigationMocks.redirect,
 }));
 
+vi.mock("next/server", () => ({
+  connection: () => {
+    state.requestReady = true;
+    return Promise.resolve();
+  },
+}));
+
 vi.mock("@/i18n/server", () => ({
   getRequestLocale: () => Promise.resolve(state.locale),
 }));
 
 vi.mock("@/lib/config/runtime", () => ({
   getRuntimeConfig: () => {
-    if (state.rejectRuntime) return Promise.reject(new Error("unavailable"));
+    if (!state.requestReady || state.rejectRuntime) {
+      return Promise.reject(new Error("unavailable"));
+    }
     return Promise.resolve({ values: state.values });
   },
 }));
@@ -40,6 +50,7 @@ describe("public legal pages", () => {
   beforeEach(() => {
     state.locale = "zh-CN";
     state.rejectRuntime = false;
+    state.requestReady = false;
     state.values.legalContactEmail = "privacy@example.com";
     state.values.legalEffectiveDate = "2026-10-09";
     state.values.legalOperatorName = "Example Operator";

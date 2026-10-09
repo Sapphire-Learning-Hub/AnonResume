@@ -17,7 +17,6 @@ export interface LegalPolicyLabels {
 export function LegalPolicyPage({
   children,
   contactEmail,
-  description,
   effectiveDate,
   labels,
   operatorName,
@@ -25,7 +24,6 @@ export function LegalPolicyPage({
 }: {
   children: ReactNode;
   contactEmail: string | null;
-  description: string;
   effectiveDate: string;
   labels: LegalPolicyLabels;
   operatorName: string;
@@ -35,7 +33,6 @@ export function LegalPolicyPage({
 
   return (
     <LegalPageFrame
-      description={description}
       footer={
         <footer className={styles.footer}>
           <Link href="/">{labels.home}</Link>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import type { ComponentType } from "react";
 
 import { LegalPolicyPage } from "@/components/legal/LegalPolicyPage";
@@ -45,6 +46,7 @@ function formatEffectiveDate(
 }
 
 export async function renderLegalPolicy(definition: LegalPolicyDefinition) {
+  await connection();
   const [locale, configuration] = await Promise.all([
     getRequestLocale(),
     getLegalPageConfiguration(),
@@ -59,7 +61,6 @@ export async function renderLegalPolicy(definition: LegalPolicyDefinition) {
   return (
     <LegalPolicyPage
       contactEmail={configuration.legalContactEmail || null}
-      description={messages[definition.descriptionKey]}
       effectiveDate={formatEffectiveDate(
         configuration.legalEffectiveDate,
         locale,

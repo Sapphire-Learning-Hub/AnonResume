@@ -12,7 +12,7 @@ export function LegalPageFrame({
   title,
 }: {
   children: ReactNode;
-  description: string;
+  description?: string;
   footer?: ReactNode;
   title: string;
 }) {
@@ -23,7 +23,9 @@ export function LegalPageFrame({
       <article className={styles.document}>
         <header className={styles.header}>
           <h1 className={styles.title}>{title}</h1>
-          <p className={styles.description}>{description}</p>
+          {description ? (
+            <p className={styles.description}>{description}</p>
+          ) : null}
         </header>
         {children}
         {footer ?? (
