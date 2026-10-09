@@ -141,6 +141,17 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(options.socialProviders.github.disableImplicitSignUp).toBe(true);
   });
 
+  it("redirects authentication failures to the product sign-in page", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      onAPIError?: { errorURL?: string };
+    };
+
+    expect(options.onAPIError?.errorURL).toBe(
+      "https://resume.example.com/sign-in",
+    );
+  });
+
   it("captures only the GitHub provider subject during a pending link callback", async () => {
     await getAuth();
     const options = mocks.betterAuth.mock.calls[0]![0] as {
@@ -161,19 +172,21 @@ describe("restart-scoped Better Auth configuration", () => {
     });
   });
 
-  it("allows an authenticated user to link a GitHub account with a different email", async () => {
+  it("requires explicit authenticated linking for GitHub accounts", async () => {
     await getAuth();
     const options = mocks.betterAuth.mock.calls[0]![0] as {
       account: {
         accountLinking: {
           allowDifferentEmails?: boolean;
           allowUnlinkingAll?: boolean;
+          disableImplicitLinking?: boolean;
         };
       };
     };
 
     expect(options.account.accountLinking).toMatchObject({
       allowDifferentEmails: true,
+      disableImplicitLinking: true,
     });
     expect(options.account.accountLinking.allowUnlinkingAll).not.toBe(true);
   });

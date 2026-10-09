@@ -189,6 +189,7 @@ describe("AuthPanel email verification", () => {
     await waitFor(() => {
       expect(authMocks.signInSocial).toHaveBeenCalledWith({
         callbackURL: "/sign-in",
+        errorCallbackURL: "/sign-in",
         fetchOptions: {
           headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
         },
@@ -370,6 +371,21 @@ describe("AuthPanel email verification", () => {
     expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
+      }),
+    );
+  });
+
+  it("explains that an unlinked GitHub account cannot claim an existing account", () => {
+    render(
+      <AuthPanel
+        githubEnabled
+        verificationError="account_not_linked"
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "该 GitHub 账号尚未绑定。请先使用原登录方式登录，再前往账号中心绑定 GitHub。",
       }),
     );
   });

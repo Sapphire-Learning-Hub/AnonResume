@@ -60,9 +60,13 @@ function createAuth(configuration: {
     baseURL: configuration.applicationOrigin,
     secret: configuration.authSecret,
     database: getDatabasePool(),
+    onAPIError: {
+      errorURL: new URL("/sign-in", configuration.applicationOrigin).toString(),
+    },
     account: {
       accountLinking: {
         allowDifferentEmails: true,
+        disableImplicitLinking: true,
       },
     },
     databaseHooks: {

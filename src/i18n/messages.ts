@@ -519,6 +519,8 @@ const messages = {
     "auth.socialSignInUnavailable": "GitHub 登录暂时不可用。",
     "auth.socialRegistrationRequired":
       "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
+    "auth.socialAccountNotLinked":
+      "该 GitHub 账号尚未绑定。请先使用原登录方式登录，再前往账号中心绑定 GitHub。",
     "auth.rateLimited": "尝试次数过多，请稍后再试。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
     "auth.registrationConsentPrefix": "我已阅读并同意",
@@ -2130,6 +2132,8 @@ const messages = {
       "GitHub sign-in is temporarily unavailable.",
     "auth.socialRegistrationRequired":
       "This GitHub account is not registered. Switch to Create account and agree to the privacy policy and terms of service.",
+    "auth.socialAccountNotLinked":
+      "This GitHub account is not linked. Sign in using your original method, then link GitHub from Account Center.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.registrationConsentPrefix": "I have read and agree to the ",

@@ -196,6 +196,7 @@ const verificationFailureCodes = new Set([
 ]);
 
 const socialRegistrationFailureCodes = new Set(["signup_disabled"]);
+const socialAccountLinkFailureCodes = new Set(["account_not_linked"]);
 
 const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   ACCOUNT_SUSPENDED: "auth.accountSuspended",
@@ -272,7 +273,9 @@ export function AuthPanel({
         ? t("auth.invalidVerificationLink")
         : verificationError && socialRegistrationFailureCodes.has(verificationError)
           ? t("auth.socialRegistrationRequired")
-        : null;
+          : verificationError && socialAccountLinkFailureCodes.has(verificationError)
+            ? t("auth.socialAccountNotLinked")
+            : null;
 
   useEffect(() => {
     const key = "authentication-page-error";
@@ -423,6 +426,7 @@ export function AuthPanel({
       const result = await authClient.signIn.social({
         provider: "github",
         callbackURL: "/sign-in",
+        errorCallbackURL: "/sign-in",
         ...(requestSignUp
           ? {
               requestSignUp: true,
