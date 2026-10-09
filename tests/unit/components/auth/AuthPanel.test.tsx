@@ -411,6 +411,30 @@ describe("AuthPanel email verification", () => {
       }),
     );
   });
+
+  it.each([
+    [
+      "social_registration_invalid",
+      "GitHub 注册流程无效或已过期，请重新开始。",
+    ],
+    [
+      "social_registration_account_exists",
+      "该 GitHub 账号或邮箱已有对应账号，请使用原登录方式登录后再绑定 GitHub。",
+    ],
+    ["social_oauth_cancelled", "已取消 GitHub 授权。"],
+    ["social_oauth_failed", "GitHub 授权未完成，请稍后重试。"],
+  ])("explains the %s social registration callback", (code, message) => {
+    render(
+      <AuthPanel
+        githubEnabled
+        verificationError={code}
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({ title: message }),
+    );
+  });
 });
 
 describe("PasswordResetPanel", () => {

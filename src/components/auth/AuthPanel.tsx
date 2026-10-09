@@ -195,8 +195,16 @@ const verificationFailureCodes = new Set([
   "token_expired",
 ]);
 
-const socialRegistrationFailureCodes = new Set(["signup_disabled"]);
 const socialAccountLinkFailureCodes = new Set(["account_not_linked"]);
+
+const socialRegistrationErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
+  signup_disabled: "auth.socialRegistrationRequired",
+  social_oauth_cancelled: "auth.socialRegistration.callbackCancelled",
+  social_oauth_failed: "auth.socialRegistration.callbackFailed",
+  social_registration_account_exists:
+    "auth.socialRegistration.callbackAccountExists",
+  social_registration_invalid: "auth.socialRegistration.callbackInvalid",
+};
 
 const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   ACCOUNT_SUSPENDED: "auth.accountSuspended",
@@ -271,8 +279,8 @@ export function AuthPanel({
       ? t("auth.accountSuspended")
       : verificationError && verificationFailureCodes.has(verificationError)
         ? t("auth.invalidVerificationLink")
-        : verificationError && socialRegistrationFailureCodes.has(verificationError)
-          ? t("auth.socialRegistrationRequired")
+        : verificationError && socialRegistrationErrorMessageKeys[verificationError]
+          ? t(socialRegistrationErrorMessageKeys[verificationError])
           : verificationError && socialAccountLinkFailureCodes.has(verificationError)
             ? t("auth.socialAccountNotLinked")
             : null;

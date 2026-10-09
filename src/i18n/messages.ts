@@ -552,6 +552,13 @@ const messages = {
     "auth.socialRegistration.createdHeading": "账号已创建",
     "auth.socialRegistration.createdDescription":
       "自动登录未完成，请使用刚刚设置的邮箱和密码登录。",
+    "auth.socialRegistration.callbackInvalid":
+      "GitHub 注册流程无效或已过期，请重新开始。",
+    "auth.socialRegistration.callbackAccountExists":
+      "该 GitHub 账号或邮箱已有对应账号，请使用原登录方式登录后再绑定 GitHub。",
+    "auth.socialRegistration.callbackCancelled": "已取消 GitHub 授权。",
+    "auth.socialRegistration.callbackFailed":
+      "GitHub 授权未完成，请稍后重试。",
     "auth.rateLimited": "尝试次数过多，请稍后再试。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
     "auth.registrationConsentPrefix": "我已阅读并同意",
@@ -2201,6 +2208,14 @@ const messages = {
     "auth.socialRegistration.createdHeading": "Account created",
     "auth.socialRegistration.createdDescription":
       "Automatic sign-in did not complete. Sign in with the email and password you just set.",
+    "auth.socialRegistration.callbackInvalid":
+      "The GitHub registration session is invalid or expired. Start again.",
+    "auth.socialRegistration.callbackAccountExists":
+      "This GitHub account or email already belongs to an account. Sign in using the original method, then link GitHub.",
+    "auth.socialRegistration.callbackCancelled":
+      "GitHub authorization was cancelled.",
+    "auth.socialRegistration.callbackFailed":
+      "GitHub authorization did not complete. Try again later.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.registrationConsentPrefix": "I have read and agree to the ",
