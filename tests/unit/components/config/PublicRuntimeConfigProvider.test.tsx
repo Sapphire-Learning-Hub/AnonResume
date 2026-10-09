@@ -10,13 +10,22 @@ import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConf
 
 function SourceCodeLink() {
   const configuration = usePublicRuntimeConfig();
-  return <a href={configuration.sourceCodeUrl}>source</a>;
+  return (
+    <div data-ai-enabled={configuration.aiEnabled}>
+      <a href={configuration.sourceCodeUrl}>source</a>
+      <a href={configuration.supportUrl}>support</a>
+    </div>
+  );
 }
 
 function snapshot(sourceCodeUrl: string): PublicRuntimeConfig {
   return {
+    aiEnabled: true,
     configurationHealth: "healthy",
+    privacyPolicyUrl: "https://example.com/privacy",
     sourceCodeUrl,
+    supportUrl: "https://example.com/support",
+    termsOfServiceUrl: "https://example.com/terms",
   };
 }
 
@@ -42,6 +51,9 @@ describe("PublicRuntimeConfigProvider", () => {
       "href",
       configuration.sourceCodeUrl,
     );
+    expect(container.querySelector('[data-ai-enabled="true"]')).not.toBeNull();
+    expect(container.querySelector('a[href="https://example.com/support"]'))
+      .not.toBeNull();
     await act(async () => root?.unmount());
   });
 

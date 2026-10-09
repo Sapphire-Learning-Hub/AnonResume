@@ -122,8 +122,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       const { getRuntimeConfig } = await import("@/lib/config/runtime");
       const runtime = await getRuntimeConfig("web");
       publicRuntimeConfig = {
+        aiEnabled: runtime.values.aiEnabled,
         configurationHealth: runtime.health,
+        privacyPolicyUrl: runtime.values.privacyPolicyUrl,
         sourceCodeUrl: runtime.values.sourceCodeUrl,
+        supportUrl: runtime.values.supportUrl,
+        termsOfServiceUrl: runtime.values.termsOfServiceUrl,
       };
     } catch {
       runtimeUnavailable = true;

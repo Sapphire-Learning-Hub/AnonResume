@@ -5,6 +5,22 @@ import type { ConfigDefinition } from "@/lib/config/types";
 const positiveInteger = z.number().int().positive();
 const nonNegativeInteger = z.number().int().nonnegative();
 const optionalText = z.string().trim();
+const optionalEmail = optionalText.refine(
+  (value) => !value || z.email().safeParse(value).success,
+  "Must be a valid email address",
+);
+const optionalIsoDate = optionalText.refine(
+  (value) => !value || z.iso.date().safeParse(value).success,
+  "Must use YYYY-MM-DD",
+);
+const optionalHttpsUrl = optionalText.refine((value) => {
+  if (!value) return true;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}, "Must be an absolute HTTPS URL");
 const hostname = z
   .string()
   .trim()
@@ -55,14 +71,13 @@ export const managedConfigSchema = z
     aiWorkerPollIntervalMs: positiveInteger.min(250).max(60_000),
     aiWorkerRecoveryIntervalMs: positiveInteger.min(250).max(3_600_000),
     aiWorkerRetentionIntervalMs: positiveInteger.min(1_000).max(86_400_000),
-    sourceCodeUrl: optionalText.refine((value) => {
-      if (!value) return true;
-      try {
-        return new URL(value).protocol === "https:";
-      } catch {
-        return false;
-      }
-    }, "Must be an absolute HTTPS URL"),
+    sourceCodeUrl: optionalHttpsUrl,
+    legalOperatorName: optionalText,
+    legalContactEmail: optionalEmail,
+    legalEffectiveDate: optionalIsoDate,
+    privacyPolicyUrl: optionalHttpsUrl,
+    termsOfServiceUrl: optionalHttpsUrl,
+    supportUrl: optionalHttpsUrl,
   })
   .strict()
   .superRefine((value, context) => {
@@ -184,7 +199,10 @@ export const CONFIG_REGISTRY = {
   pdfForceExpiryMs: definition("pdf", "hot", ["web", "pdf-worker"], 86_400_000, "PDF_EXPORT_FORCE_EXPIRY_MS"),
   pdfAllowAnonymous: definition("pdf", "hot", ["web"], false, "PDF_EXPORT_ALLOW_ANONYMOUS"),
   resumeVersionHistoryLimit: definition("resume", "hot", ["web"], 5, "RESUME_VERSION_HISTORY_LIMIT"),
-  aiEnabled: definition("ai", "hot", ["web", "ai-worker"], false, "AI_ENABLED"),
+  aiEnabled: {
+    ...definition("ai", "hot", ["web", "ai-worker"], false, "AI_ENABLED"),
+    public: true,
+  },
   aiPlatformEnabled: definition("ai", "hot", ["web", "ai-worker"], false, "AI_PLATFORM_ENABLED"),
   aiByokEnabled: definition("ai", "hot", ["web", "ai-worker"], false, "AI_BYOK_ENABLED"),
   aiTrustedEndpointHostnames: definition("ai", "hot", ["web", "ai-worker"], [], "AI_TRUSTED_ENDPOINT_HOSTNAMES"),
@@ -200,6 +218,30 @@ export const CONFIG_REGISTRY = {
   aiWorkerRetentionIntervalMs: definition("ai", "hot", ["ai-worker"], 3_600_000, "AI_WORKER_RETENTION_INTERVAL_MS"),
   sourceCodeUrl: {
     ...definition("general", "hot", ["web"], "", "NEXT_PUBLIC_SOURCE_CODE_URL"),
+    public: true,
+  },
+  legalOperatorName: {
+    ...definition("legal", "hot", ["web"], "", "LEGAL_OPERATOR_NAME"),
+    public: true,
+  },
+  legalContactEmail: {
+    ...definition("legal", "hot", ["web"], "", "LEGAL_CONTACT_EMAIL"),
+    public: true,
+  },
+  legalEffectiveDate: {
+    ...definition("legal", "hot", ["web"], "", "LEGAL_EFFECTIVE_DATE"),
+    public: true,
+  },
+  privacyPolicyUrl: {
+    ...definition("legal", "hot", ["web"], "", "PRIVACY_POLICY_URL"),
+    public: true,
+  },
+  termsOfServiceUrl: {
+    ...definition("legal", "hot", ["web"], "", "TERMS_OF_SERVICE_URL"),
+    public: true,
+  },
+  supportUrl: {
+    ...definition("legal", "hot", ["web"], "", "SUPPORT_URL"),
     public: true,
   },
 } satisfies ConfigRegistry;

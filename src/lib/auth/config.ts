@@ -32,6 +32,7 @@ function createAuth(configuration: {
         github: {
           clientId: values.githubClientId,
           clientSecret: values.githubClientSecret,
+          disableImplicitSignUp: true,
         },
       }
     : undefined;

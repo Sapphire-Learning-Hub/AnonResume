@@ -1,5 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 
+import {
+  DEFAULT_PUBLIC_RUNTIME_CONFIG,
+  PublicRuntimeConfigProvider,
+} from "@/components/config/PublicRuntimeConfigProvider";
+
 vi.mock("@/components/auth/SignOutButton", () => ({
   SignOutButton: () => <button type="button">退出登录</button>,
 }));
@@ -35,6 +40,14 @@ describe("WorkbenchAccountMenu", () => {
       "href",
       "/app/account",
     );
+    expect(screen.getByRole("link", { name: "帮助中心" })).toHaveAttribute(
+      "href",
+      "/docs",
+    );
+    expect(screen.getByRole("link", { name: "获取支持" })).toHaveAttribute(
+      "href",
+      "/docs/support",
+    );
   });
 
   it("does not expose an account center to the management-only superadmin", () => {
@@ -53,5 +66,42 @@ describe("WorkbenchAccountMenu", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Admin admin@example.com" }));
     expect(screen.queryByRole("link", { name: "账号中心" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "帮助中心" })).toHaveAttribute(
+      "href",
+      "/docs",
+    );
+    expect(screen.getByRole("link", { name: "获取支持" })).toHaveAttribute(
+      "href",
+      "/docs/support",
+    );
+  });
+
+  it("opens a configured support destination externally", () => {
+    render(
+      <PublicRuntimeConfigProvider
+        value={{
+          ...DEFAULT_PUBLIC_RUNTIME_CONFIG,
+          supportUrl: "https://support.example.com/tickets",
+        }}
+      >
+        <WorkbenchAccountMenu
+          access={{
+            mode: "product",
+            productAccess: true,
+            canEnterManagement: false,
+            mfaEnrollmentRequired: false,
+          }}
+          collapsed={false}
+          email="user@example.com"
+          name="User"
+        />
+      </PublicRuntimeConfigProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "User user@example.com" }));
+    expect(screen.getByRole("link", { name: "获取支持" }))
+      .toHaveAttribute("href", "https://support.example.com/tickets");
+    expect(screen.getByRole("link", { name: "获取支持" }))
+      .toHaveAttribute("target", "_blank");
   });
 });

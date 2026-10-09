@@ -6,7 +6,8 @@ export type ConfigGroup =
   | "security"
   | "pdf"
   | "resume"
-  | "ai";
+  | "ai"
+  | "legal";
 
 export interface ConfigDefinition<T> {
   applyMode: ConfigApplyMode;

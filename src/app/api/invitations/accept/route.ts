@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { hasRegistrationConsent } from "@/lib/auth/registration-consent";
 import {
   acceptUserInvitation,
   InvalidUserInvitationError,
@@ -13,6 +14,13 @@ const bodySchema = z.object({
 }).strict();
 
 export async function POST(request: Request) {
+  if (!hasRegistrationConsent(request)) {
+    return NextResponse.json(
+      { error: "REGISTRATION_CONSENT_REQUIRED" },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });

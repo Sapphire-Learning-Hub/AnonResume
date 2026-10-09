@@ -8,6 +8,7 @@ import {
   CloudDownloadOutlined,
   CodeOutlined,
   DatabaseOutlined,
+  ExportOutlined,
   HistoryOutlined,
   ImportOutlined,
   LayoutOutlined,
@@ -32,6 +33,7 @@ import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConf
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
+import { resolvePublicInformationDestinations } from "@/lib/public-info/destinations";
 
 import { useMarketingHomeStyles } from "./MarketingHome.style";
 
@@ -189,7 +191,9 @@ export function MarketingHome({
 }) {
   const { styles } = useMarketingHomeStyles();
   const { t } = useI18n();
-  const { sourceCodeUrl } = usePublicRuntimeConfig();
+  const runtimeConfig = usePublicRuntimeConfig();
+  const { sourceCodeUrl } = runtimeConfig;
+  const publicDestinations = resolvePublicInformationDestinations(runtimeConfig);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const scrollAnimationFrameRef = useRef<number | null>(null);
 
@@ -589,18 +593,84 @@ export function MarketingHome({
 
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          <AnonResumeLogo className={styles.footerLogo} loading="lazy" variant="lockup" />
-          <span>{t("home.footer.description")}</span>
-          <div className={styles.footerLinks}>
-            {sourceCodeUrl ? (
-              <a href={sourceCodeUrl} rel="noreferrer" target="_blank">
-                <CodeOutlined /> {t("common.settings.sourceCode")}
-              </a>
-            ) : null}
-            <a href="/license">{t("common.settings.license")}</a>
-            <a href="/third-party-notices">{t("common.settings.thirdPartyNotices")}</a>
-            <a href="/brand-notice">{t("common.settings.brandNotice")}</a>
+          <div className={styles.footerBrand}>
+            <AnonResumeLogo className={styles.footerLogo} loading="lazy" variant="lockup" />
+            <span>{t("home.footer.description")}</span>
           </div>
+          <nav
+            aria-label={t("home.footer.navigation")}
+            className={styles.footerGroups}
+          >
+            <section className={styles.footerGroup}>
+              <h2>{t("home.footer.group.product")}</h2>
+              <div className={styles.footerLinks}>
+                <a href="/docs">{t("docs.siteTitle")}</a>
+                {publicDestinations.support.external ? (
+                  <a
+                    href={publicDestinations.support.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {t("docs.navigation.support")}
+                    <ExportOutlined aria-hidden="true" />
+                  </a>
+                ) : (
+                  <a href={publicDestinations.support.href}>
+                    {t("docs.navigation.support")}
+                  </a>
+                )}
+              </div>
+            </section>
+            <section className={styles.footerGroup}>
+              <h2>{t("home.footer.group.legal")}</h2>
+              <div className={styles.footerLinks}>
+                {publicDestinations.privacy.external ? (
+                  <a
+                    href={publicDestinations.privacy.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {t("legal.privacy.title")}
+                    <ExportOutlined aria-hidden="true" />
+                  </a>
+                ) : (
+                  <a href={publicDestinations.privacy.href}>
+                    {t("legal.privacy.title")}
+                  </a>
+                )}
+                {publicDestinations.terms.external ? (
+                  <a
+                    href={publicDestinations.terms.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {t("legal.terms.title")}
+                    <ExportOutlined aria-hidden="true" />
+                  </a>
+                ) : (
+                  <a href={publicDestinations.terms.href}>
+                    {t("legal.terms.title")}
+                  </a>
+                )}
+              </div>
+            </section>
+            <section className={styles.footerGroup}>
+              <h2>{t("home.footer.group.openSource")}</h2>
+              <div className={styles.footerLinks}>
+                {sourceCodeUrl ? (
+                  <a href={sourceCodeUrl} rel="noreferrer" target="_blank">
+                    <CodeOutlined aria-hidden="true" />
+                    {t("common.settings.sourceCode")}
+                  </a>
+                ) : null}
+                <a href="/license">{t("common.settings.license")}</a>
+                <a href="/third-party-notices">
+                  {t("common.settings.thirdPartyNotices")}
+                </a>
+                <a href="/brand-notice">{t("common.settings.brandNotice")}</a>
+              </div>
+            </section>
+          </nav>
         </div>
       </footer>
     </div>

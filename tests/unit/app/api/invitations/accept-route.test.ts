@@ -33,13 +33,36 @@ describe("public invitation acceptance routes", () => {
     const response = await POST(
       new Request("http://localhost/api/invitations/accept", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-anonresume-registration-consent": "true",
+        },
         body: JSON.stringify({ token: "raw-token", name: "New user", password: "new-user-password" }),
       }),
     );
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ email: "invited@example.com" });
+  });
+
+  it("rejects invitation registration without legal consent", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token: "raw-token",
+          name: "New user",
+          password: "new-user-password",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "REGISTRATION_CONSENT_REQUIRED",
+    });
+    expect(mocks.accept).not.toHaveBeenCalled();
   });
 
   it("maps every invalid token state to one public error", async () => {

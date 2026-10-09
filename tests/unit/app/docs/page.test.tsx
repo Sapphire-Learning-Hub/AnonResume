@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import DocsLayout from "@/app/docs/layout";
 import DocsPage from "@/app/docs/page";
+import AiAssistantPage from "@/app/docs/ai-assistant/page";
 import PublicResumeCustomizationPage from "@/app/docs/public-resume-customization/page";
 
 const navigationState = vi.hoisted(() => ({ pathname: "/docs" }));
@@ -13,8 +14,18 @@ const docsViewerState = vi.hoisted(() => ({
     name: string;
   },
 }));
+const runtimeState = vi.hoisted(() => ({
+  aiEnabled: false,
+  supportUrl: "",
+}));
+const navigationMocks = vi.hoisted(() => ({
+  redirect: vi.fn((href: string) => {
+    throw new Error(`redirect:${href}`);
+  }),
+}));
 
 vi.mock("next/navigation", () => ({
+  redirect: navigationMocks.redirect,
   usePathname: () => navigationState.pathname,
 }));
 
@@ -28,6 +39,17 @@ vi.mock("@/lib/auth/docs-context", () => ({
   getDocsViewerContext: () => Promise.resolve(docsViewerState.viewer),
 }));
 
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: () => Promise.resolve({
+    values: {
+      aiEnabled: runtimeState.aiEnabled,
+      privacyPolicyUrl: "",
+      supportUrl: runtimeState.supportUrl,
+      termsOfServiceUrl: "",
+    },
+  }),
+}));
+
 vi.mock("@/components/ui/useAppFeedback", () => ({
   useAppFeedback: () => ({
     toast: { error: vi.fn(), success: vi.fn() },
@@ -38,6 +60,9 @@ describe("documentation routes", () => {
   beforeEach(() => {
     navigationState.pathname = "/docs";
     docsViewerState.viewer = null;
+    runtimeState.aiEnabled = false;
+    runtimeState.supportUrl = "";
+    navigationMocks.redirect.mockClear();
   });
 
   it("uses the management-only documentation state for a super administrator", async () => {
@@ -73,7 +98,7 @@ describe("documentation routes", () => {
       screen.getByRole("navigation", { name: "文档导航" }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("帮助中心")).not.toHaveLength(0);
-    expect(screen.getByText("公开简历")).toBeInTheDocument();
+    expect(screen.getByText("产品帮助")).toBeInTheDocument();
     expect(
       screen.getByRole("searchbox", { name: "搜索文档" }),
     ).toBeInTheDocument();
@@ -93,15 +118,56 @@ describe("documentation routes", () => {
     expect(
       screen.getByRole("button", { name: "复制全文" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /下一篇.*公开简历外观/ })).toHaveAttribute(
-      "href",
-      "/docs/public-resume-customization",
-    );
+    expect(screen.getByRole("link", { name: /下一篇.*使用简历编辑器/ }))
+      .toHaveAttribute("href", "/docs/editor");
+    expect(
+      screen.getAllByRole("link", { name: "使用简历编辑器" }),
+    ).not.toHaveLength(0);
 
     fireEvent.change(screen.getByRole("searchbox", { name: "搜索文档" }), {
       target: { value: "不存在" },
     });
     expect(screen.getAllByText("没有匹配的文档")).not.toHaveLength(0);
+  });
+
+  it("only exposes AI help when the platform enables AI", async () => {
+    runtimeState.aiEnabled = true;
+    const { unmount } = render(await DocsLayout({ children: await DocsPage() }));
+
+    expect(screen.getByRole("link", { name: "使用 AI 助手" })).toHaveAttribute(
+      "href",
+      "/docs/ai-assistant",
+    );
+    unmount();
+
+    runtimeState.aiEnabled = false;
+    render(await DocsLayout({ children: await DocsPage() }));
+    expect(screen.queryByRole("link", { name: "使用 AI 助手" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("redirects the AI guide when AI is disabled", async () => {
+    runtimeState.aiEnabled = false;
+
+    await expect(AiAssistantPage()).rejects.toThrow("redirect:/docs");
+    expect(navigationMocks.redirect).toHaveBeenCalledWith("/docs");
+  });
+
+  it("renders the AI guide when AI is enabled", async () => {
+    runtimeState.aiEnabled = true;
+    navigationState.pathname = "/docs/ai-assistant";
+
+    render(
+      await DocsLayout({
+        children: await AiAssistantPage(),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "使用 AI 助手" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "使用 AI 助手" }))
+      .toHaveAttribute("aria-current", "page");
   });
 
   it("generates the complete public appearance parameter reference", async () => {
@@ -122,10 +188,9 @@ describe("documentation routes", () => {
     expect(
       screen.getByRole("link", { name: "创建分享链接" }),
     ).toHaveAttribute("href", "#url-builder-title");
-    expect(screen.getByRole("link", { name: /上一篇.*文档首页/ })).toHaveAttribute(
-      "href",
-      "/docs",
-    );
+    expect(
+      screen.getByRole("link", { name: /上一篇.*导入、发布与导出/ }),
+    ).toHaveAttribute("href", "/docs/import-export");
     const advancedReference = screen
       .getByText("高级参数")
       .closest("details");

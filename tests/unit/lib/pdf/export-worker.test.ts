@@ -260,6 +260,19 @@ describe("PDF export worker", () => {
       hotRevisionId: "revision-2",
       values: refreshedValues,
     };
+    await vi.waitFor(async () => {
+      const heartbeat = await db.query.workerHeartbeats.findFirst({
+        where: eq(workerHeartbeats.workerId, "hot-refresh-worker"),
+      });
+      expect(heartbeat?.metadata).toMatchObject({
+        desiredRevisionId: "revision-2",
+        hotRevisionId: "revision-2",
+        maxConcurrency: 1,
+        restartRevisionId: "revision-1",
+      });
+      expect(heartbeat?.sessionId).toBe("hot-refresh-session");
+    });
+
     const second = await enqueuePdfExport(
       {
         resumeUserId: "user-demo",
@@ -274,17 +287,6 @@ describe("PDF export worker", () => {
     );
     secondJobId = second.jobId;
 
-    await vi.waitFor(async () => {
-      const heartbeat = await db.query.workerHeartbeats.findFirst({
-        where: eq(workerHeartbeats.workerId, "hot-refresh-worker"),
-      });
-      expect(heartbeat?.metadata).toMatchObject({
-        desiredRevisionId: "revision-2",
-        hotRevisionId: "revision-2",
-        restartRevisionId: "revision-1",
-      });
-      expect(heartbeat?.sessionId).toBe("hot-refresh-session");
-    });
     expect(processJob).toHaveBeenCalledTimes(1);
     await expect(
       getPdfExportStatus(

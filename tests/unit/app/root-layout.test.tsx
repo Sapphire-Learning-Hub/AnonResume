@@ -38,10 +38,33 @@ vi.mock("@/components/ui/GlobalFloatingActions", () => ({
 }));
 vi.mock("@/components/config/PublicRuntimeConfigProvider", () => ({
   DEFAULT_PUBLIC_RUNTIME_CONFIG: {
+    aiEnabled: false,
     configurationHealth: "healthy",
+    privacyPolicyUrl: "",
     sourceCodeUrl: "",
+    supportUrl: "",
+    termsOfServiceUrl: "",
   },
-  PublicRuntimeConfigProvider: ({ children }: PropsWithChildren) => children,
+  PublicRuntimeConfigProvider: ({
+    children,
+    value,
+  }: PropsWithChildren<{
+    value: {
+      aiEnabled: boolean;
+      privacyPolicyUrl: string;
+      supportUrl: string;
+      termsOfServiceUrl: string;
+    };
+  }>) => (
+    <div
+      data-ai-enabled={value.aiEnabled}
+      data-privacy-url={value.privacyPolicyUrl}
+      data-support-url={value.supportUrl}
+      data-terms-url={value.termsOfServiceUrl}
+    >
+      {children}
+    </div>
+  ),
 }));
 vi.mock("@/i18n/I18nProvider", () => ({
   I18nProvider: ({ children }: PropsWithChildren) => children,
@@ -63,7 +86,13 @@ describe("root layout setup gate", () => {
     );
     mocks.runtime.mockResolvedValue({
       health: "healthy",
-      values: { sourceCodeUrl: "https://example.com/source" },
+      values: {
+        aiEnabled: true,
+        privacyPolicyUrl: "https://example.com/privacy",
+        sourceCodeUrl: "https://example.com/source",
+        supportUrl: "https://example.com/support",
+        termsOfServiceUrl: "https://example.com/terms",
+      },
     });
   });
 
@@ -100,5 +129,31 @@ describe("root layout setup gate", () => {
       screen.getByRole("heading", { name: "Configuration recovery" }),
     ).toBeVisible();
     expect(mocks.decision).not.toHaveBeenCalled();
+  });
+
+  it("injects public help and legal configuration into the application shell", async () => {
+    mocks.decision.mockResolvedValue("allow");
+
+    render(
+      await RootLayout({
+        children: <h1>Product</h1>,
+        params: Promise.resolve({}),
+      }),
+    );
+
+    const shell = screen.getByRole("heading", { name: "Product" }).parentElement;
+    expect(shell).toHaveAttribute("data-ai-enabled", "true");
+    expect(shell).toHaveAttribute(
+      "data-privacy-url",
+      "https://example.com/privacy",
+    );
+    expect(shell).toHaveAttribute(
+      "data-support-url",
+      "https://example.com/support",
+    );
+    expect(shell).toHaveAttribute(
+      "data-terms-url",
+      "https://example.com/terms",
+    );
   });
 });

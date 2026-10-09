@@ -5,9 +5,11 @@ import { createStyles } from "antd-style";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { RegistrationConsent } from "@/components/auth/RegistrationConsent";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useI18n } from "@/i18n/I18nProvider";
 import { authClient } from "@/lib/auth/client";
+import { REGISTRATION_CONSENT_HEADER } from "@/lib/auth/registration-consent";
 
 const useStyles = createStyles(({ token, css }) => ({
   introduction: css`
@@ -48,6 +50,7 @@ export function AcceptInvitationPanel({
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [registrationConsent, setRegistrationConsent] = useState(false);
   const [pending, setPending] = useState(false);
 
   if (!email) {
@@ -63,6 +66,10 @@ export function AcceptInvitationPanel({
   }
 
   async function submit() {
+    if (!registrationConsent) {
+      toast.error(t("auth.registrationConsentRequired"));
+      return;
+    }
     if (password !== confirmation) {
       toast.error(t("auth.passwordMismatch"));
       return;
@@ -71,7 +78,10 @@ export function AcceptInvitationPanel({
     try {
       const response = await fetch("/api/invitations/accept", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          [REGISTRATION_CONSENT_HEADER]: "true",
+        },
         body: JSON.stringify({ token, name, password }),
       });
       if (!response.ok) {
@@ -133,7 +143,17 @@ export function AcceptInvitationPanel({
           required
           value={confirmation}
         />
-        <Button block htmlType="submit" loading={pending} type="primary">
+        <RegistrationConsent
+          checked={registrationConsent}
+          onChange={setRegistrationConsent}
+        />
+        <Button
+          block
+          disabled={!registrationConsent}
+          htmlType="submit"
+          loading={pending}
+          type="primary"
+        >
           {t("invitations.accept.submit")}
         </Button>
       </form>

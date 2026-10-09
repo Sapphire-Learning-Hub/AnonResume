@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DocsArticleLayout } from "@/components/docs/DocsArticleLayout";
-import IndexEnglish from "@/content/docs/index.en-US.mdx";
-import IndexChinese from "@/content/docs/index.zh-CN.mdx";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
+import { getAdjacentDocsEntries, getVisibleDocsEntries } from "@/lib/docs/catalog";
+import { getDocsRuntimeConfiguration } from "@/lib/docs/runtime";
 
 export async function generateMetadata(): Promise<Metadata> {
   const messages = getMessages(await getRequestLocale());
@@ -16,9 +17,15 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function DocsPage() {
-  const locale = await getRequestLocale();
+  const [locale, runtimeConfig] = await Promise.all([
+    getRequestLocale(),
+    getDocsRuntimeConfiguration(),
+  ]);
   const messages = getMessages(locale);
-  const Content = locale === "en-US" ? IndexEnglish : IndexChinese;
+  const entries = getVisibleDocsEntries(runtimeConfig.aiEnabled).filter(
+    (entry) => entry.id !== "home",
+  );
+  const adjacent = getAdjacentDocsEntries("/docs", runtimeConfig.aiEnabled);
 
   return (
     <DocsArticleLayout
@@ -27,20 +34,18 @@ export default async function DocsPage() {
       isRoot
       nextLabel={messages["docs.next"]}
       nextPage={{
-        href: "/docs/public-resume-customization",
-        label: messages["docs.navigation.publicAppearance"],
+        href: adjacent.next?.href ?? "/docs/editor",
+        label: adjacent.next
+          ? messages[adjacent.next.titleKey]
+          : messages["docs.navigation.editor"],
       }}
       paginationLabel={messages["docs.pagination"]}
       previousLabel={messages["docs.previous"]}
       rootLabel={messages["docs.navigation.home"]}
       toc={[
         {
-          href: "#create-share-link",
-          label: messages["docs.index.section.publicLinks"],
-        },
-        {
-          href: "#preview-and-share",
-          label: messages["docs.index.section.sharing"],
+          href: "#find-help",
+          label: messages["docs.index.section.tasks"],
         },
       ]}
       tocLabel={messages["docs.onThisPage"]}
@@ -49,7 +54,15 @@ export default async function DocsPage() {
         <p data-docs-eyebrow>{messages["docs.index.eyebrow"]}</p>
         <h1>{messages["docs.index.title"]}</h1>
         <p data-docs-lead>{messages["docs.index.lead"]}</p>
-        <Content />
+        <h2 id="find-help">{messages["docs.index.section.tasks"]}</h2>
+        <div data-docs-task-grid>
+          {entries.map((entry) => (
+            <Link data-docs-task-card href={entry.href} key={entry.id}>
+              <strong>{messages[entry.titleKey]}</strong>
+              <span>{messages[entry.summaryKey]}</span>
+            </Link>
+          ))}
+        </div>
       </div>
     </DocsArticleLayout>
   );

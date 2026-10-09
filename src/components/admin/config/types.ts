@@ -58,6 +58,12 @@ export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> =
   aiWorkerRecoveryIntervalMs: "configuration.field.aiWorkerRecoveryIntervalMs",
   aiWorkerRetentionIntervalMs: "configuration.field.aiWorkerRetentionIntervalMs",
   sourceCodeUrl: "configuration.field.sourceCodeUrl",
+  legalOperatorName: "configuration.field.legalOperatorName",
+  legalContactEmail: "configuration.field.legalContactEmail",
+  legalEffectiveDate: "configuration.field.legalEffectiveDate",
+  privacyPolicyUrl: "configuration.field.privacyPolicyUrl",
+  termsOfServiceUrl: "configuration.field.termsOfServiceUrl",
+  supportUrl: "configuration.field.supportUrl",
 };
 
 export const configurationGroupMessageKeys = {
@@ -67,6 +73,7 @@ export const configurationGroupMessageKeys = {
   pdf: "configuration.group.pdf",
   resume: "configuration.group.resume",
   ai: "configuration.group.ai",
+  legal: "configuration.group.legal",
 } as const satisfies Record<string, AdminMessageKey>;
 
 export const configurationNumberBounds: Partial<
@@ -109,7 +116,7 @@ const configFieldSchema = z.object({
   changed: z.boolean(),
   configured: z.boolean(),
   consumers: z.array(z.enum(["web", "pdf-worker", "ai-worker"])),
-  group: z.enum(["general", "email", "security", "pdf", "resume", "ai"]),
+  group: z.enum(["general", "email", "security", "pdf", "resume", "ai", "legal"]),
   key: configKeySchema,
   public: z.boolean(),
   sensitive: z.boolean(),

@@ -116,6 +116,17 @@ describe("restart-scoped Better Auth configuration", () => {
     });
   });
 
+  it("requires social registration to be explicitly requested", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      socialProviders: {
+        github: { disableImplicitSignUp?: boolean };
+      };
+    };
+
+    expect(options.socialProviders.github.disableImplicitSignUp).toBe(true);
+  });
+
   it("holds restart-scoped settings until a new process initializes", async () => {
     const first = await getAuth();
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues({

@@ -7,11 +7,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AuthExperienceShell } from "@/components/auth/AuthExperienceShell";
+import { RegistrationConsent } from "@/components/auth/RegistrationConsent";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useVerificationCooldown } from "@/components/ui/useVerificationCooldown";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { authClient } from "@/lib/auth/client";
+import { REGISTRATION_CONSENT_HEADER } from "@/lib/auth/registration-consent";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
 
 const useStyles = createStyles(({ token, css }) => ({
@@ -193,6 +195,8 @@ const verificationFailureCodes = new Set([
   "token_expired",
 ]);
 
+const socialRegistrationFailureCodes = new Set(["signup_disabled"]);
+
 const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   ACCOUNT_SUSPENDED: "auth.accountSuspended",
   EMAIL_PASSWORD_DISABLED: "auth.signInUnavailable",
@@ -205,6 +209,7 @@ const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   PASSWORD_TOO_LONG: "auth.passwordTooLong",
   PASSWORD_TOO_SHORT: "auth.passwordTooShort",
   PROVIDER_NOT_FOUND: "auth.socialSignInUnavailable",
+  REGISTRATION_CONSENT_REQUIRED: "auth.registrationConsentRequired",
   RESET_PASSWORD_DISABLED: "auth.passwordResetUnavailable",
   TOO_MANY_REQUESTS: "auth.rateLimited",
 };
@@ -248,6 +253,7 @@ export function AuthPanel({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [registrationConsent, setRegistrationConsent] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(
     null,
   );
@@ -264,6 +270,8 @@ export function AuthPanel({
       ? t("auth.accountSuspended")
       : verificationError && verificationFailureCodes.has(verificationError)
         ? t("auth.invalidVerificationLink")
+        : verificationError && socialRegistrationFailureCodes.has(verificationError)
+          ? t("auth.socialRegistrationRequired")
         : null;
 
   useEffect(() => {
@@ -312,6 +320,10 @@ export function AuthPanel({
       toast.error(t("auth.passwordMismatch"));
       return;
     }
+    if (mode === "sign-up" && !registrationConsent) {
+      toast.error(t("auth.registrationConsentRequired"));
+      return;
+    }
 
     setIsPending(true);
 
@@ -322,6 +334,9 @@ export function AuthPanel({
           email,
           password,
           callbackURL: "/sign-in?verified=1",
+          fetchOptions: {
+            headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
+          },
         });
 
         if (result.error) {
@@ -396,12 +411,26 @@ export function AuthPanel({
   }
 
   async function handleGitHubSignIn() {
+    const requestSignUp = mode === "sign-up";
+    if (requestSignUp && !registrationConsent) {
+      toast.error(t("auth.registrationConsentRequired"));
+      return;
+    }
+
     setIsPending(true);
 
     try {
       const result = await authClient.signIn.social({
         provider: "github",
         callbackURL: "/sign-in",
+        ...(requestSignUp
+          ? {
+              requestSignUp: true,
+              fetchOptions: {
+                headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
+              },
+            }
+          : {}),
       });
 
       if (result.error) {
@@ -577,6 +606,12 @@ export function AuthPanel({
                     required
                   />
                 ) : null}
+                {mode === "sign-up" ? (
+                  <RegistrationConsent
+                    checked={registrationConsent}
+                    onChange={setRegistrationConsent}
+                  />
+                ) : null}
                 {verificationEmail && mode === "sign-in" ? (
                   <Button
                     onClick={handleResendVerification}
@@ -605,6 +640,7 @@ export function AuthPanel({
                   type="primary"
                   htmlType="submit"
                   loading={isPending}
+                  disabled={mode === "sign-up" && !registrationConsent}
                   block
                 >
                   {mode === "recover"
@@ -633,6 +669,7 @@ export function AuthPanel({
                       icon={<GithubOutlined />}
                       onClick={handleGitHubSignIn}
                       loading={isPending}
+                      disabled={mode === "sign-up" && !registrationConsent}
                       block
                     >
                       {t("common.continueWithGitHub")}
@@ -656,7 +693,10 @@ export function AuthPanel({
                     }
                     type="text"
                     onClick={() =>
-                      setMode(mode === "sign-up" ? "sign-in" : "sign-up")
+                      {
+                        setMode(mode === "sign-up" ? "sign-in" : "sign-up");
+                        setRegistrationConsent(false);
+                      }
                     }
                   >
                     {mode === "sign-up"

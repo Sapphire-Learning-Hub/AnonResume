@@ -848,26 +848,56 @@ export const useMarketingHomeStyles = createStyles(({ token, css }) => ({
     background: ${token.colorBgContainer};
   `,
   footerInner: css`
-    display: flex;
+    display: grid;
     width: min(1320px, 100%);
-    gap: 28px;
-    align-items: center;
-    justify-content: space-between;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    align-items: start;
+    gap: clamp(40px, 7vw, 96px);
     margin: 0 auto;
     color: ${token.colorTextSecondary};
     font-size: 13px;
 
-    @media (max-width: 700px) {
-      align-items: flex-start;
-      flex-direction: column;
+    @media (max-width: 840px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  footerBrand: css`
+    display: grid;
+    max-width: 320px;
+    gap: 14px;
+    line-height: 1.7;
+  `,
+  footerGroups: css`
+    display: grid;
+    grid-template-columns: repeat(3, minmax(130px, 1fr));
+    gap: clamp(28px, 4vw, 56px);
+
+    @media (max-width: 600px) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 400px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  footerGroup: css`
+    min-width: 0;
+
+    > h2 {
+      margin: 0 0 12px;
+      color: ${token.colorText};
+      font-size: 13px;
+      font-weight: 700;
     }
   `,
   footerLinks: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 18px;
+    display: grid;
+    gap: 9px;
 
     > a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       color: inherit;
       text-decoration: none;
     }

@@ -24,6 +24,7 @@ import { useState } from "react";
 
 import { useAppTheme } from "@/theme/AppThemeProvider";
 import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
+import { resolvePublicInformationDestinations } from "@/lib/public-info/destinations";
 import type { AppAccentTheme, AppThemeMode } from "@/theme/app-theme";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 
@@ -255,7 +256,9 @@ export function LocaleSwitcher({
   const [section, setSection] = useState<SettingsSection>("general");
   const { locale, setLocale, t } = useI18n();
   const { mode, accent, setMode, setAccent } = useAppTheme();
-  const { sourceCodeUrl } = usePublicRuntimeConfig();
+  const runtimeConfig = usePublicRuntimeConfig();
+  const publicDestinations = resolvePublicInformationDestinations(runtimeConfig);
+  const { sourceCodeUrl } = runtimeConfig;
 
   const sectionTitle =
     section === "general"
@@ -504,6 +507,56 @@ export function LocaleSwitcher({
                         </span>
                       </Tooltip>
                     )}
+                  </div>
+                  <div className={styles.aboutLink}>
+                    <div className={styles.settingCopy}>
+                      <Typography.Text className={styles.settingLabel}>
+                        {t("legal.privacy.title")}
+                      </Typography.Text>
+                      <span className={styles.settingDescription}>
+                        {t("common.settings.privacyDescription")}
+                      </span>
+                    </div>
+                    <a
+                      href={publicDestinations.privacy.href}
+                      rel={
+                        publicDestinations.privacy.external
+                          ? "noreferrer"
+                          : undefined
+                      }
+                      target={
+                        publicDestinations.privacy.external
+                          ? "_blank"
+                          : undefined
+                      }
+                    >
+                      {t("legal.privacy.title")}
+                    </a>
+                  </div>
+                  <div className={styles.aboutLink}>
+                    <div className={styles.settingCopy}>
+                      <Typography.Text className={styles.settingLabel}>
+                        {t("legal.terms.title")}
+                      </Typography.Text>
+                      <span className={styles.settingDescription}>
+                        {t("common.settings.termsDescription")}
+                      </span>
+                    </div>
+                    <a
+                      href={publicDestinations.terms.href}
+                      rel={
+                        publicDestinations.terms.external
+                          ? "noreferrer"
+                          : undefined
+                      }
+                      target={
+                        publicDestinations.terms.external
+                          ? "_blank"
+                          : undefined
+                      }
+                    >
+                      {t("legal.terms.title")}
+                    </a>
                   </div>
                   <div className={styles.aboutLink}>
                     <div className={styles.settingCopy}>

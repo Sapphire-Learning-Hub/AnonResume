@@ -1,7 +1,10 @@
 "use client";
 
 import {
+  CustomerServiceOutlined,
+  ExportOutlined,
   IdcardOutlined,
+  QuestionCircleOutlined,
   RightOutlined,
   UserAddOutlined,
   UserOutlined,
@@ -11,11 +14,13 @@ import { createStyles } from "antd-style";
 import { useState } from "react";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
 import { ManagementModeControl } from "@/components/dashboard/ManagementModeControl";
 import { UserInvitationDialog } from "@/components/invitations/UserInvitationDialog";
 import { useI18n } from "@/i18n/I18nProvider";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
+import { resolvePublicInformationDestinations } from "@/lib/public-info/destinations";
 
 const useStyles = createStyles(({ token, css }) => ({
   footer: css`
@@ -188,6 +193,9 @@ export function WorkbenchAccountMenu({
 }) {
   const { styles } = useStyles();
   const { t } = useI18n();
+  const publicDestinations = resolvePublicInformationDestinations(
+    usePublicRuntimeConfig(),
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const [invitationSession, setInvitationSession] = useState(0);
@@ -260,6 +268,32 @@ export function WorkbenchAccountMenu({
                   {t("invitations.navigation")}
                 </Button>
               ) : null}
+              <Button
+                className={styles.actionButton}
+                href="/docs"
+                icon={<QuestionCircleOutlined aria-hidden="true" />}
+                onClick={() => setMenuOpen(false)}
+                type="text"
+              >
+                {t("docs.siteTitle")}
+              </Button>
+              <Button
+                className={styles.actionButton}
+                href={publicDestinations.support.href}
+                icon={
+                  publicDestinations.support.external ? (
+                    <ExportOutlined aria-hidden="true" />
+                  ) : (
+                    <CustomerServiceOutlined aria-hidden="true" />
+                  )
+                }
+                onClick={() => setMenuOpen(false)}
+                rel={publicDestinations.support.external ? "noreferrer" : undefined}
+                target={publicDestinations.support.external ? "_blank" : undefined}
+                type="text"
+              >
+                {t("docs.navigation.support")}
+              </Button>
               <LocaleSwitcher
                 className={styles.actionButton}
                 onActivate={() => setMenuOpen(false)}
