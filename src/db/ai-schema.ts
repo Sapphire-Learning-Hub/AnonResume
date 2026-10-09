@@ -260,7 +260,7 @@ export const aiConversations =
           columns: [table.userId, table.resumeId],
           foreignColumns: [resumes.userId, resumes.id],
           name: "ai_conversations_resume_fk",
-        }).onDelete("cascade"),
+        }).onDelete("cascade").onUpdate("cascade"),
         foreignKey({
           columns: [table.modelId],
           foreignColumns: [aiModels.id],
@@ -284,7 +284,7 @@ export const aiConversations =
             columns: [table.userId, table.resumeId],
             foreignColumns: [resumes.userId, resumes.id],
             name: "ai_conversations_resume_fk",
-          }).onDelete("cascade"),
+          }).onDelete("cascade").onUpdate("cascade"),
           foreignKey({
             columns: [table.modelId],
             foreignColumns: [aiModels.id],

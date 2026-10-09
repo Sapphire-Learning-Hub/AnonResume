@@ -1,13 +1,16 @@
 export type AccountLifecycleStatus =
   | "active"
   | "pending_deletion"
-  | "deleted";
+  | "deleted"
+  | "merged";
 
 export type AccountLifecycleSnapshot = {
   status: AccountLifecycleStatus;
   deletionRequestedAt: Date | null;
   deletionDueAt: Date | null;
   deletedAt: Date | null;
+  mergedIntoUserId: string | null;
+  mergedAt: Date | null;
   explicit: boolean;
 };
 

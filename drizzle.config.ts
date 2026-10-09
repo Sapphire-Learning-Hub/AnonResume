@@ -43,6 +43,7 @@ if (!process.env.DATABASE_URL) {
 export default defineConfig({
   schema: [
     "./src/db/schema.ts",
+    "./src/db/account-merge-schema.ts",
     "./src/db/ai-schema.ts",
     "./src/db/config-schema.ts",
     "./src/db/invitation-schema.ts",

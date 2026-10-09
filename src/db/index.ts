@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { getDatabasePool } from "@/lib/runtime/database";
 
 import { aiDatabaseTables } from "./ai-schema";
+import { accountMergeDatabaseTables } from "./account-merge-schema";
 import { configDatabaseTables } from "./config-schema";
 import { invitationDatabaseTables } from "./invitation-schema";
 
@@ -32,6 +33,12 @@ import {
 } from "./schema";
 
 export { getDatabaseSchemaName } from "./schema";
+export {
+  accountMergeLocks,
+  accountMergeNotificationOutbox,
+  accountMergeOperations,
+  accountSocialLinkAttempts,
+} from "./account-merge-schema";
 export {
   aiAuditPayloads,
   aiConversations,
@@ -78,6 +85,7 @@ export {
 export const db = drizzle({
   client: getDatabasePool(),
   schema: {
+    ...accountMergeDatabaseTables,
     ...aiDatabaseTables,
     ...configDatabaseTables,
     ...invitationDatabaseTables,
