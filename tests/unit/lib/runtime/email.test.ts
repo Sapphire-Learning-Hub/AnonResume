@@ -190,4 +190,24 @@ describe("account security email", () => {
     expect(message.subject).toContain("email address changed");
     expect(message.text).toContain("new@example.com");
   });
+
+  it("renders account merge completion and timeout notices", () => {
+    const completed = buildAccountSecurityNoticeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "用户",
+      to: "user@example.com",
+      event: "merge_completed_primary",
+      locale: "zh-CN",
+    });
+    const timedOut = buildAccountSecurityNoticeEmail({
+      from: "AnonResume <mailer@example.com>",
+      name: "User",
+      to: "user@example.com",
+      event: "merge_timed_out",
+      locale: "en-US",
+    });
+
+    expect(completed.subject).toContain("合并");
+    expect(timedOut.subject).toContain("timed out");
+  });
 });

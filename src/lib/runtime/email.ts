@@ -68,7 +68,11 @@ export type AccountSecurityNoticeEvent =
   | "email_changed"
   | "deletion_requested"
   | "account_restored"
-  | "account_deleted";
+  | "account_deleted"
+  | "merge_completed_primary"
+  | "merge_completed_secondary"
+  | "merge_timed_out"
+  | "merge_failed";
 
 interface AccountSecurityNoticeEmailInput {
   from: string;
@@ -312,6 +316,22 @@ export function buildAccountSecurityNoticeEmail({
       subject: "Your AnonResume account was deleted",
       body: "The account deletion recovery period ended and deletion is complete.",
     },
+    merge_completed_primary: {
+      subject: "Your AnonResume accounts were merged",
+      body: "The account merge completed. Sign in again with the retained account.",
+    },
+    merge_completed_secondary: {
+      subject: "Your AnonResume account was merged",
+      body: "This account was merged into the account you selected and can no longer be used to sign in.",
+    },
+    merge_timed_out: {
+      subject: "Your AnonResume account merge timed out",
+      body: "The merge was not completed because active work did not finish in time. Your accounts remain separate.",
+    },
+    merge_failed: {
+      subject: "Your AnonResume account merge failed",
+      body: "The merge could not be completed. Your accounts remain separate; review them before trying again.",
+    },
   } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
   const chinese = {
     password_changed: {
@@ -333,6 +353,22 @@ export function buildAccountSecurityNoticeEmail({
     account_deleted: {
       subject: "你的 AnonResume 账号已注销",
       body: "账号注销冷静期已结束，注销处理已完成。",
+    },
+    merge_completed_primary: {
+      subject: "你的 AnonResume 账号已合并",
+      body: "账号合并已完成，请使用保留的账号重新登录。",
+    },
+    merge_completed_secondary: {
+      subject: "你的 AnonResume 账号已被合并",
+      body: "该账号已合并至你选择保留的账号，无法再用于登录。",
+    },
+    merge_timed_out: {
+      subject: "AnonResume 账号合并已超时",
+      body: "由于运行中的任务未能及时结束，本次合并未完成，两个账号仍保持独立。",
+    },
+    merge_failed: {
+      subject: "AnonResume 账号合并失败",
+      body: "本次合并未能完成，两个账号仍保持独立，请检查后重试。",
     },
   } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
   const copy = (locale === "en-US" ? english : chinese)[event];

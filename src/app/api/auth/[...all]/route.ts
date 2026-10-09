@@ -10,6 +10,9 @@ import {
   SOCIAL_LINK_RESULT_PROOF_COOKIE,
 } from "@/lib/auth/account/merge/link-attempts";
 import { getAuth } from "@/lib/auth/config";
+import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/executor";
+import { AccountMergeError } from "@/lib/auth/account/merge/errors";
+import { getOptionalSession } from "@/lib/auth/session";
 import {
   hasRegistrationConsent,
   requiresRegistrationConsent,
@@ -18,6 +21,8 @@ import {
 export async function GET(request: NextRequest) {
   const blocked = await blockAuthDuringInitialSetup(request);
   if (blocked) return blocked;
+  const mergeBlocked = await blockSocialMutationDuringMerge(request);
+  if (mergeBlocked) return mergeBlocked;
   const response = await toNextJsHandler(await getAuth()).GET(request);
   return attachSocialLinkResultProof(request, response);
 }
@@ -29,7 +34,31 @@ export async function POST(request: NextRequest) {
   if (missingConsent) return missingConsent;
   const inactiveReset = await blockInactivePasswordReset(request);
   if (inactiveReset) return inactiveReset;
+  const mergeBlocked = await blockSocialMutationDuringMerge(request);
+  if (mergeBlocked) return mergeBlocked;
   return toNextJsHandler(await getAuth()).POST(request);
+}
+
+async function blockSocialMutationDuringMerge(request: NextRequest) {
+  const endpoint = new URL(request.url).pathname.split("/").at(-1);
+  if (
+    endpoint !== "link-social" &&
+    endpoint !== "unlink-account" &&
+    endpoint !== "github"
+  ) {
+    return null;
+  }
+  const session = await getOptionalSession();
+  if (!session) return null;
+  try {
+    await assertAccountMergeMutationAllowed(session.user.id);
+    return null;
+  } catch (error) {
+    if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+      return NextResponse.json({ error: error.code }, { status: 409 });
+    }
+    throw error;
+  }
 }
 
 async function blockRegistrationWithoutConsent(request: NextRequest) {

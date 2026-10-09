@@ -7,6 +7,8 @@ import { consumeAccountEmailChallenge } from "./challenges";
 import { AccountSecurityError } from "./errors";
 import { deliverPostCommitAccountNotice } from "./notifications";
 import { getAccountLifecycle } from "./repository";
+import { assertAccountMergeMutationAllowed } from "./merge/executor";
+import { AccountMergeError } from "./merge/errors";
 import {
   verifyAccountPassword,
   verifyAccountPasswordWithClient,
@@ -91,6 +93,14 @@ export async function submitAccountDeletion(input: {
     deletionDueAt: Date;
   }) => Promise<void>;
 }) {
+  try {
+    await assertAccountMergeMutationAllowed(input.userId);
+  } catch (error) {
+    if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+      throw new AccountSecurityError("merge_in_progress");
+    }
+    throw error;
+  }
   const now = input.now ?? new Date();
   await verifyAccountPassword({
     userId: input.userId,

@@ -36,6 +36,7 @@ import { createAiAgentToolDefinitions } from "@/lib/ai/tools/catalog";
 import { createAiProposalWorkspace } from "@/lib/ai/tools/proposal-workspace";
 import { createAiProposalProgressChanges } from "@/lib/ai/proposals/progress";
 import { encryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
+import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/executor";
 import { finalizeOwnedAiRun } from "@/lib/ai/runs/finalize";
 import {
   getAiQuotaSnapshot,
@@ -306,6 +307,7 @@ export async function prepareAiRun(input: {
   now?: Date;
 }): Promise<PreparedAiRun> {
   const now = input.now ?? new Date();
+  await assertAccountMergeMutationAllowed(input.userId);
   const [row] = await db
     .select({
       conversation: aiConversations,

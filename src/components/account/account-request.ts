@@ -37,6 +37,7 @@ const accountErrorMessages: Readonly<Record<string, MessageKey>> = {
   challenge_resend_too_soon: "account.error.resendTooSoon",
   current_session_required: "account.error.currentSession",
   email_in_use: "account.error.emailInUse",
+  merge_in_progress: "account.error.mergeInProgress",
   password_incorrect: "account.error.passwordIncorrect",
   password_invalid: "account.error.passwordInvalid",
   password_unavailable: "account.error.passwordUnavailable",

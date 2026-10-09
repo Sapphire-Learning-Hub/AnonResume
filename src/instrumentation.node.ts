@@ -1,5 +1,6 @@
 import { initializePendingInstanceSetup } from "@/lib/admin/setup/startup";
 import { startAccountMaintenanceLoop } from "@/lib/auth/account/maintenance-runtime";
+import { startAccountMergeRuntime } from "@/lib/auth/account/merge/runtime";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 
@@ -15,3 +16,4 @@ if (setup.generated) {
 }
 
 startAccountMaintenanceLoop();
+startAccountMergeRuntime();

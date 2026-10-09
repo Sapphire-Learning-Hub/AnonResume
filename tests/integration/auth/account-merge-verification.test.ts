@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import { hashPassword } from "better-auth/crypto";
 
-import { accountMergeLocks, accountMergeOperations, accountSocialLinkAttempts, db } from "@/db";
+import {
+  accountLifecycle,
+  accountMergeLocks,
+  accountMergeOperations,
+  accountSocialLinkAttempts,
+  db,
+} from "@/db";
 import { AccountMergeError } from "@/lib/auth/account/merge/errors";
 import {
   captureSocialLinkProviderSubject,
@@ -41,11 +47,12 @@ describe("account merge verification", () => {
   async function createIntent() {
     const current = await createUser("merge-current");
     const target = await createUser("merge-target");
+    const githubAccountId = `github-${randomUUID()}`;
     await getDatabasePool().query(
       `INSERT INTO "account"
         (id, "accountId", "providerId", "userId", "createdAt", "updatedAt", issuer)
-       VALUES ($1, 'github-42', 'github', $2, now(), now(), 'github')`,
-      [randomUUID(), target.id],
+       VALUES ($1, $2, 'github', $3, now(), now(), 'github')`,
+      [randomUUID(), githubAccountId, target.id],
     );
     const sessionToken = `session-${randomUUID()}`;
     const attempt = await createSocialLinkAttempt({
@@ -56,7 +63,7 @@ describe("account merge verification", () => {
     await captureSocialLinkProviderSubject({
       rawToken: attempt.rawToken,
       providerId: "github",
-      providerAccountId: "github-42",
+      providerAccountId: githubAccountId,
     });
     const collision = await resolveSocialLinkAttempt({
       rawToken: attempt.rawToken,
@@ -80,6 +87,9 @@ describe("account merge verification", () => {
     await db.delete(accountMergeLocks);
     await db.delete(accountMergeOperations);
     await db.delete(accountSocialLinkAttempts);
+    if (userIds.length) {
+      await db.delete(accountLifecycle);
+    }
     if (userIds.length) {
       await getDatabasePool().query(
         `DELETE FROM "user" WHERE id = ANY($1::text[])`,
@@ -151,14 +161,15 @@ describe("account merge verification", () => {
       userId: fixture.current.id,
       primaryChoice: "current",
       now: new Date("2026-10-09T12:00:05.000Z"),
-    })).resolves.toMatchObject({ state: "confirmed" });
-    await expect(db.select().from(accountMergeLocks)).resolves.toHaveLength(2);
+    })).resolves.toMatchObject({ state: "completed" });
+    await expect(db.select().from(accountMergeLocks)).resolves.toHaveLength(0);
   });
 
   it("invalidates verification if provider ownership changes", async () => {
     const fixture = await createIntent();
     await getDatabasePool().query(
-      `DELETE FROM "account" WHERE "providerId" = 'github' AND "accountId" = 'github-42'`,
+      `DELETE FROM "account" WHERE "providerId" = 'github' AND "userId" = $1`,
+      [fixture.target.id],
     );
 
     await expect(verifyAccountMergeIntent({

@@ -15,6 +15,7 @@ import {
 } from "@/lib/ai/proposals/repository";
 import { AiQuotaExceededError } from "@/lib/ai/usage/ledger";
 import { RequestBodyTooLargeError } from "@/lib/http/request-body";
+import { AccountMergeError } from "@/lib/auth/account/merge/errors";
 
 export class AiFeatureUnavailableError extends Error {
   constructor() {
@@ -24,6 +25,9 @@ export class AiFeatureUnavailableError extends Error {
 }
 
 export function createAiErrorResponse(error: unknown) {
+  if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+    return Response.json({ error: error.code }, { status: 409 });
+  }
   if (error instanceof AiProposalConflictError) {
     return Response.json(
       {

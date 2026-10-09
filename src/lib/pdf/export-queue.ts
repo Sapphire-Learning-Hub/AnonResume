@@ -10,6 +10,7 @@ import { and, asc, count, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { db, pdfExportJobs } from "@/db";
 import type { ResumeDocument } from "@/domain/resume/schema";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/executor";
 import type { ManagedConfig } from "@/lib/config/registry";
 import {
   getPdfExportWorkerAvailability,
@@ -156,6 +157,13 @@ export async function enqueuePdfExport(
   },
   configuration: Readonly<PdfExportConfiguration>,
 ) {
+  const participantIds = new Set([
+    params.resumeUserId,
+    ...(params.requesterUserId ? [params.requesterUserId] : []),
+  ]);
+  for (const userId of participantIds) {
+    await assertAccountMergeMutationAllowed(userId);
+  }
   const accessToken = randomBytes(32).toString("base64url");
 
   const [job] = await db.transaction(async (transaction) => {

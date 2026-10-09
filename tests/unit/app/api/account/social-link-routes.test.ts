@@ -127,7 +127,7 @@ describe("social account link attempt routes", () => {
   it("rejects a forged collision URL without an auth-callback proof", async () => {
     const currentUserId = await createUser("link-current");
     const targetUserId = await createUser("link-target");
-    await bindGitHub(targetUserId, "github-42");
+    await bindGitHub(targetUserId, `github-${randomUUID()}`);
     const { rawToken } = await start(currentUserId);
 
     const response = await resolveAttempt(request(
@@ -142,14 +142,15 @@ describe("social account link attempt routes", () => {
   it("promotes only a captured, proven collision and rejects replay", async () => {
     const currentUserId = await createUser("link-current");
     const targetUserId = await createUser("link-target");
-    await bindGitHub(targetUserId, "github-42");
+    const githubAccountId = `github-${randomUUID()}`;
+    await bindGitHub(targetUserId, githubAccountId);
     const { rawToken } = await start(currentUserId);
     const { captureSocialLinkProviderSubject } = await import(
       "@/lib/auth/account/merge/link-attempts"
     );
     await expect(captureSocialLinkProviderSubject({
       providerId: "github",
-      providerAccountId: "github-42",
+      providerAccountId: githubAccountId,
       rawToken,
     })).resolves.toBe(true);
     const proof = createSocialLinkResultProof(rawToken, collisionCode);
@@ -174,14 +175,15 @@ describe("social account link attempt routes", () => {
   it("rejects an attempt from a different current session", async () => {
     const currentUserId = await createUser("link-current");
     const targetUserId = await createUser("link-target");
-    await bindGitHub(targetUserId, "github-42");
+    const githubAccountId = `github-${randomUUID()}`;
+    await bindGitHub(targetUserId, githubAccountId);
     const { rawToken } = await start(currentUserId, "original-session");
     const { captureSocialLinkProviderSubject } = await import(
       "@/lib/auth/account/merge/link-attempts"
     );
     await captureSocialLinkProviderSubject({
       providerId: "github",
-      providerAccountId: "github-42",
+      providerAccountId: githubAccountId,
       rawToken,
     });
     sessionMocks.getOptionalSession.mockResolvedValue({
@@ -206,10 +208,11 @@ describe("social account link attempt routes", () => {
   it("rejects an expired attempt", async () => {
     const currentUserId = await createUser("link-current");
     const targetUserId = await createUser("link-target");
-    await bindGitHub(targetUserId, "github-42");
+    const githubAccountId = `github-${randomUUID()}`;
+    await bindGitHub(targetUserId, githubAccountId);
     const { rawToken } = await start(currentUserId);
     await db.update(accountSocialLinkAttempts).set({
-      providerAccountId: "github-42",
+      providerAccountId: githubAccountId,
       state: "captured",
       expiresAt: new Date(0),
     }).where(eq(accountSocialLinkAttempts.initiatingUserId, currentUserId));

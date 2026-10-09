@@ -7,6 +7,7 @@ import { AccountSecurityError } from "@/lib/auth/account/errors";
 import { verifyAccountPassword } from "@/lib/auth/account/security";
 
 import { AccountMergeError } from "./errors";
+import { advanceAccountMergeOperation } from "./executor";
 import { evaluateAccountMergePolicy } from "./policy";
 import {
   confirmMergeOperation,
@@ -182,13 +183,22 @@ export async function confirmVerifiedAccountMerge(input: {
     secondaryEmail: secondary.email,
     now,
   });
+  if (confirmed.state === "confirmed") {
+    return advanceAccountMergeOperation({ operationId: confirmed.id, now });
+  }
   return { state: confirmed.state };
 }
 
 export async function getAccountMergeOperationStatus(rawStatusToken: string) {
   const operation = await getMergeOperationByStatusToken(rawStatusToken);
+  const primary = operation.primaryUserId
+    ? await getMergeAccountRecord(operation.primaryUserId).catch(() => null)
+    : null;
   return {
     state: operation.state,
     failureCode: operation.failureCode,
+    primary: primary
+      ? { email: summarizeMergeAccount(primary).email, name: primary.name }
+      : null,
   };
 }

@@ -16,6 +16,7 @@ import {
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 import { getPublishedResumeBySlug } from "@/lib/resume/repository";
+import { AccountMergeError } from "@/lib/auth/account/merge/errors";
 
 export async function POST(
   request: Request,
@@ -86,6 +87,9 @@ export async function POST(
       { status: 202 },
     );
   } catch (error) {
+    if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+      return NextResponse.json({ error: error.code }, { status: 409 });
+    }
     if (error instanceof PdfExportQueueFullError) {
       return NextResponse.json({ error: "queue_full" }, { status: 429 });
     }
