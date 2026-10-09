@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ApiOutlined,
   DatabaseOutlined,
   DownloadOutlined,
   ExclamationCircleOutlined,
@@ -13,7 +14,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Checkbox, Input, Modal, Spin, Tag } from "antd";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
@@ -28,6 +29,7 @@ import {
 } from "./account-request";
 import { useAccountCenterStyles } from "./AccountCenter.style";
 import { EmailChangeFlow } from "./EmailChangeFlow";
+import { ConnectedAccounts } from "./ConnectedAccounts";
 
 type AccountProfile = {
   email: string;
@@ -46,8 +48,20 @@ type AccountSession = {
   device: AccountSessionDevice;
 };
 
-type AccountSection = "profile" | "password" | "email" | "sessions" | "data";
+type AccountSection =
+  | "profile"
+  | "password"
+  | "email"
+  | "connections"
+  | "sessions"
+  | "data";
 type AccountLoadState = "loading" | "ready" | "error";
+
+type AccountCenterProps = {
+  connectionNotice?: "linked" | "error";
+  githubEnabled?: boolean;
+  initialSection?: AccountSection;
+};
 
 function jsonRequest(method: string, body?: unknown): RequestInit {
   return {
@@ -106,7 +120,11 @@ function sessionDeviceDetails(device: AccountSessionDevice, t: Translate) {
   return os || "";
 }
 
-export function AccountCenter() {
+export function AccountCenter({
+  connectionNotice,
+  githubEnabled = false,
+  initialSection = "profile",
+}: AccountCenterProps = {}) {
   const { styles } = useAccountCenterStyles();
   const { locale, t } = useI18n();
   const { toast } = useAppFeedback();
@@ -116,7 +134,9 @@ export function AccountCenter() {
   const [profileState, setProfileState] = useState<AccountLoadState>("loading");
   const [sessionsState, setSessionsState] = useState<AccountLoadState>("loading");
   const [busy, setBusy] = useState<string>();
-  const [activeSection, setActiveSection] = useState<AccountSection>("profile");
+  const [activeSection, setActiveSection] = useState<AccountSection>(
+    initialSection === "connections" && !githubEnabled ? "profile" : initialSection,
+  );
   const [name, setName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -128,6 +148,7 @@ export function AccountCenter() {
   const [deletionPassword, setDeletionPassword] = useState("");
   const [deletionCode, setDeletionCode] = useState("");
   const [deletionCodeSent, setDeletionCodeSent] = useState(false);
+  const handledConnectionNotice = useRef<AccountCenterProps["connectionNotice"]>(undefined);
   const deletionCooldown = useVerificationCooldown();
 
   const loadProfile = useCallback(async (signal?: AbortSignal) => {
@@ -187,6 +208,21 @@ export function AccountCenter() {
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!connectionNotice || !githubEnabled) return;
+    if (handledConnectionNotice.current === connectionNotice) return;
+    handledConnectionNotice.current = connectionNotice;
+    if (connectionNotice === "linked") {
+      toast.success(t("account.connections.linked"));
+    } else {
+      toast.error({
+        key: "account-connections-action",
+        content: t("account.connections.linkFailed"),
+      });
+    }
+    router.replace("/app/account?section=connections", { scroll: false });
+  }, [connectionNotice, githubEnabled, router, t, toast]);
 
   useEffect(() => {
     if (!deletionWarningOpen || deletionWarningSeconds <= 0) return;
@@ -314,6 +350,11 @@ export function AccountCenter() {
       label: t("account.email.title"),
       icon: <MailOutlined aria-hidden="true" />,
     },
+    ...(githubEnabled ? [{
+      id: "connections" as const,
+      label: t("account.connections.title"),
+      icon: <ApiOutlined aria-hidden="true" />,
+    }] : []),
     {
       id: "sessions",
       label: t("account.sessions.title"),
@@ -440,6 +481,21 @@ export function AccountCenter() {
               ? { ...current, email }
               : current)}
           /> : profileFallback}
+            </section>
+          ) : null}
+
+          {activeSection === "connections" && githubEnabled ? (
+            <section
+              aria-labelledby="account-connections-title"
+              className={styles.section}
+              id="account-connections-section"
+            >
+              <div className={styles.sectionHeader}>
+                <h2 className={styles.sectionTitle} id="account-connections-title">
+                  {t("account.connections.title")}
+                </h2>
+              </div>
+              <ConnectedAccounts />
             </section>
           ) : null}
 

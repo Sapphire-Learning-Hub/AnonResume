@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 
 const feedbackMocks = vi.hoisted(() => ({
   error: vi.fn(),
@@ -8,6 +9,11 @@ const navigationMocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   replace: vi.fn(),
 }));
+const authMocks = vi.hoisted(() => ({
+  linkSocial: vi.fn(),
+  listAccounts: vi.fn(),
+  unlinkAccount: vi.fn(),
+}));
 
 vi.mock("@/components/ui/useAppFeedback", () => ({
   useAppFeedback: () => ({ toast: feedbackMocks }),
@@ -15,6 +21,7 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => navigationMocks,
 }));
+vi.mock("@/lib/auth/client", () => ({ authClient: authMocks }));
 
 import { AccountCenter } from "@/components/account/AccountCenter";
 
@@ -65,6 +72,10 @@ function jsonResponse(body: unknown, status = 200) {
 describe("AccountCenter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authMocks.listAccounts.mockResolvedValue({
+      data: [{ id: "credential-account", providerId: "credential" }],
+      error: null,
+    });
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/account/profile" && !init?.method) {
@@ -159,6 +170,33 @@ describe("AccountCenter", () => {
     expect(screen.getByRole("heading", { name: "更换邮箱" })).toBeInTheDocument();
     expect(screen.getByLabelText("当前密码")).toBeInTheDocument();
     expect(screen.queryByLabelText("新邮箱")).not.toBeInTheDocument();
+  });
+
+  it("shows account connections only when GitHub OAuth is enabled", async () => {
+    const { unmount } = render(<AccountCenter />);
+    await screen.findByDisplayValue("Current User");
+    expect(screen.queryByRole("button", { name: "关联账号" })).not.toBeInTheDocument();
+    unmount();
+
+    render(<AccountCenter githubEnabled />);
+    await screen.findByDisplayValue("Current User");
+    fireEvent.click(screen.getByRole("button", { name: "关联账号" }));
+
+    expect(screen.getByRole("heading", { name: "关联账号" })).toBeInTheDocument();
+    expect(await screen.findByText("GitHub")).toBeInTheDocument();
+  });
+
+  it("reports an OAuth callback result once in development strict mode", async () => {
+    render(
+      <StrictMode>
+        <AccountCenter connectionNotice="linked" githubEnabled initialSection="connections" />
+      </StrictMode>,
+    );
+
+    await screen.findByText("GitHub");
+    expect(feedbackMocks.success).toHaveBeenCalledTimes(1);
+    expect(feedbackMocks.success).toHaveBeenCalledWith("GitHub 账号已关联。");
+    expect(navigationMocks.replace).toHaveBeenCalledTimes(1);
   });
 
   it("updates the profile and password from dedicated sections", async () => {

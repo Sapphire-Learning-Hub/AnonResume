@@ -1,0 +1,101 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+
+const authMocks = vi.hoisted(() => ({
+  linkSocial: vi.fn(),
+  listAccounts: vi.fn(),
+  unlinkAccount: vi.fn(),
+}));
+const feedbackMocks = vi.hoisted(() => ({
+  error: vi.fn(),
+  success: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/client", () => ({ authClient: authMocks }));
+vi.mock("@/components/ui/useAppFeedback", () => ({
+  useAppFeedback: () => ({ toast: feedbackMocks }),
+}));
+
+import { ConnectedAccounts } from "@/components/account/ConnectedAccounts";
+
+const credentialAccount = {
+  id: "credential-account",
+  providerId: "credential",
+};
+const githubAccount = {
+  id: "github-account",
+  providerId: "github",
+};
+
+describe("ConnectedAccounts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMocks.linkSocial.mockResolvedValue({ data: { redirect: true }, error: null });
+    authMocks.unlinkAccount.mockResolvedValue({ data: { status: true }, error: null });
+  });
+
+  it("starts GitHub account linking and returns to the account connections section", async () => {
+    authMocks.listAccounts.mockResolvedValue({
+      data: [credentialAccount],
+      error: null,
+    });
+
+    render(<ConnectedAccounts />);
+    fireEvent.click(await screen.findByRole("button", { name: "关联 GitHub" }));
+
+    await waitFor(() => expect(authMocks.linkSocial).toHaveBeenCalledWith({
+      callbackURL: "/app/account?section=connections&linked=github",
+      errorCallbackURL: "/app/account?section=connections&linkError=github",
+      provider: "github",
+    }));
+  });
+
+  it("unlinks GitHub when another sign-in method remains", async () => {
+    authMocks.listAccounts
+      .mockResolvedValueOnce({
+        data: [credentialAccount, githubAccount],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [credentialAccount],
+        error: null,
+      });
+
+    render(<ConnectedAccounts />);
+    fireEvent.click(await screen.findByRole("button", { name: "解除 GitHub 关联" }));
+    const dialog = screen.getByRole("dialog", { name: "解除 GitHub 关联" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "解除关联" }));
+
+    await waitFor(() => expect(authMocks.unlinkAccount).toHaveBeenCalledWith({
+      accountId: "github-account",
+    }));
+    expect(await screen.findByRole("button", { name: "关联 GitHub" })).toBeInTheDocument();
+    expect(feedbackMocks.success).toHaveBeenCalledWith("GitHub 账号关联已解除。");
+  });
+
+  it("prevents unlinking the only remaining sign-in method", async () => {
+    authMocks.listAccounts.mockResolvedValue({
+      data: [githubAccount],
+      error: null,
+    });
+
+    render(<ConnectedAccounts />);
+
+    expect(await screen.findByRole("button", {
+      name: "解除 GitHub 关联",
+    })).toBeDisabled();
+  });
+
+  it("keeps account navigation available when linked accounts fail to load", async () => {
+    authMocks.listAccounts
+      .mockResolvedValueOnce({ data: null, error: { message: "failed" } })
+      .mockResolvedValueOnce({ data: [credentialAccount], error: null });
+
+    render(<ConnectedAccounts />);
+
+    expect(await screen.findByText("关联账号暂时无法加载。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "重新加载关联账号" }));
+
+    expect(await screen.findByRole("button", { name: "关联 GitHub" })).toBeInTheDocument();
+    expect(authMocks.listAccounts).toHaveBeenCalledTimes(2);
+  });
+});

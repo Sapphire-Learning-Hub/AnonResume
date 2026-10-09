@@ -463,12 +463,14 @@ describe("account security", () => {
       await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `anonresume:account-deletion:${user.userId}`,
       ]);
-      const passwordChange = changeAccountPassword({
+      const passwordChange = expect(changeAccountPassword({
         userId: user.userId,
         currentSessionToken: currentSession,
         currentPassword: user.password,
         newPassword: "replacement-password-456",
         notify: async () => undefined,
+      })).rejects.toMatchObject({
+        code: "account_unavailable",
       });
 
       await new Promise((resolve) => setTimeout(resolve, 75));
@@ -486,9 +488,7 @@ describe("account security", () => {
       );
       await locker.query("COMMIT");
 
-      await expect(passwordChange).rejects.toMatchObject({
-        code: "account_unavailable",
-      });
+      await passwordChange;
     } finally {
       await locker.query("ROLLBACK").catch(() => undefined);
       locker.release();
@@ -504,9 +504,11 @@ describe("account security", () => {
       await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `anonresume:account-deletion:${user.userId}`,
       ]);
-      const profileUpdate = updateAccountProfile({
+      const profileUpdate = expect(updateAccountProfile({
         userId: user.userId,
         name: "Late profile value",
+      })).rejects.toMatchObject({
+        code: "account_unavailable",
       });
 
       await new Promise((resolve) => setTimeout(resolve, 75));
@@ -524,9 +526,7 @@ describe("account security", () => {
       );
       await locker.query("COMMIT");
 
-      await expect(profileUpdate).rejects.toMatchObject({
-        code: "account_unavailable",
-      });
+      await profileUpdate;
       const identity = await getDatabasePool().query<{ name: string }>(
         `SELECT name FROM "user" WHERE id = $1`,
         [user.userId],
