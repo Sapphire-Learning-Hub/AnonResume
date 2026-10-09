@@ -127,6 +127,23 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(options.socialProviders.github.disableImplicitSignUp).toBe(true);
   });
 
+  it("allows an authenticated user to link a GitHub account with a different email", async () => {
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      account: {
+        accountLinking: {
+          allowDifferentEmails?: boolean;
+          allowUnlinkingAll?: boolean;
+        };
+      };
+    };
+
+    expect(options.account.accountLinking).toMatchObject({
+      allowDifferentEmails: true,
+    });
+    expect(options.account.accountLinking.allowUnlinkingAll).not.toBe(true);
+  });
+
   it("holds restart-scoped settings until a new process initializes", async () => {
     const first = await getAuth();
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues({

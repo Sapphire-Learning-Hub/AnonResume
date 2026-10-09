@@ -42,6 +42,11 @@ function createAuth(configuration: {
     baseURL: configuration.applicationOrigin,
     secret: configuration.authSecret,
     database: getDatabasePool(),
+    account: {
+      accountLinking: {
+        allowDifferentEmails: true,
+      },
+    },
     databaseHooks: {
       user: {
         create: {

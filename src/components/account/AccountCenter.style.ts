@@ -282,6 +282,44 @@ export const useAccountCenterStyles = createStyles(({ token, css }) => ({
     color: ${token.colorTextSecondary};
     font-size: 12px;
   `,
+  connectionList: css`
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  `,
+  connection: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 12px;
+
+    @media (max-width: 620px) {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  `,
+  connectionIdentity: css`
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 10px;
+  `,
+  connectionIcon: css`
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 8px;
+    color: ${token.colorText};
+    background: ${token.colorFillTertiary};
+    font-size: 20px;
+  `,
   dataRow: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
