@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, lte } from "drizzle-orm";
 
 import { db, socialRegistrationAttempts } from "@/db";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 import { SocialRegistrationError } from "./errors";
 import {
@@ -182,6 +183,49 @@ export async function consumeSocialRegistrationAttempt(input: {
     gt(socialRegistrationAttempts.expiresAt, now),
   )).returning({ id: socialRegistrationAttempts.id });
   return rows.length === 1;
+}
+
+export async function findSocialRegistrationConflict(input: {
+  rawToken: string;
+  now?: Date;
+}): Promise<"email" | "provider" | null> {
+  const now = input.now ?? new Date();
+  const [attempt] = await db.select().from(socialRegistrationAttempts).where(
+    and(
+      eq(
+        socialRegistrationAttempts.tokenHash,
+        intentDigest(input.rawToken),
+      ),
+      inArray(socialRegistrationAttempts.state, [
+        "profile_captured",
+        "email_pending",
+        "email_verified",
+      ]),
+      gt(socialRegistrationAttempts.expiresAt, now),
+    ),
+  ).limit(1);
+  if (!attempt?.providerAccountId) {
+    throw new SocialRegistrationError("intent_invalid");
+  }
+
+  const pool = getDatabasePool();
+  const [provider, email] = await Promise.all([
+    pool.query<{ id: string }>(
+      `SELECT id FROM "account"
+        WHERE "providerId" = $1 AND "accountId" = $2
+        LIMIT 1`,
+      [attempt.providerId, attempt.providerAccountId],
+    ),
+    attempt.selectedEmail
+      ? pool.query<{ id: string }>(
+          `SELECT id FROM "user" WHERE lower(email) = $1 LIMIT 1`,
+          [attempt.selectedEmail],
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+  if (provider.rows[0]) return "provider";
+  if (email.rows[0]) return "email";
+  return null;
 }
 
 export async function lockSocialRegistrationAttempt(

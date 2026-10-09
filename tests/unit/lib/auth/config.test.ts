@@ -10,8 +10,13 @@ const mocks = vi.hoisted(() => ({
   invalidatePasswordResetToken: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
   captureSocialLinkProviderSubject: vi.fn(),
+  captureSocialRegistrationProfile: vi.fn(),
+  githubUserInfo: vi.fn(),
+  github: vi.fn(),
   socialLinkAttemptCookie: "anonresume_social_link_attempt",
+  socialRegistrationAttemptCookie: "anonresume_social_registration_attempt",
   cookieValue: "attempt-token",
+  registrationCookieValue: "registration-token",
 }));
 
 vi.mock("better-auth", () => ({ betterAuth: mocks.betterAuth }));
@@ -21,8 +26,13 @@ vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => name === mocks.socialLinkAttemptCookie
       ? { value: mocks.cookieValue }
+      : name === mocks.socialRegistrationAttemptCookie
+        ? { value: mocks.registrationCookieValue }
       : undefined,
   }),
+}));
+vi.mock("better-auth/social-providers", () => ({
+  github: mocks.github,
 }));
 vi.mock("@/lib/runtime/database", () => ({ getDatabasePool: () => "database" }));
 vi.mock("@/lib/runtime/email", () => ({
@@ -39,6 +49,10 @@ vi.mock("@/lib/auth/account/security", () => ({
 vi.mock("@/lib/auth/account/merge/link-attempts", () => ({
   SOCIAL_LINK_ATTEMPT_COOKIE: mocks.socialLinkAttemptCookie,
   captureSocialLinkProviderSubject: mocks.captureSocialLinkProviderSubject,
+}));
+vi.mock("@/lib/auth/social-registration/repository", () => ({
+  SOCIAL_REGISTRATION_ATTEMPT_COOKIE: mocks.socialRegistrationAttemptCookie,
+  captureSocialRegistrationProfile: mocks.captureSocialRegistrationProfile,
 }));
 vi.mock("@/lib/invitations/registration", () => ({
   invalidateInvitationsForIndependentRegistration: mocks.invalidateInvitations,
@@ -83,12 +97,24 @@ function runtimeValues(overrides: Record<string, unknown> = {}) {
 describe("restart-scoped Better Auth configuration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.cookieValue = "attempt-token";
+    mocks.registrationCookieValue = "registration-token";
     delete (globalThis as typeof globalThis & {
       __anonResumeAuthPromise?: Promise<unknown>;
     }).__anonResumeAuthPromise;
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues());
     mocks.isSuperAdminPrincipal.mockResolvedValue(false);
     mocks.isPasswordResetAllowedForUser.mockResolvedValue(true);
+    mocks.github.mockReturnValue({ getUserInfo: mocks.githubUserInfo });
+    mocks.githubUserInfo.mockResolvedValue({
+      user: {
+        email: "github@example.com",
+        emailVerified: true,
+        image: "https://avatars.example/github",
+        name: "GitHub User",
+      },
+      data: { id: "github-42", login: "github-user" },
+    });
   });
 
   it("creates one auth instance for concurrent callers", async () => {
@@ -152,24 +178,112 @@ describe("restart-scoped Better Auth configuration", () => {
     );
   });
 
-  it("captures only the GitHub provider subject during a pending link callback", async () => {
+  it("delegates GitHub parsing and captures pending link and registration intents", async () => {
     await getAuth();
     const options = mocks.betterAuth.mock.calls[0]![0] as {
       socialProviders: {
         github: {
-          mapProfileToUser: (profile: { id: string }) => Promise<Record<string, never>>;
+          getUserInfo: (tokens: { accessToken: string }) => Promise<unknown>;
         };
       };
     };
 
-    await expect(options.socialProviders.github.mapProfileToUser({
-      id: "github-42",
-    })).resolves.toEqual({});
+    const tokens = { accessToken: "oauth-access-token" };
+    const expected = await mocks.githubUserInfo(tokens);
+    mocks.githubUserInfo.mockClear();
+
+    await expect(options.socialProviders.github.getUserInfo(tokens))
+      .resolves.toBe(expected);
+    expect(mocks.githubUserInfo).toHaveBeenCalledWith(tokens);
     expect(mocks.captureSocialLinkProviderSubject).toHaveBeenCalledWith({
       providerAccountId: "github-42",
       providerId: "github",
       rawToken: "attempt-token",
     });
+    expect(mocks.captureSocialRegistrationProfile).toHaveBeenCalledWith({
+      rawToken: "registration-token",
+      providerId: "github",
+      providerAccountId: "github-42",
+      providerEmail: "github@example.com",
+      providerEmailVerified: true,
+      displayName: "GitHub User",
+      avatarUrl: "https://avatars.example/github",
+    });
+  });
+
+  it("does not trust an unverified GitHub email during profile capture", async () => {
+    mocks.githubUserInfo.mockResolvedValue({
+      user: {
+        email: "unverified@example.com",
+        emailVerified: false,
+        image: null,
+        name: "Unverified User",
+      },
+      data: { id: "github-unverified", login: "unverified-user" },
+    });
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      socialProviders: {
+        github: { getUserInfo: (tokens: { accessToken: string }) => Promise<unknown> };
+      };
+    };
+
+    await options.socialProviders.github.getUserInfo({ accessToken: "token" });
+
+    expect(mocks.captureSocialRegistrationProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerEmail: "unverified@example.com",
+        providerEmailVerified: false,
+      }),
+    );
+  });
+
+  it("requires a local email step when GitHub returns no email", async () => {
+    mocks.githubUserInfo.mockResolvedValue({
+      user: {
+        email: null,
+        emailVerified: false,
+        image: null,
+        name: "No Email User",
+      },
+      data: { id: "github-no-email", login: "no-email-user" },
+    });
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      socialProviders: {
+        github: { getUserInfo: (tokens: { accessToken: string }) => Promise<unknown> };
+      };
+    };
+
+    await options.socialProviders.github.getUserInfo({ accessToken: "token" });
+
+    expect(mocks.captureSocialRegistrationProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerEmail: null,
+        providerEmailVerified: false,
+      }),
+    );
+  });
+
+  it("leaves ordinary GitHub login unchanged when no attempt cookie exists", async () => {
+    mocks.cookieValue = "";
+    mocks.registrationCookieValue = "";
+    await getAuth();
+    const options = mocks.betterAuth.mock.calls[0]![0] as {
+      socialProviders: {
+        github: { getUserInfo: (tokens: { accessToken: string }) => Promise<unknown> };
+      };
+    };
+
+    const result = await options.socialProviders.github.getUserInfo({
+      accessToken: "ordinary-login-token",
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      data: expect.objectContaining({ id: "github-42" }),
+    }));
+    expect(mocks.captureSocialLinkProviderSubject).not.toHaveBeenCalled();
+    expect(mocks.captureSocialRegistrationProfile).not.toHaveBeenCalled();
   });
 
   it("requires explicit authenticated linking for GitHub accounts", async () => {

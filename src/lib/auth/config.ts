@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { cookies } from "next/headers";
 import { after } from "next/server";
 
 import { isSuperAdminPrincipal } from "@/lib/admin/store";
@@ -9,10 +8,7 @@ import {
   isPasswordResetAllowedForUser,
 } from "@/lib/auth/account/security";
 import { sessionDeviceAdditionalFields } from "@/lib/auth/account/session-device";
-import {
-  captureSocialLinkProviderSubject,
-  SOCIAL_LINK_ATTEMPT_COOKIE,
-} from "@/lib/auth/account/merge/link-attempts";
+import { getGitHubUserInfoForAuth } from "@/lib/auth/social-registration/github-profile";
 import {
   getBootstrapNodeEnvironment,
   readBootstrapConfig,
@@ -38,19 +34,12 @@ function createAuth(configuration: {
           clientId: values.githubClientId,
           clientSecret: values.githubClientSecret,
           disableImplicitSignUp: true,
-          mapProfileToUser: async (profile: { id: string }) => {
-            const rawToken = (await cookies()).get(
-              SOCIAL_LINK_ATTEMPT_COOKIE,
-            )?.value;
-            if (rawToken) {
-              await captureSocialLinkProviderSubject({
-                providerAccountId: profile.id,
-                providerId: "github",
-                rawToken,
-              });
-            }
-            return {};
-          },
+          getUserInfo: (
+            tokens: Parameters<typeof getGitHubUserInfoForAuth>[0],
+          ) => getGitHubUserInfoForAuth(tokens, {
+            clientId: values.githubClientId,
+            clientSecret: values.githubClientSecret,
+          }),
         },
       }
     : undefined;

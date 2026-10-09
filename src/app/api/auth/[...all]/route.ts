@@ -14,6 +14,7 @@ import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/exec
 import { AccountMergeError } from "@/lib/auth/account/merge/errors";
 import { getOptionalSession } from "@/lib/auth/session";
 import {
+  createRegistrationConsentErrorResponse,
   hasRegistrationConsent,
   requiresRegistrationConsent,
 } from "@/lib/auth/registration-consent";
@@ -69,13 +70,7 @@ async function blockRegistrationWithoutConsent(request: NextRequest) {
     return null;
   }
 
-  return NextResponse.json(
-    {
-      code: "REGISTRATION_CONSENT_REQUIRED",
-      message: "Privacy policy and terms consent is required",
-    },
-    { status: 400, headers: { "Cache-Control": "no-store" } },
-  );
+  return createRegistrationConsentErrorResponse();
 }
 
 async function blockInactivePasswordReset(request: NextRequest) {
