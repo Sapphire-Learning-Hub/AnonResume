@@ -38,8 +38,14 @@ and a production deployment are separate operations.
    changed file through `HEAD`. Build two inventories: user-perceivable product
    changes, and operator-only upgrade requirements. Do not treat commits as
    release-note entries one-for-one.
-3. Choose the requested SemVer version. If none was supplied and the correct
-   increment is ambiguous, ask the user instead of guessing.
+3. Choose the requested SemVer version. For a published stable version, use a
+   patch increment for backward-compatible defect fixes, a minor increment for
+   backward-compatible features, and a major increment for incompatible
+   changes. Continue a prerelease series by incrementing its prerelease
+   identifier until the intended stable version is ready. Never invent a fourth
+   numeric segment or an ad hoc `hotfix` suffix, and never reuse or move a
+   published tag. If the release mixes categories or the correct increment is
+   otherwise ambiguous, ask the user instead of guessing.
 4. Fetch `origin`, confirm the local `main` matches `origin/main`, and create
    `release/vX.Y.Z` from that commit. Stop if the branch or version tag already
    exists locally or remotely.
