@@ -14,7 +14,8 @@ import { getDatabasePool } from "@/lib/runtime/database";
 const sessionMocks = vi.hoisted(() => ({ getOptionalSession: vi.fn() }));
 
 vi.mock("@/lib/auth/session", () => sessionMocks);
-vi.mock("@/lib/http/request-origin", () => ({
+vi.mock("@/lib/http/request-origin", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/http/request-origin")>()),
   requireSameOrigin: () => null,
 }));
 
@@ -87,6 +88,7 @@ describe("social account link attempt routes", () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await db.delete(accountSocialLinkAttempts);
     if (createdAccounts.length) {
       await getDatabasePool().query(
@@ -100,6 +102,20 @@ describe("social account link attempt routes", () => {
         [createdUsers.splice(0)],
       );
     }
+  });
+
+  it("redirects callbacks through the configured public origin", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BETTER_AUTH_URL", "https://resume.example.com");
+    sessionMocks.getOptionalSession.mockResolvedValue(null);
+
+    const response = await resolveAttempt(request(
+      "https://0.0.0.0:3000/api/account/social-link/result?provider=github&outcome=success",
+    ));
+
+    expect(response.headers.get("location")).toBe(
+      "https://resume.example.com/app/account?section=connections&linkError=github",
+    );
   });
 
   it("creates a short-lived HttpOnly attempt without storing the raw token", async () => {

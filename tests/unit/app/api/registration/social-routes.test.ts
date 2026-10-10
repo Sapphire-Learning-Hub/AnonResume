@@ -26,7 +26,8 @@ vi.mock("@/lib/auth/config", () => ({
 vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: mocks.getOptionalSession,
 }));
-vi.mock("@/lib/http/request-origin", () => ({
+vi.mock("@/lib/http/request-origin", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/http/request-origin")>()),
   requireSameOrigin: mocks.requireSameOrigin,
 }));
 vi.mock("@/lib/auth/social-registration/repository", () => ({
@@ -105,6 +106,10 @@ describe("social registration routes", () => {
     });
     mocks.sendEmailChallenge.mockResolvedValue({ retryAfterSeconds: 60 });
     mocks.verifyEmail.mockResolvedValue({ email: "new@example.com" });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("rejects attempt creation without explicit legal consent", async () => {
@@ -192,6 +197,21 @@ describe("social registration routes", () => {
       rawToken: "registration-token",
     });
     expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("redirects callbacks through the configured public origin", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("BETTER_AUTH_URL", "https://resume.example.com");
+    mocks.getOptionalSession.mockResolvedValue({ user: { id: "user-1" } });
+
+    const response = await resolveResult(request(
+      "https://0.0.0.0:3000/api/registration/social/result?provider=github&outcome=success",
+      { cookie: "registration-token" },
+    ));
+
+    expect(response.headers.get("location")).toBe(
+      "https://resume.example.com/app",
+    );
   });
 
   it("rejects a callback when OAuth profile capture did not complete", async () => {
