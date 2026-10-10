@@ -63,12 +63,24 @@ interface AccountVerificationCodeEmailInput {
   locale: "zh-CN" | "en-US";
 }
 
+interface SocialRegistrationVerificationCodeEmailInput {
+  from: string;
+  name: string;
+  to: string;
+  code: string;
+  locale: "zh-CN" | "en-US";
+}
+
 export type AccountSecurityNoticeEvent =
   | "password_changed"
   | "email_changed"
   | "deletion_requested"
   | "account_restored"
-  | "account_deleted";
+  | "account_deleted"
+  | "merge_completed_primary"
+  | "merge_completed_secondary"
+  | "merge_timed_out"
+  | "merge_failed";
 
 interface AccountSecurityNoticeEmailInput {
   from: string;
@@ -283,6 +295,52 @@ export function buildAccountVerificationCodeEmail({
   };
 }
 
+export function buildSocialRegistrationVerificationCodeEmail({
+  from,
+  name,
+  to,
+  code,
+  locale,
+}: SocialRegistrationVerificationCodeEmailInput) {
+  const copy = locale === "en-US"
+    ? {
+        greeting: `Hello ${name || "AnonResume user"},`,
+        subject: "Verify your email to create an AnonResume account",
+        instruction: "Enter this verification code in AnonResume:",
+        expiry:
+          "The code expires in 10 minutes. Ignore this email if you did not request it.",
+      }
+    : {
+        greeting: `${name || "AnonResume 用户"}，你好。`,
+        subject: "验证邮箱以创建 AnonResume 账号",
+        instruction: "请在 AnonResume 中输入以下验证码：",
+        expiry: "验证码将在 10 分钟后失效。如果不是你发起的操作，请忽略这封邮件。",
+      };
+
+  return {
+    from,
+    to,
+    subject: copy.subject,
+    text: [copy.greeting, "", copy.instruction, code, "", copy.expiry].join(
+      "\n",
+    ),
+    html: `<!doctype html>
+<html lang="${locale}">
+  <body style="margin:0;background:#f7f3f5;color:#261d22;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+      <div style="border:1px solid #eadfe4;border-radius:22px;background:#ffffff;padding:34px;">
+        <h1 style="margin:0 0 14px;font-size:25px;line-height:1.3;">${escapeHtml(copy.subject)}</h1>
+        <p style="margin:0 0 12px;line-height:1.7;">${escapeHtml(copy.greeting)}</p>
+        <p style="margin:0 0 16px;color:#6f6068;line-height:1.7;">${escapeHtml(copy.instruction)}</p>
+        <p style="margin:0 0 18px;font-size:32px;font-weight:750;letter-spacing:.18em;">${escapeHtml(code)}</p>
+        <p style="margin:0;color:#8a7c83;font-size:13px;line-height:1.6;">${escapeHtml(copy.expiry)}</p>
+      </div>
+    </div>
+  </body>
+</html>`,
+  };
+}
+
 export function buildAccountSecurityNoticeEmail({
   from,
   name,
@@ -312,6 +370,22 @@ export function buildAccountSecurityNoticeEmail({
       subject: "Your AnonResume account was deleted",
       body: "The account deletion recovery period ended and deletion is complete.",
     },
+    merge_completed_primary: {
+      subject: "Your AnonResume accounts were merged",
+      body: "The account merge completed. Sign in again with the retained account.",
+    },
+    merge_completed_secondary: {
+      subject: "Your AnonResume account was merged",
+      body: "This account was merged into the account you selected and can no longer be used to sign in.",
+    },
+    merge_timed_out: {
+      subject: "Your AnonResume account merge timed out",
+      body: "The merge was not completed because active work did not finish in time. Your accounts remain separate.",
+    },
+    merge_failed: {
+      subject: "Your AnonResume account merge failed",
+      body: "The merge could not be completed. Your accounts remain separate; review them before trying again.",
+    },
   } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
   const chinese = {
     password_changed: {
@@ -333,6 +407,22 @@ export function buildAccountSecurityNoticeEmail({
     account_deleted: {
       subject: "你的 AnonResume 账号已注销",
       body: "账号注销冷静期已结束，注销处理已完成。",
+    },
+    merge_completed_primary: {
+      subject: "你的 AnonResume 账号已合并",
+      body: "账号合并已完成，请使用保留的账号重新登录。",
+    },
+    merge_completed_secondary: {
+      subject: "你的 AnonResume 账号已被合并",
+      body: "该账号已合并至你选择保留的账号，无法再用于登录。",
+    },
+    merge_timed_out: {
+      subject: "AnonResume 账号合并已超时",
+      body: "由于运行中的任务未能及时结束，本次合并未完成，两个账号仍保持独立。",
+    },
+    merge_failed: {
+      subject: "AnonResume 账号合并失败",
+      body: "本次合并未能完成，两个账号仍保持独立，请检查后重试。",
     },
   } satisfies Record<AccountSecurityNoticeEvent, { subject: string; body: string }>;
   const copy = (locale === "en-US" ? english : chinese)[event];
@@ -678,6 +768,27 @@ export async function sendAccountVerificationCode(input: {
   if (config.transport === "console") {
     console.info(
       `[AnonResume] Account verification code for ${input.email}: ${input.code}`,
+    );
+    return;
+  }
+  await getSmtpTransporter(config).sendMail(message);
+}
+
+export async function sendSocialRegistrationVerificationCode(input: {
+  email: string;
+  name: string;
+  code: string;
+  locale: "zh-CN" | "en-US";
+}) {
+  const config = await getEmailDeliveryConfig();
+  const message = buildSocialRegistrationVerificationCodeEmail({
+    from: config.from,
+    to: input.email,
+    ...input,
+  });
+  if (config.transport === "console") {
+    console.info(
+      `[AnonResume] Social registration verification code for ${input.email}: ${input.code}`,
     );
     return;
   }

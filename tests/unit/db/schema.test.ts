@@ -18,6 +18,16 @@ describe("database schema contracts", () => {
     );
 
     expect(resumeForeignKey?.onDelete).toBe("cascade");
+    expect(resumeForeignKey?.onUpdate).toBe("cascade");
+  });
+
+  it("moves PDF jobs when resume ownership changes", () => {
+    const config = getTableConfig(pdfExportJobs);
+    const resumeForeignKey = config.foreignKeys.find(
+      (foreignKey) => foreignKey.reference().foreignTable === resumes,
+    );
+
+    expect(resumeForeignKey?.onUpdate).toBe("cascade");
   });
 
   it("indexes queued PDF exports for FIFO claims and user status reads", () => {

@@ -105,7 +105,7 @@ async function assertUserOperationAllowed({
   if (!target.rows[0]) throw new AdminManagementNotFoundError();
   if (target.rows[0].lifecycleStatus !== "active") {
     throw new AdminManagementConflictError(
-      "Pending or deleted accounts cannot be changed through user operations",
+      "Non-active accounts cannot be changed through user operations",
     );
   }
   if (target.rows[0].principalKind === "super_admin") {
@@ -332,7 +332,7 @@ export async function setAdminRoles(input: {
     if (user.rowCount !== 1) throw new AdminManagementNotFoundError();
     if (user.rows[0]!.lifecycleStatus !== "active") {
       throw new AdminManagementConflictError(
-        "Pending or deleted accounts cannot receive management roles",
+        "Non-active accounts cannot receive management roles",
       );
     }
     const principal = await client.query<{

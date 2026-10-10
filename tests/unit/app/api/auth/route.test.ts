@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
   decision: vi.fn(),
@@ -6,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   handlerPost: vi.fn(),
   getAuth: vi.fn(),
   isPasswordResetAllowedForToken: vi.fn(),
+  getOptionalSession: vi.fn(),
+  assertAccountMergeMutationAllowed: vi.fn(),
+  createSocialLinkResultProof: vi.fn(() => "callback-proof"),
 }));
 
 vi.mock("@/lib/admin/setup/access", () => ({
@@ -18,6 +22,17 @@ vi.mock("@/lib/auth/config", () => ({
 vi.mock("@/lib/auth/account/security", () => ({
   isPasswordResetAllowedForToken: mocks.isPasswordResetAllowedForToken,
 }));
+vi.mock("@/lib/auth/session", () => ({
+  getOptionalSession: mocks.getOptionalSession,
+}));
+vi.mock("@/lib/auth/account/merge/executor", () => ({
+  assertAccountMergeMutationAllowed: mocks.assertAccountMergeMutationAllowed,
+}));
+vi.mock("@/lib/auth/account/merge/link-attempts", () => ({
+  SOCIAL_LINK_ATTEMPT_COOKIE: "anonresume_social_link_attempt",
+  SOCIAL_LINK_RESULT_PROOF_COOKIE: "anonresume_social_link_result_proof",
+  createSocialLinkResultProof: mocks.createSocialLinkResultProof,
+}));
 
 vi.mock("better-auth/next-js", () => ({
   toNextJsHandler: () => ({
@@ -27,6 +42,7 @@ vi.mock("better-auth/next-js", () => ({
 }));
 
 import { GET, POST } from "@/app/api/auth/[...all]/route";
+import { AccountMergeError } from "@/lib/auth/account/merge/errors";
 
 describe("authentication setup gate", () => {
   beforeEach(() => {
@@ -35,6 +51,8 @@ describe("authentication setup gate", () => {
     mocks.handlerGet.mockResolvedValue(new Response(null, { status: 204 }));
     mocks.handlerPost.mockResolvedValue(new Response(null, { status: 204 }));
     mocks.isPasswordResetAllowedForToken.mockResolvedValue(true);
+    mocks.getOptionalSession.mockResolvedValue(null);
+    mocks.assertAccountMergeMutationAllowed.mockResolvedValue(undefined);
   });
 
   it("rejects a previously issued reset token after deletion becomes pending", async () => {
@@ -145,6 +163,43 @@ describe("authentication setup gate", () => {
       error: "instance_setup_required",
     });
     expect(mocks.handlerGet).not.toHaveBeenCalled();
+  });
+
+  it("blocks social account mutations while an account merge is pending", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+    mocks.getOptionalSession.mockResolvedValue({ user: { id: "user-1" } });
+    mocks.assertAccountMergeMutationAllowed.mockRejectedValue(
+      new AccountMergeError("merge_in_progress"),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/auth/link-social", { method: "POST" }) as never,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: "merge_in_progress" });
+    expect(mocks.handlerPost).not.toHaveBeenCalled();
+  });
+
+  it("attaches a server proof to a real GitHub account-link collision", async () => {
+    mocks.decision.mockResolvedValue("allowed");
+    mocks.handlerGet.mockResolvedValue(Response.redirect(
+      "http://localhost/api/account/social-link/result?provider=github&outcome=error&error=account_already_linked_to_different_user",
+    ));
+
+    const response = await GET(new NextRequest(
+      "http://localhost/api/auth/callback/github?code=oauth-code&state=oauth-state",
+      { headers: { cookie: "anonresume_social_link_attempt=attempt-token" } },
+    ));
+
+    expect(mocks.createSocialLinkResultProof).toHaveBeenCalledWith(
+      "attempt-token",
+      "account_already_linked_to_different_user",
+    );
+    expect(response.headers.get("set-cookie")).toContain(
+      "anonresume_social_link_result_proof=callback-proof",
+    );
+    expect(response.headers.get("set-cookie")).toContain("HttpOnly");
   });
 
   it("preserves auth reads and recovery-mode mutations", async () => {

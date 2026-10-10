@@ -61,19 +61,44 @@ describe("management users page lifecycle states", () => {
           deletionDueAt: new Date("2026-10-14T00:00:00.000Z"),
           deletedAt: new Date("2026-10-14T00:00:00.000Z"),
         },
+        {
+          id: "merged-user",
+          name: "Merged account",
+          email: "merged-user@merged.invalid",
+          emailVerified: false,
+          invitationPending: false,
+          createdAt: new Date("2026-08-01T00:00:00.000Z"),
+          resumes: 0,
+          principalKind: null,
+          roles: [],
+          suspended: false,
+          lifecycleStatus: "merged",
+          deletionDueAt: null,
+          deletedAt: null,
+          mergedAt: new Date("2026-10-09T08:00:00.000Z"),
+          sourceEmailMasked: "m***@example.com",
+          mergedInto: {
+            id: "primary-user",
+            name: "Primary User",
+            email: "primary@example.com",
+          },
+        },
       ],
       page: 1,
       pageSize: 20,
-      total: 2,
+      total: 3,
       totalPages: 1,
     });
   });
 
-  it("shows pending and deleted status without management actions", async () => {
+  it("shows terminal lifecycle status without management actions", async () => {
     render(await ManagementUsersPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText(/待注销.*2026\/10\/14/)).toBeInTheDocument();
     expect(screen.getByText("已注销")).toBeInTheDocument();
+    expect(screen.getByText("m***@example.com")).toBeInTheDocument();
+    expect(screen.getByText(/已合并.*2026\/10\/9/)).toBeInTheDocument();
+    expect(screen.getByText("合并至 Primary User（primary@example.com）")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "用户操作" })).not.toBeInTheDocument();
   });
 });

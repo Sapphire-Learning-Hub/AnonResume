@@ -78,6 +78,10 @@ describe("AuthPanel email verification", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("eagerly loads the above-the-fold brand image", () => {
     render(<AuthPanel githubEnabled={false} />);
 
@@ -173,7 +177,17 @@ describe("AuthPanel email verification", () => {
     );
   });
 
-  it("marks GitHub registration as explicit after legal consent", async () => {
+  it("creates a registration intent before starting GitHub registration", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      callbackURL:
+        "/api/registration/social/result?provider=github&outcome=success",
+      errorCallbackURL:
+        "/api/registration/social/result?provider=github&outcome=error",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
     authMocks.signInSocial.mockResolvedValue({
       data: { redirect: true, url: "https://github.com/login/oauth/authorize" },
       error: null,
@@ -187,13 +201,22 @@ describe("AuthPanel email verification", () => {
     fireEvent.click(screen.getByRole("button", { name: /使用 GitHub 继续/ }));
 
     await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/registration/social/attempt",
+        expect.objectContaining({
+          body: JSON.stringify({ provider: "github" }),
+          headers: expect.objectContaining({
+            [REGISTRATION_CONSENT_HEADER]: "true",
+          }),
+          method: "POST",
+        }),
+      );
       expect(authMocks.signInSocial).toHaveBeenCalledWith({
-        callbackURL: "/sign-in",
-        fetchOptions: {
-          headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
-        },
+        callbackURL:
+          "/api/registration/social/result?provider=github&outcome=success",
+        errorCallbackURL:
+          "/api/registration/social/result?provider=github&outcome=error",
         provider: "github",
-        requestSignUp: true,
       });
     });
   });
@@ -371,6 +394,45 @@ describe("AuthPanel email verification", () => {
       expect.objectContaining({
         title: "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
       }),
+    );
+  });
+
+  it("explains that an unlinked GitHub account cannot claim an existing account", () => {
+    render(
+      <AuthPanel
+        githubEnabled
+        verificationError="account_not_linked"
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "该 GitHub 账号尚未绑定。请先使用原登录方式登录，再前往账号中心绑定 GitHub。",
+      }),
+    );
+  });
+
+  it.each([
+    [
+      "social_registration_invalid",
+      "GitHub 注册流程无效或已过期，请重新开始。",
+    ],
+    [
+      "social_registration_account_exists",
+      "该 GitHub 账号或邮箱已有对应账号，请使用原登录方式登录后再绑定 GitHub。",
+    ],
+    ["social_oauth_cancelled", "已取消 GitHub 授权。"],
+    ["social_oauth_failed", "GitHub 授权未完成，请稍后重试。"],
+  ])("explains the %s social registration callback", (code, message) => {
+    render(
+      <AuthPanel
+        githubEnabled
+        verificationError={code}
+      />,
+    );
+
+    expect(feedbackMocks.notificationError).toHaveBeenCalledWith(
+      expect.objectContaining({ title: message }),
     );
   });
 });

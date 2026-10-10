@@ -34,6 +34,7 @@ describe("AI database schema", () => {
     expect(
       resumeForeignKey?.reference().columns.map((column) => column.name),
     ).toEqual(["user_id", "resume_id"]);
+    expect(resumeForeignKey?.onUpdate).toBe("cascade");
     expect(messageConfig.indexes.map((index) => index.config.name)).toContain(
       "ai_messages_conversation_sequence_unique",
     );

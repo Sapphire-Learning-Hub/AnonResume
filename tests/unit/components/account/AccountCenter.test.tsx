@@ -199,6 +199,38 @@ describe("AccountCenter", () => {
     expect(navigationMocks.replace).toHaveBeenCalledTimes(1);
   });
 
+  it("forwards a GitHub collision callback to the connected-account flow", async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/account/profile" && !init?.method) {
+        return jsonResponse({ profile });
+      }
+      if (url === "/api/account/sessions" && !init?.method) {
+        return jsonResponse({ sessions });
+      }
+      if (url === "/api/account/social-merge/intent") {
+        return jsonResponse({ providerId: "github", requiresAdminMfa: false });
+      }
+      return jsonResponse({ ok: true });
+    });
+
+    render(
+      <AccountCenter
+        githubEnabled
+        initialSection="connections"
+        mergeRequested
+      />,
+    );
+
+    expect(await screen.findByLabelText("当前账号密码")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "合并账号" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /取\s*消/ }));
+    expect(navigationMocks.replace).toHaveBeenCalledWith(
+      "/app/account?section=connections",
+      { scroll: false },
+    );
+  });
+
   it("updates the profile and password from dedicated sections", async () => {
     render(<AccountCenter />);
     expect(await screen.findByDisplayValue("Current User")).toBeInTheDocument();

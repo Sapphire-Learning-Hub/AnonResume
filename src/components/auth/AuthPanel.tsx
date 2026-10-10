@@ -195,7 +195,16 @@ const verificationFailureCodes = new Set([
   "token_expired",
 ]);
 
-const socialRegistrationFailureCodes = new Set(["signup_disabled"]);
+const socialAccountLinkFailureCodes = new Set(["account_not_linked"]);
+
+const socialRegistrationErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
+  signup_disabled: "auth.socialRegistrationRequired",
+  social_oauth_cancelled: "auth.socialRegistration.callbackCancelled",
+  social_oauth_failed: "auth.socialRegistration.callbackFailed",
+  social_registration_account_exists:
+    "auth.socialRegistration.callbackAccountExists",
+  social_registration_invalid: "auth.socialRegistration.callbackInvalid",
+};
 
 const authErrorMessageKeys: Readonly<Record<string, MessageKey>> = {
   ACCOUNT_SUSPENDED: "auth.accountSuspended",
@@ -270,9 +279,11 @@ export function AuthPanel({
       ? t("auth.accountSuspended")
       : verificationError && verificationFailureCodes.has(verificationError)
         ? t("auth.invalidVerificationLink")
-        : verificationError && socialRegistrationFailureCodes.has(verificationError)
-          ? t("auth.socialRegistrationRequired")
-        : null;
+        : verificationError && socialRegistrationErrorMessageKeys[verificationError]
+          ? t(socialRegistrationErrorMessageKeys[verificationError])
+          : verificationError && socialAccountLinkFailureCodes.has(verificationError)
+            ? t("auth.socialAccountNotLinked")
+            : null;
 
   useEffect(() => {
     const key = "authentication-page-error";
@@ -420,17 +431,39 @@ export function AuthPanel({
     setIsPending(true);
 
     try {
+      let callbackURL = "/sign-in";
+      let errorCallbackURL = "/sign-in";
+
+      if (requestSignUp) {
+        const response = await fetch("/api/registration/social/attempt", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [REGISTRATION_CONSENT_HEADER]: "true",
+          },
+          body: JSON.stringify({ provider: "github" }),
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        if (
+          !response.ok ||
+          !payload ||
+          typeof payload !== "object" ||
+          !("callbackURL" in payload) ||
+          typeof payload.callbackURL !== "string" ||
+          !("errorCallbackURL" in payload) ||
+          typeof payload.errorCallbackURL !== "string"
+        ) {
+          toast.error(t("auth.socialSignInUnavailable"));
+          return;
+        }
+        callbackURL = payload.callbackURL;
+        errorCallbackURL = payload.errorCallbackURL;
+      }
+
       const result = await authClient.signIn.social({
         provider: "github",
-        callbackURL: "/sign-in",
-        ...(requestSignUp
-          ? {
-              requestSignUp: true,
-              fetchOptions: {
-                headers: { [REGISTRATION_CONSENT_HEADER]: "true" },
-              },
-            }
-          : {}),
+        callbackURL,
+        errorCallbackURL,
       });
 
       if (result.error) {
@@ -438,6 +471,7 @@ export function AuthPanel({
       }
     } catch (error) {
       toast.error(getAuthFeedbackMessage(error, t));
+    } finally {
       setIsPending(false);
     }
   }

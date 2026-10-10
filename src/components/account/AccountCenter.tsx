@@ -61,6 +61,7 @@ type AccountCenterProps = {
   connectionNotice?: "linked" | "error";
   githubEnabled?: boolean;
   initialSection?: AccountSection;
+  mergeRequested?: boolean;
 };
 
 function jsonRequest(method: string, body?: unknown): RequestInit {
@@ -124,6 +125,7 @@ export function AccountCenter({
   connectionNotice,
   githubEnabled = false,
   initialSection = "profile",
+  mergeRequested = false,
 }: AccountCenterProps = {}) {
   const { styles } = useAccountCenterStyles();
   const { locale, t } = useI18n();
@@ -495,7 +497,13 @@ export function AccountCenter({
                   {t("account.connections.title")}
                 </h2>
               </div>
-              <ConnectedAccounts />
+              <ConnectedAccounts
+                mergeRequested={mergeRequested}
+                onMergeDismissed={() => router.replace(
+                  "/app/account?section=connections",
+                  { scroll: false },
+                )}
+              />
             </section>
           ) : null}
 

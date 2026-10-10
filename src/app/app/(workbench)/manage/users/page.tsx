@@ -55,6 +55,7 @@ export default async function ManagementUsersPage({
         }}
         rows={users.items.map((user) => {
           const lifecycleActive = user.lifecycleStatus === "active";
+          const merged = user.lifecycleStatus === "merged";
           const canOperateTarget =
             lifecycleActive &&
             (context.kind === "super_admin" || user.principalKind === null);
@@ -65,16 +66,28 @@ export default async function ManagementUsersPage({
           );
           return [
             <AdminIdentity
-              description={user.email}
+              description={merged ? (
+                <>
+                  <span>{user.sourceEmailMasked ?? user.email}</span>
+                  {user.mergedInto ? (
+                    <>
+                      <br />
+                      <span>{t("users.mergedInto", user.mergedInto)}</span>
+                    </>
+                  ) : null}
+                </>
+              ) : user.email}
               key="identity"
-              title={user.name}
+              title={merged ? t("users.mergedIdentity") : user.name}
             />,
-            <AdminStatus
-              key="verification"
-              tone={user.emailVerified ? "success" : "warning"}
-            >
-              {user.emailVerified ? t("users.verified") : t("users.unverified")}
-            </AdminStatus>,
+            merged ? "-" : (
+              <AdminStatus
+                key="verification"
+                tone={user.emailVerified ? "success" : "warning"}
+              >
+                {user.emailVerified ? t("users.verified") : t("users.unverified")}
+              </AdminStatus>
+            ),
             user.resumes,
             user.principalKind === "super_admin"
               ? t("shell.superAdmin")
@@ -91,6 +104,13 @@ export default async function ManagementUsersPage({
             ) : user.lifecycleStatus === "deleted" ? (
               <AdminStatus key="status" tone="danger">
                 {t("users.deleted")}
+              </AdminStatus>
+            ) : merged ? (
+              <AdminStatus key="status" tone="info">
+                {t("users.merged")}
+                {user.mergedAt
+                  ? ` · ${t("users.mergedAt", { time: user.mergedAt.toLocaleString(locale) })}`
+                  : null}
               </AdminStatus>
             ) : (
               <AdminStatus

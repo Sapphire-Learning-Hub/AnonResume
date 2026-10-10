@@ -242,6 +242,21 @@ export async function isSuperAdminPrincipal(userId: string) {
   return rows[0]?.kind === "super_admin";
 }
 
+export async function getAdminPrincipalKindForAccountMerge(userId: string) {
+  const rows = await db
+    .select({
+      kind: adminPrincipals.kind,
+      quarantinedAt: adminPrincipals.quarantinedAt,
+    })
+    .from(adminPrincipals)
+    .where(eq(adminPrincipals.userId, userId))
+    .limit(1);
+  const principal = rows[0];
+  if (!principal) return null;
+  if (principal.quarantinedAt) return "quarantined_admin" as const;
+  return principal.kind;
+}
+
 export async function isAccountSuspended(userId: string) {
   const rows = await db
     .select({ suspendedUntil: accountRestrictions.suspendedUntil })

@@ -519,6 +519,46 @@ const messages = {
     "auth.socialSignInUnavailable": "GitHub 登录暂时不可用。",
     "auth.socialRegistrationRequired":
       "该 GitHub 账号尚未注册，请切换到创建账号并同意隐私政策与服务条款。",
+    "auth.socialAccountNotLinked":
+      "该 GitHub 账号尚未绑定。请先使用原登录方式登录，再前往账号中心绑定 GitHub。",
+    "auth.socialRegistration.emailCodeSent": "验证码已发送。",
+    "auth.socialRegistration.error.codeExpired": "验证码已过期，请重新获取。",
+    "auth.socialRegistration.error.codeInvalid": "验证码不正确或已失效。",
+    "auth.socialRegistration.error.emailConflict":
+      "该邮箱已注册，请使用原登录方式登录后在账号中心绑定 GitHub。",
+    "auth.socialRegistration.error.resendTooSoon":
+      "请稍后再重新发送验证码。",
+    "auth.socialRegistration.error.emailAttemptsExhausted":
+      "验证码尝试次数过多，请重新获取。",
+    "auth.socialRegistration.error.emailInvalid": "请输入有效的邮箱地址。",
+    "auth.socialRegistration.loading": "正在读取注册信息",
+    "auth.socialRegistration.heading": "完成 GitHub 注册",
+    "auth.socialRegistration.lead": "设置登录信息，完成账号创建。",
+    "auth.socialRegistration.emailHeading": "验证登录邮箱",
+    "auth.socialRegistration.emailLead":
+      "GitHub 未提供可用邮箱，请验证一个邮箱作为登录账号。",
+    "auth.socialRegistration.displayName": "显示名称",
+    "auth.socialRegistration.loginEmail": "登录邮箱",
+    "auth.socialRegistration.emailCode": "邮箱验证码",
+    "auth.socialRegistration.sendCode": "发送验证码",
+    "auth.socialRegistration.resendCode": "重新发送",
+    "auth.socialRegistration.verifyEmail": "验证邮箱",
+    "auth.socialRegistration.expiredHeading": "注册流程已失效",
+    "auth.socialRegistration.expiredDescription":
+      "请返回登录页，重新使用 GitHub 创建账号。",
+    "auth.socialRegistration.conflictHeading": "该账号已存在",
+    "auth.socialRegistration.conflictDescription":
+      "请使用原登录方式登录，再前往账号中心绑定 GitHub。",
+    "auth.socialRegistration.createdHeading": "账号已创建",
+    "auth.socialRegistration.createdDescription":
+      "自动登录未完成，请使用刚刚设置的邮箱和密码登录。",
+    "auth.socialRegistration.callbackInvalid":
+      "GitHub 注册流程无效或已过期，请重新开始。",
+    "auth.socialRegistration.callbackAccountExists":
+      "该 GitHub 账号或邮箱已有对应账号，请使用原登录方式登录后再绑定 GitHub。",
+    "auth.socialRegistration.callbackCancelled": "已取消 GitHub 授权。",
+    "auth.socialRegistration.callbackFailed":
+      "GitHub 授权未完成，请稍后重试。",
     "auth.rateLimited": "尝试次数过多，请稍后再试。",
     "auth.passwordMismatch": "两次输入的密码不一致。",
     "auth.registrationConsentPrefix": "我已阅读并同意",
@@ -1458,6 +1498,41 @@ const messages = {
     "account.connections.actionFailed": "关联账号操作失败，请重试。",
     "account.connections.loadFailed": "关联账号暂时无法加载。",
     "account.connections.retry": "重新加载关联账号",
+    "account.merge.title": "合并账号",
+    "account.merge.intro":
+      "这个 GitHub 账号已关联另一个 AnonResume 账号。验证两个账号后，可以将简历与历史记录合并到同一个账号。",
+    "account.merge.currentPassword": "当前账号密码",
+    "account.merge.targetEmail": "另一个账号邮箱",
+    "account.merge.targetPassword": "另一个账号密码",
+    "account.merge.mfa": "管理员 MFA 验证码",
+    "account.merge.verify": "验证并继续",
+    "account.merge.currentAccount": "当前账号",
+    "account.merge.githubAccount": "GitHub 已关联账号",
+    "account.merge.resumeCount": "{count} 份简历",
+    "account.merge.methodEmail": "邮箱密码",
+    "account.merge.primaryLabel": "选择合并后保留的账号身份",
+    "account.merge.keepCurrent": "保留当前账号",
+    "account.merge.keepTarget": "保留已关联 GitHub 的账号",
+    "account.merge.warning":
+      "确认后无法撤销。未保留账号的简历和历史记录会转移，登录邮箱、密码及个性化配置不会保留；两个账号的现有登录都会退出。",
+    "account.merge.confirm": "确认合并",
+    "account.merge.confirmCountdown": "{seconds} 秒后可确认",
+    "account.merge.leave": "暂时关闭",
+    "account.merge.return": "返回关联账号",
+    "account.merge.waitingTitle": "正在等待现有任务完成",
+    "account.merge.waitingBody":
+      "当前账号仍有 AI 或 PDF 任务在运行。任务结束后会自动继续合并，最长等待 10 分钟。",
+    "account.merge.failedTitle": "账号合并未完成",
+    "account.merge.timeoutBody":
+      "等待现有任务结束超时，账号未发生合并。请检查任务状态后重新关联 GitHub。",
+    "account.merge.failedBody":
+      "账号未发生合并。请返回关联账号后重新尝试。",
+    "account.merge.completed": "账号已合并，请重新登录。",
+    "account.merge.error.currentPassword": "当前账号密码不正确。",
+    "account.merge.error.targetCredentials": "另一个账号的邮箱或密码不正确。",
+    "account.merge.error.mfa": "管理员 MFA 验证码不正确。",
+    "account.merge.error.tooEarly": "请等待确认倒计时结束。",
+    "account.merge.error.generic": "账号合并暂时无法继续，请重试。",
     "account.sessions.title": "登录设备",
     "account.sessions.description": "查看当前有效登录，并移除不再使用的设备。",
     "account.sessions.current": "当前设备",
@@ -1512,6 +1587,7 @@ const messages = {
     "account.error.resendTooSoon": "请稍后再重新发送验证码。",
     "account.error.currentSession": "当前登录状态已失效，请重新登录。",
     "account.error.emailInUse": "该邮箱已被其他账号使用。",
+    "account.error.mergeInProgress": "账号正在合并，请等待处理完成后再执行此操作。",
     "account.error.passwordIncorrect": "当前密码不正确。",
     "account.error.passwordInvalid": "新密码不符合安全要求。",
     "account.error.passwordUnavailable": "此账号不支持密码验证。",
@@ -2094,6 +2170,52 @@ const messages = {
       "GitHub sign-in is temporarily unavailable.",
     "auth.socialRegistrationRequired":
       "This GitHub account is not registered. Switch to Create account and agree to the privacy policy and terms of service.",
+    "auth.socialAccountNotLinked":
+      "This GitHub account is not linked. Sign in using your original method, then link GitHub from Account Center.",
+    "auth.socialRegistration.emailCodeSent": "Verification code sent.",
+    "auth.socialRegistration.error.codeExpired":
+      "The verification code has expired. Request a new one.",
+    "auth.socialRegistration.error.codeInvalid":
+      "The verification code is incorrect or no longer valid.",
+    "auth.socialRegistration.error.emailConflict":
+      "This email is already registered. Sign in using the original method, then link GitHub from Account Center.",
+    "auth.socialRegistration.error.resendTooSoon":
+      "Wait before requesting another verification code.",
+    "auth.socialRegistration.error.emailAttemptsExhausted":
+      "Too many incorrect attempts. Request a new verification code.",
+    "auth.socialRegistration.error.emailInvalid":
+      "Enter a valid email address.",
+    "auth.socialRegistration.loading": "Loading registration details",
+    "auth.socialRegistration.heading": "Complete GitHub registration",
+    "auth.socialRegistration.lead":
+      "Set your sign-in details to finish creating your account.",
+    "auth.socialRegistration.emailHeading": "Verify your sign-in email",
+    "auth.socialRegistration.emailLead":
+      "GitHub did not provide a usable email. Verify an email address to use for sign-in.",
+    "auth.socialRegistration.displayName": "Display name",
+    "auth.socialRegistration.loginEmail": "Sign-in email",
+    "auth.socialRegistration.emailCode": "Email verification code",
+    "auth.socialRegistration.sendCode": "Send verification code",
+    "auth.socialRegistration.resendCode": "Resend",
+    "auth.socialRegistration.verifyEmail": "Verify email",
+    "auth.socialRegistration.expiredHeading":
+      "Registration session expired",
+    "auth.socialRegistration.expiredDescription":
+      "Return to sign in and start GitHub registration again.",
+    "auth.socialRegistration.conflictHeading": "This account already exists",
+    "auth.socialRegistration.conflictDescription":
+      "Sign in using the original method, then link GitHub from Account Center.",
+    "auth.socialRegistration.createdHeading": "Account created",
+    "auth.socialRegistration.createdDescription":
+      "Automatic sign-in did not complete. Sign in with the email and password you just set.",
+    "auth.socialRegistration.callbackInvalid":
+      "The GitHub registration session is invalid or expired. Start again.",
+    "auth.socialRegistration.callbackAccountExists":
+      "This GitHub account or email already belongs to an account. Sign in using the original method, then link GitHub.",
+    "auth.socialRegistration.callbackCancelled":
+      "GitHub authorization was cancelled.",
+    "auth.socialRegistration.callbackFailed":
+      "GitHub authorization did not complete. Try again later.",
     "auth.rateLimited": "Too many attempts. Try again later.",
     "auth.passwordMismatch": "The passwords do not match.",
     "auth.registrationConsentPrefix": "I have read and agree to the ",
@@ -3093,6 +3215,41 @@ const messages = {
     "account.connections.actionFailed": "The connected-account action failed. Try again.",
     "account.connections.loadFailed": "Connected accounts are temporarily unavailable.",
     "account.connections.retry": "Reload connected accounts",
+    "account.merge.title": "Merge accounts",
+    "account.merge.intro":
+      "This GitHub account is already linked to another AnonResume account. Verify both accounts to combine their resumes and history.",
+    "account.merge.currentPassword": "Current account password",
+    "account.merge.targetEmail": "Other account email",
+    "account.merge.targetPassword": "Other account password",
+    "account.merge.mfa": "Administrator MFA code",
+    "account.merge.verify": "Verify and continue",
+    "account.merge.currentAccount": "Current account",
+    "account.merge.githubAccount": "GitHub-linked account",
+    "account.merge.resumeCount": "{count} resumes",
+    "account.merge.methodEmail": "Email and password",
+    "account.merge.primaryLabel": "Choose the account identity to keep",
+    "account.merge.keepCurrent": "Keep the current account",
+    "account.merge.keepTarget": "Keep the GitHub-linked account",
+    "account.merge.warning":
+      "This cannot be undone. Resumes and history from the other account will transfer, but its sign-in email, password, and personal settings will not be kept. Existing sessions for both accounts will be signed out.",
+    "account.merge.confirm": "Confirm merge",
+    "account.merge.confirmCountdown": "Confirm in {seconds} seconds",
+    "account.merge.leave": "Close for now",
+    "account.merge.return": "Return to connected accounts",
+    "account.merge.waitingTitle": "Waiting for existing tasks to finish",
+    "account.merge.waitingBody":
+      "An AI or PDF task is still running. The merge will continue automatically when it finishes, for up to 10 minutes.",
+    "account.merge.failedTitle": "Account merge not completed",
+    "account.merge.timeoutBody":
+      "The existing tasks did not finish in time, so no accounts were merged. Check their status and connect GitHub again.",
+    "account.merge.failedBody":
+      "No accounts were merged. Return to connected accounts and try again.",
+    "account.merge.completed": "Accounts merged. Sign in again to continue.",
+    "account.merge.error.currentPassword": "The current account password is incorrect.",
+    "account.merge.error.targetCredentials": "The other account email or password is incorrect.",
+    "account.merge.error.mfa": "The administrator MFA code is incorrect.",
+    "account.merge.error.tooEarly": "Wait for the confirmation countdown to finish.",
+    "account.merge.error.generic": "Account merging cannot continue right now. Try again.",
     "account.sessions.title": "Signed-in devices",
     "account.sessions.description": "Review active sessions and remove devices you no longer use.",
     "account.sessions.current": "Current device",
@@ -3147,6 +3304,7 @@ const messages = {
     "account.error.resendTooSoon": "Wait before requesting another verification code.",
     "account.error.currentSession": "Your current session is no longer valid. Sign in again.",
     "account.error.emailInUse": "That email address is already in use.",
+    "account.error.mergeInProgress": "Your accounts are being merged. Wait for it to finish before trying this action.",
     "account.error.passwordIncorrect": "The current password is incorrect.",
     "account.error.passwordInvalid": "The new password does not meet the security requirements.",
     "account.error.passwordUnavailable": "Password verification is unavailable for this account.",

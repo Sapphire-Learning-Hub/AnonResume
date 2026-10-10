@@ -26,6 +26,8 @@ function mapLifecycleRow(
       deletionRequestedAt: null,
       deletionDueAt: null,
       deletedAt: null,
+      mergedIntoUserId: null,
+      mergedAt: null,
       explicit: false,
     };
   }
@@ -35,6 +37,8 @@ function mapLifecycleRow(
     deletionRequestedAt: row.deletionRequestedAt,
     deletionDueAt: row.deletionDueAt,
     deletedAt: row.deletedAt,
+    mergedIntoUserId: row.mergedIntoUserId,
+    mergedAt: row.mergedAt,
     explicit: true,
   };
 }
@@ -75,7 +79,7 @@ export async function requestAccountDeletion(input: {
 
   return withAccountLifecycleLock(input.userId, async (transaction) => {
     const current = await findLifecycle(transaction, input.userId);
-    if (current?.status === "deleted") {
+    if (current?.status === "deleted" || current?.status === "merged") {
       throw new AccountLifecycleTransitionError("account_not_pending");
     }
     if (current?.status === "pending_deletion") {

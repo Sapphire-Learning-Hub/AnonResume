@@ -198,7 +198,7 @@ export const resumeVersions =
           columns: [table.userId, table.resumeId],
           foreignColumns: [resumes.userId, resumes.id],
           name: "resume_versions_resume_fk",
-        }).onDelete("cascade"),
+        }).onDelete("cascade").onUpdate("cascade"),
         index("resume_versions_resume_created_id_idx").on(
           table.userId,
           table.resumeId,
@@ -214,7 +214,7 @@ export const resumeVersions =
           columns: [table.userId, table.resumeId],
           foreignColumns: [resumes.userId, resumes.id],
           name: "resume_versions_resume_fk",
-        }).onDelete("cascade"),
+        }).onDelete("cascade").onUpdate("cascade"),
         index("resume_versions_resume_created_id_idx").on(
           table.userId,
           table.resumeId,
@@ -251,7 +251,7 @@ export const pdfExportJobs =
           columns: [table.resumeUserId, table.resumeId],
           foreignColumns: [resumes.userId, resumes.id],
           name: "pdf_export_jobs_resume_fk",
-        }).onDelete("cascade"),
+        }).onDelete("cascade").onUpdate("cascade"),
         check(
           "pdf_export_jobs_status_check",
           sql`${table.status} IN ('queued', 'running', 'completed', 'failed', 'cancelled')`,
@@ -270,7 +270,7 @@ export const pdfExportJobs =
           columns: [table.resumeUserId, table.resumeId],
           foreignColumns: [resumes.userId, resumes.id],
           name: "pdf_export_jobs_resume_fk",
-        }).onDelete("cascade"),
+        }).onDelete("cascade").onUpdate("cascade"),
         check(
           "pdf_export_jobs_status_check",
           sql`${table.status} IN ('queued', 'running', 'completed', 'failed', 'cancelled')`,
@@ -639,7 +639,7 @@ export const accountRestrictions =
 const accountLifecycleColumns = {
   userId: text("user_id").primaryKey(),
   status: text("status")
-    .$type<"active" | "pending_deletion" | "deleted">()
+    .$type<"active" | "pending_deletion" | "deleted" | "merged">()
     .notNull()
     .default("active"),
   deletionRequestedAt: timestamp("deletion_requested_at", {
@@ -647,6 +647,8 @@ const accountLifecycleColumns = {
   }),
   deletionDueAt: timestamp("deletion_due_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  mergedIntoUserId: text("merged_into_user_id"),
+  mergedAt: timestamp("merged_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -656,7 +658,7 @@ export const accountLifecycle =
     ? pgTable("account_lifecycle", accountLifecycleColumns, (table) => [
         check(
           "account_lifecycle_status_check",
-          sql`${table.status} IN ('active', 'pending_deletion', 'deleted')`,
+          sql`${table.status} IN ('active', 'pending_deletion', 'deleted', 'merged')`,
         ),
         check(
           "account_lifecycle_dates_check",
@@ -665,21 +667,37 @@ export const accountLifecycle =
             AND ${table.deletionRequestedAt} IS NULL
             AND ${table.deletionDueAt} IS NULL
             AND ${table.deletedAt} IS NULL
+            AND ${table.mergedIntoUserId} IS NULL
+            AND ${table.mergedAt} IS NULL
           ) OR (
             ${table.status} = 'pending_deletion'
             AND ${table.deletionRequestedAt} IS NOT NULL
             AND ${table.deletionDueAt} IS NOT NULL
             AND ${table.deletedAt} IS NULL
+            AND ${table.mergedIntoUserId} IS NULL
+            AND ${table.mergedAt} IS NULL
           ) OR (
             ${table.status} = 'deleted'
             AND ${table.deletionRequestedAt} IS NOT NULL
             AND ${table.deletionDueAt} IS NOT NULL
             AND ${table.deletedAt} IS NOT NULL
+            AND ${table.mergedIntoUserId} IS NULL
+            AND ${table.mergedAt} IS NULL
+          ) OR (
+            ${table.status} = 'merged'
+            AND ${table.deletionRequestedAt} IS NULL
+            AND ${table.deletionDueAt} IS NULL
+            AND ${table.deletedAt} IS NULL
+            AND ${table.mergedIntoUserId} IS NOT NULL
+            AND ${table.mergedAt} IS NOT NULL
           )`,
         ),
         index("account_lifecycle_status_due_idx").on(
           table.status,
           table.deletionDueAt,
+        ),
+        index("account_lifecycle_merged_into_idx").on(
+          table.mergedIntoUserId,
         ),
       ])
     : pgSchema(schemaName).table(
@@ -688,7 +706,7 @@ export const accountLifecycle =
         (table) => [
           check(
             "account_lifecycle_status_check",
-            sql`${table.status} IN ('active', 'pending_deletion', 'deleted')`,
+            sql`${table.status} IN ('active', 'pending_deletion', 'deleted', 'merged')`,
           ),
           check(
             "account_lifecycle_dates_check",
@@ -697,21 +715,37 @@ export const accountLifecycle =
               AND ${table.deletionRequestedAt} IS NULL
               AND ${table.deletionDueAt} IS NULL
               AND ${table.deletedAt} IS NULL
+              AND ${table.mergedIntoUserId} IS NULL
+              AND ${table.mergedAt} IS NULL
             ) OR (
               ${table.status} = 'pending_deletion'
               AND ${table.deletionRequestedAt} IS NOT NULL
               AND ${table.deletionDueAt} IS NOT NULL
               AND ${table.deletedAt} IS NULL
+              AND ${table.mergedIntoUserId} IS NULL
+              AND ${table.mergedAt} IS NULL
             ) OR (
               ${table.status} = 'deleted'
               AND ${table.deletionRequestedAt} IS NOT NULL
               AND ${table.deletionDueAt} IS NOT NULL
               AND ${table.deletedAt} IS NOT NULL
+              AND ${table.mergedIntoUserId} IS NULL
+              AND ${table.mergedAt} IS NULL
+            ) OR (
+              ${table.status} = 'merged'
+              AND ${table.deletionRequestedAt} IS NULL
+              AND ${table.deletionDueAt} IS NULL
+              AND ${table.deletedAt} IS NULL
+              AND ${table.mergedIntoUserId} IS NOT NULL
+              AND ${table.mergedAt} IS NOT NULL
             )`,
           ),
           index("account_lifecycle_status_due_idx").on(
             table.status,
             table.deletionDueAt,
+          ),
+          index("account_lifecycle_merged_into_idx").on(
+            table.mergedIntoUserId,
           ),
         ],
       );

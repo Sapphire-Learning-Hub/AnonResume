@@ -8,6 +8,7 @@ import {
   isPasswordResetAllowedForUser,
 } from "@/lib/auth/account/security";
 import { sessionDeviceAdditionalFields } from "@/lib/auth/account/session-device";
+import { getGitHubUserInfoForAuth } from "@/lib/auth/social-registration/github-profile";
 import {
   getBootstrapNodeEnvironment,
   readBootstrapConfig,
@@ -33,6 +34,12 @@ function createAuth(configuration: {
           clientId: values.githubClientId,
           clientSecret: values.githubClientSecret,
           disableImplicitSignUp: true,
+          getUserInfo: (
+            tokens: Parameters<typeof getGitHubUserInfoForAuth>[0],
+          ) => getGitHubUserInfoForAuth(tokens, {
+            clientId: values.githubClientId,
+            clientSecret: values.githubClientSecret,
+          }),
         },
       }
     : undefined;
@@ -42,9 +49,13 @@ function createAuth(configuration: {
     baseURL: configuration.applicationOrigin,
     secret: configuration.authSecret,
     database: getDatabasePool(),
+    onAPIError: {
+      errorURL: new URL("/sign-in", configuration.applicationOrigin).toString(),
+    },
     account: {
       accountLinking: {
         allowDifferentEmails: true,
+        disableImplicitLinking: true,
       },
     },
     databaseHooks: {

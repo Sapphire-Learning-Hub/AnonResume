@@ -29,8 +29,19 @@ const githubAccount = {
 describe("ConnectedAccounts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      callbackURL: "/api/account/social-link/result?provider=github&outcome=success",
+      errorCallbackURL: "/api/account/social-link/result?provider=github&outcome=error",
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })));
     authMocks.linkSocial.mockResolvedValue({ data: { redirect: true }, error: null });
     authMocks.unlinkAccount.mockResolvedValue({ data: { status: true }, error: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("starts GitHub account linking and returns to the account connections section", async () => {
@@ -42,11 +53,41 @@ describe("ConnectedAccounts", () => {
     render(<ConnectedAccounts />);
     fireEvent.click(await screen.findByRole("button", { name: "关联 GitHub" }));
 
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(
+      "/api/account/social-link/attempt",
+      expect.objectContaining({ method: "POST" }),
+    ));
     await waitFor(() => expect(authMocks.linkSocial).toHaveBeenCalledWith({
-      callbackURL: "/app/account?section=connections&linked=github",
-      errorCallbackURL: "/app/account?section=connections&linkError=github",
+      callbackURL: "/api/account/social-link/result?provider=github&outcome=success",
+      errorCallbackURL: "/api/account/social-link/result?provider=github&outcome=error",
       provider: "github",
     }));
+  });
+
+  it("opens the passive merge flow only after a GitHub collision callback", async () => {
+    authMocks.listAccounts.mockResolvedValue({
+      data: [credentialAccount],
+      error: null,
+    });
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      providerId: "github",
+      requiresAdminMfa: false,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+
+    const { rerender } = render(<ConnectedAccounts />);
+    expect(await screen.findByText("GitHub")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "合并账号" })).not.toBeInTheDocument();
+
+    rerender(<ConnectedAccounts mergeRequested />);
+
+    expect(await screen.findByRole("dialog", { name: "合并账号" })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/account/social-merge/intent",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("unlinks GitHub when another sign-in method remains", async () => {

@@ -9,6 +9,8 @@ import { consumeAccountEmailChallenges } from "./challenges";
 import { AccountSecurityError } from "./errors";
 import { deliverPostCommitAccountNotice } from "./notifications";
 import { getAccountLifecycle } from "./repository";
+import { assertAccountMergeMutationAllowed } from "./merge/executor";
+import { AccountMergeError } from "./merge/errors";
 
 type AccountIdentityRow = {
   id: string;
@@ -28,6 +30,17 @@ function quoteIdentifier(value: string) {
 
 function projectTable(name: string) {
   return `${quoteIdentifier(getDatabaseSchemaName())}.${quoteIdentifier(name)}`;
+}
+
+async function assertSecurityMutationAllowed(userId: string) {
+  try {
+    await assertAccountMergeMutationAllowed(userId);
+  } catch (error) {
+    if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+      throw new AccountSecurityError("merge_in_progress");
+    }
+    throw error;
+  }
 }
 
 async function getIdentity(client: PoolClient, userId: string, lock = false) {
@@ -185,6 +198,7 @@ export async function changeAccountPassword(input: {
   newPassword: string;
   notify: (identity: { email: string; name: string }) => Promise<void>;
 }) {
+  await assertSecurityMutationAllowed(input.userId);
   await assertActiveProductAccount(input.userId);
   if (input.newPassword.length < 12 || input.newPassword.length > 128) {
     throw new AccountSecurityError("password_invalid");
@@ -232,6 +246,7 @@ export async function changeAccountEmail(input: {
     newEmail: string;
   }) => Promise<void>;
 }) {
+  await assertSecurityMutationAllowed(input.userId);
   await assertActiveProductAccount(input.userId);
   const newEmail = input.newEmail.trim().toLowerCase();
   const binding = `email-change:${newEmail}`;

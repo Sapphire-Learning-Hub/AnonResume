@@ -14,6 +14,8 @@ import { getDatabasePool } from "@/lib/runtime/database";
 import { AccountSecurityError } from "./errors";
 import { getAccountLifecycle } from "./repository";
 import type { AccountEmailChallengePurpose } from "./types";
+import { assertAccountMergeMutationAllowed } from "./merge/executor";
+import { AccountMergeError } from "./merge/errors";
 
 const CHALLENGE_LIFETIME_MS = 10 * 60 * 1000;
 const CHALLENGE_RESEND_DELAY_MS = 60 * 1000;
@@ -122,6 +124,14 @@ export async function issueAccountEmailChallenge(input: {
   now?: Date;
   deliver: (value: { code: string; expiresAt: Date }) => Promise<void>;
 }) {
+  try {
+    await assertAccountMergeMutationAllowed(input.userId);
+  } catch (error) {
+    if (error instanceof AccountMergeError && error.code === "merge_in_progress") {
+      throw new AccountSecurityError("merge_in_progress");
+    }
+    throw error;
+  }
   const now = input.now ?? new Date();
   await assertChallengeLifecycle(input.userId, input.purpose, now);
   const id = randomUUID();

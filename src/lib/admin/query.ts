@@ -434,9 +434,16 @@ export async function listAdminUsers(request: AdminListRequest) {
     principalKind: string | null;
     roles: unknown;
     suspended: boolean;
-    lifecycleStatus: "active" | "pending_deletion" | "deleted";
+    lifecycleStatus: "active" | "pending_deletion" | "deleted" | "merged";
     deletionDueAt: Date | null;
     deletedAt: Date | null;
+    mergedAt: Date | null;
+    mergedInto: {
+      email: string;
+      id: string;
+      name: string;
+    } | null;
+    sourceEmailMasked: string | null;
   }>(
     request,
     `SELECT count(*)::text AS total FROM "user" AS identity ${search.clause}`,
@@ -456,6 +463,13 @@ export async function listAdminUsers(request: AdminListRequest) {
       coalesce(lifecycle.status, 'active') AS "lifecycleStatus",
       lifecycle.deletion_due_at AS "deletionDueAt",
       lifecycle.deleted_at AS "deletedAt",
+      lifecycle.merged_at AS "mergedAt",
+      merge_audit.source_email_masked AS "sourceEmailMasked",
+      CASE WHEN merged_identity.id IS NULL THEN NULL ELSE jsonb_build_object(
+        'id', merged_identity.id,
+        'name', merged_identity.name,
+        'email', merged_identity.email
+      ) END AS "mergedInto",
       (restriction.user_id IS NOT NULL AND
        (restriction.suspended_until IS NULL OR restriction.suspended_until > now())) AS suspended
     FROM "user" AS identity
@@ -486,6 +500,16 @@ export async function listAdminUsers(request: AdminListRequest) {
       ON restriction.user_id = identity.id
     LEFT JOIN ${schema}.account_lifecycle AS lifecycle
       ON lifecycle.user_id = identity.id
+    LEFT JOIN "user" AS merged_identity
+      ON merged_identity.id = lifecycle.merged_into_user_id
+    LEFT JOIN LATERAL (
+      SELECT operation.source_email_masked
+        FROM ${schema}.account_merge_operations AS operation
+       WHERE operation.secondary_user_id = identity.id
+         AND operation.state = 'completed'
+       ORDER BY operation.completed_at DESC NULLS LAST, operation.id DESC
+       LIMIT 1
+    ) AS merge_audit ON true
     ${search.clause}
     ORDER BY identity."createdAt" DESC, identity.id DESC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
