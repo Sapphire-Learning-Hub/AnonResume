@@ -10,10 +10,14 @@ import {
   verifySocialLinkResultProof,
 } from "@/lib/auth/account/merge/link-attempts";
 import { getOptionalSession } from "@/lib/auth/session";
+import { createApplicationUrl } from "@/lib/http/request-origin";
 
 function accountRedirect(request: NextRequest, query: string) {
   return NextResponse.redirect(
-    new URL(`/app/account?section=connections&${query}`, request.url),
+    createApplicationUrl(
+      `/app/account?section=connections&${query}`,
+      request,
+    ),
   );
 }
 

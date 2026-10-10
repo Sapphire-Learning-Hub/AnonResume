@@ -11,6 +11,7 @@ import {
   clearSocialRegistrationCookie,
   getSocialRegistrationCookie,
 } from "@/lib/auth/social-registration/http";
+import { createApplicationUrl } from "@/lib/http/request-origin";
 
 const expectedRegistrationErrors = new Set([
   "account_not_linked",
@@ -18,7 +19,7 @@ const expectedRegistrationErrors = new Set([
 ]);
 
 function redirect(request: NextRequest, path: string) {
-  return NextResponse.redirect(new URL(path, request.url));
+  return NextResponse.redirect(createApplicationUrl(path, request));
 }
 
 async function fail(
