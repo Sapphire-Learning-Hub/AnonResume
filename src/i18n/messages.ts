@@ -70,6 +70,7 @@ const messages = {
     "common.preview": "预览",
     "common.publish": "发布",
     "common.unpublish": "取消发布",
+    "common.export": "导出",
     "publication.unpublishTitle": "取消发布简历",
     "publication.unpublishDescription":
       "取消发布“{title}”后，公开链接将立即无法访问。",
@@ -1260,6 +1261,7 @@ const messages = {
     "editor.publicLinkCopied": "公开链接已复制",
     "editor.publicActionsMore": "更多公开页操作",
     "editor.publicAppearanceHelp": "公开页外观帮助",
+    "editor.exportFormats": "选择导出格式",
     "editor.deleteSection": "删除章节",
     "editor.restoreLocalVersion": "恢复本地版本",
     "editor.useCloudVersion": "使用云端版本",
@@ -1673,6 +1675,7 @@ const messages = {
     "common.preview": "Preview",
     "common.publish": "Publish",
     "common.unpublish": "Unpublish",
+    "common.export": "Export",
     "publication.unpublishTitle": "Unpublish resume",
     "publication.unpublishDescription":
       "After unpublishing “{title}”, its public link will stop working immediately.",
@@ -2957,6 +2960,7 @@ const messages = {
     "editor.publicLinkCopied": "Public link copied",
     "editor.publicActionsMore": "More public page actions",
     "editor.publicAppearanceHelp": "Public page appearance help",
+    "editor.exportFormats": "Choose export format",
     "editor.deleteSection": "Delete Section",
     "editor.restoreLocalVersion": "Restore local version",
     "editor.useCloudVersion": "Use cloud version",

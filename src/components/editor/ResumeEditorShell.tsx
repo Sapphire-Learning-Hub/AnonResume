@@ -2666,14 +2666,34 @@ export function ResumeEditorShell({
             <HelpIcon size={16} />
           </Button>
         </Tooltip>
-        <Button
-          disabled={pdfBusy}
-          loading={pdfBusy}
-          type="primary"
-          onClick={() => void handleExportPdf()}
-        >
-          {t("common.pdf")}
-        </Button>
+        <Space.Compact>
+          <Button
+            disabled={pdfBusy}
+            loading={pdfBusy}
+            type="primary"
+            onClick={() => void handleExportPdf()}
+          >
+            {t("common.export")}
+          </Button>
+          <Dropdown
+            classNames={{ item: styles.publicActionsMenuItem }}
+            menu={{
+              items: [{ key: "pdf", label: t("common.pdf") }],
+              onClick: ({ key }) => {
+                if (key === "pdf") void handleExportPdf();
+              },
+            }}
+            mouseEnterDelay={0}
+            trigger={["hover", "click"]}
+          >
+            <Button
+              aria-label={t("editor.exportFormats")}
+              disabled={pdfBusy}
+              icon={<DownOutlined />}
+              type="primary"
+            />
+          </Dropdown>
+        </Space.Compact>
       </div>
     </>
   );
