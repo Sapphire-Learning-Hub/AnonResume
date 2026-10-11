@@ -116,20 +116,21 @@ function createAuth(configuration: {
 }
 
 export type AuthInstance = ReturnType<typeof createAuth>;
-let githubAuthEnabled = false;
 
 declare global {
   var __anonResumeAuthPromise: Promise<AuthInstance> | undefined;
+  var __anonResumeGitHubAuthEnabled: boolean | undefined;
 }
 
 if (getBootstrapNodeEnvironment() === "development") {
   globalThis.__anonResumeAuthPromise = undefined;
+  globalThis.__anonResumeGitHubAuthEnabled = undefined;
 }
 
 async function createAuthFromRuntimeConfig() {
   const bootstrap = readBootstrapConfig();
   const runtime = await getRuntimeConfig("web");
-  githubAuthEnabled = Boolean(
+  globalThis.__anonResumeGitHubAuthEnabled = Boolean(
     runtime.values.githubClientId && runtime.values.githubClientSecret,
   );
   return createAuth({
@@ -146,5 +147,5 @@ export async function getAuth(): Promise<AuthInstance> {
 
 export async function isGitHubAuthEnabled() {
   await getAuth();
-  return githubAuthEnabled;
+  return globalThis.__anonResumeGitHubAuthEnabled ?? false;
 }

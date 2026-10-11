@@ -102,6 +102,9 @@ describe("restart-scoped Better Auth configuration", () => {
     delete (globalThis as typeof globalThis & {
       __anonResumeAuthPromise?: Promise<unknown>;
     }).__anonResumeAuthPromise;
+    delete (globalThis as typeof globalThis & {
+      __anonResumeGitHubAuthEnabled?: boolean;
+    }).__anonResumeGitHubAuthEnabled;
     mocks.getRuntimeConfig.mockResolvedValue(runtimeValues());
     mocks.isSuperAdminPrincipal.mockResolvedValue(false);
     mocks.isPasswordResetAllowedForUser.mockResolvedValue(true);
@@ -323,6 +326,23 @@ describe("restart-scoped Better Auth configuration", () => {
     expect(restarted).not.toBe(first);
     expect(mocks.betterAuth).toHaveBeenCalledTimes(2);
     expect(await isGitHubAuthEnabled()).toBe(false);
+  });
+
+  it("shares the GitHub enabled state across production module instances", async () => {
+    await getAuth();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.resetModules();
+
+    try {
+      const { isGitHubAuthEnabled: getReloadedGitHubAuthEnabled } = await import(
+        "@/lib/auth/config"
+      );
+
+      await expect(getReloadedGitHubAuthEnabled()).resolves.toBe(true);
+      expect(mocks.betterAuth).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("rebuilds the auth instance when its module hot reloads in development", async () => {
