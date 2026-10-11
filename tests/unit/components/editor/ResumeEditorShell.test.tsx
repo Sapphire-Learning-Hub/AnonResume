@@ -181,7 +181,12 @@ describe("ResumeEditorShell", () => {
       "href",
       "/app/resumes/resume-demo/preview",
     );
-    expect(screen.getByRole("button", { name: "PDF" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: /^导\s*出$/ }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "选择导出格式" }),
+    ).toBeEnabled();
     expect(
       screen.queryByRole("button", { name: spacedLabel("保存") }),
     ).not.toBeInTheDocument();
@@ -1349,7 +1354,7 @@ describe("ResumeEditorShell", () => {
     );
   });
 
-  it("exports pdf after saving dirty changes", async () => {
+  it("exports PDF from the default export action after saving dirty changes", async () => {
     const saveDocument = vi.fn().mockResolvedValue({
       version: 2,
       updatedAt: 1000,
@@ -1368,11 +1373,34 @@ describe("ResumeEditorShell", () => {
 
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("空白章节") }));
-    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^导\s*出$/ }),
+    );
 
     expect(await screen.findByText("已保存")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(saveDocument).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(exportPdfDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" }),
+    );
+  });
+
+  it("exports PDF from the export format menu", async () => {
+    const exportPdfDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        exportPdfDocument={exportPdfDocument}
+      />,
+    );
+
+    fireEvent.mouseEnter(
+      screen.getByRole("button", { name: "选择导出格式" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "PDF" }));
+
     await waitFor(() =>
       expect(exportPdfDocument).toHaveBeenCalledWith({ resumeId: "resume-demo" }),
     );
