@@ -66,6 +66,12 @@ export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> =
   supportUrl: "configuration.field.supportUrl",
 };
 
+export const configurationFieldNoticeMessageKeys: Partial<
+  Record<ConfigKey, AdminMessageKey>
+> = {
+  githubClientId: "configuration.notice.githubClientId",
+};
+
 export const configurationGroupMessageKeys = {
   general: "configuration.group.general",
   email: "configuration.group.email",

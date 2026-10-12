@@ -221,6 +221,11 @@ const zhCN = {
   "configuration.clear": "清除",
   "configuration.apply.hot": "热更新",
   "configuration.apply.restart": "需要重启",
+  "configuration.notice.important": "重要",
+  "configuration.notice.githubClientId":
+    "更换 GitHub Client ID 即切换到其他 OAuth 应用。已有 GitHub 账号绑定会保留，但原应用的授权凭据不能由新应用复用；用户下次使用 GitHub 登录或关联账号时需要重新授权。发布前请确认新应用的回调地址已正确配置。",
+  "configuration.githubClientIdChangeTitle": "确认更换 GitHub OAuth 应用",
+  "configuration.githubClientIdChangeConfirm": "仍然保存草稿",
   "configuration.group.general": "基础设置",
   "configuration.group.email": "邮件与登录",
   "configuration.group.security": "管理安全",
@@ -1014,6 +1019,11 @@ const enUS: AdminMessages = {
   "configuration.clear": "Clear",
   "configuration.apply.hot": "Hot reload",
   "configuration.apply.restart": "Restart required",
+  "configuration.notice.important": "Important",
+  "configuration.notice.githubClientId":
+    "Changing the GitHub client ID switches to a different OAuth app. Existing GitHub account links are retained, but authorization credentials issued by the previous app cannot be reused. Users must authorize the new app the next time they sign in with or connect GitHub. Verify the new app's callback URL before publishing.",
+  "configuration.githubClientIdChangeTitle": "Confirm GitHub OAuth app change",
+  "configuration.githubClientIdChangeConfirm": "Save draft anyway",
   "configuration.group.general": "General",
   "configuration.group.email": "Email and sign-in",
   "configuration.group.security": "Management security",
