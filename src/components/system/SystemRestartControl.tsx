@@ -13,6 +13,8 @@ import type { SystemRestartOperationView } from "@/lib/runtime/restart/types";
 import {
   parseOptionalSystemRestartOperation,
   parseSystemRestartOperation,
+  restartConsumerMessageKey,
+  restartConsumerOrder,
   type SystemRestartOperation,
 } from "./restart-types";
 import { SystemRestartProgress } from "./SystemRestartProgress";
@@ -56,6 +58,12 @@ export function SystemRestartControl({
   const pendingRuntimes = runtimes.filter(
     (runtime) => runtime.state === "pending_restart",
   );
+  const pendingConsumerCounts = restartConsumerOrder.flatMap((consumer) => {
+    const count = pendingRuntimes.filter(
+      (runtime) => runtime.consumer === consumer,
+    ).length;
+    return count > 0 ? [{ consumer, count }] : [];
+  });
   const unsupportedRuntime = pendingRuntimes.find(
     (runtime) => !runtime.onlineRestartSupported,
   );
@@ -168,6 +176,19 @@ export function SystemRestartControl({
         onOk={() => void createRestartOperation()}
       >
         <p>{t("system.restart.confirmDescription")}</p>
+        <div className="system-restart-confirmation">
+          <strong>{t("system.restart.affectedTargets")}</strong>
+          <ul>
+            {pendingConsumerCounts.map(({ consumer, count }) => (
+              <li key={consumer}>
+                {t("system.restart.targetCount", {
+                  consumer: t(restartConsumerMessageKey(consumer)),
+                  count,
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
       </Modal>
       {reauthModal}
     </div>

@@ -47,6 +47,18 @@ export const systemRestartOperationSchema = z.object({
 export type SystemRestartOperation = z.infer<typeof systemRestartOperationSchema>;
 export type SystemRestartTarget = z.infer<typeof restartTargetSchema>;
 
+export const restartConsumerOrder = [
+  "pdf-worker",
+  "ai-worker",
+  "web",
+] as const satisfies readonly SystemRestartTarget["consumer"][];
+
+export function restartConsumerMessageKey(
+  consumer: SystemRestartTarget["consumer"],
+) {
+  return `system.restart.consumer.${consumer}` as const;
+}
+
 export function parseSystemRestartOperation(value: unknown) {
   return systemRestartOperationSchema.parse(value);
 }

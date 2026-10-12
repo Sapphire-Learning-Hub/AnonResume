@@ -113,12 +113,25 @@ describe("SystemRestartControl", () => {
         <SystemRestartControl
           canRestart
           initialOperation={null}
-          runtimes={[pendingRuntime]}
+          runtimes={[
+            pendingRuntime,
+            {
+              ...pendingRuntime,
+              instanceId: "production/web/web-2",
+            },
+            {
+              ...pendingRuntime,
+              consumer: "ai-worker",
+              instanceId: "production/ai-worker/ai-1",
+            },
+          ]}
         />,
       );
 
       fireEvent.click(screen.getByRole("button", { name: "应用重启配置" }));
       const dialog = screen.getByRole("dialog", { name: "确认重启应用服务" });
+      expect(within(dialog).getByText("Web 服务 × 2")).toBeInTheDocument();
+      expect(within(dialog).getByText("AI Worker × 1")).toBeInTheDocument();
       const confirm = within(dialog).getByRole("button", { name: /确认重启/ });
       expect(confirm).toBeDisabled();
 
@@ -191,5 +204,40 @@ describe("SystemRestartControl", () => {
 
     expect(screen.getByText("需要检查")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("groups targets by service and displays elapsed operation time", () => {
+    const completedOperation = {
+      ...operation,
+      completedAt: "2026-10-13T08:01:05.000Z",
+      status: "succeeded" as const,
+      targets: [
+        {
+          ...operation.targets[0]!,
+          completedAt: "2026-10-13T08:01:05.000Z",
+          status: "healthy" as const,
+        },
+        {
+          ...operation.targets[0]!,
+          completedAt: "2026-10-13T08:00:30.000Z",
+          consumer: "ai-worker" as const,
+          instanceId: "production/ai-worker/ai-1",
+          sequence: 1,
+          status: "healthy" as const,
+        },
+      ],
+    };
+
+    render(
+      <SystemRestartControl
+        canRestart
+        initialOperation={completedOperation}
+        runtimes={[]}
+      />,
+    );
+
+    expect(screen.getByText("Web 服务 × 1")).toBeInTheDocument();
+    expect(screen.getByText("AI Worker × 1")).toBeInTheDocument();
+    expect(screen.getByText("已用时 1 分 5 秒")).toBeInTheDocument();
   });
 });
