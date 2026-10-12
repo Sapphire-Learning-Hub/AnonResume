@@ -331,7 +331,12 @@ export function AdminConfigurationManager({
       </div>
       {state.pendingRestartConsumers.length > 0 ? (
         <Alert
-          message={t("configuration.restartPending", {
+          action={(
+            <Button href="/app/manage/system" size="small">
+              {t("configuration.restartAction")}
+            </Button>
+          )}
+          title={t("configuration.restartPending", {
             consumers: state.pendingRestartConsumers.join(", "),
           })}
           showIcon

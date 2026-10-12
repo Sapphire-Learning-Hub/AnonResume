@@ -8,6 +8,7 @@ import type {
   AdminConfigurationRuntimeInstance,
   AdminConfigurationRuntimeStatus,
 } from "@/lib/admin/query";
+import type { RuntimeSupervisorKind } from "@/lib/runtime/restart/supervisor";
 
 const statusTones: Record<
   AdminConfigurationRuntimeStatus,
@@ -38,9 +39,14 @@ export function ConfigurationRuntimeStatusTable({
     hotVersion: string;
     instance: string;
     lastSync: string;
+    onlineRestart: string;
+    onlineRestartAvailable: string;
+    onlineRestartUnavailable: string;
     release: string;
     restartVersion: string;
     state: string;
+    supervisor: string;
+    supervisors: Record<RuntimeSupervisorKind, string>;
     states: Record<AdminConfigurationRuntimeStatus, string>;
     unknown: string;
   };
@@ -69,6 +75,8 @@ export function ConfigurationRuntimeStatusTable({
           text.restartVersion,
           text.fallbackVersion,
           text.lastSync,
+          text.supervisor,
+          text.onlineRestart,
           text.state,
           text.error,
         ]}
@@ -81,6 +89,15 @@ export function ConfigurationRuntimeStatusTable({
           version(runtime.loadedRestartVersion),
           version(runtime.fallbackVersion),
           runtime.lastSeenAt.toLocaleString(locale),
+          text.supervisors[runtime.supervisorKind],
+          <AdminStatus
+            key={`${runtime.instanceId}-restart-capability`}
+            tone={runtime.onlineRestartSupported ? "success" : "danger"}
+          >
+            {runtime.onlineRestartSupported
+              ? text.onlineRestartAvailable
+              : text.onlineRestartUnavailable}
+          </AdminStatus>,
           <AdminStatus key={`${runtime.instanceId}-status`} tone={statusTones[runtime.state]}>
             {text.states[runtime.state]}
           </AdminStatus>,

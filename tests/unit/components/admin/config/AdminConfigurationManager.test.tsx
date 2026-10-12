@@ -156,6 +156,20 @@ describe("AdminConfigurationManager", () => {
     expect(screen.getByText("已变更")).toBeInTheDocument();
   });
 
+  it("links pending restart configuration to the system workflow", () => {
+    renderManager({
+      initialState: {
+        ...initialState,
+        pendingRestartConsumers: ["web"],
+      },
+    });
+
+    expect(screen.getByRole("link", { name: "前往系统状态" })).toHaveAttribute(
+      "href",
+      "/app/manage/system",
+    );
+  });
+
   it("marks a field while its edit is waiting to be saved", () => {
     renderManager();
 
