@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import {
+  adminAuditEvents,
   db,
   systemConfigRevisions,
   systemConfigRuntimeStates,
@@ -20,13 +21,31 @@ import {
   markSystemRestartTargetExiting,
   reconcileSystemRestartTargetStartup,
 } from "@/lib/runtime/restart/store";
+import { getDatabasePool } from "@/lib/runtime/database";
 
 describe("managed runtime restart operation creation", () => {
   const deploymentId = `restart-${randomUUID()}`;
   const now = new Date("2026-10-13T08:00:00.000Z");
+  const actorUserIds = [
+    "restart-operator",
+    "restart-operator-a",
+    "restart-operator-b",
+  ];
   let activeRevisionId: string;
 
+  beforeAll(async () => {
+    for (const actorUserId of actorUserIds) {
+      await getDatabasePool().query(
+        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt")
+         VALUES ($1, 'Restart operator', $2, true, now(), now())
+         ON CONFLICT (id) DO NOTHING`,
+        [actorUserId, `${actorUserId}@example.com`],
+      );
+    }
+  });
+
   beforeEach(async () => {
+    await db.delete(adminAuditEvents).where(eq(adminAuditEvents.action, "system.restart"));
     await db.delete(systemRestartTargets);
     await db.delete(systemRestartOperations);
     await db.delete(systemConfigRuntimeStates);
@@ -46,10 +65,15 @@ describe("managed runtime restart operation creation", () => {
   });
 
   afterAll(async () => {
+    await db.delete(adminAuditEvents).where(eq(adminAuditEvents.action, "system.restart"));
     await db.delete(systemRestartTargets);
     await db.delete(systemRestartOperations);
     await db.delete(systemConfigRuntimeStates);
     await db.delete(systemConfigRevisions);
+    await getDatabasePool().query(
+      `DELETE FROM "user" WHERE id = ANY($1::text[])`,
+      [actorUserIds],
+    );
   });
 
   async function insertRuntime(input: {
@@ -136,6 +160,12 @@ describe("managed runtime restart operation creation", () => {
     await expect(
       getCurrentSystemRestartOperation({ deploymentId }),
     ).resolves.toEqual(operation);
+    await expect(
+      db
+        .select({ targetId: adminAuditEvents.targetId })
+        .from(adminAuditEvents)
+        .where(eq(adminAuditEvents.action, "system.restart")),
+    ).resolves.toEqual([{ targetId: operation.id }]);
   });
 
   it("rejects a stale pending runtime", async () => {

@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  adminAuditEvents,
   db,
   systemConfigRevisions,
   systemConfigRuntimeStates,
@@ -16,6 +17,7 @@ import {
   getSystemRestartOperationByIdempotency,
 } from "@/lib/runtime/restart/store";
 import type { RuntimeSupervisorKind } from "@/lib/runtime/restart/supervisor";
+import { notifyRuntimeRestart } from "@/lib/runtime/restart/notifications";
 import type { SystemRestartOperationView } from "@/lib/runtime/restart/types";
 
 export { getCurrentSystemRestartOperation };
@@ -199,6 +201,18 @@ export async function createSystemRestartOperation(input: {
       await transaction.insert(systemRestartTargets).values(
         targetRows.map((target) => ({ ...target, operationId: operation.id })),
       );
+      await transaction.insert(adminAuditEvents).values({
+        action: "system.restart",
+        actorUserId: input.actorUserId,
+        metadata: {
+          deploymentId: input.deploymentId,
+          desiredRevisionId: activeRevision.id,
+          targetCount: targetRows.length,
+        },
+        outcome: "success",
+        targetId: operation.id,
+        targetType: "system_restart_operation",
+      });
       return operation.id;
     });
   } catch (error) {
@@ -217,5 +231,6 @@ export async function createSystemRestartOperation(input: {
   if (!operation) {
     throw new SystemRestartOperationError("configuration_unavailable");
   }
+  await notifyRuntimeRestart().catch(() => undefined);
   return operation;
 }
