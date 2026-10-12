@@ -64,6 +64,13 @@ function postgresErrorCode(error: unknown) {
   return typeof code === "string" ? code : null;
 }
 
+function parseDatabaseTimestamp(value: unknown) {
+  if (value instanceof Date) return value;
+  if (typeof value !== "string" && typeof value !== "number") return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function createSystemRestartOperation(input: {
   actorUserId: string;
   deploymentId: string;
@@ -112,11 +119,11 @@ export async function createSystemRestartOperation(input: {
         throw new SystemRestartOperationError("configuration_unavailable");
       }
 
-      const databaseNow = input.now ?? (
-        await transaction.execute<{ now: Date }>(
+      const databaseNow = input.now ?? parseDatabaseTimestamp((
+        await transaction.execute<{ now: unknown }>(
           sql`SELECT now() AS "now"`,
         )
-      ).rows[0]?.now;
+      ).rows[0]?.now);
       if (!databaseNow) {
         throw new SystemRestartOperationError("configuration_unavailable");
       }

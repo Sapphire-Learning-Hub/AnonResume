@@ -168,6 +168,22 @@ describe("managed runtime restart operation creation", () => {
     ).resolves.toEqual([{ targetId: operation.id }]);
   });
 
+  it("uses the database clock when the caller does not inject a timestamp", async () => {
+    await insertRuntime({
+      consumer: "web",
+      lastSeenAt: new Date(),
+    });
+
+    await expect(createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+    })).resolves.toMatchObject({
+      deploymentId,
+      status: "queued",
+    });
+  });
+
   it("rejects a stale pending runtime", async () => {
     await insertRuntime({
       consumer: "web",
