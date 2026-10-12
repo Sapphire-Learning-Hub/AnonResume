@@ -308,5 +308,8 @@ describe("AdminConfigurationManager", () => {
       "/api/manage/configuration/revisions/history-1/rollback",
       { method: "POST" },
     );
+    await waitFor(() => expect(
+      screen.queryByText("版本 1 详情", { selector: ".ant-modal-title" }),
+    ).not.toBeInTheDocument());
   });
 });
