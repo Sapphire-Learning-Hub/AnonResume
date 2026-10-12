@@ -1,6 +1,17 @@
 "use client";
 
-import { Button, Checkbox, Form, Input, InputNumber, Select, Space, Tag } from "antd";
+import { ExclamationCircleFilled } from "@ant-design/icons";
+import {
+  Button,
+  Checkbox,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Tag,
+  Tooltip,
+} from "antd";
 import { createStyles } from "antd-style";
 
 import type { ManagedConfigFieldView } from "@/lib/config/admin/types";
@@ -24,6 +35,15 @@ const useStyles = createStyles(({ css, token }) => ({
     gap: 6px;
     margin-top: 8px;
   `,
+  noticeIcon: css`
+    color: ${token.colorError};
+    cursor: help;
+  `,
+  noticeLabel: css`
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  `,
   secret: css`
     display: grid;
     gap: 10px;
@@ -35,6 +55,7 @@ export function ConfigurationField({
   disabled,
   field,
   label,
+  notice,
   onChange,
   text,
 }: {
@@ -42,6 +63,7 @@ export function ConfigurationField({
   disabled: boolean;
   field: ManagedConfigFieldView;
   label: string;
+  notice?: string;
   onChange: (change?: ConfigurationFieldChange) => void;
   text: {
     cancelReplacement: string;
@@ -49,6 +71,7 @@ export function ConfigurationField({
     clear: string;
     configured: string;
     hot: string;
+    important: string;
     replace: string;
     restart: string;
     pendingClear: string;
@@ -58,6 +81,16 @@ export function ConfigurationField({
   const replacementActive = field.sensitive && change?.operation === "set";
   const value = change?.operation === "set" ? change.value : field.value;
   const bounds = configurationNumberBounds[field.key];
+  const fieldLabel = notice ? (
+    <span className={styles.noticeLabel}>
+      {label}
+      <Tooltip title={notice}>
+        <span aria-label={text.important} role="img" tabIndex={0}>
+          <ExclamationCircleFilled aria-hidden="true" className={styles.noticeIcon} />
+        </span>
+      </Tooltip>
+    </span>
+  ) : label;
 
   function metadata() {
     return (
@@ -81,7 +114,7 @@ export function ConfigurationField({
   if (field.sensitive) {
     return (
       <div className={styles.field}>
-        <Form.Item label={label}>
+        <Form.Item label={fieldLabel}>
           <div className={styles.secret}>
             <Space wrap>
               <Tag color={field.configured ? "green" : "default"}>
@@ -182,7 +215,7 @@ export function ConfigurationField({
 
   return (
     <div className={styles.field}>
-      <Form.Item label={typeof field.value === "boolean" ? undefined : label}>
+      <Form.Item label={typeof field.value === "boolean" ? undefined : fieldLabel}>
         {control}
       </Form.Item>
       {metadata()}

@@ -18,6 +18,7 @@ import { ConfigurationField } from "./ConfigurationField";
 import { ConfigurationHistory } from "./ConfigurationHistory";
 import {
   configurationFieldMessageKeys,
+  configurationFieldNoticeMessageKeys,
   configurationGroupMessageKeys,
   parseManagedConfigurationHistory,
   parseManagedConfigurationView,
@@ -78,6 +79,7 @@ export function AdminConfigurationManager({
   const [changes, setChanges] = useState<Partial<Record<ConfigKey, ConfigurationFieldChange>>>({});
   const [savedChanges, setSavedChanges] = useState<Partial<Record<ConfigKey, ConfigurationFieldChange>>>({});
   const [saving, setSaving] = useState(false);
+  const [saveWarningOpen, setSaveWarningOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -103,6 +105,11 @@ export function AdminConfigurationManager({
     return configurationFieldMessageKeys[key]
       ? t(configurationFieldMessageKeys[key])
       : field;
+  }
+
+  function noticeFor(field: ConfigKey) {
+    const messageKey = configurationFieldNoticeMessageKeys[field];
+    return messageKey ? t(messageKey) : undefined;
   }
 
   function updateField(
@@ -167,6 +174,19 @@ export function AdminConfigurationManager({
     } finally {
       setSaving(false);
     }
+  }
+
+  function requestSaveDraft() {
+    if (changes.githubClientId) {
+      setSaveWarningOpen(true);
+      return;
+    }
+    void saveDraft();
+  }
+
+  async function confirmSaveDraft() {
+    await saveDraft();
+    setSaveWarningOpen(false);
   }
 
   async function publishConfiguration() {
@@ -245,6 +265,7 @@ export function AdminConfigurationManager({
                 field={field}
                 key={field.key}
                 label={labelFor(field.key)}
+                notice={noticeFor(field.key)}
                 text={{
                   cancelReplacement: t("common.cancel"),
                   changed: t("configuration.changed"),
@@ -253,6 +274,7 @@ export function AdminConfigurationManager({
                     ? t("configuration.configured")
                     : t("configuration.notConfigured"),
                   hot: t("configuration.apply.hot"),
+                  important: t("configuration.notice.important"),
                   pendingClear: t("configuration.pendingClear"),
                   replace: t("configuration.replace"),
                   restart: t("configuration.apply.restart"),
@@ -285,7 +307,7 @@ export function AdminConfigurationManager({
             <Button
               disabled={changeEntries.length === 0 || hasEmptySecretReplacement}
               loading={saving}
-              onClick={() => void saveDraft()}
+              onClick={requestSaveDraft}
             >
               {t("configuration.saveDraft")}
             </Button>
@@ -319,6 +341,19 @@ export function AdminConfigurationManager({
       <Form layout="vertical">
         <Collapse defaultActiveKey={groups.map((group) => group.key)} items={groups} />
       </Form>
+
+      <Modal
+        cancelText={t("common.cancel")}
+        confirmLoading={saving}
+        okButtonProps={{ danger: true }}
+        okText={t("configuration.githubClientIdChangeConfirm")}
+        open={saveWarningOpen}
+        title={t("configuration.githubClientIdChangeTitle")}
+        onCancel={() => setSaveWarningOpen(false)}
+        onOk={() => void confirmSaveDraft()}
+      >
+        <p>{t("configuration.notice.githubClientId")}</p>
+      </Modal>
 
       <Modal
         cancelText={t("common.cancel")}
