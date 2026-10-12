@@ -17,6 +17,16 @@ export function readRuntimeIdentityEnvironment(
   };
 }
 
+export function readRuntimeSupervisorEnvironment(
+  environment: ProcessEnvironment = process.env,
+) {
+  return {
+    ANONRESUME_PROCESS_SUPERVISOR:
+      environment.ANONRESUME_PROCESS_SUPERVISOR,
+    INVOCATION_ID: environment.INVOCATION_ID,
+  };
+}
+
 export function readHealthcheckEnvironment(
   environment: ProcessEnvironment = process.env,
 ) {

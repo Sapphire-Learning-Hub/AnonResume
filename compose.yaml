@@ -10,6 +10,7 @@ x-app-environment: &app-environment
   BETTER_AUTH_SECRET_FILE: /run/anonresume-secrets/auth-secret
   CONFIG_MASTER_KEY_FILE: /run/anonresume-secrets/config-master-key
   ANONRESUME_DEPLOYMENT_ID: ${ANONRESUME_DEPLOYMENT_ID:-production}
+  ANONRESUME_PROCESS_SUPERVISOR: docker-compose
 
 x-app-security: &app-security
   init: true

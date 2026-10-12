@@ -16,6 +16,7 @@ import { classifyConfigurationHealth } from "@/lib/config/health";
 import type { ConfigurationNotifier } from "@/lib/config/notifications";
 import { getManagedConfigDefaults, type ManagedConfig } from "@/lib/config/registry";
 import { RuntimeConfigManager } from "@/lib/config/runtime";
+import type { RuntimeSupervisorCapability } from "@/lib/runtime/restart/supervisor";
 import {
   ensureConfigurationState,
   getConfigurationState,
@@ -67,7 +68,11 @@ describe("runtime configuration snapshots", () => {
     });
   }
 
-  function manager(notifier = new FakeNotifier(), now?: () => Date) {
+  function manager(
+    notifier = new FakeNotifier(),
+    now?: () => Date,
+    supervisor?: RuntimeSupervisorCapability,
+  ) {
     return new RuntimeConfigManager({
       consumer: "web",
       instanceId: `runtime-test-${randomUUID()}`,
@@ -76,8 +81,30 @@ describe("runtime configuration snapshots", () => {
       now,
       pollIntervalMs: 30_000,
       release: "test-release",
+      ...(supervisor ? { supervisor } : {}),
     });
   }
+
+  it("persists only sanitized restart supervisor capability metadata", async () => {
+    const runtime = manager(new FakeNotifier(), undefined, {
+      kind: "docker-compose",
+      reasonCode: null,
+      restartSupported: true,
+    });
+    await runtime.start();
+    const snapshot = await runtime.snapshot();
+
+    const state = await db.query.systemConfigRuntimeStates.findFirst({
+      where: eq(systemConfigRuntimeStates.instanceId, snapshot.instanceId),
+    });
+    expect(state?.metadata).toMatchObject({
+      onlineRestartSupported: true,
+      supervisorKind: "docker-compose",
+    });
+    expect(state?.metadata).not.toHaveProperty("environment");
+    expect(state?.metadata).not.toHaveProperty("invocationId");
+    await runtime.stop();
+  });
 
   it("atomically replaces hot values while preserving request snapshots", async () => {
     const notifier = new FakeNotifier();

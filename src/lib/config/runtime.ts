@@ -25,6 +25,10 @@ import {
 import type { ConfigConsumer } from "@/lib/config/types";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
+import {
+  resolveRuntimeSupervisor,
+  type RuntimeSupervisorCapability,
+} from "@/lib/runtime/restart/supervisor";
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
 
@@ -50,6 +54,7 @@ interface RuntimeConfigManagerOptions {
   now?: () => Date;
   pollIntervalMs?: number;
   release?: string;
+  supervisor?: RuntimeSupervisorCapability;
 }
 
 function frozenValues(values: ManagedConfig): Readonly<ManagedConfig> {
@@ -109,6 +114,7 @@ export class RuntimeConfigManager {
   private readonly now: () => Date;
   private readonly pollIntervalMs: number;
   private readonly release: string;
+  private readonly supervisor: RuntimeSupervisorCapability;
   private readonly startedAt: Date;
   private current: RuntimeConfigSnapshot | null = null;
   private restartValues: ManagedConfig | null = null;
@@ -126,6 +132,7 @@ export class RuntimeConfigManager {
     this.now = options.now ?? (() => new Date());
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.release = options.release ?? getApplicationRelease();
+    this.supervisor = options.supervisor ?? resolveRuntimeSupervisor();
     this.startedAt = this.now();
   }
 
@@ -268,6 +275,8 @@ export class RuntimeConfigManager {
         lastError: state.lastError,
         metadata: {
           configurationPollIntervalMs: this.pollIntervalMs,
+          onlineRestartSupported: this.supervisor.restartSupported,
+          supervisorKind: this.supervisor.kind,
           ...metadata,
         },
       })
@@ -289,6 +298,8 @@ export class RuntimeConfigManager {
           lastError: state.lastError,
           metadata: {
             configurationPollIntervalMs: this.pollIntervalMs,
+            onlineRestartSupported: this.supervisor.restartSupported,
+            supervisorKind: this.supervisor.kind,
             ...metadata,
           },
         },
