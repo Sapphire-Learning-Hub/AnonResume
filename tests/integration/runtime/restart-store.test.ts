@@ -13,6 +13,13 @@ import {
   createSystemRestartOperation,
   getCurrentSystemRestartOperation,
 } from "@/lib/admin/system-restart/service";
+import {
+  claimNextSystemRestartTarget,
+  expireSystemRestartTargets,
+  markSystemRestartTargetAwaitingStartup,
+  markSystemRestartTargetExiting,
+  reconcileSystemRestartTargetStartup,
+} from "@/lib/runtime/restart/store";
 
 describe("managed runtime restart operation creation", () => {
   const deploymentId = `restart-${randomUUID()}`;
@@ -234,5 +241,203 @@ describe("managed runtime restart operation creation", () => {
         .from(systemRestartOperations)
         .where(eq(systemRestartOperations.deploymentId, deploymentId)),
     ).resolves.toHaveLength(1);
+  });
+
+  it("claims targets sequentially and guards stable identity and session", async () => {
+    const pdf = await insertRuntime({ consumer: "pdf-worker", instance: "pdf-a" });
+    const ai = await insertRuntime({ consumer: "ai-worker", instance: "ai-a" });
+    await insertRuntime({ consumer: "web", instance: "web-a" });
+    const operation = await createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+      now,
+    });
+
+    await expect(
+      claimNextSystemRestartTarget({
+        consumer: "pdf-worker",
+        deploymentId,
+        now,
+        sessionId: pdf.sessionId,
+        stableId: `${deploymentId}/pdf-worker/wrong-instance`,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      claimNextSystemRestartTarget({
+        consumer: "pdf-worker",
+        deploymentId,
+        now,
+        sessionId: "replacement-session",
+        stableId: pdf.instanceId,
+      }),
+    ).resolves.toBeNull();
+
+    const claimedPdf = await claimNextSystemRestartTarget({
+      consumer: "pdf-worker",
+      deploymentId,
+      now,
+      sessionId: pdf.sessionId,
+      stableId: pdf.instanceId,
+    });
+    expect(claimedPdf).toMatchObject({
+      instanceId: pdf.instanceId,
+      operationId: operation.id,
+    });
+    await expect(
+      claimNextSystemRestartTarget({
+        consumer: "ai-worker",
+        deploymentId,
+        now,
+        sessionId: ai.sessionId,
+        stableId: ai.instanceId,
+      }),
+    ).resolves.toBeNull();
+
+    await markSystemRestartTargetExiting({ ...claimedPdf!, now });
+    await markSystemRestartTargetAwaitingStartup({ ...claimedPdf!, now });
+    await reconcileSystemRestartTargetStartup({
+      consumer: "pdf-worker",
+      deploymentId,
+      healthState: "healthy",
+      loadedRestartRevisionId: activeRevisionId,
+      now,
+      sessionId: "pdf-replacement-session",
+      stableId: pdf.instanceId,
+    });
+
+    await expect(
+      claimNextSystemRestartTarget({
+        consumer: "ai-worker",
+        deploymentId,
+        now,
+        sessionId: ai.sessionId,
+        stableId: ai.instanceId,
+      }),
+    ).resolves.toMatchObject({ instanceId: ai.instanceId });
+  });
+
+  it("accepts an external session replacement and completes the operation", async () => {
+    const web = await insertRuntime({ consumer: "web", instance: "web-a" });
+    await createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+      now,
+    });
+
+    await reconcileSystemRestartTargetStartup({
+      consumer: "web",
+      deploymentId,
+      healthState: "healthy",
+      loadedRestartRevisionId: activeRevisionId,
+      now,
+      sessionId: `${web.sessionId}-replacement`,
+      stableId: web.instanceId,
+    });
+
+    await expect(
+      getCurrentSystemRestartOperation({ deploymentId }),
+    ).resolves.toMatchObject({
+      status: "succeeded",
+      targets: [expect.objectContaining({ status: "healthy" })],
+    });
+  });
+
+  it("fails the operation when a replacement loads the wrong revision", async () => {
+    const web = await insertRuntime({ consumer: "web", instance: "web-a" });
+    await createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+      now,
+    });
+
+    await reconcileSystemRestartTargetStartup({
+      consumer: "web",
+      deploymentId,
+      healthState: "healthy",
+      loadedRestartRevisionId: randomUUID(),
+      now,
+      sessionId: `${web.sessionId}-replacement`,
+      stableId: web.instanceId,
+    });
+
+    await expect(
+      getCurrentSystemRestartOperation({ deploymentId }),
+    ).resolves.toMatchObject({
+      errorCode: "replacement_wrong_revision",
+      status: "failed",
+      targets: [
+        expect.objectContaining({
+          errorCode: "replacement_wrong_revision",
+          status: "failed",
+        }),
+      ],
+    });
+  });
+
+  it("times out a worker that does not finish draining", async () => {
+    const worker = await insertRuntime({ consumer: "ai-worker", instance: "ai-a" });
+    await createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+      now,
+    });
+    await claimNextSystemRestartTarget({
+      consumer: "ai-worker",
+      deploymentId,
+      now,
+      sessionId: worker.sessionId,
+      stableId: worker.instanceId,
+    });
+
+    await expireSystemRestartTargets({
+      now: new Date(now.getTime() + 600_001),
+      startupTimeoutMs: 120_000,
+      workerDrainTimeoutMs: 600_000,
+    });
+
+    await expect(
+      getCurrentSystemRestartOperation({ deploymentId }),
+    ).resolves.toMatchObject({
+      errorCode: "worker_drain_timeout",
+      status: "timed_out",
+      targets: [expect.objectContaining({ status: "timed_out" })],
+    });
+  });
+
+  it("times out a web target that does not return", async () => {
+    const web = await insertRuntime({ consumer: "web", instance: "web-a" });
+    await createSystemRestartOperation({
+      actorUserId: "restart-operator",
+      deploymentId,
+      idempotencyKey: randomUUID(),
+      now,
+    });
+    const claimed = await claimNextSystemRestartTarget({
+      consumer: "web",
+      deploymentId,
+      now,
+      sessionId: web.sessionId,
+      stableId: web.instanceId,
+    });
+    await markSystemRestartTargetExiting({ ...claimed!, now });
+    await markSystemRestartTargetAwaitingStartup({ ...claimed!, now });
+
+    await expireSystemRestartTargets({
+      now: new Date(now.getTime() + 120_001),
+      startupTimeoutMs: 120_000,
+      workerDrainTimeoutMs: 600_000,
+    });
+
+    await expect(
+      getCurrentSystemRestartOperation({ deploymentId }),
+    ).resolves.toMatchObject({
+      errorCode: "instance_did_not_return",
+      status: "timed_out",
+      targets: [expect.objectContaining({ status: "timed_out" })],
+    });
   });
 });
