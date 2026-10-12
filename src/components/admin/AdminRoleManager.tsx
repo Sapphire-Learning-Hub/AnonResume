@@ -170,6 +170,7 @@ const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "ai.audit.sensitive.read": "permission.ai.audit.sensitive.read",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
+  "system.restart": "permission.system.restart",
   "configuration.read": "permission.configuration.read",
   "configuration.edit": "permission.configuration.edit",
   "configuration.publish": "permission.configuration.publish",
@@ -224,7 +225,7 @@ const permissionGroups: Array<{
   },
   {
     label: "roles.permissionGroup.system",
-    permissions: ["system.read"],
+    permissions: ["system.read", "system.restart"],
   },
   {
     label: "roles.permissionGroup.configuration",

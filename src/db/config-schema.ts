@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { BuildExtraConfigColumns } from "drizzle-orm/column-builder";
 import {
   check,
   foreignKey,
@@ -16,6 +17,7 @@ import {
 
 import type { EncryptedConfigSecret } from "@/lib/config/crypto";
 import type { ConfigConsumer } from "@/lib/config/types";
+import type { RuntimeSupervisorKind } from "@/lib/runtime/restart/supervisor";
 
 import { getDatabaseSchemaName } from "./schema";
 
@@ -26,6 +28,20 @@ export type SystemConfigHealthState =
   | "degraded"
   | "recovery_required";
 export type RuntimeInstanceStatus = "running" | "stopped";
+export type SystemRestartOperationStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "timed_out";
+export type SystemRestartTargetStatus =
+  | "queued"
+  | "draining"
+  | "exiting"
+  | "awaiting_startup"
+  | "healthy"
+  | "failed"
+  | "timed_out";
 
 const schemaName = getDatabaseSchemaName();
 
@@ -222,8 +238,144 @@ export const systemConfigRuntimeStates =
         ],
       );
 
+const restartOperationColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deploymentId: text("deployment_id").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  idempotencyKey: uuid("idempotency_key").notNull(),
+  desiredRevisionId: uuid("desired_revision_id").notNull(),
+  status: text("status")
+    .$type<SystemRestartOperationStatus>()
+    .notNull()
+    .default("queued"),
+  errorCode: text("error_code"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+type RestartOperationTable = BuildExtraConfigColumns<
+  "system_restart_operations",
+  typeof restartOperationColumns,
+  "pg"
+>;
+
+function restartOperationConstraints(table: RestartOperationTable) {
+  return [
+    foreignKey({
+      columns: [table.desiredRevisionId],
+      foreignColumns: [systemConfigRevisions.id],
+      name: "system_restart_operations_desired_revision_fk",
+    }).onDelete("restrict"),
+    uniqueIndex("system_restart_operations_actor_idempotency_unique").on(
+      table.actorUserId,
+      table.idempotencyKey,
+    ),
+    uniqueIndex("system_restart_operations_deployment_active_unique")
+      .on(table.deploymentId)
+      .where(sql`${table.status} IN ('queued', 'running')`),
+    index("system_restart_operations_deployment_created_idx").on(
+      table.deploymentId,
+      table.createdAt.desc(),
+    ),
+    check(
+      "system_restart_operations_status_check",
+      sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed', 'timed_out')`,
+    ),
+  ];
+}
+
+export const systemRestartOperations = schemaName === "public"
+  ? pgTable(
+      "system_restart_operations",
+      restartOperationColumns,
+      restartOperationConstraints,
+    )
+  : pgSchema(schemaName).table(
+      "system_restart_operations",
+      restartOperationColumns,
+      restartOperationConstraints,
+    );
+
+const restartTargetColumns = {
+  operationId: uuid("operation_id").notNull(),
+  instanceId: text("instance_id").notNull(),
+  consumer: text("consumer").$type<ConfigConsumer>().notNull(),
+  sequence: integer("sequence").notNull(),
+  expectedSessionId: text("expected_session_id").notNull(),
+  desiredRestartRevisionId: uuid("desired_restart_revision_id").notNull(),
+  supervisorKind: text("supervisor_kind").$type<RuntimeSupervisorKind>().notNull(),
+  status: text("status")
+    .$type<SystemRestartTargetStatus>()
+    .notNull()
+    .default("queued"),
+  errorCode: text("error_code"),
+  drainStartedAt: timestamp("drain_started_at", { withTimezone: true }),
+  exitStartedAt: timestamp("exit_started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+};
+
+type RestartTargetTable = BuildExtraConfigColumns<
+  "system_restart_targets",
+  typeof restartTargetColumns,
+  "pg"
+>;
+
+function restartTargetConstraints(table: RestartTargetTable) {
+  return [
+    primaryKey({ columns: [table.operationId, table.instanceId] }),
+    foreignKey({
+      columns: [table.operationId],
+      foreignColumns: [systemRestartOperations.id],
+      name: "system_restart_targets_operation_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.desiredRestartRevisionId],
+      foreignColumns: [systemConfigRevisions.id],
+      name: "system_restart_targets_desired_revision_fk",
+    }).onDelete("restrict"),
+    uniqueIndex("system_restart_targets_operation_sequence_unique").on(
+      table.operationId,
+      table.sequence,
+    ),
+    check(
+      "system_restart_targets_consumer_check",
+      sql`${table.consumer} IN ('web', 'pdf-worker', 'ai-worker')`,
+    ),
+    check(
+      "system_restart_targets_supervisor_check",
+      sql`${table.supervisorKind} IN ('docker-compose', 'systemd')`,
+    ),
+    check(
+      "system_restart_targets_status_check",
+      sql`${table.status} IN ('queued', 'draining', 'exiting', 'awaiting_startup', 'healthy', 'failed', 'timed_out')`,
+    ),
+    check(
+      "system_restart_targets_sequence_check",
+      sql`${table.sequence} >= 0`,
+    ),
+  ];
+}
+
+export const systemRestartTargets = schemaName === "public"
+  ? pgTable(
+      "system_restart_targets",
+      restartTargetColumns,
+      restartTargetConstraints,
+    )
+  : pgSchema(schemaName).table(
+      "system_restart_targets",
+      restartTargetColumns,
+      restartTargetConstraints,
+    );
+
 export const configDatabaseTables = {
   systemConfigRevisions,
   systemConfigValues,
   systemConfigRuntimeStates,
+  systemRestartOperations,
+  systemRestartTargets,
 };

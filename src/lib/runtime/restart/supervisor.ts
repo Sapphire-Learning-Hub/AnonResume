@@ -19,7 +19,7 @@ export interface RuntimeSupervisorCapability {
 }
 
 export function resolveRuntimeSupervisor(options: {
-  environment?: ReturnType<typeof readRuntimeSupervisorEnvironment>;
+  environment?: Partial<ReturnType<typeof readRuntimeSupervisorEnvironment>>;
   fileExists?: (path: string) => boolean;
 } = {}): RuntimeSupervisorCapability {
   const environment =

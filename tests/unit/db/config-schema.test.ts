@@ -10,6 +10,8 @@ describe("configuration database schema", () => {
         "systemConfigRevisions",
         "systemConfigValues",
         "systemConfigRuntimeStates",
+        "systemRestartOperations",
+        "systemRestartTargets",
       ]),
     );
   });
@@ -70,6 +72,59 @@ describe("configuration database schema", () => {
     );
     expect(config.indexes.map((index) => index.config.name)).toContain(
       "system_config_runtime_states_consumer_seen_idx",
+    );
+  });
+
+  it("keeps one active restart operation per deployment and idempotency key", () => {
+    const columns = getTableColumns(database.systemRestartOperations);
+    const config = getTableConfig(database.systemRestartOperations);
+
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining([
+        "deploymentId",
+        "actorUserId",
+        "idempotencyKey",
+        "desiredRevisionId",
+        "status",
+      ]),
+    );
+    expect(config.indexes.map((index) => index.config.name)).toEqual(
+      expect.arrayContaining([
+        "system_restart_operations_actor_idempotency_unique",
+        "system_restart_operations_deployment_active_unique",
+      ]),
+    );
+    expect(
+      config.indexes.find(
+        (index) =>
+          index.config.name ===
+          "system_restart_operations_deployment_active_unique",
+      )?.config.where,
+    ).toBeDefined();
+  });
+
+  it("snapshots restart targets with stable ordering and expected sessions", () => {
+    const columns = getTableColumns(database.systemRestartTargets);
+    const config = getTableConfig(database.systemRestartTargets);
+
+    expect(Object.keys(columns)).toEqual(
+      expect.arrayContaining([
+        "operationId",
+        "instanceId",
+        "consumer",
+        "sequence",
+        "expectedSessionId",
+        "desiredRestartRevisionId",
+        "supervisorKind",
+        "status",
+      ]),
+    );
+    expect(config.primaryKeys[0]?.columns.map((column) => column.name)).toEqual([
+      "operation_id",
+      "instance_id",
+    ]);
+    expect(config.indexes.map((index) => index.config.name)).toContain(
+      "system_restart_targets_operation_sequence_unique",
     );
   });
 });
