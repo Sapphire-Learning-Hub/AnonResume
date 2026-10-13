@@ -1046,6 +1046,8 @@ const messages = {
     "editor.restoreVersionDescription": "当前内容会自动保存为新的恢复点。",
     "editor.outline": "大纲",
     "editor.dragSection": "拖动排序 {title}",
+    "editor.editSectionTitle": "编辑章节标题 {title}",
+    "editor.editSectionTitleAction": "直接编辑章节标题 {title}",
     "editor.canvas": "画布",
     "editor.pageCount": "共 {count} 页",
     "editor.pageNavigation": "页面导航",
@@ -1200,8 +1202,6 @@ const messages = {
     "editor.moveBlockDown": "下移内容",
     "editor.unknown": "未知",
     "editor.rendererDefaults": "全局简历元数据与渲染器默认设置",
-    "editor.outlineDescription":
-      "优先整理章节顺序与结构，再进入画布做内容细调。",
     "editor.canvasDescription":
       "画布保持所见即所得，属性调整集中在顶部功能区完成。",
     "editor.canvasDescriptionContent":
@@ -2743,6 +2743,8 @@ const messages = {
       "Your current content will be saved as a new restore point.",
     "editor.outline": "Outline",
     "editor.dragSection": "Drag to reorder {title}",
+    "editor.editSectionTitle": "Edit section title {title}",
+    "editor.editSectionTitleAction": "Edit section title directly {title}",
     "editor.canvas": "Canvas",
     "editor.pageCount": "{count} pages",
     "editor.pageNavigation": "Page navigation",
@@ -2900,8 +2902,6 @@ const messages = {
     "editor.moveBlockDown": "Move Content Down",
     "editor.unknown": "Unknown",
     "editor.rendererDefaults": "Global resume metadata and renderer defaults",
-    "editor.outlineDescription":
-      "Shape section order and structure first, then fine-tune content on the canvas.",
     "editor.canvasDescription":
       "The canvas stays WYSIWYG while property changes are handled in the top ribbon.",
     "editor.canvasDescriptionContent":

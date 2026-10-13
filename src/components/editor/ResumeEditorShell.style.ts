@@ -320,29 +320,29 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     background: ${token.colorBgContainer};
     box-shadow: 0 1px 0 ${token.colorBorderSecondary};
   `,
-  panelDescription: css`
-    margin: 0;
-    font-size: 13px;
-    color: ${token.colorTextSecondary};
-    line-height: 1.5;
-  `,
   outlineList: css`
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
   `,
   outlineItem: css`
     display: grid;
-    gap: 8px;
-    align-items: stretch;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 4px;
+    align-items: center;
+    min-height: 46px;
+    padding: 5px 6px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 10px;
+    background: ${token.colorBgContainer};
     transition:
       transform 160ms ease,
+      border-color 160ms ease,
       box-shadow 160ms ease,
       opacity 160ms ease;
-    cursor: grab;
 
-    &:active {
-      cursor: grabbing;
+    &:hover {
+      border-color: color-mix(in srgb, ${token.colorPrimary} 30%, transparent);
     }
 
     &[data-dragging="true"] {
@@ -354,6 +354,12 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
       box-shadow: inset 0 0 0 2px
         color-mix(in srgb, ${token.colorPrimary} 18%, transparent);
     }
+
+    &[data-selected="true"] {
+      border-color: color-mix(in srgb, ${token.colorPrimary} 40%, transparent);
+      box-shadow: 0 0 0 2px
+        color-mix(in srgb, ${token.colorPrimary} 8%, transparent);
+    }
   `,
   panelActionRow: css`
     display: flex;
@@ -362,47 +368,127 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     gap: 4px;
   `,
   compactActionRow: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: repeat(2, 24px);
+    gap: 2px;
     align-items: center;
-    justify-content: flex-end;
-    width: 100%;
-    margin-top: 2px;
-    padding-top: 8px;
-    border-top: 1px solid ${token.colorBorderSecondary};
+  `,
+  outlineTitleArea: css`
+    position: relative;
+    min-width: 0;
+
+    &:hover > [data-edit-action="true"],
+    &:focus-within > [data-edit-action="true"] {
+      opacity: 1;
+      pointer-events: auto;
+    }
   `,
   outlineButton: css`
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 6px;
+    min-width: 0;
+    align-items: center;
+    gap: 5px;
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 10px;
-    background: ${token.colorBgContainer};
+    padding: 6px 30px 6px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
     text-align: left;
-    font-size: 16px;
+    font: inherit;
+    font-size: 14px;
     font-weight: 600;
     line-height: 1.35;
     color: ${token.colorText};
     cursor: pointer;
 
     &:hover {
-      border-color: color-mix(in srgb, ${token.colorPrimary} 40%, transparent);
+      color: ${token.colorPrimary};
+      background: ${token.colorFillTertiary};
     }
 
     &[aria-pressed="true"] {
-      border-color: color-mix(in srgb, ${token.colorPrimary} 35%, transparent);
-      box-shadow: 0 0 0 3px
-        color-mix(in srgb, ${token.colorPrimary} 8%, transparent);
+      color: ${token.colorPrimary};
     }
   `,
+  outlineTitleText: css`
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   outlineMeta: css`
+    flex: 0 0 auto;
     font-size: 12px;
     color: ${token.colorTextSecondary};
+  `,
+  outlineEditButton: css`
+    && {
+      position: absolute;
+      top: 1px;
+      right: 1px;
+      width: 26px;
+      min-width: 26px;
+      height: 28px;
+      padding: 0;
+      color: ${token.colorTextSecondary};
+      opacity: 0;
+      pointer-events: none;
+      transition:
+        color 160ms ease,
+        background-color 160ms ease,
+        opacity 160ms ease;
+    }
+
+    &&[data-visible="true"] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    &&:hover {
+      color: ${token.colorPrimary};
+      background: ${token.colorFillTertiary};
+    }
+  `,
+  outlineDragHandle: css`
+    && {
+      width: 26px;
+      min-width: 26px;
+      height: 30px;
+      padding: 0;
+      color: ${token.colorTextTertiary};
+      cursor: grab;
+    }
+
+    &&:hover {
+      color: ${token.colorPrimary};
+      background: ${token.colorFillTertiary};
+    }
+
+    &&:active {
+      cursor: grabbing;
+    }
+  `,
+  outlineTitleInput: css`
+    && {
+      min-width: 0;
+      height: 30px;
+      padding-inline: 7px;
+      font-weight: 600;
+    }
+  `,
+  outlineOrderButton: css`
+    && {
+      width: 24px;
+      min-width: 24px;
+      height: 28px;
+      padding: 0;
+      color: ${token.colorTextSecondary};
+    }
+
+    &&:hover:not(:disabled) {
+      color: ${token.colorPrimary};
+      background: ${token.colorFillTertiary};
+    }
   `,
   canvasPanel: css`
     gap: 0;
