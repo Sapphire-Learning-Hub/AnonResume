@@ -77,6 +77,7 @@ import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPr
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
+import { AppRouteLoadingHold } from "@/components/ui/AppRouteLoading";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
@@ -657,6 +658,7 @@ export function ResumeEditorShell({
   }>();
   const [paginationRevision, setPaginationRevision] = useState(0);
   const [paginationReady, setPaginationReady] = useState(false);
+  const [initialPaginationReady, setInitialPaginationReady] = useState(false);
   const [pageCount, setPageCount] = useState(1);
   const [activePage, setActivePage] = useState(1);
   const activeEditSurfaceMode: EditSurfaceMode = temporaryLayoutMode
@@ -667,6 +669,11 @@ export function ResumeEditorShell({
     aiProposalPreview && aiPreviewMode === "effect"
       ? aiProposalPreview.document
       : document;
+
+  const handlePaginationReadyChange = useCallback((ready: boolean) => {
+    setPaginationReady(ready);
+    if (ready) setInitialPaginationReady(true);
+  }, []);
 
   function previewAiProposal(input: {
     proposal: AiResumeProposal;
@@ -3065,6 +3072,7 @@ export function ResumeEditorShell({
 
   return (
     <div className={styles.editorWorkspace}>
+      <AppRouteLoadingHold active={!initialPaginationReady || previewBusy} />
       <main className={styles.shell} data-testid="resume-editor-shell">
       <EditorRibbon
         activeTab={effectiveRibbonTab}
@@ -3404,7 +3412,7 @@ export function ResumeEditorShell({
                   showPrintSafeArea={showPrintSafeArea}
                   zoom={zoom}
                   onPageCountChange={handlePageCountChange}
-                  onPaginationReadyChange={setPaginationReady}
+                  onPaginationReadyChange={handlePaginationReadyChange}
                 />
               ) : (
                 <ResumeLinkDialogContext.Provider value={setLinkDialogDraft}>
@@ -3455,7 +3463,7 @@ export function ResumeEditorShell({
                       })
                     }
                     onPageCountChange={handlePageCountChange}
-                    onPaginationReadyChange={setPaginationReady}
+                    onPaginationReadyChange={handlePaginationReadyChange}
                   />
                 </ResumeLinkDialogContext.Provider>
               )}

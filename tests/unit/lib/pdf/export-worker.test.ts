@@ -164,7 +164,14 @@ describe("PDF export worker", () => {
       idlePollMs: 1,
     });
 
-    setTimeout(() => controller.abort(), 10);
+    await vi.waitFor(async () => {
+      const jobs = await db
+        .select({ id: pdfExportJobs.id })
+        .from(pdfExportJobs)
+        .where(eq(pdfExportJobs.id, queued.jobId));
+      expect(jobs).toHaveLength(0);
+    });
+    controller.abort();
     await worker;
 
     await expect(

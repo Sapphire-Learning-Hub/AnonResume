@@ -27,6 +27,10 @@ import {
   updateAccountProfile,
 } from "@/lib/auth/account/security";
 import { getDatabasePool } from "@/lib/runtime/database";
+import {
+  getDatabaseBackendPid,
+  waitForDatabaseOperationBlockedBy,
+} from "../../support/postgres";
 
 describe("account security", () => {
   const userIds: string[] = [];
@@ -463,6 +467,7 @@ describe("account security", () => {
       await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `anonresume:account-deletion:${user.userId}`,
       ]);
+      const blockerPid = await getDatabaseBackendPid(locker);
       const passwordChange = expect(changeAccountPassword({
         userId: user.userId,
         currentSessionToken: currentSession,
@@ -473,7 +478,7 @@ describe("account security", () => {
         code: "account_unavailable",
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 75));
+      await waitForDatabaseOperationBlockedBy(blockerPid);
       const requestedAt = new Date("2026-10-07T00:00:00.000Z");
       await locker.query(
         `INSERT INTO ${schema}.account_lifecycle
@@ -504,6 +509,7 @@ describe("account security", () => {
       await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `anonresume:account-deletion:${user.userId}`,
       ]);
+      const blockerPid = await getDatabaseBackendPid(locker);
       const profileUpdate = expect(updateAccountProfile({
         userId: user.userId,
         name: "Late profile value",
@@ -511,7 +517,7 @@ describe("account security", () => {
         code: "account_unavailable",
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 75));
+      await waitForDatabaseOperationBlockedBy(blockerPid);
       const requestedAt = new Date("2026-10-07T00:00:00.000Z");
       await locker.query(
         `INSERT INTO ${schema}.account_lifecycle

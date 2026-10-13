@@ -18,7 +18,7 @@ import {
 } from "@ant-design/icons";
 import { Button, Tooltip } from "antd";
 import { createStyles } from "antd-style";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 

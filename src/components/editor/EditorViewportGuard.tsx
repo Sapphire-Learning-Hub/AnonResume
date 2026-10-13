@@ -8,6 +8,8 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { AppRouteLoadingBoundary } from "@/components/ui/AppRouteLoading";
+
 export type EditorViewportAccess = "checking" | "allowed" | "blocked";
 
 export const editorViewportMediaQuery = "(min-width: 961px)";
@@ -93,5 +95,5 @@ export function EditorViewportGuard({
     }
   }, [fallbackHref, router, sessionAccess]);
 
-  return sessionAccess === "allowed" ? children : null;
+  return sessionAccess === "allowed" ? children : <AppRouteLoadingBoundary />;
 }

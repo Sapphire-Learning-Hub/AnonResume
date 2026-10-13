@@ -38,6 +38,19 @@ import { encryptAiCredential } from "@/lib/ai/security/credentials";
 import { releaseAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
 
+function waitForAbort(signal: AbortSignal) {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? new Error("aborted"));
+  }
+  return new Promise<never>((_resolve, reject) => {
+    signal.addEventListener(
+      "abort",
+      () => reject(signal.reason ?? new Error("aborted")),
+      { once: true },
+    );
+  });
+}
+
 describe("AI run service", () => {
   const encryptionKey = Buffer.alloc(32, 6);
   const defaultMonthlyPoints = 10_000;
@@ -299,21 +312,23 @@ describe("AI run service", () => {
         },
       });
 
-      for (let attempt = 0; attempt < 100; attempt += 1) {
-        const [preparing] = await db
-          .select({
-            id: aiRuns.id,
-            assistantMessageId: aiRuns.assistantMessageId,
-          })
-          .from(aiRuns)
-          .where(
-            and(
-              eq(aiRuns.conversationId, conversationId),
-              eq(aiRuns.status, "preparing"),
-            ),
-          )
-          .limit(1);
-        if (preparing) {
+      await vi.waitFor(
+        async () => {
+          const [preparing] = await db
+            .select({
+              id: aiRuns.id,
+              assistantMessageId: aiRuns.assistantMessageId,
+            })
+            .from(aiRuns)
+            .where(
+              and(
+                eq(aiRuns.conversationId, conversationId),
+                eq(aiRuns.status, "preparing"),
+              ),
+            )
+            .limit(1);
+          if (!preparing) throw new Error("preparing_run_not_visible_yet");
+
           runId = preparing.id;
           await db
             .update(aiRuns)
@@ -328,10 +343,9 @@ describe("AI run service", () => {
             .update(aiMessages)
             .set({ completionState: "failed" })
             .where(eq(aiMessages.id, preparing.assistantMessageId));
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
+        },
+        { interval: 10, timeout: 5_000 },
+      );
       expect(runId).not.toBe("");
       await client.query("COMMIT");
       try {
@@ -446,17 +460,7 @@ describe("AI run service", () => {
         yield { type: "request_id", requestId: "provider-request-stop" };
         yield { type: "text_delta", delta: "partial" };
         notifyFirstDelta();
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(resolve, 500);
-          signal.addEventListener(
-            "abort",
-            () => {
-              clearTimeout(timer);
-              reject(new Error("aborted"));
-            },
-            { once: true },
-          );
-        });
+        await waitForAbort(signal);
         yield { type: "text_delta", delta: " should not arrive" };
       },
     };
@@ -503,13 +507,17 @@ describe("AI run service", () => {
 
   it("renews the execution lease while a provider is silent", async () => {
     let notifyStarted!: () => void;
+    let releaseProvider!: () => void;
     const started = new Promise<void>((resolve) => {
       notifyStarted = resolve;
+    });
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
     });
     const adapter: AiProviderAdapter = {
       async *start() {
         notifyStarted();
-        await new Promise((resolve) => setTimeout(resolve, 1_300));
+        await providerGate;
         yield { type: "text_delta", delta: "延迟后完成" };
         yield {
           type: "usage",
@@ -542,15 +550,39 @@ describe("AI run service", () => {
     })();
 
     await started;
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
-    expect(
-      await recoverExpiredAiRuns({ now: new Date(), batchSize: 10 }),
-    ).toEqual({
-      interrupted: 0,
-      settlementPending: 0,
-      releasedPoints: 0,
-    });
-    await consuming;
+    try {
+      const [initialRun] = await db
+        .select({ leaseExpiresAt: aiRuns.leaseExpiresAt })
+        .from(aiRuns)
+        .where(eq(aiRuns.id, prepared.runId));
+      const initialLease = initialRun?.leaseExpiresAt?.getTime();
+      if (initialLease === undefined) {
+        throw new Error("initial_execution_lease_unavailable");
+      }
+
+      await vi.waitFor(
+        async () => {
+          const [renewedRun] = await db
+            .select({ leaseExpiresAt: aiRuns.leaseExpiresAt })
+            .from(aiRuns)
+            .where(eq(aiRuns.id, prepared.runId));
+          expect(renewedRun?.leaseExpiresAt?.getTime()).toBeGreaterThan(
+            initialLease,
+          );
+        },
+        { interval: 25, timeout: 5_000 },
+      );
+      expect(
+        await recoverExpiredAiRuns({ now: new Date(), batchSize: 10 }),
+      ).toEqual({
+        interrupted: 0,
+        settlementPending: 0,
+        releasedPoints: 0,
+      });
+    } finally {
+      releaseProvider();
+      await consuming;
+    }
 
     const [run] = await db
       .select()
@@ -561,17 +593,13 @@ describe("AI run service", () => {
 
   it("does not renew an already expired lease while a provider is silent", async () => {
     let notifyStarted!: () => void;
-    let releaseProvider!: () => void;
     const started = new Promise<void>((resolve) => {
       notifyStarted = resolve;
     });
-    const providerGate = new Promise<void>((resolve) => {
-      releaseProvider = resolve;
-    });
     const adapter: AiProviderAdapter = {
-      async *start() {
+      async *start(_request, signal) {
         notifyStarted();
-        await providerGate;
+        await waitForAbort(signal);
         yield { type: "text_delta", delta: "过期后不应继续" };
       },
     };
@@ -601,12 +629,6 @@ describe("AI run service", () => {
       .update(aiRuns)
       .set({ leaseExpiresAt: expiredAt })
       .where(eq(aiRuns.id, prepared.runId));
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    const [expiredRun] = await db
-      .select({ leaseExpiresAt: aiRuns.leaseExpiresAt })
-      .from(aiRuns)
-      .where(eq(aiRuns.id, prepared.runId));
-    releaseProvider();
 
     let executionError: unknown;
     try {
@@ -614,6 +636,10 @@ describe("AI run service", () => {
     } catch (error) {
       executionError = error;
     }
+    const [expiredRun] = await db
+      .select({ leaseExpiresAt: aiRuns.leaseExpiresAt })
+      .from(aiRuns)
+      .where(eq(aiRuns.id, prepared.runId));
     await releaseAiQuota({
       userId,
       runId: prepared.runId,
@@ -702,9 +728,9 @@ describe("AI run service", () => {
       notifyStarted = resolve;
     });
     const adapter: AiProviderAdapter = {
-      async *start() {
+      async *start(_request, signal) {
         notifyStarted();
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await waitForAbort(signal);
         yield { type: "text_delta", delta: "旧执行器不应写入" };
       },
     };

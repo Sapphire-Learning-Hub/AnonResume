@@ -14,6 +14,10 @@ import {
   resendUserInvitation,
 } from "@/lib/admin/invitations";
 import { getDatabasePool } from "@/lib/runtime/database";
+import {
+  getDatabaseBackendPid,
+  waitForDatabaseOperationBlockedBy,
+} from "../../../support/postgres";
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
@@ -227,6 +231,7 @@ describe("administrator invitations", () => {
       await locker.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
         `anonresume:account-deletion:${invited.userId}`,
       ]);
+      const blockerPid = await getDatabaseBackendPid(locker);
       const resend = resendUserInvitation({
         actorUserId,
         actorKind: "super_admin",
@@ -234,7 +239,7 @@ describe("administrator invitations", () => {
         deliverInvitation,
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 75));
+      await waitForDatabaseOperationBlockedBy(blockerPid);
       const requestedAt = new Date("2026-10-07T00:00:00.000Z");
       await locker.query(
         `INSERT INTO ${schema}.account_lifecycle

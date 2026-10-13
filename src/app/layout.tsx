@@ -29,6 +29,7 @@ import {
   type PublicRuntimeConfig,
 } from "@/components/config/PublicRuntimeConfigProvider";
 import { GlobalFloatingActions } from "@/components/ui/GlobalFloatingActions";
+import { AppRouteLoadingProvider } from "@/components/ui/AppRouteLoading";
 import { getMessages } from "@/i18n/messages";
 import { getRequestLocale } from "@/i18n/server";
 import {
@@ -192,8 +193,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
               initialResolvedMode={initialTheme.resolvedMode}
             >
               <StyleRegistry>
-                {setupGate ?? children}
-                {setupGate ? null : <GlobalFloatingActions />}
+                <AppRouteLoadingProvider>
+                  {setupGate ?? children}
+                  {setupGate ? null : <GlobalFloatingActions />}
+                </AppRouteLoadingProvider>
               </StyleRegistry>
             </AppThemeProvider>
           </PublicRuntimeConfigProvider>

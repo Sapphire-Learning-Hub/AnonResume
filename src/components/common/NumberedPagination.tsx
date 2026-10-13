@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import { createStyles } from "antd-style";
 
 import { useI18n } from "@/i18n/I18nProvider";

@@ -1,7 +1,7 @@
 "use client";
 
 import { ExportOutlined } from "@ant-design/icons";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 
 import type { PublicDestination } from "@/lib/public-info/destinations";
 

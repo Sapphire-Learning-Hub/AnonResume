@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { sql } from "drizzle-orm";
+
 import { db, instanceSetupState } from "@/db";
 import {
   getInstanceSetupSnapshot,
@@ -9,6 +11,7 @@ import {
   withInstanceSetupLock,
 } from "@/lib/admin/setup/repository";
 import { getDatabasePool } from "@/lib/runtime/database";
+import { waitForDatabaseOperationBlockedBy } from "../../support/postgres";
 
 describe("instance setup repository", () => {
   beforeEach(async () => {
@@ -39,25 +42,33 @@ describe("instance setup repository", () => {
 
   it("serializes setup transitions with a transaction-scoped lock", async () => {
     let releaseFirst!: () => void;
+    let notifyFirstEntered!: (pid: number) => void;
     const firstMayFinish = new Promise<void>((resolve) => {
       releaseFirst = resolve;
     });
+    const firstEntered = new Promise<number>((resolve) => {
+      notifyFirstEntered = resolve;
+    });
     const order: string[] = [];
 
-    const first = withInstanceSetupLock(async () => {
+    const first = withInstanceSetupLock(async (transaction) => {
+      const result = await transaction.execute<{ pid: number }>(
+        sql`SELECT pg_backend_pid() AS pid`,
+      );
+      const pid = result.rows[0]?.pid;
+      if (!pid) throw new Error("database_backend_pid_unavailable");
       order.push("first-entered");
+      notifyFirstEntered(pid);
       await firstMayFinish;
       order.push("first-finished");
     });
-    await vi.waitFor(() => {
-      expect(order).toContain("first-entered");
-    });
+    const blockerPid = await firstEntered;
 
     const second = withInstanceSetupLock(async (transaction) => {
       order.push("second-entered");
       return getInstanceSetupSnapshot(transaction);
     });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitForDatabaseOperationBlockedBy(blockerPid);
     expect(order).toEqual(["first-entered"]);
 
     releaseFirst();

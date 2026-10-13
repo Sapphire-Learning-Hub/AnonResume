@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 
 import { AdminPage } from "@/components/admin/AdminPage";
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";

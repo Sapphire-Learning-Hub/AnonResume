@@ -8,7 +8,7 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { Button, Input } from "antd";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import { usePathname } from "next/navigation";
 import { useDeferredValue, useState, type ReactNode } from "react";
 
