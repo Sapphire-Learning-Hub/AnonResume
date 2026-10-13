@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/app",
   useRouter: () => ({ refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/lib/admin/setup/access", () => ({
   getSetupAccessDecision: mocks.decision,
@@ -70,6 +72,7 @@ vi.mock("@/components/config/PublicRuntimeConfigProvider", () => ({
 }));
 vi.mock("@/i18n/I18nProvider", () => ({
   I18nProvider: ({ children }: PropsWithChildren) => children,
+  useI18n: () => ({ t: (key: string) => key }),
 }));
 vi.mock("@/theme/AppThemeProvider", () => ({
   AppThemeProvider: ({ children }: PropsWithChildren) => children,
