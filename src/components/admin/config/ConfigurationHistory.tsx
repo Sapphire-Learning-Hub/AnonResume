@@ -2,7 +2,6 @@
 
 import { Button, Empty, Modal, Space, Tag } from "antd";
 import { createStyles } from "antd-style";
-import { useState } from "react";
 
 import type { ManagedConfigurationRevisionView } from "./types";
 
@@ -55,8 +54,11 @@ export function ConfigurationHistory({
   fieldLabel,
   canRollback,
   onClose,
+  onCloseDetails,
   onPrepareRollback,
+  onSelect,
   open,
+  selected,
   text,
 }: {
   items: ManagedConfigurationRevisionView[];
@@ -64,8 +66,11 @@ export function ConfigurationHistory({
   fieldLabel: (field: string) => string;
   canRollback: boolean;
   onClose: () => void;
+  onCloseDetails: () => void;
   onPrepareRollback: (revision: ManagedConfigurationRevisionView) => void;
+  onSelect: (revision: ManagedConfigurationRevisionView) => void;
   open: boolean;
+  selected?: ManagedConfigurationRevisionView;
   text: {
     active: string;
     author: string;
@@ -81,7 +86,6 @@ export function ConfigurationHistory({
   };
 }) {
   const { styles } = useStyles();
-  const [selected, setSelected] = useState<ManagedConfigurationRevisionView>();
 
   return (
     <>
@@ -113,7 +117,7 @@ export function ConfigurationHistory({
                 </div>
                 <Button
                   className={styles.historyAction}
-                  onClick={() => setSelected(item)}
+                  onClick={() => onSelect(item)}
                   type="link"
                 >
                   {text.details}
@@ -123,38 +127,40 @@ export function ConfigurationHistory({
           </div>
         )}
       </Modal>
-      <Modal
-        cancelText={text.close}
-        footer={(_, { CancelBtn }) => (
-          <Space>
-            <CancelBtn />
-            {canRollback ? (
-              <Button danger onClick={() => selected && onPrepareRollback(selected)}>
-                {text.prepareRollback}
-              </Button>
-            ) : null}
-          </Space>
-        )}
-        open={Boolean(selected)}
-        title={selected ? text.revisionDetails(selected.version) : ""}
-        width={720}
-        onCancel={() => setSelected(undefined)}
-      >
-        {(selected?.changes.length ?? 0) === 0 ? <Empty description={text.empty} /> : (
-          <div className="admin-stack">
-            {selected?.changes.map((change, index) => (
-              <div key={`${change.field}-${index}`}>
-                <strong>{fieldLabel(change.field)}</strong>
-                <p className="admin-dialog-description">
-                  {change.sensitive
-                    ? `${text.configuredSecret}: ${change.operation}`
-                    : `${String(change.before)} → ${String(change.after)}`}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
+      {selected ? (
+        <Modal
+          cancelText={text.close}
+          footer={(_, { CancelBtn }) => (
+            <Space>
+              <CancelBtn />
+              {canRollback ? (
+                <Button danger onClick={() => onPrepareRollback(selected)}>
+                  {text.prepareRollback}
+                </Button>
+              ) : null}
+            </Space>
+          )}
+          open
+          title={text.revisionDetails(selected.version)}
+          width={720}
+          onCancel={onCloseDetails}
+        >
+          {selected.changes.length === 0 ? <Empty description={text.empty} /> : (
+            <div className="admin-stack">
+              {selected.changes.map((change, index) => (
+                <div key={`${change.field}-${index}`}>
+                  <strong>{fieldLabel(change.field)}</strong>
+                  <p className="admin-dialog-description">
+                    {change.sensitive
+                      ? `${text.configuredSecret}: ${change.operation}`
+                      : `${String(change.before)} → ${String(change.after)}`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      ) : null}
     </>
   );
 }

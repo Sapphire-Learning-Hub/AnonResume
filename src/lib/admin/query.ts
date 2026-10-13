@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/permissions";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
+import type { RuntimeSupervisorKind } from "@/lib/runtime/restart/supervisor";
 import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ConfigConsumer } from "@/lib/config/types";
@@ -76,8 +77,10 @@ export interface AdminConfigurationRuntimeInstance {
   lastSeenAt: Date;
   loadedHotVersion: number | null;
   loadedRestartVersion: number | null;
+  onlineRestartSupported: boolean;
   release: string;
   state: AdminConfigurationRuntimeStatus;
+  supervisorKind: RuntimeSupervisorKind;
 }
 
 const DEFAULT_CONFIG_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -87,6 +90,33 @@ const SAFE_CONFIGURATION_ERROR_CODES = new Set([
   "configuration_refresh_failed",
   "no_readable_revision",
 ]);
+
+const RUNTIME_SUPERVISOR_KINDS = new Set<RuntimeSupervisorKind>([
+  "docker-compose",
+  "systemd",
+  "container",
+  "manual",
+]);
+
+function readRuntimeSupervisor(metadata: unknown): {
+  onlineRestartSupported: boolean;
+  supervisorKind: RuntimeSupervisorKind;
+} {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return { onlineRestartSupported: false, supervisorKind: "manual" };
+  }
+  const record = metadata as Record<string, unknown>;
+  const supervisorKind = typeof record.supervisorKind === "string" &&
+    RUNTIME_SUPERVISOR_KINDS.has(record.supervisorKind as RuntimeSupervisorKind)
+    ? record.supervisorKind as RuntimeSupervisorKind
+    : "manual";
+  return {
+    onlineRestartSupported:
+      record.onlineRestartSupported === true &&
+      (supervisorKind === "docker-compose" || supervisorKind === "systemd"),
+    supervisorKind,
+  };
+}
 
 export function classifyConfigurationRuntimeState(
   input: ConfigurationRuntimeClassificationInput,
@@ -927,23 +957,28 @@ export async function getAdminSystemStatus() {
     release: getApplicationRelease(),
     database: database.rows[0],
     desiredConfiguration: desiredConfiguration.rows[0] ?? null,
-    configurationInstances: runtimeStates.rows.map((state) => ({
-      consumer: state.consumer,
-      desiredVersion: state.desiredVersion,
-      errorCode: sanitizedConfigurationErrorCode(state.lastError),
-      fallbackVersion: state.fallbackVersion,
-      instanceId: state.instanceId,
-      lastSeenAt: state.lastSeenAt,
-      loadedHotVersion: state.loadedHotVersion,
-      loadedRestartVersion: state.loadedRestartVersion,
-      release: state.release,
-      state: classifyConfigurationRuntimeState(state, {
-        expectedHeartbeatIntervalMs: expectedConfigurationHeartbeatInterval(
-          state.metadata,
-        ),
-        now,
-      }),
-    })) satisfies AdminConfigurationRuntimeInstance[],
+    configurationInstances: runtimeStates.rows.map((state) => {
+      const supervisor = readRuntimeSupervisor(state.metadata);
+      return {
+        consumer: state.consumer,
+        desiredVersion: state.desiredVersion,
+        errorCode: sanitizedConfigurationErrorCode(state.lastError),
+        fallbackVersion: state.fallbackVersion,
+        instanceId: state.instanceId,
+        lastSeenAt: state.lastSeenAt,
+        loadedHotVersion: state.loadedHotVersion,
+        loadedRestartVersion: state.loadedRestartVersion,
+        onlineRestartSupported: supervisor.onlineRestartSupported,
+        release: state.release,
+        state: classifyConfigurationRuntimeState(state, {
+          expectedHeartbeatIntervalMs: expectedConfigurationHeartbeatInterval(
+            state.metadata,
+          ),
+          now,
+        }),
+        supervisorKind: supervisor.supervisorKind,
+      };
+    }) satisfies AdminConfigurationRuntimeInstance[],
     configurationValid: configuration.valid,
     configurationIssues: configuration.issues,
     smtpConfigured: Boolean(

@@ -49,8 +49,10 @@ describe("SystemStatePage", () => {
             lastSeenAt: new Date("2026-09-20T00:00:00.000Z"),
             loadedHotVersion: 3,
             loadedRestartVersion: 2,
+            onlineRestartSupported: true,
             release: "v1.3.1",
             state: "pending_restart",
+            supervisorKind: "docker-compose",
           },
           {
             consumer: "ai-worker",
@@ -61,8 +63,10 @@ describe("SystemStatePage", () => {
             lastSeenAt: new Date("2026-09-20T00:00:30.000Z"),
             loadedHotVersion: 2,
             loadedRestartVersion: 2,
+            onlineRestartSupported: false,
             release: "v1.3.1",
             state: "recovery_required",
+            supervisorKind: "manual",
           },
         ]}
         text={{
@@ -76,7 +80,17 @@ describe("SystemStatePage", () => {
           lastSync: "最后同步",
           release: "版本",
           restartVersion: "重启配置版本",
+          onlineRestart: "在线重启",
+          onlineRestartAvailable: "可用",
+          onlineRestartUnavailable: "不可用",
           state: "状态",
+          supervisor: "进程管理",
+          supervisors: {
+            "docker-compose": "Docker Compose",
+            systemd: "systemd",
+            container: "容器（未验证）",
+            manual: "手动管理",
+          },
           states: {
             current: "已同步",
             error: "错误",
@@ -92,6 +106,8 @@ describe("SystemStatePage", () => {
     expect(screen.getByText("等待重启")).toBeInTheDocument();
     expect(screen.getByText("需要恢复")).toBeInTheDocument();
     expect(screen.getByText("active_revision_unreadable")).toBeInTheDocument();
+    expect(screen.getByText("Docker Compose")).toBeInTheDocument();
+    expect(screen.getByText("手动管理")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看配置历史并准备回滚" })).toHaveAttribute(
       "href",
       "/app/manage/configuration?history=1",

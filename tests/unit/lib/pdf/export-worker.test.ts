@@ -299,4 +299,62 @@ describe("PDF export worker", () => {
     await vi.waitFor(() => expect(processJob).toHaveBeenCalledTimes(2));
     await worker;
   });
+
+  it("keeps its heartbeat running until active exports drain", async () => {
+    const queued = await enqueuePdfExport(
+      {
+        resumeUserId: "user-demo",
+        resumeId: "resume-demo",
+        requesterUserId: "user-demo",
+        document: (
+          await import("@/domain/resume/default-document")
+        ).createDefaultResumeDocument(),
+        filename: "drain.pdf",
+      },
+      configuration(),
+    );
+    const controller = new AbortController();
+    let finishActive!: () => void;
+    const activeMayFinish = new Promise<void>((resolve) => {
+      finishActive = resolve;
+    });
+    const processJob = vi.fn(async () => activeMayFinish);
+    const workerId = "pdf-worker-drain";
+
+    const worker = runPdfExportWorker({
+      signal: controller.signal,
+      workerId,
+      sessionId: "pdf-worker-drain-session",
+      appOrigin: "https://resume.example.com",
+      runtimeManager: runtimeManager(),
+      processJob,
+      idlePollMs: 1,
+    });
+
+    await vi.waitFor(() => expect(processJob).toHaveBeenCalled());
+    controller.abort();
+    await vi.waitFor(async () => {
+      const heartbeat = await db.query.workerHeartbeats.findFirst({
+        where: eq(workerHeartbeats.workerId, workerId),
+      });
+      expect(heartbeat?.status).toBe("running");
+    });
+
+    finishActive();
+    await worker;
+    await expect(
+      db.query.workerHeartbeats.findFirst({
+        where: eq(workerHeartbeats.workerId, workerId),
+      }),
+    ).resolves.toMatchObject({ status: "stopped" });
+    await expect(
+      getPdfExportStatus(
+        { jobId: queued.jobId, requesterUserId: "user-demo" },
+        configuration(),
+      ),
+    ).resolves.toMatchObject({ status: "running" });
+    await db
+      .delete(workerHeartbeats)
+      .where(eq(workerHeartbeats.workerId, workerId));
+  });
 });

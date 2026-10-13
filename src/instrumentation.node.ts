@@ -3,6 +3,7 @@ import { startAccountMaintenanceLoop } from "@/lib/auth/account/maintenance-runt
 import { startAccountMergeRuntime } from "@/lib/auth/account/merge/runtime";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
+import { startWebRestartRuntime } from "@/lib/runtime/restart/process-runtime";
 
 readBootstrapConfig();
 
@@ -17,3 +18,4 @@ if (setup.generated) {
 
 startAccountMaintenanceLoop();
 startAccountMergeRuntime();
+await startWebRestartRuntime({ identity });

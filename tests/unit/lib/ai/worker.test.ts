@@ -334,4 +334,40 @@ describe("AI worker", () => {
     expect(executeRun).toHaveBeenCalledTimes(1);
     expect(claimQueuedRuns).toHaveBeenCalledTimes(1);
   });
+
+  it("records a stopped heartbeat only after active work drains", async () => {
+    const controller = new AbortController();
+    let finishActive!: () => void;
+    const activeMayFinish = new Promise<void>((resolve) => {
+      finishActive = resolve;
+    });
+    const operations = createOperations({
+      claimQueuedRuns: vi
+        .fn()
+        .mockResolvedValueOnce([preparedRun()])
+        .mockResolvedValue([]),
+      executeRun: vi.fn(async () => activeMayFinish),
+    });
+
+    const worker = runAiWorker({
+      encryptionKey: Buffer.alloc(32, 1),
+      operations,
+      runtimeManager: runtimeManager({ aiEnabled: true }),
+      signal: controller.signal,
+      workerId: "ai-worker-drain",
+      sessionId: "ai-worker-drain-session",
+    });
+
+    await vi.waitFor(() => expect(operations.executeRun).toHaveBeenCalled());
+    controller.abort();
+    await Promise.resolve();
+    expect(operations.markStopped).not.toHaveBeenCalled();
+
+    finishActive();
+    await worker;
+    expect(operations.markStopped).toHaveBeenCalledWith({
+      sessionId: "ai-worker-drain-session",
+      workerId: "ai-worker-drain",
+    });
+  });
 });

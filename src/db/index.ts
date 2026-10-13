@@ -56,6 +56,8 @@ export {
   systemConfigRevisions,
   systemConfigRuntimeStates,
   systemConfigValues,
+  systemRestartOperations,
+  systemRestartTargets,
 } from "./config-schema";
 export { userInvitations } from "./invitation-schema";
 export {

@@ -6,8 +6,11 @@ import {
   AdminTable,
 } from "@/components/admin/AdminPage";
 import { ConfigurationRuntimeStatusTable } from "@/components/system/ConfigurationRuntimeStatusTable";
+import { SystemRestartControl } from "@/components/system/SystemRestartControl";
 import { requireAdminPage } from "@/lib/admin/page";
 import { getAdminSystemStatus, listAdminWorkers } from "@/lib/admin/query";
+import { getCurrentSystemRestartOperation } from "@/lib/admin/system-restart/service";
+import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import {
   parsePageRequest,
   readSearchParam,
@@ -21,14 +24,16 @@ export default async function ManagementSystemPage({
 }: {
   searchParams: Promise<PaginationSearchParams>;
 }) {
-  await requireAdminPage("system.read");
+  const context = await requireAdminPage("system.read");
   const resolvedSearchParams = await searchParams;
-  const [status, workers] = await Promise.all([
+  const identity = resolveRuntimeIdentity("web");
+  const [status, workers, initialOperation] = await Promise.all([
     getAdminSystemStatus(),
     listAdminWorkers({
       ...parsePageRequest(resolvedSearchParams),
       query: readSearchParam(resolvedSearchParams, "q"),
     }),
+    getCurrentSystemRestartOperation({ deploymentId: identity.deploymentId }),
   ]);
   const locale = await getRequestLocale();
   const t = createAdminTranslator(locale);
@@ -57,6 +62,14 @@ export default async function ManagementSystemPage({
         <AdminMetric label={t("system.concurrency")} value={status.queue.maxConcurrency} />
       </AdminMetricGrid>
       <AdminSection title={t("system.configurationRuntime")}>
+        <SystemRestartControl
+          canRestart={
+            context.kind === "super_admin" ||
+            context.permissions.includes("system.restart")
+          }
+          initialOperation={initialOperation}
+          runtimes={status.configurationInstances}
+        />
         <ConfigurationRuntimeStatusTable
           locale={locale}
           recoveryHref="/app/manage/configuration"
@@ -70,9 +83,19 @@ export default async function ManagementSystemPage({
             hotVersion: t("system.hotVersion"),
             instance: t("system.configurationInstance"),
             lastSync: t("system.lastSynchronization"),
+            onlineRestart: t("system.onlineRestart"),
+            onlineRestartAvailable: t("system.onlineRestart.available"),
+            onlineRestartUnavailable: t("system.onlineRestart.unavailable"),
             release: t("system.release"),
             restartVersion: t("system.restartVersion"),
             state: t("system.configurationState"),
+            supervisor: t("system.supervisor"),
+            supervisors: {
+              "docker-compose": t("system.supervisor.dockerCompose"),
+              systemd: t("system.supervisor.systemd"),
+              container: t("system.supervisor.container"),
+              manual: t("system.supervisor.manual"),
+            },
             states: {
               current: t("system.configurationState.current"),
               error: t("system.configurationState.error"),

@@ -84,6 +84,7 @@ export function AdminConfigurationManager({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [history, setHistory] = useState<ManagedConfigurationRevisionView[]>([]);
+  const [historyRevision, setHistoryRevision] = useState<ManagedConfigurationRevisionView>();
   const [rollbackRevision, setRollbackRevision] = useState<ManagedConfigurationRevisionView>();
 
   const fieldByKey = new Map(state.fields.map((field) => [field.key, field]));
@@ -242,6 +243,7 @@ export function AdminConfigurationManager({
       setState(parseManagedConfigurationView(await response.json()));
       setSavedChanges({});
       setRollbackRevision(undefined);
+      setHistoryRevision(undefined);
       setHistoryOpen(false);
       toast.success(t("configuration.rollbackPrepared"));
       router.refresh();
@@ -331,7 +333,12 @@ export function AdminConfigurationManager({
       </div>
       {state.pendingRestartConsumers.length > 0 ? (
         <Alert
-          message={t("configuration.restartPending", {
+          action={(
+            <Button href="/app/manage/system" size="small">
+              {t("configuration.restartAction")}
+            </Button>
+          )}
+          title={t("configuration.restartPending", {
             consumers: state.pendingRestartConsumers.join(", "),
           })}
           showIcon
@@ -375,6 +382,7 @@ export function AdminConfigurationManager({
         items={history}
         loading={historyLoading}
         open={historyOpen}
+        selected={historyRevision}
         text={{
           active: t("configuration.active"),
           author: t("configuration.author"),
@@ -388,8 +396,13 @@ export function AdminConfigurationManager({
           revisionDetails: (version) => t("configuration.revisionDetails", { version }),
           version: (version) => t("configuration.version", { version }),
         }}
-        onClose={() => setHistoryOpen(false)}
+        onClose={() => {
+          setHistoryRevision(undefined);
+          setHistoryOpen(false);
+        }}
+        onCloseDetails={() => setHistoryRevision(undefined)}
         onPrepareRollback={(revision) => setRollbackRevision(revision)}
+        onSelect={(revision) => setHistoryRevision(revision)}
       />
 
       <Modal

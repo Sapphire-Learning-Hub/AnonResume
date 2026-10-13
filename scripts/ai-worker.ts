@@ -3,6 +3,7 @@ import { getAiCredentialsEncryptionKey } from "@/lib/ai/config/configuration";
 import { getRuntimeConfigManager } from "@/lib/config/runtime";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
+import { startWorkerRestartRuntime } from "@/lib/runtime/restart/process-runtime";
 import { withWorkerInstanceLock } from "@/lib/runtime/worker-instance-lock";
 
 const configuration = validateBootstrapConfiguration();
@@ -21,13 +22,19 @@ process.once("SIGTERM", stop);
 try {
   await runtimeManager.start();
   const identity = await runtimeManager.snapshot();
-  await withWorkerInstanceLock(identity.instanceId, () =>
-    runAiWorker({
-      signal: controller.signal,
-      encryptionKey: getAiCredentialsEncryptionKey(),
-      runtimeManager,
-    })
-  );
+  await startWorkerRestartRuntime({
+    abort: stop,
+    consumer: "ai-worker",
+    runtimeManager,
+    work: () =>
+      withWorkerInstanceLock(identity.instanceId, () =>
+        runAiWorker({
+          signal: controller.signal,
+          encryptionKey: getAiCredentialsEncryptionKey(),
+          runtimeManager,
+        })
+      ),
+  });
 } finally {
   await runtimeManager.stop();
   await getDatabasePool().end();

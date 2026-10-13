@@ -38,6 +38,36 @@ silently convert an existing host. Docker deployments use immutable published
 images and named volumes. systemd deployments use an exact Git commit and the
 credential workflow below.
 
+## Managed configuration restarts
+
+Treat the management-page restart workflow as a configuration operation, not
+as a release deployment. It may apply an already-published restart-scoped
+configuration, but it must never be used to pull images, change Git revisions,
+run migrations, or claim that a new release was deployed.
+
+- The official Compose stack is detected automatically and supplies verified
+  container restart policies. Do not expose or document its internal marker as
+  an operator setting.
+- A systemd installation may use the workflow only when Web, PDF Worker, and AI
+  Worker are all systemd services configured with `Restart=always`. Runtime
+  detection proves systemd supervision, not the restart policy, so verify the
+  merged unit configuration before enabling operators to rely on it.
+- Unmanaged processes, unknown supervisors, and containers whose restart
+  policy cannot be verified remain unsupported. Do not bypass the disabled UI
+  or manually alter runtime metadata to advertise support.
+- Starting an operation requires the `system.restart` permission and recent
+  management MFA. The application drains active Worker work, restarts Workers
+  before Web, and preserves progress in PostgreSQL while the browser briefly
+  disconnects.
+
+After an authorized configuration restart, require every target in the system
+status panel to reach `healthy`. Then confirm that each runtime's loaded restart
+revision equals its desired revision. A healthy target is evidence that the
+runtime session changed and the desired restart revision loaded; process state
+alone is insufficient. If the operation fails or times out, inspect sanitized
+service logs and the redacted configuration doctor report before any manual
+restart.
+
 ## Docker Compose workflow
 
 1. Resolve an exact release tag. Verify both the core and PDF image manifests,

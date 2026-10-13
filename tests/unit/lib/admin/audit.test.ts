@@ -2,6 +2,10 @@ import {
   createAdminAuditChanges,
   sanitizeAdminAuditMetadata,
 } from "@/lib/admin/audit";
+import {
+  getAdminAuditActionMessageKey,
+  getAdminAuditTargetMessageKey,
+} from "@/lib/admin/audit-catalog";
 
 describe("admin audit metadata", () => {
   it("recursively strips credentials, content and binary result fields", () => {
@@ -44,5 +48,14 @@ describe("admin audit metadata", () => {
         after: "after",
       }],
     });
+  });
+
+  it("labels managed restart operations in the audit log", () => {
+    expect(getAdminAuditActionMessageKey("system.restart")).toBe(
+      "audit.action.system.restart",
+    );
+    expect(getAdminAuditTargetMessageKey("system_restart_operation")).toBe(
+      "audit.target.system_restart_operation",
+    );
   });
 });

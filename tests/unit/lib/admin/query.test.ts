@@ -317,8 +317,10 @@ describe("admin paginated queries", () => {
       )).toMatchObject({
         consumer: "web",
         errorCode: "configuration_runtime_error",
+        onlineRestartSupported: false,
         release: "test-release",
         state: "error",
+        supervisorKind: "manual",
       });
     } finally {
       await pool.query(
