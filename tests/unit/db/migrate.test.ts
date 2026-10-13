@@ -201,12 +201,33 @@ describe("database migrations", () => {
       "overview.read",
       "audit.read",
       "system.read",
+      "system.restart",
       "configuration.read",
       "configuration.edit",
       "configuration.publish",
       "configuration.history",
       "configuration.rollback",
     ]);
+  });
+
+  it("grants managed restart access to system and configuration operators", async () => {
+    const schemaName = getDatabaseSchemaName();
+    const result = await getDatabasePool().query<{
+      permissions: string[];
+      systemKey: string;
+    }>(
+      `SELECT system_key AS "systemKey", permissions
+         FROM "${schemaName}".admin_roles
+        WHERE system_key IN ('system_operator', 'platform_configuration_manager')`,
+    );
+    const permissionsByRole = Object.fromEntries(
+      result.rows.map((role) => [role.systemKey, role.permissions]),
+    );
+
+    expect(permissionsByRole.system_operator).toContain("system.restart");
+    expect(permissionsByRole.platform_configuration_manager).toContain(
+      "system.restart",
+    );
   });
 
   it("adds the Better Auth account issuer required by credential sign-up", async () => {

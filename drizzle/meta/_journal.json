@@ -274,6 +274,13 @@
       "when": 1791828556254,
       "tag": "0038_flimsy_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791876708839,
+      "tag": "0039_grant_restart_role_permissions",
+      "breakpoints": true
     }
   ]
 }
