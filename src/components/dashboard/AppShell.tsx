@@ -25,7 +25,6 @@ import { type ReactNode, useState } from "react";
 import { AnnouncementBanner } from "@/components/announcements/AnnouncementBanner";
 import { AnonResumeLogo } from "@/components/brand/AnonResumeLogo";
 import { ConfigurationHealthBanner } from "@/components/config/ConfigurationHealthBanner";
-import { usePublicRuntimeConfig } from "@/components/config/usePublicRuntimeConfig";
 import {
   buildAppNavigation,
   type AppNavigationIcon,
@@ -35,6 +34,7 @@ import { SessionDeviceReporter } from "@/components/account/SessionDeviceReporte
 import { useI18n } from "@/i18n/I18nProvider";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
+import type { ManagedConfigurationHealthState } from "@/lib/config/health";
 
 const useStyles = createStyles(({ token, css }) => ({
   shell: css`
@@ -369,6 +369,7 @@ export interface AppShellProps {
   access: AppShellAccess;
   announcements?: readonly LocalizedAnnouncement[];
   children: ReactNode;
+  configurationHealth: ManagedConfigurationHealthState;
   user: {
     name?: string | null;
     email: string;
@@ -379,11 +380,11 @@ export function AppShell({
   access,
   announcements = [],
   children,
+  configurationHealth,
   user,
 }: AppShellProps) {
   const { styles } = useStyles();
   const { t } = useI18n();
-  const { configurationHealth } = usePublicRuntimeConfig();
   const pathname = usePathname();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const contentScroll = pathname.startsWith("/app/fonts")
@@ -393,6 +394,8 @@ export function AppShell({
   const navigationSections = buildAppNavigation(access, t);
   const showConfigurationHealth =
     configurationHealth !== "healthy" &&
+    (configurationHealth !== "restart_required" ||
+      access.mode === "management") &&
     (configurationHealth !== "recovery_required" || access.mode !== "product");
   const canManageConfiguration =
     access.mode === "management" &&

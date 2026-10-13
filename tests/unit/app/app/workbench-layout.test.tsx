@@ -1,12 +1,17 @@
 import { render, screen } from "@testing-library/react";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 import { requireAppShellContext } from "@/lib/auth/app-shell-context";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
 import WorkbenchLayout from "@/app/app/(workbench)/layout";
 
 vi.mock("@/lib/auth/app-shell-context", () => ({
   requireAppShellContext: vi.fn(),
+}));
+
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -19,6 +24,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("WorkbenchLayout", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      health: "healthy",
+    } as never);
+  });
+
   it("owns the persistent workbench chrome around route content", async () => {
     vi.mocked(requireAppShellContext).mockResolvedValue({
       access: {
@@ -43,5 +55,32 @@ describe("WorkbenchLayout", () => {
     expect(requireAppShellContext).toHaveBeenCalledOnce();
     expect(screen.getByRole("heading", { name: "Route content" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "工作台导航" })).toBeInTheDocument();
+  });
+
+  it("passes restart requirements to an active delegated management session", async () => {
+    vi.mocked(requireAppShellContext).mockResolvedValue({
+      access: {
+        kind: "delegated_admin",
+        mode: "management",
+        permissions: ["system.read"],
+        productAccess: true,
+      },
+      user: {
+        id: "admin-demo",
+        name: "Admin User",
+        email: "admin@example.com",
+      },
+    } as never);
+    vi.mocked(getRuntimeConfig).mockResolvedValue({
+      health: "restart_required",
+    } as never);
+
+    render(
+      await WorkbenchLayout({
+        children: <h1>Management content</h1>,
+      }),
+    );
+
+    expect(screen.getByText("部分配置等待重启生效")).toBeInTheDocument();
   });
 });
