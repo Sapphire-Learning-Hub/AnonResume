@@ -38,7 +38,12 @@ function renderShell(
 ) {
   return render(
     <PublicRuntimeConfigProvider value={configuration}>
-      <AppShell access={access} announcements={announcements} user={user}>
+      <AppShell
+        access={access}
+        announcements={announcements}
+        configurationHealth={configuration.configurationHealth}
+        user={user}
+      >
         <div data-testid="route-child">Route content</div>
       </AppShell>
     </PublicRuntimeConfigProvider>,
@@ -218,5 +223,49 @@ describe("AppShell", () => {
       "/app/manage/configuration",
     );
     expect(screen.queryByText(/smtpPassword|githubClientSecret/)).toBeNull();
+  });
+
+  it("hides restart-scoped capability status outside management mode", () => {
+    renderShell(
+      {
+        canEnterManagement: true,
+        mfaEnrollmentRequired: false,
+        mode: "product",
+        productAccess: true,
+      },
+      [],
+      {
+        aiEnabled: false,
+        configurationHealth: "restart_required",
+        privacyPolicyUrl: "",
+        sourceCodeUrl: "",
+        supportUrl: "",
+        termsOfServiceUrl: "",
+      },
+    );
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows restart-scoped capability status to delegated administrators in management mode", () => {
+    renderShell(
+      {
+        kind: "delegated_admin",
+        mode: "management",
+        permissions: ["system.read"],
+        productAccess: true,
+      },
+      [],
+      {
+        aiEnabled: false,
+        configurationHealth: "restart_required",
+        privacyPolicyUrl: "",
+        sourceCodeUrl: "",
+        supportUrl: "",
+        termsOfServiceUrl: "",
+      },
+    );
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
   });
 });

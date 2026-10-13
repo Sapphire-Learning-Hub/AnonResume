@@ -51,6 +51,7 @@ vi.mock("@/components/config/PublicRuntimeConfigProvider", () => ({
   }: PropsWithChildren<{
     value: {
       aiEnabled: boolean;
+      configurationHealth: string;
       privacyPolicyUrl: string;
       supportUrl: string;
       termsOfServiceUrl: string;
@@ -58,6 +59,7 @@ vi.mock("@/components/config/PublicRuntimeConfigProvider", () => ({
   }>) => (
     <div
       data-ai-enabled={value.aiEnabled}
+      data-configuration-health={value.configurationHealth}
       data-privacy-url={value.privacyPolicyUrl}
       data-support-url={value.supportUrl}
       data-terms-url={value.termsOfServiceUrl}
@@ -155,5 +157,29 @@ describe("root layout setup gate", () => {
       "data-terms-url",
       "https://example.com/terms",
     );
+  });
+
+  it("does not expose restart requirements through public runtime configuration", async () => {
+    mocks.decision.mockResolvedValue("allow");
+    mocks.runtime.mockResolvedValue({
+      health: "restart_required",
+      values: {
+        aiEnabled: true,
+        privacyPolicyUrl: "",
+        sourceCodeUrl: "",
+        supportUrl: "",
+        termsOfServiceUrl: "",
+      },
+    });
+
+    render(
+      await RootLayout({
+        children: <h1>Product</h1>,
+        params: Promise.resolve({}),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Product" }).parentElement)
+      .toHaveAttribute("data-configuration-health", "healthy");
   });
 });
