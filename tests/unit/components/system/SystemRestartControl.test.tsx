@@ -21,6 +21,7 @@ vi.mock("@/components/admin/ai/useAdminAiSensitiveAction", () => ({
 }));
 
 import { SystemRestartControl } from "@/components/system/SystemRestartControl";
+import { SystemRestartProgress } from "@/components/system/SystemRestartProgress";
 
 const pendingRuntime = {
   consumer: "web" as const,
@@ -62,6 +63,14 @@ const operation = {
   }],
   updatedAt: "2026-10-13T08:00:01.000Z",
 };
+
+function getDialogByTitle(title: string) {
+  const dialog = screen.getAllByRole("dialog").find((candidate) =>
+    within(candidate).queryByText(title),
+  );
+  if (!dialog) throw new Error(`Unable to find dialog titled ${title}`);
+  return dialog;
+}
 
 describe("SystemRestartControl", () => {
   const nativeGetComputedStyle = window.getComputedStyle.bind(window);
@@ -152,7 +161,11 @@ describe("SystemRestartControl", () => {
       expect(JSON.parse(String(request?.body)).idempotencyKey).toMatch(
         /^[0-9a-f-]{36}$/,
       );
-      expect(screen.getByText("等待当前工作完成")).toBeInTheDocument();
+      const progressDialog = getDialogByTitle("服务重启进度");
+      expect(within(progressDialog).getByText("等待当前工作完成")).toBeInTheDocument();
+      expect(
+        within(progressDialog).queryByRole("button", { name: /关\s*闭/ }),
+      ).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -169,9 +182,13 @@ describe("SystemRestartControl", () => {
         status: "healthy" as const,
       })),
     };
+    let resolveRecovery: (response: Response) => void = () => undefined;
+    const recoveryResponse = new Promise<Response>((resolve) => {
+      resolveRecovery = resolve;
+    });
     vi.spyOn(globalThis, "fetch")
       .mockRejectedValueOnce(new Error("connection reset"))
-      .mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 200 }));
+      .mockReturnValueOnce(recoveryResponse);
 
     render(
       <SystemRestartControl
@@ -182,17 +199,26 @@ describe("SystemRestartControl", () => {
       />,
     );
 
-    expect(await screen.findByText("连接暂时不可用，正在等待服务恢复")).toBeInTheDocument();
-    expect(await screen.findByText("已恢复")).toBeInTheDocument();
+    const progressDialog = getDialogByTitle("服务重启进度");
+    expect(
+      await within(progressDialog).findByText("连接暂时不可用，正在等待服务恢复"),
+    ).toBeInTheDocument();
+    await act(async () => {
+      resolveRecovery(new Response(JSON.stringify(completed), { status: 200 }));
+    });
+    expect(await within(progressDialog).findByText("已恢复")).toBeInTheDocument();
     await waitFor(() => {
       expect(
-        screen.queryByText("连接暂时不可用，正在等待服务恢复"),
+        within(progressDialog).queryByText("连接暂时不可用，正在等待服务恢复"),
       ).not.toBeInTheDocument();
     });
+    fireEvent.click(
+      within(progressDialog).getByRole("button", { name: /关\s*闭/ }),
+    );
     expect(feedbackMocks.error).not.toHaveBeenCalled();
   });
 
-  it("restores an existing operation without creating another one", () => {
+  it("does not reopen a completed operation after a page reload", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     render(
       <SystemRestartControl
@@ -202,7 +228,10 @@ describe("SystemRestartControl", () => {
       />,
     );
 
-    expect(screen.getByText("需要检查")).toBeInTheDocument();
+    expect(
+      screen.queryByText("服务重启进度"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("需要检查")).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -228,13 +257,7 @@ describe("SystemRestartControl", () => {
       ],
     };
 
-    render(
-      <SystemRestartControl
-        canRestart
-        initialOperation={completedOperation}
-        runtimes={[]}
-      />,
-    );
+    render(<SystemRestartProgress disconnected={false} operation={completedOperation} />);
 
     expect(screen.getByText("Web 服务 × 1")).toBeInTheDocument();
     expect(screen.getByText("AI Worker × 1")).toBeInTheDocument();

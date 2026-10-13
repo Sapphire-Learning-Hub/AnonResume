@@ -52,6 +52,11 @@ export function SystemRestartControl({
   const [operation, setOperation] = useState<SystemRestartOperation | null>(() =>
     initialOperation ? parseSystemRestartOperation(initialOperation) : null,
   );
+  const [progressOpen, setProgressOpen] = useState(() =>
+    initialOperation
+      ? ACTIVE_STATUSES.has(parseSystemRestartOperation(initialOperation).status)
+      : false,
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [disconnected, setDisconnected] = useState(false);
@@ -137,6 +142,7 @@ export function SystemRestartControl({
     try {
       const created = parseSystemRestartOperation(await response.json());
       setOperation(created);
+      setProgressOpen(true);
       setDisconnected(false);
       setConfirmOpen(false);
       toast.success(t("system.restart.created"));
@@ -161,9 +167,6 @@ export function SystemRestartControl({
         </Button>
         {reason ? <span>{reason}</span> : null}
       </div>
-      {operation ? (
-        <SystemRestartProgress disconnected={disconnected} operation={operation} />
-      ) : null}
       <Modal
         cancelText={t("common.cancel")}
         okButtonProps={{ disabled: countdown > 0, danger: true, loading: pending }}
@@ -189,6 +192,27 @@ export function SystemRestartControl({
             ))}
           </ul>
         </div>
+      </Modal>
+      <Modal
+        centered
+        closable={!active}
+        footer={active ? null : (
+          <Button type="primary" onClick={() => setProgressOpen(false)}>
+            {t("common.close")}
+          </Button>
+        )}
+        keyboard={!active}
+        mask={{ closable: !active }}
+        open={progressOpen && Boolean(operation)}
+        title={t("system.restart.progressTitle")}
+        width={900}
+        onCancel={() => {
+          if (!active) setProgressOpen(false);
+        }}
+      >
+        {operation ? (
+          <SystemRestartProgress disconnected={disconnected} operation={operation} />
+        ) : null}
       </Modal>
       {reauthModal}
     </div>

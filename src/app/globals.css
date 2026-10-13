@@ -523,10 +523,6 @@ html[data-app-theme="dark"] [data-brand-logo="true"] {
 .system-restart-progress {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 4px;
-  background: var(--app-surface-subtle);
 }
 
 .system-restart-progress__header {

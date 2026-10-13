@@ -75,7 +75,6 @@ export function SystemRestartProgress({
     <section className="system-restart-progress" aria-live="polite">
       <header className="system-restart-progress__header">
         <div>
-          <strong>{t("system.restart.progressTitle")}</strong>
           <span className="system-restart-progress__summary">
             {t(operationStateKey(operation.status))}
           </span>
