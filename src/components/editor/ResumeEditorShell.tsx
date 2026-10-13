@@ -3072,7 +3072,7 @@ export function ResumeEditorShell({
 
   return (
     <div className={styles.editorWorkspace}>
-      <AppRouteLoadingHold active={!initialPaginationReady} />
+      <AppRouteLoadingHold active={!initialPaginationReady || previewBusy} />
       <main className={styles.shell} data-testid="resume-editor-shell">
       <EditorRibbon
         activeTab={effectiveRibbonTab}

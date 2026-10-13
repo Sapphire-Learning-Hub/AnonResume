@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, Input, Modal } from "antd";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 

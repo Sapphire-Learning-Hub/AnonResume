@@ -1,12 +1,42 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { AnchorHTMLAttributes } from "react";
 import { useState } from "react";
 import { vi } from "vitest";
 
 import {
+  AppRouteLink,
   AppRouteLoadingBoundary,
   AppRouteLoadingHold,
   AppRouteLoadingProvider,
 } from "@/components/ui/AppRouteLoading";
+
+vi.mock("next/link", async () => {
+  const { forwardRef } = await import("react");
+  type MockLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
+    onNavigate?: (event: { preventDefault: () => void }) => void;
+  };
+
+  return {
+    default: forwardRef<HTMLAnchorElement, MockLinkProps>(function MockLink(
+      { onClick, onNavigate, ...props },
+      ref,
+    ) {
+      return (
+        <a
+          {...props}
+          ref={ref}
+          onClick={(event) => {
+            onClick?.(event);
+            if (event.defaultPrevented) return;
+
+            event.preventDefault();
+            onNavigate?.({ preventDefault: () => {} });
+          }}
+        />
+      );
+    }),
+  };
+});
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/app",
@@ -26,12 +56,25 @@ function LoadingHarness() {
   );
 }
 
-function LinkHarness() {
+function PreventedLinkHarness() {
   return (
     <AppRouteLoadingProvider>
       <a href="/docs/editor" onClick={(event) => event.preventDefault()}>
         Open editor guide
       </a>
+    </AppRouteLoadingProvider>
+  );
+}
+
+function AppRouteLinkHarness({ cancel = false }: { cancel?: boolean }) {
+  return (
+    <AppRouteLoadingProvider>
+      <AppRouteLink
+        href="/docs/editor"
+        onNavigate={cancel ? (event) => event.preventDefault() : undefined}
+      >
+        Open editor guide
+      </AppRouteLink>
     </AppRouteLoadingProvider>
   );
 }
@@ -68,8 +111,17 @@ describe("AppRouteLoading", () => {
       .toHaveAttribute("aria-busy", "false");
   });
 
-  it("starts before an internal site link handles client-side navigation", () => {
-    render(<LinkHarness />);
+  it("does not start for a same-origin click that cancels navigation", () => {
+    const { container } = render(<PreventedLinkHarness />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
+
+    expect(container.querySelector("[data-app-route-loading]"))
+      .toHaveAttribute("aria-busy", "false");
+  });
+
+  it("starts when a Next link confirms client-side navigation", () => {
+    render(<AppRouteLinkHarness />);
 
     fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
 
@@ -77,6 +129,15 @@ describe("AppRouteLoading", () => {
       "aria-busy",
       "true",
     );
+  });
+
+  it("does not start when a Next link cancels client-side navigation", () => {
+    const { container } = render(<AppRouteLinkHarness cancel />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
+
+    expect(container.querySelector("[data-app-route-loading]"))
+      .toHaveAttribute("aria-busy", "false");
   });
 
   it("stays active until the destination surface reports that it is ready", () => {

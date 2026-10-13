@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import type { ReactNode } from "react";
 
 import { LegalPageFrame } from "./LegalDocumentPage";

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 
 import { DocsArticleLayout } from "@/components/docs/DocsArticleLayout";
 import { getMessages } from "@/i18n/messages";

@@ -2,9 +2,12 @@
 
 import { LoadingOutlined } from "@ant-design/icons";
 import { createStyles } from "antd-style";
+import NextLink from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  type ComponentProps,
   createContext,
+  forwardRef,
   type PropsWithChildren,
   useCallback,
   useContext,
@@ -17,11 +20,13 @@ import { useI18n } from "@/i18n/I18nProvider";
 
 interface AppRouteLoadingContextValue {
   beginBoundary: () => void;
+  beginNavigation: () => void;
   endBoundary: () => void;
 }
 
 const AppRouteLoadingContext = createContext<AppRouteLoadingContextValue>({
   beginBoundary: () => {},
+  beginNavigation: () => {},
   endBoundary: () => {},
 });
 
@@ -132,6 +137,7 @@ const useStyles = createStyles(({ token, css }) => ({
 
 function isInternalRouteNavigation(event: MouseEvent) {
   if (
+    event.defaultPrevented ||
     event.button !== 0 ||
     event.metaKey ||
     event.ctrlKey ||
@@ -145,7 +151,12 @@ function isInternalRouteNavigation(event: MouseEvent) {
   if (!(target instanceof Element)) return false;
 
   const anchor = target.closest<HTMLAnchorElement>("a[href]");
-  if (!anchor || anchor.download || (anchor.target && anchor.target !== "_self")) {
+  if (
+    !anchor ||
+    anchor.dataset.appRouteLoading === "false" ||
+    anchor.download ||
+    (anchor.target && anchor.target !== "_self")
+  ) {
     return false;
   }
 
@@ -153,6 +164,8 @@ function isInternalRouteNavigation(event: MouseEvent) {
   if (destination.origin !== window.location.origin) {
     return false;
   }
+
+  if (destination.pathname.startsWith("/api/")) return false;
 
   const current = new URL(window.location.href);
   return (
@@ -175,18 +188,21 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
   const beginBoundary = useCallback(() => {
     setBoundaryCount((count) => count + 1);
   }, []);
+  const beginNavigation = useCallback(() => {
+    setLinkPendingFrom(routeKey);
+  }, [routeKey]);
   const endBoundary = useCallback(() => {
     setBoundaryCount((count) => Math.max(0, count - 1));
   }, []);
 
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
-      if (isInternalRouteNavigation(event)) setLinkPendingFrom(routeKey);
+      if (isInternalRouteNavigation(event)) beginNavigation();
     }
 
-    document.addEventListener("click", handleDocumentClick, true);
-    return () => document.removeEventListener("click", handleDocumentClick, true);
-  }, [routeKey]);
+    document.addEventListener("click", handleDocumentClick);
+    return () => document.removeEventListener("click", handleDocumentClick);
+  }, [beginNavigation]);
 
   useEffect(() => {
     if (linkPendingFrom === null || linkPendingFrom === routeKey) return;
@@ -208,7 +224,9 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
   }, [linkPendingFrom, routeKey]);
 
   return (
-    <AppRouteLoadingContext.Provider value={{ beginBoundary, endBoundary }}>
+    <AppRouteLoadingContext.Provider
+      value={{ beginBoundary, beginNavigation, endBoundary }}
+    >
       {children}
       <div
         aria-busy={active}
@@ -232,6 +250,31 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
     </AppRouteLoadingContext.Provider>
   );
 }
+
+type AppRouteLinkProps = ComponentProps<typeof NextLink>;
+
+export const AppRouteLink = forwardRef<HTMLAnchorElement, AppRouteLinkProps>(
+  function AppRouteLink({ onNavigate, ...props }, ref) {
+    const { beginNavigation } = useContext(AppRouteLoadingContext);
+
+    const handleNavigate: NonNullable<AppRouteLinkProps["onNavigate"]> = (
+      event,
+    ) => {
+      let prevented = false;
+
+      onNavigate?.({
+        preventDefault: () => {
+          prevented = true;
+          event.preventDefault();
+        },
+      });
+
+      if (!prevented) beginNavigation();
+    };
+
+    return <NextLink {...props} ref={ref} onNavigate={handleNavigate} />;
+  },
+);
 
 export function AppRouteLoadingBoundary() {
   return (
