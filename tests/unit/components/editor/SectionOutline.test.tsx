@@ -94,9 +94,15 @@ describe("SectionOutline", () => {
   const classNames = {
     outlineList: "outlineList",
     outlineItem: "outlineItem",
+    outlineTitleArea: "outlineTitleArea",
     outlineButton: "outlineButton",
+    outlineTitleText: "outlineTitleText",
     outlineMeta: "outlineMeta",
+    outlineEditButton: "outlineEditButton",
+    outlineDragHandle: "outlineDragHandle",
+    outlineTitleInput: "outlineTitleInput",
     compactActionRow: "compactActionRow",
+    outlineOrderButton: "outlineOrderButton",
   };
 
   beforeEach(() => {
@@ -104,12 +110,13 @@ describe("SectionOutline", () => {
     sortableState.overId = "";
   });
 
-  it("renders a draggable card for each section item", () => {
+  it("renders a dedicated drag handle for each section item", () => {
     render(
       <SectionOutline
         sections={sections}
         selectedSectionId="section-profile"
         onSelectSection={vi.fn()}
+        onRenameSection={vi.fn()}
         onMoveSection={vi.fn()}
         classNames={classNames}
       />,
@@ -117,8 +124,12 @@ describe("SectionOutline", () => {
 
     const profileItem = screen.getByTestId("section-outline-item-section-profile");
     expect(profileItem).toHaveAttribute("role", "group");
-    expect(profileItem).toHaveAttribute("aria-label", "拖动排序 个人简介");
-    expect(profileItem).toHaveAttribute(
+    expect(profileItem).not.toHaveAttribute("data-sortable-id");
+    expect(
+      within(profileItem).getByRole("button", {
+        name: "拖动排序 个人简介",
+      }),
+    ).toHaveAttribute(
       "data-sortable-id",
       "section-profile",
     );
@@ -143,6 +154,7 @@ describe("SectionOutline", () => {
         sections={sections}
         selectedSectionId="section-profile"
         onSelectSection={vi.fn()}
+        onRenameSection={vi.fn()}
         onMoveSection={vi.fn()}
         classNames={classNames}
       />,
@@ -165,6 +177,7 @@ describe("SectionOutline", () => {
         sections={sections}
         selectedSectionId="section-profile"
         onSelectSection={onSelectSection}
+        onRenameSection={vi.fn()}
         onMoveSection={onMoveSection}
         classNames={classNames}
       />,
@@ -176,6 +189,85 @@ describe("SectionOutline", () => {
 
     expect(onSelectSection).toHaveBeenCalledWith("section-experience");
     expect(onMoveSection).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("textbox", { name: "编辑章节标题 经历" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("commits an edited section title with Enter", () => {
+    const onRenameSection = vi.fn();
+
+    render(
+      <SectionOutline
+        sections={sections}
+        selectedSectionId="section-experience"
+        onSelectSection={vi.fn()}
+        onRenameSection={onRenameSection}
+        onMoveSection={vi.fn()}
+        classNames={classNames}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "经历" }));
+    const titleInput = screen.getByRole("textbox", {
+      name: "编辑章节标题 经历",
+    });
+    fireEvent.change(titleInput, { target: { value: "工作经历" } });
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+
+    expect(onRenameSection).toHaveBeenCalledWith({
+      sectionId: "section-experience",
+      title: "工作经历",
+    });
+  });
+
+  it("cancels an edited section title with Escape", () => {
+    const onRenameSection = vi.fn();
+
+    render(
+      <SectionOutline
+        sections={sections}
+        selectedSectionId="section-experience"
+        onSelectSection={vi.fn()}
+        onRenameSection={onRenameSection}
+        onMoveSection={vi.fn()}
+        classNames={classNames}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "经历" }));
+    const titleInput = screen.getByRole("textbox", {
+      name: "编辑章节标题 经历",
+    });
+    fireEvent.change(titleInput, { target: { value: "不应保存" } });
+    fireEvent.keyDown(titleInput, { key: "Escape" });
+
+    expect(onRenameSection).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "经历" })).toBeInTheDocument();
+  });
+
+  it("opens title editing directly from the edit action", () => {
+    const onSelectSection = vi.fn();
+
+    render(
+      <SectionOutline
+        sections={sections}
+        selectedSectionId="section-profile"
+        onSelectSection={onSelectSection}
+        onRenameSection={vi.fn()}
+        onMoveSection={vi.fn()}
+        classNames={classNames}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "直接编辑章节标题 经历" }),
+    );
+
+    expect(onSelectSection).toHaveBeenCalledWith("section-experience");
+    expect(
+      screen.getByRole("textbox", { name: "编辑章节标题 经历" }),
+    ).toBeInTheDocument();
   });
 
   it("reorders sections when drag ends over a different section", () => {
@@ -186,6 +278,7 @@ describe("SectionOutline", () => {
         sections={sections}
         selectedSectionId="section-profile"
         onSelectSection={vi.fn()}
+        onRenameSection={vi.fn()}
         onMoveSection={onMoveSection}
         classNames={classNames}
       />,

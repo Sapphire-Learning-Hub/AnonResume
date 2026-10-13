@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 import {
   closestCenter,
@@ -19,7 +19,13 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button } from "antd";
+import {
+  DownOutlined,
+  EditOutlined,
+  HolderOutlined,
+  UpOutlined,
+} from "@ant-design/icons";
+import { Button, Input } from "antd";
 
 import type { ResumeSection } from "@/domain/resume/schema";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -30,13 +36,11 @@ function stopEventPropagation(event: {
   event.stopPropagation();
 }
 
-function getSectionTitle(section: ResumeSection, untitledSectionLabel: string) {
+function getSectionTitleText(section: ResumeSection) {
   const firstParagraph = section.title?.content[0];
-  const text = firstParagraph?.content
+  return firstParagraph?.content
     .map((node) => (node.type === "text" ? node.text : "\n"))
-    .join("");
-
-  return text || untitledSectionLabel;
+    .join("") ?? "";
 }
 
 function createOutlineItemStyle(params: {
@@ -61,6 +65,7 @@ function SortableSectionOutlineItem({
   sectionCount,
   selected,
   onSelectSection,
+  onRenameSection,
   onMoveSection,
   classNames,
 }: {
@@ -69,12 +74,19 @@ function SortableSectionOutlineItem({
   sectionCount: number;
   selected: boolean;
   onSelectSection: (sectionId: string) => void;
+  onRenameSection: (params: { sectionId: string; title: string }) => void;
   onMoveSection: (params: { sectionId: string; toIndex: number }) => void;
   classNames: {
     outlineItem: string;
+    outlineTitleArea: string;
     outlineButton: string;
+    outlineTitleText: string;
     outlineMeta: string;
+    outlineEditButton: string;
+    outlineDragHandle: string;
+    outlineTitleInput: string;
     compactActionRow: string;
+    outlineOrderButton: string;
   };
 }) {
   const {
@@ -82,51 +94,129 @@ function SortableSectionOutlineItem({
     isDragging,
     isOver,
     listeners,
+    setActivatorNodeRef,
     setNodeRef,
     transform,
     transition,
   } = useSortable({ id: section.id });
   const { t } = useI18n();
-  const sortableAttributes = {
-    ...attributes,
-    role: undefined,
-    "aria-roledescription": undefined,
-  };
-  const sectionTitle = getSectionTitle(section, t("renderer.untitledSection"));
+  const titleText = getSectionTitleText(section);
+  const sectionTitle = titleText || t("renderer.untitledSection");
+  const [editing, setEditing] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(titleText);
+  const cancelEditRef = useRef(false);
   const canMoveUp = sectionIndex > 0;
   const canMoveDown = sectionIndex < sectionCount - 1;
+
+  function startEditing() {
+    onSelectSection(section.id);
+    setDraftTitle(titleText);
+    setEditing(true);
+  }
+
+  function finishEditing() {
+    setEditing(false);
+    if (cancelEditRef.current) {
+      cancelEditRef.current = false;
+      setDraftTitle(titleText);
+      return;
+    }
+
+    const nextTitle = draftTitle.trim();
+    if (nextTitle !== titleText) {
+      onRenameSection({ sectionId: section.id, title: nextTitle });
+    }
+  }
+
   return (
     <div
       ref={setNodeRef}
       className={classNames.outlineItem}
       data-dragging={isDragging}
       data-over={isOver && !isDragging}
+      data-selected={selected}
       style={createOutlineItemStyle({ transform, transition })}
       data-testid={`section-outline-item-${section.id}`}
-      {...sortableAttributes}
-      {...listeners}
       role="group"
-      aria-label={t("editor.dragSection", { title: sectionTitle })}
     >
-      <button
-        type="button"
-        aria-label={sectionTitle}
-        aria-current={selected ? "true" : undefined}
-        aria-pressed={selected}
-        className={classNames.outlineButton}
-        onClick={() => onSelectSection(section.id)}
-      >
-        <span>{sectionTitle}</span>
-        {!section.visible ? (
-          <span className={classNames.outlineMeta}>{t("renderer.hidden")}</span>
-        ) : null}
-      </button>
+      <Button
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label={t("editor.dragSection", { title: sectionTitle })}
+        className={classNames.outlineDragHandle}
+        icon={<HolderOutlined aria-hidden="true" />}
+        size="small"
+        type="text"
+      />
+      <div className={classNames.outlineTitleArea}>
+        {editing ? (
+          <Input
+            autoFocus
+            aria-label={t("editor.editSectionTitle", { title: sectionTitle })}
+            className={classNames.outlineTitleInput}
+            size="small"
+            value={draftTitle}
+            onBlur={finishEditing}
+            onChange={(event) => setDraftTitle(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                event.currentTarget.blur();
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                cancelEditRef.current = true;
+                event.currentTarget.blur();
+              }
+            }}
+          />
+        ) : (
+          <>
+            <button
+              type="button"
+              aria-label={sectionTitle}
+              aria-current={selected ? "true" : undefined}
+              aria-pressed={selected}
+              className={classNames.outlineButton}
+              onClick={() => {
+                if (selected) {
+                  startEditing();
+                  return;
+                }
+                onSelectSection(section.id);
+              }}
+            >
+              <span className={classNames.outlineTitleText}>{sectionTitle}</span>
+              {!section.visible ? (
+                <span className={classNames.outlineMeta}>{t("renderer.hidden")}</span>
+              ) : null}
+            </button>
+            <Button
+              aria-label={t("editor.editSectionTitleAction", {
+                title: sectionTitle,
+              })}
+              className={classNames.outlineEditButton}
+              data-edit-action="true"
+              data-visible={selected}
+              icon={<EditOutlined aria-hidden="true" />}
+              size="small"
+              type="text"
+              onClick={startEditing}
+            />
+          </>
+        )}
+      </div>
       <div className={classNames.compactActionRow}>
         <Button
+          className={classNames.outlineOrderButton}
+          icon={<UpOutlined aria-hidden="true" />}
           size="small"
+          type="text"
           disabled={!canMoveUp}
           aria-label={t("renderer.moveUp", { title: sectionTitle })}
-          onPointerDown={stopEventPropagation}
           onClick={(event) => {
             stopEventPropagation(event);
             onMoveSection({
@@ -134,14 +224,14 @@ function SortableSectionOutlineItem({
               toIndex: sectionIndex - 1,
             });
           }}
-        >
-          {t("common.up")}
-        </Button>
+        />
         <Button
+          className={classNames.outlineOrderButton}
+          icon={<DownOutlined aria-hidden="true" />}
           size="small"
+          type="text"
           disabled={!canMoveDown}
           aria-label={t("renderer.moveDown", { title: sectionTitle })}
-          onPointerDown={stopEventPropagation}
           onClick={(event) => {
             stopEventPropagation(event);
             onMoveSection({
@@ -149,9 +239,7 @@ function SortableSectionOutlineItem({
               toIndex: sectionIndex + 1,
             });
           }}
-        >
-          {t("common.down")}
-        </Button>
+        />
       </div>
     </div>
   );
@@ -161,19 +249,27 @@ export function SectionOutline({
   sections,
   selectedSectionId,
   onSelectSection,
+  onRenameSection,
   onMoveSection,
   classNames,
 }: {
   sections: ResumeSection[];
   selectedSectionId?: string;
   onSelectSection: (sectionId: string) => void;
+  onRenameSection: (params: { sectionId: string; title: string }) => void;
   onMoveSection: (params: { sectionId: string; toIndex: number }) => void;
   classNames: {
     outlineList: string;
     outlineItem: string;
+    outlineTitleArea: string;
     outlineButton: string;
+    outlineTitleText: string;
     outlineMeta: string;
+    outlineEditButton: string;
+    outlineDragHandle: string;
+    outlineTitleInput: string;
     compactActionRow: string;
+    outlineOrderButton: string;
   };
 }) {
   const sensors = useSensors(
@@ -235,12 +331,19 @@ export function SectionOutline({
               sectionCount={sections.length}
               selected={selectedSectionId === section.id}
               onSelectSection={onSelectSection}
+              onRenameSection={onRenameSection}
               onMoveSection={onMoveSection}
               classNames={{
                 outlineItem: classNames.outlineItem,
+                outlineTitleArea: classNames.outlineTitleArea,
                 outlineButton: classNames.outlineButton,
+                outlineTitleText: classNames.outlineTitleText,
                 outlineMeta: classNames.outlineMeta,
+                outlineEditButton: classNames.outlineEditButton,
+                outlineDragHandle: classNames.outlineDragHandle,
+                outlineTitleInput: classNames.outlineTitleInput,
                 compactActionRow: classNames.compactActionRow,
+                outlineOrderButton: classNames.outlineOrderButton,
               }}
             />
           ))}

@@ -3310,20 +3310,29 @@ export function ResumeEditorShell({
           >
             <h2 className={styles.panelHeading}>{t("editor.outline")}</h2>
           </div>
-          <p className={styles.panelDescription}>
-            {t("editor.outlineDescription")}
-          </p>
           <SectionOutline
             sections={document.sections}
             selectedSectionId={selection.sectionId}
             onSelectSection={handleOutlineSectionSelection}
+            onRenameSection={({ sectionId, title }) =>
+              store.getState().setSectionTitle({
+                sectionId,
+                title: title ? createRichTextFromPlainText(title) : undefined,
+              })
+            }
             onMoveSection={(params) => store.getState().moveSection(params)}
             classNames={{
               outlineList: styles.outlineList,
               outlineItem: styles.outlineItem,
+              outlineTitleArea: styles.outlineTitleArea,
               outlineButton: styles.outlineButton,
+              outlineTitleText: styles.outlineTitleText,
               outlineMeta: styles.outlineMeta,
+              outlineEditButton: styles.outlineEditButton,
+              outlineDragHandle: styles.outlineDragHandle,
+              outlineTitleInput: styles.outlineTitleInput,
               compactActionRow: styles.compactActionRow,
+              outlineOrderButton: styles.outlineOrderButton,
             }}
           />
         </aside>

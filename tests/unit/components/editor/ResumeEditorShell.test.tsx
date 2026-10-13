@@ -1610,6 +1610,28 @@ describe("ResumeEditorShell", () => {
     expect(within(dialog).queryByLabelText("章节用途")).not.toBeInTheDocument();
   });
 
+  it("edits a section title directly from the outline", () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "经历" }));
+    fireEvent.click(screen.getByRole("button", { name: "经历" }));
+    const titleInput = screen.getByRole("textbox", {
+      name: "编辑章节标题 经历",
+    });
+
+    fireEvent.change(titleInput, { target: { value: "工作经历" } });
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+
+    expect(screen.getByRole("button", { name: "工作经历" })).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByText("工作经历"))
+      .toBeInTheDocument();
+  });
+
   it("updates section layout from the inspector and reflects it on the canvas", () => {
     render(
       <ResumeEditorShell
@@ -2317,7 +2339,9 @@ describe("ResumeEditorShell", () => {
       within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制章节") }),
     );
 
-    expect(screen.getAllByRole("group", { name: "拖动排序 个人简介" })).toHaveLength(2);
+    expect(
+      screen.getAllByRole("button", { name: "拖动排序 个人简介" }),
+    ).toHaveLength(2);
   });
 
   it("duplicates selected content beside its source from the inspector", () => {
