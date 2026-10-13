@@ -31,7 +31,10 @@ export default async function WorkbenchLayout({
       access={context.access}
       announcements={announcements}
       configurationHealth={configurationHealth}
-      user={context.user}
+      user={{
+        email: context.user.email,
+        name: context.user.name,
+      }}
     >
       {children}
     </AppShell>

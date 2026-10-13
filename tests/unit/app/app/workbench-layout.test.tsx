@@ -57,6 +57,33 @@ describe("WorkbenchLayout", () => {
     expect(screen.getByRole("navigation", { name: "工作台导航" })).toBeInTheDocument();
   });
 
+  it("only exposes the user fields required by the client shell", async () => {
+    vi.mocked(requireAppShellContext).mockResolvedValue({
+      access: {
+        canEnterManagement: false,
+        mfaEnrollmentRequired: false,
+        mode: "product",
+        productAccess: true,
+      },
+      user: {
+        id: "user-private-id",
+        name: "Demo User",
+        email: "demo@example.com",
+        emailVerified: true,
+        image: "https://example.com/private-avatar.png",
+      },
+    } as never);
+
+    const result = await WorkbenchLayout({
+      children: <h1>Route content</h1>,
+    });
+
+    expect(result.props.user).toEqual({
+      name: "Demo User",
+      email: "demo@example.com",
+    });
+  });
+
   it("passes restart requirements to an active delegated management session", async () => {
     vi.mocked(requireAppShellContext).mockResolvedValue({
       access: {
