@@ -66,11 +66,17 @@ function PreventedLinkHarness() {
   );
 }
 
-function AppRouteLinkHarness({ cancel = false }: { cancel?: boolean }) {
+function AppRouteLinkHarness({
+  cancel = false,
+  href = "/docs/editor",
+}: {
+  cancel?: boolean;
+  href?: string;
+}) {
   return (
     <AppRouteLoadingProvider>
       <AppRouteLink
-        href="/docs/editor"
+        href={href}
         onNavigate={cancel ? (event) => event.preventDefault() : undefined}
       >
         Open editor guide
@@ -138,6 +144,35 @@ describe("AppRouteLoading", () => {
 
     expect(container.querySelector("[data-app-route-loading]"))
       .toHaveAttribute("aria-busy", "false");
+  });
+
+  it("does not start when a Next link points to the current route", () => {
+    const { container } = render(<AppRouteLinkHarness href="/app" />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
+
+    expect(container.querySelector("[data-app-route-loading]"))
+      .toHaveAttribute("aria-busy", "false");
+  });
+
+  it("does not start for a hash-only navigation", () => {
+    const { container } = render(<AppRouteLinkHarness href="/app#resumes" />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
+
+    expect(container.querySelector("[data-app-route-loading]"))
+      .toHaveAttribute("aria-busy", "false");
+  });
+
+  it("starts when a Next link changes the current search parameters", () => {
+    render(<AppRouteLinkHarness href="/app?view=archived" />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Open editor guide" }));
+
+    expect(screen.getByRole("status", { name: "正在加载页面" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
   });
 
   it("stays active until the destination surface reports that it is ready", () => {
