@@ -63,6 +63,8 @@ function request(path: string, body?: unknown) {
 
 describe("account deletion routes", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-07T00:00:00.000Z"));
     vi.clearAllMocks();
     mocks.getOptionalIdentitySession.mockResolvedValue(identity);
     mocks.getOptionalSession.mockResolvedValue(identity);
@@ -77,6 +79,10 @@ describe("account deletion routes", () => {
       expiresAt: new Date("2026-10-07T00:10:00.000Z"),
       resendAvailableAt: new Date("2026-10-07T00:01:00.000Z"),
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns the pending lifecycle for the restricted recovery page", async () => {
