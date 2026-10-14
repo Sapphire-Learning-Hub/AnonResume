@@ -9,10 +9,12 @@ import {
   createContext,
   forwardRef,
   type PropsWithChildren,
+  type Ref,
   useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -20,7 +22,7 @@ import { useI18n } from "@/i18n/I18nProvider";
 
 interface AppRouteLoadingContextValue {
   beginBoundary: () => void;
-  beginNavigation: () => void;
+  beginNavigation: (destinationHref?: string) => void;
   endBoundary: () => void;
 }
 
@@ -31,6 +33,18 @@ const AppRouteLoadingContext = createContext<AppRouteLoadingContextValue>({
 });
 
 const ROUTE_LOADING_BOUNDARY_SELECTOR = "[data-app-route-loading-boundary]";
+
+function routeKeyFromUrl(url: URL) {
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function isLoadableAppRoute(destination: URL, currentRouteKey: string) {
+  return (
+    destination.origin === window.location.origin &&
+    !destination.pathname.startsWith("/api/") &&
+    routeKeyFromUrl(destination) !== currentRouteKey
+  );
+}
 
 const useStyles = createStyles(({ token, css }) => ({
   indicator: css`
@@ -161,16 +175,9 @@ function isInternalRouteNavigation(event: MouseEvent) {
   }
 
   const destination = new URL(anchor.href, window.location.href);
-  if (destination.origin !== window.location.origin) {
-    return false;
-  }
-
-  if (destination.pathname.startsWith("/api/")) return false;
-
-  const current = new URL(window.location.href);
-  return (
-    destination.pathname !== current.pathname ||
-    destination.search !== current.search
+  return isLoadableAppRoute(
+    destination,
+    routeKeyFromUrl(new URL(window.location.href)),
   );
 }
 
@@ -188,7 +195,12 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
   const beginBoundary = useCallback(() => {
     setBoundaryCount((count) => count + 1);
   }, []);
-  const beginNavigation = useCallback(() => {
+  const beginNavigation = useCallback((destinationHref?: string) => {
+    if (destinationHref) {
+      const destination = new URL(destinationHref, window.location.href);
+      if (!isLoadableAppRoute(destination, routeKey)) return;
+    }
+
     setLinkPendingFrom(routeKey);
   }, [routeKey]);
   const endBoundary = useCallback(() => {
@@ -253,9 +265,22 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
 
 type AppRouteLinkProps = ComponentProps<typeof NextLink>;
 
+function assignRefValue<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === "function") {
+    ref(value);
+  } else if (ref) {
+    ref.current = value;
+  }
+}
+
 export const AppRouteLink = forwardRef<HTMLAnchorElement, AppRouteLinkProps>(
   function AppRouteLink({ onNavigate, ...props }, ref) {
     const { beginNavigation } = useContext(AppRouteLoadingContext);
+    const anchorRef = useRef<HTMLAnchorElement | null>(null);
+    const setAnchorRef = useCallback((node: HTMLAnchorElement | null) => {
+      anchorRef.current = node;
+      assignRefValue(ref, node);
+    }, [ref]);
 
     const handleNavigate: NonNullable<AppRouteLinkProps["onNavigate"]> = (
       event,
@@ -269,10 +294,10 @@ export const AppRouteLink = forwardRef<HTMLAnchorElement, AppRouteLinkProps>(
         },
       });
 
-      if (!prevented) beginNavigation();
+      if (!prevented) beginNavigation(anchorRef.current?.href);
     };
 
-    return <NextLink {...props} ref={ref} onNavigate={handleNavigate} />;
+    return <NextLink {...props} ref={setAnchorRef} onNavigate={handleNavigate} />;
   },
 );
 
