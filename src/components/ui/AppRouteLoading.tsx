@@ -86,6 +86,11 @@ const useStyles = createStyles(({ token, css }) => ({
         ${token.colorPrimaryActive}
       );
       content: "";
+      animation: none;
+    }
+
+    &[data-active="true"]::after,
+    body:has([data-app-route-loading-boundary]) &::after {
       animation: app-route-progress 1.05s ${token.motionEaseInOut} infinite;
     }
 
@@ -252,6 +257,7 @@ export function AppRouteLoadingProvider({ children }: PropsWithChildren) {
         <span
           aria-label={label}
           className={styles.progress}
+          data-active={active}
           role="progressbar"
         />
         <span aria-hidden="true" className={styles.spinner}>
