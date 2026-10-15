@@ -1,22 +1,46 @@
 "use client";
 
-import { Button, Input, Modal, Pagination, Segmented, Select, Spin, Tag } from "antd";
+import { Button, Input, Pagination, Select, Spin, Tag } from "antd";
 import { createStyles } from "antd-style";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
-import { SearchIcon } from "@/components/ui/InlineIcons";
+import {
+  loadResumeFontAssets,
+  ResumeFontAssets,
+  type ResumeFontAssetStatus,
+} from "@/components/resume/fonts/font-assets";
+import { FavoriteIcon, SearchIcon } from "@/components/ui/InlineIcons";
+import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
 import {
-  filterResumeFontPresets,
-  type ResumeFontCategory,
+  listResumeFontPresets,
   type ResumeFontPreset,
 } from "@/domain/resume/font-presets";
+import {
+  filterAndSortResumeFontPresets,
+  serializeFontMarketQuery,
+  usesFallbackForText,
+  type FontMarketFilters as FontMarketFilterState,
+  type FontMarketQuery,
+} from "@/domain/resume/fonts/market";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { PageResult } from "@/lib/shared/pagination";
 import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
 import { fetchResumeEntriesPage } from "@/lib/resume/client";
+import { FontMarketFilters } from "./FontMarketFilters";
+import { FontDetailDialog } from "./FontDetailDialog";
+import { FontCompareDialog } from "./FontCompareDialog";
+import { FontDialogFrame } from "./FontDialogFrame";
+import { FontCompareTray } from "./FontCompareTray";
+import type { FontMarketProps } from "./types";
 
-type FontMarketCategory = ResumeFontCategory | "all";
+const defaultMarketQuery: FontMarketQuery = {
+  query: "",
+  categories: [],
+  scripts: [],
+  useCases: [],
+  sort: "newest",
+};
 
 const useStyles = createStyles(({ token, css }) => ({
   market: css`
@@ -153,6 +177,24 @@ const useStyles = createStyles(({ token, css }) => ({
     min-width: 0;
     gap: 12px;
   `,
+  cardHeaderActions: css`
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+  `,
+  recommendationTag: css`
+    && {
+      margin-inline-end: 0;
+    }
+  `,
+  favoriteButton: css`
+    && {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+  `,
   fontIdentity: css`
     display: grid;
     min-width: 0;
@@ -265,14 +307,32 @@ const emptyResumePage: PageResult<ResumeCatalogEntry> = {
   totalPages: 0,
 };
 
-export function FontMarket() {
+export function FontMarket({
+  defaultResume,
+  initialPreferences = [],
+  initialQuery = defaultMarketQuery,
+}: FontMarketProps = {}) {
   const { styles } = useStyles();
   const { t } = useI18n();
+  const { toast } = useAppFeedback();
   const editorAccess = useEditorViewportAccess();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<FontMarketCategory>("all");
-  const [previewText, setPreviewText] = useState(t("fontMarket.defaultPreview"));
+  const [query, setQuery] = useState(initialQuery.query);
+  const [filters, setFilters] = useState<FontMarketFilterState>({
+    categories: initialQuery.categories,
+    scripts: initialQuery.scripts,
+    useCases: initialQuery.useCases,
+    sort: initialQuery.sort,
+  });
+  const [preferences, setPreferences] = useState(initialPreferences);
+  const [previewText, setPreviewText] = useState(
+    t("fontMarket.defaultPreview"),
+  );
   const [selectedPreset, setSelectedPreset] = useState<ResumeFontPreset>();
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [detailPreset, setDetailPreset] = useState<ResumeFontPreset>();
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState("");
   const [resumePage, setResumePage] = useState(emptyResumePage);
   const [resumePageNumber, setResumePageNumber] = useState(1);
@@ -284,6 +344,9 @@ export function FontMarket() {
   const [readyPreviewTextById, setReadyPreviewTextById] = useState<
     ReadonlyMap<string, string>
   >(() => new Map());
+  const [assetStatuses, setAssetStatuses] = useState<
+    ReadonlyMap<string, ResumeFontAssetStatus>
+  >(() => new Map());
   const fontListRef = useRef<HTMLDivElement>(null);
   const loadingPreviewKeysRef = useRef(new Set<string>());
   const mountedRef = useRef(true);
@@ -291,19 +354,34 @@ export function FontMarket() {
   const deferredPreviewText = useDeferredValue(
     previewText || t("fontMarket.defaultPreview"),
   );
-  const filteredPresets = filterResumeFontPresets(deferredQuery, {
-    category,
-    getCategoryLabel: (value) => t(`fontMarket.category.${value}`),
-    getDescription: (preset) => t(preset.descriptionKey),
-    getScriptLabel: (script) => t(`fontMarket.script.${script}`),
+  const filteredPresets = filterAndSortResumeFontPresets({
+    presets: listResumeFontPresets(),
+    filters,
+    query: deferredQuery,
+    recentUsage: Object.fromEntries(
+      preferences.map((preference) => [
+        preference.fontPresetId,
+        preference.lastAppliedAt ?? 0,
+      ]),
+    ),
+    getSearchMetadata: (preset) => [
+      t(preset.descriptionKey),
+      t(`fontMarket.category.${preset.category}`),
+      ...preset.scripts.map((script) => t(`fontMarket.script.${script}`)),
+    ],
   });
-  const categoryOptions: { label: string; value: FontMarketCategory }[] = [
-    { label: t("fontMarket.category.all"), value: "all" },
-    { label: t("fontMarket.category.sans"), value: "sans" },
-    { label: t("fontMarket.category.serif"), value: "serif" },
-    { label: t("fontMarket.category.mono"), value: "mono" },
-    { label: t("fontMarket.category.handwriting"), value: "handwriting" },
-  ];
+
+  function syncMarketUrl(
+    nextQuery: string,
+    nextFilters: FontMarketFilterState,
+  ) {
+    const params = serializeFontMarketQuery({
+      query: nextQuery,
+      ...nextFilters,
+    });
+    const nextUrl = `${window.location.pathname}${params.size ? `?${params}` : ""}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }
 
   useEffect(() => {
     mountedRef.current = true;
@@ -355,7 +433,9 @@ export function FontMarket() {
           });
           return changed ? next : current;
         });
-        intersectingEntries.forEach((entry) => observer.unobserve(entry.target));
+        intersectingEntries.forEach((entry) =>
+          observer.unobserve(entry.target),
+        );
       },
       {
         root: fontList,
@@ -370,7 +450,40 @@ export function FontMarket() {
     });
 
     return () => observer.disconnect();
-  }, [activePreviewIds, category, deferredQuery]);
+  }, [activePreviewIds, deferredQuery, filters]);
+
+  async function toggleFavorite(preset: ResumeFontPreset) {
+    const previous = preferences;
+    const existing = previous.find((item) => item.fontPresetId === preset.id);
+    const favorite = !existing?.favorite;
+    setPreferences((current) => [
+      ...current.filter((item) => item.fontPresetId !== preset.id),
+      {
+        fontPresetId: preset.id,
+        favorite,
+        lastAppliedAt: existing?.lastAppliedAt,
+      },
+    ]);
+
+    try {
+      const response = await fetch("/api/account/font-preferences", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fontPresetId: preset.id, favorite }),
+      });
+      if (!response.ok) throw new Error("favorite_failed");
+      const payload = (await response.json()) as {
+        preferences: typeof preferences;
+      };
+      setPreferences(payload.preferences);
+    } catch {
+      setPreferences(previous);
+      void toast.error({
+        key: `font-favorite-${preset.id}`,
+        content: t("fontMarket.favoriteFailed"),
+      });
+    }
+  }
 
   useEffect(() => {
     const fontList = fontListRef.current;
@@ -378,9 +491,15 @@ export function FontMarket() {
 
     const activePreviews = Array.from(
       fontList.querySelectorAll<HTMLElement>("[data-font-preview-id]"),
-    ).filter((preview) =>
-      activePreviewIds.has(preview.dataset.fontPreviewId ?? ""),
-    );
+    ).filter((preview) => {
+      const id = preview.dataset.fontPreviewId ?? "";
+      const preset = listResumeFontPresets().find((item) => item.id === id);
+      return (
+        activePreviewIds.has(id) &&
+        preset !== undefined &&
+        assetStatuses.get(preset.assetKey) === "ready"
+      );
+    });
 
     if (!("fonts" in document) || typeof document.fonts.load !== "function") {
       setReadyPreviewTextById((current) => {
@@ -423,10 +542,15 @@ export function FontMarket() {
           });
         });
     });
-  }, [activePreviewIds, deferredPreviewText, readyPreviewTextById]);
+  }, [
+    activePreviewIds,
+    assetStatuses,
+    deferredPreviewText,
+    readyPreviewTextById,
+  ]);
 
   useEffect(() => {
-    if (!selectedPreset) return;
+    if (!applyOpen || !selectedPreset) return;
 
     let active = true;
     void fetchResumeEntriesPage({
@@ -440,7 +564,7 @@ export function FontMarket() {
         setSelectedResumeId((current) =>
           result.items.some((resume) => resume.id === current)
             ? current
-            : result.items[0]?.id ?? "",
+            : (result.items[0]?.id ?? ""),
         );
       })
       .catch(() => {
@@ -455,7 +579,7 @@ export function FontMarket() {
     return () => {
       active = false;
     };
-  }, [resumePageNumber, resumeQuery, selectedPreset]);
+  }, [applyOpen, resumePageNumber, resumeQuery, selectedPreset]);
 
   function openApplyDialog(preset: ResumeFontPreset) {
     setResumePage(emptyResumePage);
@@ -463,148 +587,287 @@ export function FontMarket() {
     setResumeQuery("");
     setResumeLoading(true);
     setSelectedPreset(preset);
-    setSelectedResumeId("");
+    setApplyOpen(true);
+    setSelectedResumeId(defaultResume?.id ?? "");
   }
+
+  function toggleComparison(preset: ResumeFontPreset) {
+    setCompareIds((current) => {
+      if (current.includes(preset.id)) {
+        return current.filter((id) => id !== preset.id);
+      }
+      return current.length < 4 ? [...current, preset.id] : current;
+    });
+  }
+
+  const comparedPresets = compareIds
+    .map((id) => listResumeFontPresets().find((preset) => preset.id === id))
+    .filter((preset): preset is ResumeFontPreset => Boolean(preset));
+  const activeAssetKeys = [
+    ...new Set(
+      listResumeFontPresets()
+        .filter(
+          (preset) =>
+            activePreviewIds.has(preset.id) ||
+            compareIds.includes(preset.id) ||
+            detailPreset?.id === preset.id,
+        )
+        .map((preset) => preset.assetKey),
+    ),
+  ];
 
   return (
     <>
+      {activeAssetKeys.map((assetKey) => (
+        <ResumeFontAssets
+          assetKey={assetKey}
+          key={assetKey}
+          onStatusChange={(key, status) => {
+            setAssetStatuses((current) => {
+              if (current.get(key) === status) return current;
+              const next = new Map(current);
+              next.set(key, status);
+              return next;
+            });
+          }}
+        />
+      ))}
       <div className={styles.market}>
-          <section className={styles.pageHeader}>
-            <h1 className={styles.heading}>{t("fontMarket.heading")}</h1>
-          </section>
+        <section className={styles.pageHeader}>
+          <h1 className={styles.heading}>{t("fontMarket.heading")}</h1>
+        </section>
 
-          <section
-            aria-label={t("fontMarket.heading")}
-            className={styles.catalog}
+        <section
+          aria-label={t("fontMarket.heading")}
+          className={styles.catalog}
+        >
+          <div className={styles.controls}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>
+                {t("fontMarket.search")}
+              </span>
+              <Input
+                allowClear
+                aria-label={t("fontMarket.search")}
+                className={styles.search}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  syncMarketUrl(event.target.value, filters);
+                }}
+                placeholder={t("fontMarket.searchPlaceholder")}
+                prefix={<SearchIcon size={16} />}
+                type="search"
+                value={query}
+              />
+            </label>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>
+                {t("fontMarket.previewText")}
+              </span>
+              <Input.TextArea
+                aria-label={t("fontMarket.previewText")}
+                className={styles.previewInput}
+                data-testid="font-preview-input"
+                onChange={(event) => setPreviewText(event.target.value)}
+                placeholder={t("fontMarket.previewPlaceholder")}
+                rows={1}
+                value={previewText}
+              />
+            </label>
+          </div>
+
+          <div className={styles.filterBar}>
+            <FontMarketFilters
+              filters={filters}
+              onChange={(nextFilters) => {
+                setFilters(nextFilters);
+                syncMarketUrl(query, nextFilters);
+              }}
+              onClear={() => {
+                setQuery("");
+                setFilters(defaultMarketQuery);
+                syncMarketUrl("", defaultMarketQuery);
+              }}
+            />
+            <span aria-live="polite" className={styles.count}>
+              {t("fontMarket.resultCount", { count: filteredPresets.length })}
+            </span>
+          </div>
+
+          <div
+            className={styles.grid}
+            data-testid="font-market-list"
+            ref={fontListRef}
           >
-            <div className={styles.controls}>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>{t("fontMarket.search")}</span>
-            <Input
-              allowClear
-              aria-label={t("fontMarket.search")}
-              className={styles.search}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t("fontMarket.searchPlaceholder")}
-              prefix={<SearchIcon size={16} />}
-              type="search"
-              value={query}
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.fieldLabel}>{t("fontMarket.previewText")}</span>
-            <Input.TextArea
-              aria-label={t("fontMarket.previewText")}
-              className={styles.previewInput}
-              data-testid="font-preview-input"
-              onChange={(event) => setPreviewText(event.target.value)}
-              placeholder={t("fontMarket.previewPlaceholder")}
-              rows={1}
-              value={previewText}
-            />
-          </label>
-            </div>
+            {filteredPresets.length === 0 ? (
+              <div className={styles.empty}>{t("fontMarket.noResults")}</div>
+            ) : (
+              filteredPresets.map((preset) => {
+                const assetStatus =
+                  assetStatuses.get(preset.assetKey) ?? "idle";
+                const previewReady =
+                  readyPreviewTextById.get(preset.id) === deferredPreviewText;
 
-            <div className={styles.filterBar}>
-          <Segmented<FontMarketCategory>
-            aria-label={t("fontMarket.heading")}
-            className={styles.categories}
-            onChange={setCategory}
-            options={categoryOptions}
-            value={category}
-          />
-          <span aria-live="polite" className={styles.count}>
-            {t("fontMarket.resultCount", { count: filteredPresets.length })}
-          </span>
-            </div>
-
-            <div
-              className={styles.grid}
-              data-testid="font-market-list"
-              ref={fontListRef}
-            >
-          {filteredPresets.length === 0 ? (
-            <div className={styles.empty}>{t("fontMarket.noResults")}</div>
-          ) : (
-            filteredPresets.map((preset) => (
-              <article className={styles.card} data-testid="font-market-card" key={preset.id}>
-                <header className={styles.cardHeader}>
-                  <div className={styles.fontIdentity}>
-                    <h2 className={styles.fontName}>{preset.name}</h2>
-                    <span className={styles.fontDescription}>
-                      {t(preset.descriptionKey)}
-                    </span>
-                  </div>
-                  <Tag>{t(`fontMarket.category.${preset.category}`)}</Tag>
-                </header>
-
-                <div className={styles.previewSlot}>
-                  <div
-                    className={styles.preview}
-                    data-font-load-family={preset.fontLoadFamily}
-                    data-font-preview-id={preset.id}
-                    data-font-ready={
-                      readyPreviewTextById.get(preset.id) === deferredPreviewText
-                    }
-                    data-testid={`font-preview-${preset.id}`}
-                    style={
-                      activePreviewIds.has(preset.id)
-                        ? { fontFamily: preset.resolvedFontFamily }
-                        : undefined
-                    }
+                return (
+                  <article
+                    className={styles.card}
+                    data-testid="font-market-card"
+                    key={preset.id}
                   >
-                    {deferredPreviewText}
-                  </div>
-                  {readyPreviewTextById.get(preset.id) !== deferredPreviewText ? (
-                    <div
-                      aria-live="polite"
-                      className={styles.previewLoading}
-                      data-testid={`font-preview-loading-${preset.id}`}
-                      role="status"
-                    >
-                      <Spin size="small" />
-                      <span>{t("fontMarket.previewLoading")}</span>
-                    </div>
-                  ) : null}
-                </div>
+                    <header className={styles.cardHeader}>
+                      <div className={styles.fontIdentity}>
+                        <h2 className={styles.fontName}>{preset.name}</h2>
+                        <span className={styles.fontDescription}>
+                          {t(preset.descriptionKey)}
+                        </span>
+                      </div>
+                      <div className={styles.cardHeaderActions}>
+                        {preset.recommended ? (
+                          <Tag
+                            className={styles.recommendationTag}
+                            color="processing"
+                          >
+                            {t("fontMarket.recommended")}
+                          </Tag>
+                        ) : null}
+                        <Button
+                          aria-label={
+                            preferences.some(
+                              (preference) =>
+                                preference.fontPresetId === preset.id &&
+                                preference.favorite,
+                            )
+                              ? t("fontMarket.unfavorite", {
+                                  font: preset.name,
+                                })
+                              : t("fontMarket.favorite", { font: preset.name })
+                          }
+                          className={styles.favoriteButton}
+                          onClick={() => void toggleFavorite(preset)}
+                          type="text"
+                        >
+                          <FavoriteIcon
+                            filled={preferences.some(
+                              (preference) =>
+                                preference.fontPresetId === preset.id &&
+                                preference.favorite,
+                            )}
+                          />
+                        </Button>
+                      </div>
+                    </header>
 
-                <footer className={styles.cardFooter}>
-                  <div className={styles.metadata}>
-                    {preset.scripts.map((script) => (
-                      <Tag key={script}>{t(`fontMarket.script.${script}`)}</Tag>
-                    ))}
-                    <Tag color="success">{t("fontMarket.license")}</Tag>
-                  </div>
-                  <div className={styles.actions}>
-                    <a
-                      className={styles.sourceLink}
-                      href={preset.source}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      {t("fontMarket.source")}
-                    </a>
-                    <Button onClick={() => openApplyDialog(preset)} type="primary">
-                      {t("fontMarket.apply")}
-                    </Button>
-                  </div>
-                </footer>
-              </article>
-            ))
-          )}
-            </div>
-          </section>
+                    <div className={styles.previewSlot}>
+                      <div
+                        className={styles.preview}
+                        data-font-load-family={preset.fontLoadFamily}
+                        data-font-preview-id={preset.id}
+                        data-font-ready={previewReady}
+                        data-testid={`font-preview-${preset.id}`}
+                        style={
+                          activePreviewIds.has(preset.id)
+                            ? { fontFamily: preset.resolvedFontFamily }
+                            : undefined
+                        }
+                      >
+                        {deferredPreviewText}
+                      </div>
+                      {!previewReady ? (
+                        <div
+                          aria-live="polite"
+                          className={styles.previewLoading}
+                          data-testid={`font-preview-loading-${preset.id}`}
+                          role="status"
+                        >
+                          {assetStatus === "error" ? (
+                            <>
+                              <span>{t("fontMarket.previewFailed")}</span>
+                              <Button
+                                onClick={() => {
+                                  void loadResumeFontAssets(
+                                    preset.assetKey,
+                                    true,
+                                  ).catch(() => undefined);
+                                }}
+                                size="small"
+                                type="link"
+                              >
+                                {t("fontMarket.previewRetry")}
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Spin size="small" />
+                              <span>{t("fontMarket.previewLoading")}</span>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <footer className={styles.cardFooter}>
+                      <div className={styles.metadata}>
+                        {preset.scripts.map((script) => (
+                          <Tag key={script}>
+                            {t(`fontMarket.script.${script}`)}
+                          </Tag>
+                        ))}
+                        {usesFallbackForText(preset, deferredPreviewText) ? (
+                          <Tag color="warning">
+                            {t("fontMarket.fallbackWarning")}
+                          </Tag>
+                        ) : null}
+                      </div>
+                      <div className={styles.actions}>
+                        <div>
+                          <Button
+                            onClick={() => {
+                              setDetailPreset(preset);
+                              setDetailOpen(true);
+                            }}
+                            type="text"
+                          >
+                            {t("fontMarket.details")}
+                          </Button>
+                          <Button
+                            aria-pressed={compareIds.includes(preset.id)}
+                            disabled={
+                              compareIds.length >= 4 &&
+                              !compareIds.includes(preset.id)
+                            }
+                            onClick={() => toggleComparison(preset)}
+                            type="text"
+                          >
+                            {compareIds.includes(preset.id)
+                              ? t("fontMarket.compareRemove")
+                              : t("fontMarket.compareAdd")}
+                          </Button>
+                        </div>
+                        <Button
+                          onClick={() => openApplyDialog(preset)}
+                          type="primary"
+                        >
+                          {t("fontMarket.apply")}
+                        </Button>
+                      </div>
+                    </footer>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
       </div>
 
-      <Modal
-        footer={null}
-        onCancel={() => setSelectedPreset(undefined)}
-        open={Boolean(selectedPreset)}
+      <FontDialogFrame
+        onClose={() => setApplyOpen(false)}
+        open={applyOpen && Boolean(selectedPreset)}
         title={
           selectedPreset
             ? t("fontMarket.applyTitle", { font: selectedPreset.name })
-            : undefined
+            : ""
         }
+        width="520px"
       >
         {selectedPreset ? (
           resumeLoading && resumePage.items.length === 0 ? (
@@ -616,7 +879,23 @@ export function FontMarket() {
               data-testid="apply-font-form"
               method="post"
             >
-              <input name="fontPresetId" type="hidden" value={selectedPreset.id} />
+              <input
+                name="fontPresetId"
+                type="hidden"
+                value={selectedPreset.id}
+              />
+              <input
+                name="version"
+                type="hidden"
+                value={
+                  resumePage.items.find(
+                    (resume) => resume.id === selectedResumeId,
+                  )?.version ??
+                  (defaultResume?.id === selectedResumeId
+                    ? defaultResume.version
+                    : "")
+                }
+              />
               <input
                 name="returnTo"
                 type="hidden"
@@ -627,7 +906,9 @@ export function FontMarket() {
                 }
               />
               <label className={styles.modalField}>
-                <span className={styles.fieldLabel}>{t("fontMarket.targetResume")}</span>
+                <span className={styles.fieldLabel}>
+                  {t("fontMarket.targetResume")}
+                </span>
                 <Select
                   aria-label={t("fontMarket.targetResume")}
                   filterOption={false}
@@ -660,10 +941,14 @@ export function FontMarket() {
                 ) : null}
               </label>
               <div className={styles.modalActions}>
-                <Button htmlType="button" onClick={() => setSelectedPreset(undefined)}>
+                <Button htmlType="button" onClick={() => setApplyOpen(false)}>
                   {t("common.dismiss")}
                 </Button>
-                <Button disabled={!selectedResumeId} htmlType="submit" type="primary">
+                <Button
+                  disabled={!selectedResumeId}
+                  htmlType="submit"
+                  type="primary"
+                >
                   {t("fontMarket.confirmApply")}
                 </Button>
               </div>
@@ -679,7 +964,32 @@ export function FontMarket() {
             </div>
           )
         ) : null}
-      </Modal>
+      </FontDialogFrame>
+
+      <FontDetailDialog
+        onApply={(preset) => {
+          setDetailOpen(false);
+          openApplyDialog(preset);
+        }}
+        onClose={() => setDetailOpen(false)}
+        open={detailOpen}
+        preset={detailPreset}
+        previewText={deferredPreviewText}
+      />
+      <FontCompareTray
+        onClear={() => setCompareIds([])}
+        onCompare={() => setCompareOpen(true)}
+        presets={comparedPresets}
+      />
+      <FontCompareDialog
+        onClose={() => setCompareOpen(false)}
+        onRemove={(id) =>
+          setCompareIds((current) => current.filter((item) => item !== id))
+        }
+        open={compareOpen}
+        presets={comparedPresets}
+        previewText={deferredPreviewText}
+      />
     </>
   );
 }

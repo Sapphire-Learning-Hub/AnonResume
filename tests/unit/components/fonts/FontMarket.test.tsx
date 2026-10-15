@@ -1,8 +1,16 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { ConfigProvider } from "antd";
 
 import { appTheme } from "@/styles/app-theme";
 import { FontMarket } from "@/components/fonts/FontMarket";
+import { listResumeFontPresets } from "@/domain/resume/font-presets";
 import { fetchResumeEntriesPage } from "@/lib/resume/client";
 
 const resumes = [
@@ -26,6 +34,20 @@ function renderFontMarket() {
       <FontMarket />
     </ConfigProvider>,
   );
+}
+
+function queryDialog(title: string) {
+  return screen
+    .queryAllByRole("dialog", { hidden: true })
+    .find((dialog) => within(dialog).queryByText(title));
+}
+
+async function findDialog(title: string) {
+  await waitFor(() => {
+    expect(queryDialog(title)).toBeDefined();
+  });
+
+  return queryDialog(title)!;
 }
 
 function installEditorViewport(matches: boolean) {
@@ -151,13 +173,18 @@ describe("FontMarket", () => {
   it("filters bundled fonts and renders editable preview text with the real font", async () => {
     renderFontMarket();
 
-    expect(screen.getByRole("heading", { name: "字体市场" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "字体市场" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(
         "集中预览可商用的开源字体，并将合适的字体直接应用到你的简历。",
       ),
     ).not.toBeInTheDocument();
-    expect(screen.getAllByTestId("font-market-card")).toHaveLength(13);
+    expect(screen.getAllByTestId("font-market-card")).toHaveLength(
+      listResumeFontPresets().length,
+    );
+    expect(screen.getAllByText("推荐")).toHaveLength(4);
     const fontList = screen.getByTestId("font-market-list");
     expect(getComputedStyle(fontList).overflowY).toBe("auto");
     expect(getComputedStyle(fontList).gridAutoRows).toBe("max-content");
@@ -169,7 +196,7 @@ describe("FontMarket", () => {
       "1",
     );
     const categoryControl = screen.getByRole("radiogroup", {
-      name: "字体市场",
+      name: "字体分类",
     });
     expect(categoryControl).toBeInTheDocument();
 
@@ -180,7 +207,9 @@ describe("FontMarket", () => {
     await waitFor(() => {
       expect(screen.getAllByTestId("font-market-card")).toHaveLength(1);
     });
-    expect(screen.getByRole("heading", { name: "Noto Serif SC" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Noto Serif SC" }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("textbox", { name: "预览文字" }), {
       target: { value: "字体决定信息的语气" },
@@ -203,7 +232,7 @@ describe("FontMarket", () => {
     expect(card).not.toBeNull();
     fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    const dialog = await findDialog("应用 LXGW WenKai");
     const form = within(dialog).getByTestId("apply-font-form");
 
     expect(form).toHaveAttribute(
@@ -214,15 +243,19 @@ describe("FontMarket", () => {
       "name",
       "fontPresetId",
     );
+    expect(within(form).getByDisplayValue("1")).toHaveAttribute(
+      "name",
+      "version",
+    );
     await waitFor(() => {
       expect(
         within(form).getByDisplayValue("/app/resumes/resume-foundation"),
       ).toHaveAttribute("name", "returnTo");
     });
-    expect(within(form).getByRole("button", { name: "确认应用" })).toHaveAttribute(
-      "type",
-      "submit",
-    );
+    expect(
+      within(form).getByRole("button", { name: "确认应用" }),
+    ).toHaveAttribute("type", "submit");
+
   });
 
   it("returns mobile font applications to the font market", async () => {
@@ -235,9 +268,9 @@ describe("FontMarket", () => {
 
     fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
 
-    const form = within(
-      await screen.findByRole("dialog", { name: "应用 LXGW WenKai" }),
-    ).getByTestId("apply-font-form");
+    const form = within(await findDialog("应用 LXGW WenKai")).getByTestId(
+      "apply-font-form",
+    );
 
     await waitFor(() => {
       expect(within(form).getByDisplayValue("/app/fonts")).toHaveAttribute(
@@ -261,7 +294,7 @@ describe("FontMarket", () => {
       .closest("article");
 
     fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
-    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    const dialog = await findDialog("应用 LXGW WenKai");
     fireEvent.click(within(dialog).getByTitle("2"));
 
     await waitFor(() => {
@@ -280,7 +313,7 @@ describe("FontMarket", () => {
       .closest("article");
 
     fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
-    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
+    const dialog = await findDialog("应用 LXGW WenKai");
     const selector = within(dialog).getByRole("combobox", { name: "目标简历" });
 
     expect(
@@ -320,10 +353,13 @@ describe("FontMarket", () => {
       .closest("article");
 
     fireEvent.click(within(card!).getByRole("button", { name: "应用到简历" }));
-    const dialog = await screen.findByRole("dialog", { name: "应用 LXGW WenKai" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "目标简历" }), {
-      target: { value: "不存在的简历" },
-    });
+    const dialog = await findDialog("应用 LXGW WenKai");
+    fireEvent.change(
+      within(dialog).getByRole("combobox", { name: "目标简历" }),
+      {
+        target: { value: "不存在的简历" },
+      },
+    );
 
     await waitFor(() => {
       expect(

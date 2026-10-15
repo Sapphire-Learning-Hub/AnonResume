@@ -8,6 +8,7 @@ import {
   resumeVersions,
   resumes,
   userInvitations,
+  userFontPreferences,
 } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
 
@@ -40,6 +41,7 @@ export async function loadAccountExportData(userId: string) {
     conversationRows,
     usageRows,
     invitationRows,
+    fontPreferenceRows,
   ] = await Promise.all([
     getAccountLifecycle(userId),
     getDatabasePool().query<{ providerId: string }>(
@@ -142,6 +144,17 @@ export async function loadAccountExportData(userId: string) {
         ),
       )
       .orderBy(asc(userInvitations.createdAt), asc(userInvitations.id)),
+    db
+      .select({
+        fontPresetId: userFontPreferences.fontPresetId,
+        favorite: userFontPreferences.isFavorite,
+        lastAppliedAt: userFontPreferences.lastAppliedAt,
+        createdAt: userFontPreferences.createdAt,
+        updatedAt: userFontPreferences.updatedAt,
+      })
+      .from(userFontPreferences)
+      .where(eq(userFontPreferences.userId, userId))
+      .orderBy(asc(userFontPreferences.fontPresetId)),
   ]);
 
   return {
@@ -153,5 +166,6 @@ export async function loadAccountExportData(userId: string) {
     conversations: conversationRows,
     usage: usageRows,
     invitations: invitationRows,
+    fontPreferences: fontPreferenceRows,
   };
 }

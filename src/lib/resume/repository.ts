@@ -246,7 +246,17 @@ async function insertResumeRecord(record: ResumeRecord) {
 }
 
 async function selectResumeRecord(userId: string, resumeId: string) {
-  const rows = await db
+  return selectResumeRecordWithExecutor(db, userId, resumeId);
+}
+
+export type ResumeRecordExecutor = Pick<typeof db, "select" | "update">;
+
+async function selectResumeRecordWithExecutor(
+  executor: ResumeRecordExecutor,
+  userId: string,
+  resumeId: string,
+) {
+  const rows = await executor
     .select()
     .from(resumes)
     .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
@@ -728,8 +738,29 @@ export async function saveResumeRecord(params: {
   document?: unknown;
   summary?: string;
 }) {
+  return saveResumeRecordWithExecutor(db, params);
+}
+
+export async function saveResumeRecordWithExecutor(
+  executor: ResumeRecordExecutor,
+  params: {
+    userId?: string;
+    resumeId: string;
+    version: number;
+    document?: unknown;
+    summary?: string;
+  },
+) {
   const userId = params.userId || LEGACY_USER_ID;
-  const current = await requireExistingResumeRecord(userId, params.resumeId);
+  const current = await selectResumeRecordWithExecutor(
+    executor,
+    userId,
+    params.resumeId,
+  );
+
+  if (!current) {
+    throw new ResumeNotFoundError(params.resumeId);
+  }
 
   if (params.version !== current.version) {
     throw new ResumeVersionConflictError(current.version);
@@ -750,7 +781,7 @@ export async function saveResumeRecord(params: {
       ? current.customSummary
       : formatCatalogSummary(params.summary);
 
-  const rows = await db
+  const rows = await executor
     .update(resumes)
     .set({
       name: document.meta.title,
@@ -771,7 +802,11 @@ export async function saveResumeRecord(params: {
     .returning();
 
   if (!rows[0]) {
-    const latest = await selectResumeRecord(userId, params.resumeId);
+    const latest = await selectResumeRecordWithExecutor(
+      executor,
+      userId,
+      params.resumeId,
+    );
 
     throw new ResumeVersionConflictError(latest?.version ?? current.version);
   }

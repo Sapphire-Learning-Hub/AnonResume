@@ -6,6 +6,7 @@ import { aiDatabaseTables } from "./ai-schema";
 import { accountMergeDatabaseTables } from "./account-merge-schema";
 import { configDatabaseTables } from "./config-schema";
 import { invitationDatabaseTables } from "./invitation-schema";
+import { fontDatabaseTables } from "./font-schema";
 import { socialRegistrationDatabaseTables } from "./social-registration-schema";
 
 import {
@@ -60,6 +61,7 @@ export {
   systemRestartTargets,
 } from "./config-schema";
 export { userInvitations } from "./invitation-schema";
+export { userFontPreferences } from "./font-schema";
 export {
   socialRegistrationAttempts,
   type SocialRegistrationAttemptState,
@@ -96,6 +98,7 @@ export const db = drizzle({
     ...aiDatabaseTables,
     ...configDatabaseTables,
     ...invitationDatabaseTables,
+    ...fontDatabaseTables,
     ...socialRegistrationDatabaseTables,
     accountEmailChallenges,
     accountLifecycle,

@@ -1,5 +1,19 @@
 export type ResumeFontCategory = "sans" | "serif" | "mono" | "handwriting";
 export type ResumeFontScript = "latin" | "zh-CN";
+export type ResumeFontUseCase =
+  | "business"
+  | "compact"
+  | "body"
+  | "editorial"
+  | "display"
+  | "technical"
+  | "creative";
+export type ResumeFontAssetKey =
+  | "latin-sans"
+  | "latin-serif"
+  | "mono"
+  | "cjk-sans"
+  | "cjk-serif-display";
 
 export type ResumeFontPreset = {
   id:
@@ -7,15 +21,22 @@ export type ResumeFontPreset = {
     | "manrope"
     | "lato"
     | "source-sans-3"
+    | "libre-franklin"
+    | "roboto-condensed"
     | "noto-sans-sc"
+    | "zcool-qingke-huangyou"
     | "noto-sans-mono"
+    | "jetbrains-mono"
     | "noto-serif-sc"
+    | "zcool-xiaowei"
     | "source-serif-4"
+    | "bitter"
     | "lora"
     | "merriweather"
     | "playfair-display"
     | "lxgw-marker-gothic"
-    | "lxgw-wenkai";
+    | "lxgw-wenkai"
+    | "ma-shan-zheng";
   name: string;
   fontFamily: string;
   resolvedFontFamily: string;
@@ -26,16 +47,27 @@ export type ResumeFontPreset = {
     | "editor.fontPreset.geometricSans"
     | "editor.fontPreset.humanistSans"
     | "editor.fontPreset.neutralSans"
+    | "editor.fontPreset.classicGrotesque"
+    | "editor.fontPreset.condensedSans"
+    | "editor.fontPreset.geometricChinese"
     | "editor.fontPreset.technicalMono"
+    | "editor.fontPreset.developerMono"
     | "editor.fontPreset.chineseSerif"
+    | "editor.fontPreset.chineseDisplay"
     | "editor.fontPreset.classicSerif"
+    | "editor.fontPreset.slabSerif"
     | "editor.fontPreset.editorialSerif"
     | "editor.fontPreset.readableSerif"
     | "editor.fontPreset.displaySerif"
     | "editor.fontPreset.markerGothic"
-    | "editor.fontPreset.chineseHandwriting";
+    | "editor.fontPreset.chineseHandwriting"
+    | "editor.fontPreset.brushCalligraphy";
   category: ResumeFontCategory;
   scripts: readonly ResumeFontScript[];
+  useCases: readonly ResumeFontUseCase[];
+  assetKey: ResumeFontAssetKey;
+  recommended?: true;
+  addedAt: string;
   license: "OFL-1.1";
   source: string;
 };
@@ -52,6 +84,10 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.businessSans",
     category: "sans",
     scripts: ["latin"],
+    useCases: ["business", "body"],
+    assetKey: "latin-sans",
+    recommended: true,
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/IBM/plex",
   },
@@ -65,6 +101,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.geometricSans",
     category: "sans",
     scripts: ["latin"],
+    useCases: ["business", "display"],
+    assetKey: "latin-sans",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/sharanda/manrope",
   },
@@ -78,6 +117,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.humanistSans",
     category: "sans",
     scripts: ["latin"],
+    useCases: ["business", "body"],
+    assetKey: "latin-sans",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/googlefonts/LatoGFVersion",
   },
@@ -92,8 +134,46 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.neutralSans",
     category: "sans",
     scripts: ["latin"],
+    useCases: ["business", "body"],
+    assetKey: "latin-sans",
+    recommended: true,
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/adobe-fonts/source-sans",
+  },
+  {
+    id: "libre-franklin",
+    name: "Libre Franklin",
+    fontFamily: '"Libre Franklin", sans-serif',
+    resolvedFontFamily:
+      "var(--font-libre-franklin), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"Libre Franklin Variable", "Noto Sans SC Variable", sans-serif',
+    descriptionKey: "editor.fontPreset.classicGrotesque",
+    category: "sans",
+    scripts: ["latin"],
+    useCases: ["business", "body"],
+    assetKey: "latin-sans",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/googlefonts/Libre-Franklin",
+  },
+  {
+    id: "roboto-condensed",
+    name: "Roboto Condensed",
+    fontFamily: '"Roboto Condensed", sans-serif',
+    resolvedFontFamily:
+      "var(--font-roboto-condensed), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"Roboto Condensed Variable", "Noto Sans SC Variable", sans-serif',
+    descriptionKey: "editor.fontPreset.condensedSans",
+    category: "sans",
+    scripts: ["latin"],
+    useCases: ["compact", "business"],
+    assetKey: "latin-sans",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/googlefonts/roboto-classic",
   },
   {
     id: "noto-sans-sc",
@@ -104,8 +184,29 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.modernSans",
     category: "sans",
     scripts: ["latin", "zh-CN"],
+    useCases: ["business", "body"],
+    assetKey: "cjk-sans",
+    recommended: true,
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/notofonts/noto-cjk",
+  },
+  {
+    id: "zcool-qingke-huangyou",
+    name: "ZCOOL QingKe HuangYou",
+    fontFamily: '"ZCOOL QingKe HuangYou", "Noto Sans SC", sans-serif',
+    resolvedFontFamily:
+      "var(--font-zcool-qingke-huangyou), var(--font-noto-sans-sc), sans-serif",
+    fontLoadFamily:
+      '"ZCOOL QingKe HuangYou", "Noto Sans SC Variable", sans-serif',
+    descriptionKey: "editor.fontPreset.geometricChinese",
+    category: "sans",
+    scripts: ["latin", "zh-CN"],
+    useCases: ["display", "creative"],
+    assetKey: "cjk-sans",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/googlefonts/zcool-qingke-huangyou",
   },
   {
     id: "noto-sans-mono",
@@ -118,8 +219,28 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.technicalMono",
     category: "mono",
     scripts: ["latin"],
+    useCases: ["technical", "compact"],
+    assetKey: "mono",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/notofonts/latin-greek-cyrillic",
+  },
+  {
+    id: "jetbrains-mono",
+    name: "JetBrains Mono",
+    fontFamily: '"JetBrains Mono", monospace',
+    resolvedFontFamily:
+      "var(--font-jetbrains-mono), var(--font-noto-sans-sc), monospace",
+    fontLoadFamily:
+      '"JetBrains Mono Variable", "Noto Sans SC Variable", monospace',
+    descriptionKey: "editor.fontPreset.developerMono",
+    category: "mono",
+    scripts: ["latin"],
+    useCases: ["technical", "compact"],
+    assetKey: "mono",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/JetBrains/JetBrainsMono",
   },
   {
     id: "noto-serif-sc",
@@ -132,8 +253,29 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.chineseSerif",
     category: "serif",
     scripts: ["latin", "zh-CN"],
+    useCases: ["body", "editorial"],
+    assetKey: "cjk-serif-display",
+    recommended: true,
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/notofonts/noto-cjk",
+  },
+  {
+    id: "zcool-xiaowei",
+    name: "ZCOOL XiaoWei",
+    fontFamily: '"ZCOOL XiaoWei", "Noto Serif SC", serif',
+    resolvedFontFamily:
+      "var(--font-zcool-xiaowei), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"ZCOOL XiaoWei", "Noto Serif SC Variable", serif',
+    descriptionKey: "editor.fontPreset.chineseDisplay",
+    category: "serif",
+    scripts: ["latin", "zh-CN"],
+    useCases: ["display", "creative"],
+    assetKey: "cjk-serif-display",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/googlefonts/xiaowei",
   },
   {
     id: "source-serif-4",
@@ -146,8 +288,28 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.classicSerif",
     category: "serif",
     scripts: ["latin"],
+    useCases: ["body", "editorial"],
+    assetKey: "latin-serif",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/adobe-fonts/source-serif",
+  },
+  {
+    id: "bitter",
+    name: "Bitter",
+    fontFamily: '"Bitter", serif',
+    resolvedFontFamily:
+      "var(--font-bitter), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"Bitter Variable", "Noto Serif SC Variable", serif',
+    descriptionKey: "editor.fontPreset.slabSerif",
+    category: "serif",
+    scripts: ["latin"],
+    useCases: ["body", "editorial"],
+    assetKey: "latin-serif",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/solmatas/BitterPro",
   },
   {
     id: "lora",
@@ -159,6 +321,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.editorialSerif",
     category: "serif",
     scripts: ["latin"],
+    useCases: ["body", "editorial"],
+    assetKey: "latin-serif",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/cyrealtype/Lora-Cyrillic",
   },
@@ -173,6 +338,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.readableSerif",
     category: "serif",
     scripts: ["latin"],
+    useCases: ["body", "editorial"],
+    assetKey: "latin-serif",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/SorkinType/Merriweather",
   },
@@ -187,6 +355,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.displaySerif",
     category: "serif",
     scripts: ["latin"],
+    useCases: ["display", "editorial"],
+    assetKey: "latin-serif",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/clauseggers/Playfair-Display",
   },
@@ -201,6 +372,9 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.markerGothic",
     category: "handwriting",
     scripts: ["latin", "zh-CN"],
+    useCases: ["creative", "display"],
+    assetKey: "cjk-sans",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/lxgw/LxgwMarkerGothic",
   },
@@ -214,8 +388,28 @@ const RESUME_FONT_PRESETS: readonly ResumeFontPreset[] = [
     descriptionKey: "editor.fontPreset.chineseHandwriting",
     category: "handwriting",
     scripts: ["latin", "zh-CN"],
+    useCases: ["body", "creative"],
+    assetKey: "cjk-serif-display",
+    addedAt: "2026-08-01",
     license: "OFL-1.1",
     source: "https://github.com/lxgw/LxgwWenKai",
+  },
+  {
+    id: "ma-shan-zheng",
+    name: "Ma Shan Zheng",
+    fontFamily: '"Ma Shan Zheng", "Noto Serif SC", serif',
+    resolvedFontFamily:
+      "var(--font-ma-shan-zheng), var(--font-noto-serif-sc), serif",
+    fontLoadFamily:
+      '"Ma Shan Zheng", "Noto Serif SC Variable", serif',
+    descriptionKey: "editor.fontPreset.brushCalligraphy",
+    category: "handwriting",
+    scripts: ["latin", "zh-CN"],
+    useCases: ["creative", "display"],
+    assetKey: "cjk-serif-display",
+    addedAt: "2026-10-15",
+    license: "OFL-1.1",
+    source: "https://github.com/googlefonts/mashanzheng",
   },
 ];
 
@@ -227,6 +421,10 @@ export function listResumeFontPresets() {
 
 export function getResumeFontPreset(id: string) {
   return RESUME_FONT_PRESETS.find((preset) => preset.id === id);
+}
+
+export function getResumeFontPresetByFamily(fontFamily: string) {
+  return RESUME_FONT_PRESETS.find((preset) => preset.fontFamily === fontFamily);
 }
 
 export function isResumeFontFamilyAllowed(fontFamily: string) {

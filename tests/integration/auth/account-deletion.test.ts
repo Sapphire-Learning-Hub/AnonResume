@@ -12,6 +12,7 @@ import {
   pdfExportJobs,
   resumes,
   userInvitations,
+  userFontPreferences,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { issueAccountEmailChallenge } from "@/lib/auth/account/challenges";
@@ -89,6 +90,7 @@ describe("account deletion lifecycle", () => {
         .where(eq(aiProviderCredentials.ownerUserId, userId));
       await db.delete(adminPrincipals).where(eq(adminPrincipals.userId, userId));
       await db.delete(resumes).where(eq(resumes.userId, userId));
+      await db.delete(userFontPreferences).where(eq(userFontPreferences.userId, userId));
       await getDatabasePool().query(
         `DELETE FROM "session" WHERE "userId" = $1`,
         [userId],
@@ -118,6 +120,11 @@ describe("account deletion lifecycle", () => {
       slug: `published-${randomUUID()}`,
       published: true,
       document,
+    });
+    await db.insert(userFontPreferences).values({
+      userId: user.userId,
+      fontPresetId: "noto-serif-sc",
+      isFavorite: true,
     });
     const [job] = await db
       .insert(pdfExportJobs)
@@ -387,6 +394,12 @@ describe("account deletion lifecycle", () => {
     });
     await expect(
       db.select().from(resumes).where(eq(resumes.userId, user.userId)),
+    ).resolves.toHaveLength(0);
+    await expect(
+      db
+        .select()
+        .from(userFontPreferences)
+        .where(eq(userFontPreferences.userId, user.userId)),
     ).resolves.toHaveLength(0);
     await expect(
       db

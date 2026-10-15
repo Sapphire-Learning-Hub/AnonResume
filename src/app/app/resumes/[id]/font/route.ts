@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { getResumeFontPreset } from "@/domain/resume/font-presets";
 import { requireSession } from "@/lib/auth/session";
 import {
   MAX_ACTION_REQUEST_BYTES,
@@ -8,11 +7,9 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/http/request-body";
 import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
-import {
-  getResumeRecord,
-  ResumeNotFoundError,
-  saveResumeRecord,
-} from "@/lib/resume/repository";
+import { InvalidFontPresetError } from "@/lib/resume/fonts/preferences";
+import { applyResumeFontPreset } from "@/lib/resume/fonts/service";
+import { ResumeVersionConflictError } from "@/lib/resume/repository";
 
 export async function POST(
   request: Request,
@@ -45,31 +42,42 @@ export async function POST(
   }
 
   const fontPresetId = formData.get("fontPresetId");
+  const versionValue = formData.get("version");
   const requestedReturnTo = formData.get("returnTo");
-  const fontPreset =
-    typeof fontPresetId === "string"
-      ? getResumeFontPreset(fontPresetId)
-      : undefined;
 
-  if (!fontPreset) {
+  if (typeof fontPresetId !== "string") {
     return NextResponse.json({ error: "invalid_font_preset" }, { status: 400 });
   }
 
-  const resume = await getResumeRecord(session.user.id, id);
-
-  if (!resume) {
-    throw new ResumeNotFoundError(id);
+  if (
+    typeof versionValue !== "string" ||
+    !/^\d+$/.test(versionValue) ||
+    Number(versionValue) < 1
+  ) {
+    return NextResponse.json({ error: "invalid_version" }, { status: 400 });
   }
 
-  const document = structuredClone(resume.document);
-  document.settings.typography.fontFamily = fontPreset.fontFamily;
+  try {
+    await applyResumeFontPreset({
+      userId: session.user.id,
+      resumeId: id,
+      version: Number(versionValue),
+      fontPresetId,
+    });
+  } catch (error) {
+    if (error instanceof InvalidFontPresetError) {
+      return NextResponse.json({ error: "invalid_font_preset" }, { status: 400 });
+    }
 
-  await saveResumeRecord({
-    userId: session.user.id,
-    resumeId: id,
-    version: resume.version,
-    document,
-  });
+    if (error instanceof ResumeVersionConflictError) {
+      return NextResponse.json(
+        { error: "version_conflict", currentVersion: error.currentVersion },
+        { status: 409 },
+      );
+    }
+
+    throw error;
+  }
 
   const editorReturnTo = `/app/resumes/${id}`;
   const returnTo =

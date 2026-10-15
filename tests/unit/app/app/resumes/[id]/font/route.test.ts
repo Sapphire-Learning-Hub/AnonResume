@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getResumeFontPreset } from "@/domain/resume/font-presets";
+import { db, userFontPreferences } from "@/db";
 import { requireSession } from "@/lib/auth/session";
 import { MAX_ACTION_REQUEST_BYTES } from "@/lib/http/request-body";
+import { listUserFontPreferences } from "@/lib/resume/fonts/preferences";
 import {
   createGeneratedResumeRecord,
   getResumeRecord,
@@ -19,9 +21,11 @@ function createFontRequest(
   fontPresetId: string,
   origin = "http://localhost",
   returnTo?: string,
+  version = 1,
 ) {
   const body = new FormData();
   body.set("fontPresetId", fontPresetId);
+  body.set("version", String(version));
   if (returnTo) {
     body.set("returnTo", returnTo);
   }
@@ -37,6 +41,7 @@ describe("apply resume font route", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await resetResumeRepository();
+    await db.delete(userFontPreferences);
     await createGeneratedResumeRecord({
       userId: "user-demo",
       templateId: "centered",
@@ -50,6 +55,7 @@ describe("apply resume font route", () => {
 
   afterEach(async () => {
     await resetResumeRepository();
+    await db.delete(userFontPreferences);
   });
 
   it("updates the signed-in user's resume and redirects to its editor", async () => {
@@ -70,6 +76,11 @@ describe("apply resume font route", () => {
           },
         },
       },
+    });
+    await expect(listUserFontPreferences("user-demo")).resolves.toContainEqual({
+      fontPresetId: "lxgw-wenkai",
+      favorite: false,
+      lastAppliedAt: expect.any(Number),
     });
   });
 
@@ -109,6 +120,41 @@ describe("apply resume font route", () => {
         },
       },
     });
+  });
+
+  it("rejects a stale resume version without recording recent usage", async () => {
+    const response = await POST(
+      createFontRequest("lxgw-wenkai", "http://localhost", undefined, 2),
+      { params: Promise.resolve({ id: "resume-foundation" }) },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "version_conflict",
+      currentVersion: 1,
+    });
+    await expect(getResumeRecord("user-demo", "resume-foundation")).resolves.toMatchObject({
+      version: 1,
+    });
+    await expect(listUserFontPreferences("user-demo")).resolves.toEqual([]);
+  });
+
+  it("rejects a missing resume version", async () => {
+    const request = createFontRequest("lxgw-wenkai");
+    const body = await request.formData();
+    body.delete("version");
+
+    const response = await POST(
+      new Request(request.url, {
+        method: "POST",
+        headers: { origin: "http://localhost" },
+        body,
+      }),
+      { params: Promise.resolve({ id: "resume-foundation" }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_version" });
   });
 
   it("rejects cross-origin requests before loading the session", async () => {

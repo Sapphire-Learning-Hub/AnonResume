@@ -49,6 +49,7 @@ function localizedSheets(
         "AI 对话与消息",
         "AI 用量",
         "邀请记录",
+        "字体偏好",
       ]
     : [
         "Account",
@@ -58,6 +59,7 @@ function localizedSheets(
         "AI conversations",
         "AI usage",
         "Invitations",
+        "Font preferences",
       ];
   const field = zh ? "项目" : "Field";
   const value = zh ? "值" : "Value";
@@ -215,6 +217,17 @@ function localizedSheets(
         invalidationReason: invitation.invalidationReason,
         createdAt: invitation.createdAt,
       })),
+    },
+    {
+      name: names[7]!,
+      columns: [
+        { header: zh ? "字体 ID" : "Font ID", key: "fontPresetId", width: 32 },
+        { header: zh ? "已收藏" : "Favorite", key: "favorite", width: 14 },
+        { header: zh ? "最近应用时间" : "Last applied at", key: "lastAppliedAt", width: 22 },
+        { header: zh ? "创建时间" : "Created at", key: "createdAt", width: 22 },
+        { header: zh ? "更新时间" : "Updated at", key: "updatedAt", width: 22 },
+      ],
+      rows: data.fontPreferences,
     },
   ];
 }

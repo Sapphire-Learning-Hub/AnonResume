@@ -124,6 +124,33 @@ async function transferResumeData(
   );
 }
 
+async function transferFontPreferences(
+  client: PoolClient,
+  primaryUserId: string,
+  secondaryUserId: string,
+  now: Date,
+) {
+  await client.query(
+    `INSERT INTO ${table("user_font_preferences")}
+      (user_id, font_preset_id, is_favorite, last_applied_at, created_at, updated_at)
+     SELECT $2, font_preset_id, is_favorite, last_applied_at, created_at, $3
+       FROM ${table("user_font_preferences")}
+      WHERE user_id = $1
+     ON CONFLICT (user_id, font_preset_id) DO UPDATE
+       SET is_favorite = ${table("user_font_preferences")}.is_favorite OR EXCLUDED.is_favorite,
+           last_applied_at = GREATEST(
+             ${table("user_font_preferences")}.last_applied_at,
+             EXCLUDED.last_applied_at
+           ),
+           updated_at = $3`,
+    [secondaryUserId, primaryUserId, now],
+  );
+  await client.query(
+    `DELETE FROM ${table("user_font_preferences")} WHERE user_id = $1`,
+    [secondaryUserId],
+  );
+}
+
 async function transferAiHistory(
   client: PoolClient,
   primaryUserId: string,
@@ -370,6 +397,7 @@ async function runTransfer(
     [operation.id, now],
   );
   await transferResumeData(client, primaryUserId, secondaryUserId, now);
+  await transferFontPreferences(client, primaryUserId, secondaryUserId, now);
   await transferAiHistory(client, primaryUserId, secondaryUserId, now);
   await invalidateSecondaryState(client, secondaryUserId, now);
   await transferAuthorizingIdentity(client, operation, now);
