@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import { eq } from "drizzle-orm";
 
-import { db, resumeVersions, resumes, userInvitations } from "@/db";
+import { db, resumeVersions, resumes, userFontPreferences, userInvitations } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { streamAccountExport } from "@/lib/auth/account/export-workbook";
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -17,6 +17,7 @@ describe("account Excel export", () => {
         .delete(userInvitations)
         .where(eq(userInvitations.inviterUserId, userId));
       await db.delete(resumes).where(eq(resumes.userId, userId));
+      await db.delete(userFontPreferences).where(eq(userFontPreferences.userId, userId));
       await getDatabasePool().query(
         `DELETE FROM "account" WHERE "userId" = $1`,
         [userId],
@@ -68,6 +69,12 @@ describe("account Excel export", () => {
       lastSentAt: new Date("2026-10-07T00:00:00.000Z"),
       expiresAt: new Date("2026-10-14T00:00:00.000Z"),
     });
+    await db.insert(userFontPreferences).values({
+      userId,
+      fontPresetId: "noto-serif-sc",
+      isFavorite: true,
+      lastAppliedAt: new Date("2026-10-15T01:00:00.000Z"),
+    });
 
     const stream = await streamAccountExport(userId, "zh-CN");
     const bytes = await new Response(stream).arrayBuffer();
@@ -82,6 +89,7 @@ describe("account Excel export", () => {
       "AI 对话与消息",
       "AI 用量",
       "邀请记录",
+      "字体偏好",
     ]);
     const values = workbook.worksheets
       .flatMap((sheet) => sheet.getSheetValues())
@@ -94,6 +102,7 @@ describe("account Excel export", () => {
     expect(values).toContain("Export User");
     expect(values).toContain("导出测试简历");
     expect(values).toContain("friend@example.com");
+    expect(values).toContain("noto-serif-sc");
     expect(values).not.toContain(credentialSecret);
     expect(values).not.toContain("never-export-this-invitation-token");
     expect(values.toLowerCase()).not.toContain("password");

@@ -72,6 +72,10 @@ import type {
 import { getResumeSectionAnchorId } from "@/domain/resume/section-links";
 import { useI18n } from "@/i18n/I18nProvider";
 import { getResumeStyleVariables } from "@/styles/resume-style-vars";
+import {
+  getResumeFontPresetByFamily,
+  listResumeFontPresets,
+} from "@/domain/resume/font-presets";
 
 import {
   TiptapTextBlockEditor,
@@ -89,6 +93,11 @@ import {
 } from "./ResumeDiffAnnotation";
 import { ResumeInlineIcon } from "./ResumeInlineIcon";
 import { ResumePrintReadyFlag } from "./ResumePrintReadyFlag";
+import {
+  ResumeFontAssets,
+  useResumeFontAssets,
+  type ResumeFontAssetStatus,
+} from "./fonts/font-assets";
 import { useResumeRendererStyles } from "./ResumeRenderer.style";
 import { measureResumeSectionFlow } from "./pagination/flow-measurement";
 import { ResumeEditingCanvas } from "./pagination/ResumeEditingCanvas";
@@ -149,6 +158,8 @@ interface ResumeRendererSharedProps {
 interface ResumePagedSectionRendererProps extends ResumeRendererSharedProps {
   settings: ResumeDocument["settings"];
   sections: readonly ResumeSection[];
+  fontAssetStatus?: ResumeFontAssetStatus;
+  fontLoadFamily?: string;
 }
 
 export interface ResumeSectionRendererProps
@@ -2390,6 +2401,8 @@ function ResumePagedSectionRenderer({
   onTextEditorFormattingStateChange,
   onPageCountChange,
   onPaginationReadyChange,
+  fontAssetStatus = "ready",
+  fontLoadFamily,
 }: ResumePagedSectionRendererProps): ReactNode {
   const { styles } = useResumeRendererStyles();
   const { t } = useI18n();
@@ -2436,6 +2449,7 @@ function ResumePagedSectionRenderer({
         pageContentHeight,
         settings,
         selection,
+        fontAssetStatus,
       }),
     [
       settings,
@@ -2443,6 +2457,7 @@ function ResumePagedSectionRenderer({
       pageContentHeight,
       paginationRevision,
       selection,
+      fontAssetStatus,
       zoom,
     ],
   );
@@ -2582,8 +2597,8 @@ function ResumePagedSectionRenderer({
   });
   const resolvedPageLayouts = pagination.pages;
   const pageBreakMap = pagination.breaks;
-  const paginationSettled = pagination.ready;
-  const printReady = pagination.ready;
+  const paginationSettled = pagination.ready && fontAssetStatus === "ready";
+  const printReady = paginationSettled;
 
   useLayoutEffect(() => {
     committedSpacerHeightsRef.current = new Map(
@@ -2635,7 +2650,11 @@ function ResumePagedSectionRenderer({
               data-resume-pagination-revision={paginationRevision}
             >
               {mode === "print" ? (
-                <ResumePrintReadyFlag ready={printReady} />
+                <ResumePrintReadyFlag
+                  fontAssetStatus={fontAssetStatus}
+                  fontLoadFamily={fontLoadFamily}
+                  ready={printReady}
+                />
               ) : null}
               {mode === "edit" ? (
               <ResumePageBreakProvider breakMap={pageBreakMap}>
@@ -2828,11 +2847,21 @@ export function ResumeRenderer({
   document,
   ...props
 }: ResumeRendererProps): ReactNode {
+  const preset =
+    getResumeFontPresetByFamily(document.settings.typography.fontFamily) ??
+    listResumeFontPresets()[0]!;
+  const fontAssets = useResumeFontAssets(preset.assetKey);
+
   return (
-    <ResumePagedSectionRenderer
-      {...props}
-      settings={document.settings}
-      sections={document.sections}
-    />
+    <>
+      <ResumeFontAssets assetKey={preset.assetKey} />
+      <ResumePagedSectionRenderer
+        {...props}
+        fontAssetStatus={fontAssets.status}
+        fontLoadFamily={preset.fontLoadFamily}
+        settings={document.settings}
+        sections={document.sections}
+      />
+    </>
   );
 }

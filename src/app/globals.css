@@ -8,19 +8,26 @@
   --app-text-secondary: #65545d;
   --app-border: #eadfe4;
   --app-shadow: rgba(74, 42, 57, 0.1);
+  --font-bitter: "Bitter Variable";
   --font-ibm-plex-sans: "IBM Plex Sans Variable";
+  --font-jetbrains-mono: "JetBrains Mono Variable";
+  --font-libre-franklin: "Libre Franklin Variable";
   --font-lora: "Lora Variable";
   --font-manrope: "Manrope Variable";
+  --font-ma-shan-zheng: "Ma Shan Zheng";
   --font-merriweather: "Merriweather Variable";
   --font-noto-sans-mono: "Noto Sans Mono Variable";
   --font-noto-sans-sc: "Noto Sans SC Variable";
   --font-noto-serif-sc: "Noto Serif SC Variable";
   --font-playfair-display: "Playfair Display Variable";
+  --font-roboto-condensed: "Roboto Condensed Variable";
   --font-source-sans-3: "Source Sans 3 Variable";
   --font-source-serif-4: "Source Serif 4 Variable";
   --font-lato: "Lato";
   --font-lxgw-marker-gothic: "LXGW Marker Gothic";
   --font-lxgw-wenkai: "LXGW WenKai";
+  --font-zcool-qingke-huangyou: "ZCOOL QingKe HuangYou";
+  --font-zcool-xiaowei: "ZCOOL XiaoWei";
 }
 
 html,

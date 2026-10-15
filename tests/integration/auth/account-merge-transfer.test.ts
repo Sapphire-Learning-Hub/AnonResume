@@ -24,6 +24,7 @@ import {
   resumes,
   resumeVersions,
   userInvitations,
+  userFontPreferences,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { executeAccountMergeTransfer } from "@/lib/auth/account/merge/transfer";
@@ -290,6 +291,20 @@ async function createFixture() {
       expiresAt: new Date("2026-10-09T12:10:00.000Z"),
     },
   ]);
+  await db.insert(userFontPreferences).values([
+    {
+      userId: primary.id,
+      fontPresetId: "noto-serif-sc",
+      isFavorite: false,
+      lastAppliedAt: new Date("2026-10-08T12:00:00.000Z"),
+    },
+    {
+      userId: secondary.id,
+      fontPresetId: "noto-serif-sc",
+      isFavorite: true,
+      lastAppliedAt: now,
+    },
+  ]);
 
   return {
     acceptedInvitationId: acceptedInvitation!.id,
@@ -316,6 +331,14 @@ async function createFixture() {
 
 async function cleanupFixture(fixture: Fixture | undefined) {
   if (!fixture) return;
+  await db.delete(userFontPreferences).where(eq(
+    userFontPreferences.userId,
+    fixture.primary.id,
+  ));
+  await db.delete(userFontPreferences).where(eq(
+    userFontPreferences.userId,
+    fixture.secondary.id,
+  ));
   await db.delete(accountMergeNotificationOutbox).where(eq(
     accountMergeNotificationOutbox.operationId,
     fixture.operationId,
@@ -506,6 +529,22 @@ describe("account merge transfer", () => {
       aiQuotaAccounts.userId,
       fixture.secondary.id,
     ))).resolves.toHaveLength(0);
+    await expect(
+      db
+        .select({
+          userId: userFontPreferences.userId,
+          favorite: userFontPreferences.isFavorite,
+          lastAppliedAt: userFontPreferences.lastAppliedAt,
+        })
+        .from(userFontPreferences)
+        .where(eq(userFontPreferences.userId, fixture.primary.id)),
+    ).resolves.toEqual([
+      {
+        userId: fixture.primary.id,
+        favorite: true,
+        lastAppliedAt: fixture.now,
+      },
+    ]);
 
     const [credential] = await db.select({
       encryptedApiKey: aiProviderCredentials.encryptedApiKey,

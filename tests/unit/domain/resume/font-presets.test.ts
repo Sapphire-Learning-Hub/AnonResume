@@ -12,12 +12,47 @@ describe("resume font presets", () => {
     expect(getResumeFontPreset("unknown-font")).toBeUndefined();
   });
 
+  it("exposes the expanded balanced font catalog through stable identifiers", () => {
+    expect(
+      [
+        "libre-franklin",
+        "roboto-condensed",
+        "bitter",
+        "jetbrains-mono",
+        "zcool-xiaowei",
+        "zcool-qingke-huangyou",
+        "ma-shan-zheng",
+      ].map((id) => getResumeFontPreset(id)?.name),
+    ).toEqual([
+      "Libre Franklin",
+      "Roboto Condensed",
+      "Bitter",
+      "JetBrains Mono",
+      "ZCOOL XiaoWei",
+      "ZCOOL QingKe HuangYou",
+      "Ma Shan Zheng",
+    ]);
+  });
+
+  it("marks the curated general-purpose recommendations independently", () => {
+    expect(
+      listResumeFontPresets()
+        .filter((preset) => preset.recommended)
+        .map((preset) => preset.id),
+    ).toEqual([
+      "ibm-plex-sans",
+      "source-sans-3",
+      "noto-sans-sc",
+      "noto-serif-sc",
+    ]);
+  });
+
   it("filters fonts by category while preserving catalog order", () => {
     expect(
       filterResumeFontPresets("", { category: "mono" }).map(
         (preset) => preset.id,
       ),
-    ).toEqual(["noto-sans-mono"]);
+    ).toEqual(["noto-sans-mono", "jetbrains-mono"]);
     expect(filterResumeFontPresets("", { category: "all" })).toEqual(
       listResumeFontPresets(),
     );

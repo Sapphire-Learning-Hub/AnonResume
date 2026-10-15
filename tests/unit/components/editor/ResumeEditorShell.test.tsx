@@ -1002,9 +1002,11 @@ describe("ResumeEditorShell", () => {
 
     expect(fontFamilySelect).toHaveTextContent("IBM Plex Sans");
 
-    fireEvent.mouseDown(
-      within(dialog).getByRole("combobox", { name: "字体族" }),
-    );
+    const fontFamilyInput = within(dialog).getByRole("combobox", {
+      name: "字体族",
+    });
+    fireEvent.mouseDown(fontFamilyInput);
+    fireEvent.change(fontFamilyInput, { target: { value: "Noto Serif SC" } });
     fireEvent.click(screen.getByText("Noto Serif SC"));
 
     expect(fontFamilySelect).toHaveTextContent("Noto Serif SC");

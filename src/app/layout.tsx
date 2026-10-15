@@ -1,21 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 
-import "@fontsource-variable/ibm-plex-sans/wght.css";
-import "@fontsource-variable/lora/wght.css";
-import "@fontsource-variable/manrope/wght.css";
-import "@fontsource-variable/merriweather/wght.css";
-import "@fontsource-variable/noto-sans-mono/wght.css";
-import "@fontsource-variable/noto-sans-sc/wght.css";
-import "@fontsource-variable/noto-serif-sc/wght.css";
-import "@fontsource-variable/playfair-display/wght.css";
-import "@fontsource-variable/source-sans-3/wght.css";
-import "@fontsource-variable/source-serif-4/wght.css";
-import "@fontsource/lato/400.css";
-import "@fontsource/lato/700.css";
-import "@fontsource/lxgw-marker-gothic/index.css";
-import "@fontsource/lxgw-wenkai/500.css";
-
 import "./globals.css";
 import "@/styles/print.css";
 
