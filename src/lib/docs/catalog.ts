@@ -3,6 +3,7 @@ import type { MessageKey } from "@/i18n/messages";
 export type DocsArticleId =
   | "home"
   | "editor"
+  | "markdown-editor"
   | "section-templates"
   | "ai-assistant"
   | "import-export"
@@ -40,6 +41,13 @@ const entries = {
     searchTermsKey: "docs.searchTerms.editor",
     summaryKey: "docs.summary.editor",
     titleKey: "docs.navigation.editor",
+  },
+  "markdown-editor": {
+    href: "/docs/markdown-editor",
+    id: "markdown-editor",
+    searchTermsKey: "docs.searchTerms.markdownEditor",
+    summaryKey: "docs.summary.markdownEditor",
+    titleKey: "docs.navigation.markdownEditor",
   },
   "section-templates": {
     href: "/docs/section-templates",
@@ -100,7 +108,12 @@ const groups: readonly DocsCatalogGroup[] = [
     labelKey: "docs.navigation.group.start",
   },
   {
-    entries: [entries.editor, entries["section-templates"], entries["ai-assistant"]],
+    entries: [
+      entries.editor,
+      entries["markdown-editor"],
+      entries["section-templates"],
+      entries["ai-assistant"],
+    ],
     id: "editing",
     labelKey: "docs.navigation.group.editing",
   },

@@ -1,0 +1,92 @@
+<h2 id="start-editing">进入 Markdown 编辑</h2>
+
+打开简历后，在“开始”中选择“Markdown 编辑”。左侧是源码，右侧是只读预览。你可以滚动、缩放和查看预览，但不能直接修改右侧画布；此时所有内容修改都通过左侧完成。
+
+段落、三级标题、粗体、斜体、删除线、行内代码、链接、有序列表和无序列表使用常见 Markdown 写法。
+
+```markdown
+### 高级后端工程师
+
+负责 **核心服务** 与 *工程效率* 建设。
+
+- 交付用户认证功能
+- 改善可观测性与故障恢复
+```
+
+<h2 id="page-theme">设置页面与主题</h2>
+
+每份 AnonResume Markdown 都以设置区开头。`anonresume: 1` 是必需的语法版本；页边距的四个数字依次为上、右、下、左。
+
+```markdown
+---
+anonresume: 1
+title: "后端工程师简历"
+locale: zh-CN
+page-margin: 18 16 18 16
+font-family: "Noto Sans SC"
+font-size: 10.5
+line-height: 1.55
+accent: "#1677ff"
+text-color: "#111827"
+muted-color: "#64748b"
+---
+```
+
+字体名称需要来自当前实例可用的简历字体。颜色使用十六进制值。如果某项设置不需要改动，保留进入模式时生成的值即可。
+
+<h2 id="content-structure">编写章节、布局与富文本</h2>
+
+二级标题表示简历章节。大括号内的属性用于设置章节类型、显隐、标题样式、分栏和分页保持。
+
+```markdown
+## 工作经历 {semantic="experience" visible=true title-color="#1677ff" title-size=24 keep-together=true}
+```
+
+章节布局还支持 `columns`、`direction`、`gap` 和 `padding`。`padding` 与页边距相同，按上、右、下、左填写四个数字。
+
+左右对齐、成组内容和标签列表使用块指令。指令以 `:::名称` 开始，以单独一行的 `:::` 结束。
+
+```markdown
+:::row {gap=16 align="center" justify="between"}
+:::group {direction="vertical" gap=8 align="start"}
+### 高级工程师
+
+示例公司
+:::
+:::group {direction="vertical" gap=8 align="end"}
+2024.01 - 至今
+:::
+:::
+
+:::badges {wrap=true gap=8}
+- TypeScript
+- PostgreSQL
+:::
+```
+
+行内样式可以与标准 Markdown 嵌套使用：
+
+```markdown
+:tag[核心技能]
+:icon[simple-icons:github]
+:color[:underline[重点内容]]{value="#1677ff"}
+[联系我](mailto:hello@example.com "发送邮件"){color="inherit" underline=false}
+```
+
+需要在同一段内换行时，在行尾保留两个空格后再换行。普通空行用于分隔段落。
+
+<h2 id="diagnostics">处理问题与规范化</h2>
+
+源码有问题时，左侧会显示行号和说明。选择一条问题可以定位到对应位置。如果问题会阻止解析，右侧会继续显示上一个有效预览，且这些错误修改不会被保存到简历。
+
+离开 Markdown 编辑时，有效源码会被整理成统一格式。多余空行、等价写法和属性顺序可能发生变化，但有意义的段落分隔会保留。如果当前源码仍有阻断错误，你可以继续修改，或明确放弃错误修改。
+
+浏览器异常刷新后，如果检测到本机未完成的 Markdown 源码，页面会让你选择恢复或从当前简历重新开始。
+
+<h2 id="compatibility">兼容性与可移植范围</h2>
+
+编辑器可识别普通 Markdown，也兼容已支持的木及简历 `:::left`、`:::right` 和 `icon:名称` 写法。再次打开 Markdown 编辑后，这些内容会显示为统一的 AnonResume Markdown v1 写法，不保证保留原始文本格式。
+
+单独复制 Markdown 源码可以携带可见内容和语法中列出的公开设置，但不会携带编辑器选中状态、内容的内部标识，或其他没有对外开放的兼容信息。因此，Markdown 源码适合编辑和迁移公开语义，不是完整备份，也不应代替平台的正常保存与导出流程。
+
+原始 HTML、脚本和自定义 CSS 不受支持。

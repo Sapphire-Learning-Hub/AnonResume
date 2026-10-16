@@ -758,6 +758,10 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("button", { name: "AI 编辑助手" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "历史记录" })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: "简历标题" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: "语法帮助" })).toHaveAttribute(
+      "href",
+      "/docs/markdown-editor",
+    );
     expect(screen.getByRole("link", { name: spacedLabel("预览") })).toBeEnabled();
     expect(screen.getByRole("button", { name: /^导\s*出$/ })).toBeEnabled();
 

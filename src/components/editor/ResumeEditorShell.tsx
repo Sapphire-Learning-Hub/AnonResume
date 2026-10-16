@@ -2836,7 +2836,7 @@ export function ResumeEditorShell({
           label: t("editor.markdown.helpGroup"),
           content: (
             <Button
-              href="/docs/anonresume-markdown"
+              href="/docs/markdown-editor"
               icon={<HelpIcon size={16} />}
               rel="noreferrer"
               target="_blank"

@@ -1,0 +1,92 @@
+<h2 id="start-editing">Enter Markdown editing</h2>
+
+Open a resume and choose **Markdown editing** under **Start**. The source is on the left and a read-only preview is on the right. You can scroll, zoom, and inspect the preview, but you cannot edit the right-hand canvas directly. All content changes come from the source while this mode is active.
+
+Paragraphs, level-three headings, bold, italic, strike-through, inline code, links, ordered lists, and unordered lists use familiar Markdown syntax.
+
+```markdown
+### Senior backend engineer
+
+Built **core services** and improved *engineering efficiency*.
+
+- Delivered user authentication
+- Improved observability and recovery
+```
+
+<h2 id="page-theme">Set up the page and theme</h2>
+
+Every AnonResume Markdown document starts with a settings block. `anonresume: 1` is the required syntax version. The four page-margin numbers are top, right, bottom, and left.
+
+```markdown
+---
+anonresume: 1
+title: "Backend engineer resume"
+locale: en-US
+page-margin: 18 16 18 16
+font-family: "IBM Plex Sans"
+font-size: 10.5
+line-height: 1.55
+accent: "#1677ff"
+text-color: "#111827"
+muted-color: "#64748b"
+---
+```
+
+The font name must be available in the resume font collection for the current instance. Colors use hexadecimal values. If a setting does not need to change, keep the value generated when you entered the mode.
+
+<h2 id="content-structure">Write sections, layouts, and rich text</h2>
+
+A level-two heading starts a resume section. Attributes in braces control the section type, visibility, title appearance, columns, and keep-together pagination behavior.
+
+```markdown
+## Experience {semantic="experience" visible=true title-color="#1677ff" title-size=24 keep-together=true}
+```
+
+Section layout also supports `columns`, `direction`, `gap`, and `padding`. Like page margins, `padding` takes four numbers in top, right, bottom, and left order.
+
+Use block directives for aligned columns, grouped content, and badge lists. A directive starts with `:::name` and ends with `:::` on its own line.
+
+```markdown
+:::row {gap=16 align="center" justify="between"}
+:::group {direction="vertical" gap=8 align="start"}
+### Senior engineer
+
+Example Company
+:::
+:::group {direction="vertical" gap=8 align="end"}
+2024.01 - Present
+:::
+:::
+
+:::badges {wrap=true gap=8}
+- TypeScript
+- PostgreSQL
+:::
+```
+
+Inline extensions can be nested with standard Markdown:
+
+```markdown
+:tag[Core skill]
+:icon[simple-icons:github]
+:color[:underline[Important text]]{value="#1677ff"}
+[Contact me](mailto:hello@example.com "Send email"){color="inherit" underline=false}
+```
+
+For a line break within one paragraph, leave two spaces at the end of the line before pressing Enter. A normal blank line separates paragraphs.
+
+<h2 id="diagnostics">Resolve issues and normalization</h2>
+
+When the source has a problem, the left pane shows its line number and an explanation. Select an issue to move to that location. If an issue prevents parsing, the right pane keeps showing the last valid preview and the invalid changes are not saved to the resume.
+
+When you leave Markdown editing, valid source is normalized into one consistent form. Extra blank lines, equivalent notation, and attribute order may change, while meaningful paragraph separation remains. If the current source still has a blocking error, you can continue editing or explicitly discard the invalid changes.
+
+After an unexpected browser refresh, the page may find unfinished Markdown source saved on this device. You can choose to recover it or restart from the current resume.
+
+<h2 id="compatibility">Compatibility and portability</h2>
+
+The editor recognizes ordinary Markdown and the supported Mujicv `:::left`, `:::right`, and `icon:name` forms. When you open Markdown editing again, the content appears in normalized AnonResume Markdown v1 form; the original text formatting is not preserved exactly.
+
+Copying the Markdown source carries visible content and the public settings listed in this guide. It does not carry editor selection, internal content identifiers, or other compatibility information that is not part of the public syntax. Markdown source is therefore useful for editing and moving public semantics, but it is not a complete backup and should not replace the platform's normal save and export flows.
+
+Raw HTML, scripts, and custom CSS are not supported.
