@@ -57,6 +57,10 @@ function setup(initialDraft?: LocalResumeMarkdownDraft, commitDelayMs = 10) {
 }
 
 describe("useResumeMarkdownSession", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows a valid candidate immediately and commits it as one debounced transaction", async () => {
     const { result, store } = setup(undefined, 5);
     await act(async () => result.current.enter());
@@ -80,12 +84,13 @@ describe("useResumeMarkdownSession", () => {
   });
 
   it("does not commit a semantic no-op", async () => {
+    vi.useFakeTimers();
     const { result, store } = setup();
     await act(async () => result.current.enter());
     act(() => result.current.setSource(`${result.current.source}\n\n`));
 
-    await waitFor(() => expect(result.current.diagnostics).toEqual([]));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(result.current.diagnostics).toEqual([]);
+    await act(async () => vi.advanceTimersByTimeAsync(20));
     expect(store.getState().history.past).toHaveLength(0);
   });
 
