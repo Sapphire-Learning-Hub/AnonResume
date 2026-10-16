@@ -158,7 +158,6 @@ function blocksFromMdastNode(
           id,
           parseInline(rawNodeSource(chunkSource, node), line, context),
           line,
-          baseBlock?.type === "text" ? baseBlock.style : undefined,
         ),
       ];
     case "heading": {
@@ -170,7 +169,6 @@ function blocksFromMdastNode(
           parseInline(raw, line, context),
           line,
           {
-            ...(baseBlock?.type === "text" ? baseBlock.style : {}),
             fontSize: node.depth === 3 ? 17 : 16,
             fontWeight: 700,
           },
@@ -183,8 +181,7 @@ function blocksFromMdastNode(
         id,
         type: "list",
         ordered: node.ordered ?? false,
-        ...(node.ordered ? {} : { marker: baseList?.marker ?? "disc" }),
-        ...(baseList?.gap === undefined ? {} : { gap: baseList.gap }),
+        ...(node.ordered ? {} : { marker: "disc" }),
         items: node.children.map((item, index) =>
           blocksFromListItem(
             item,
