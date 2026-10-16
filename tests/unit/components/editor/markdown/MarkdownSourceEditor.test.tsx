@@ -4,22 +4,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MarkdownSourceEditor } from "@/components/editor/markdown/MarkdownSourceEditor";
 
 describe("MarkdownSourceEditor", () => {
-  const originalGetClientRects = Range.prototype.getClientRects;
-
-  beforeAll(() => {
-    Object.defineProperty(Range.prototype, "getClientRects", {
-      configurable: true,
-      value: () => [new DOMRect(0, 0, 1, 16)] as unknown as DOMRectList,
-    });
-  });
-
-  afterAll(() => {
-    Object.defineProperty(Range.prototype, "getClientRects", {
-      configurable: true,
-      value: originalGetClientRects,
-    });
-  });
-
   it("provides an accessible controlled CodeMirror editor", async () => {
     const { rerender } = render(
       <MarkdownSourceEditor
@@ -44,6 +28,41 @@ describe("MarkdownSourceEditor", () => {
       />,
     );
     await waitFor(() => expect(editor).toHaveTextContent("# Second"));
+  });
+
+  it("moves focus to an externally selected diagnostic without exposing EditorView", async () => {
+    const diagnostic = {
+      severity: "error" as const,
+      code: "test_error",
+      parameters: {},
+      line: 2,
+      column: 2,
+    };
+    const { rerender } = render(
+      <MarkdownSourceEditor
+        value={"first\nsecond"}
+        diagnostics={[diagnostic]}
+        ariaLabel="Markdown source"
+        onChange={() => undefined}
+        onFocusDiagnostic={() => undefined}
+      />,
+    );
+
+    const editor = await screen.findByRole("textbox", { name: "Markdown source" });
+    expect(editor).not.toHaveFocus();
+
+    rerender(
+      <MarkdownSourceEditor
+        value={"first\nsecond"}
+        diagnostics={[diagnostic]}
+        focusRequest={{ diagnostic, requestId: 1 }}
+        ariaLabel="Markdown source"
+        onChange={() => undefined}
+        onFocusDiagnostic={() => undefined}
+      />,
+    );
+
+    await waitFor(() => expect(editor).toHaveFocus());
   });
 
   it("renders source diagnostics and keeps editor undo shortcuts local", async () => {

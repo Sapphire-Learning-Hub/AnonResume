@@ -29,6 +29,10 @@ import { useMarkdownSourceEditorStyles } from "./MarkdownSourceEditor.style";
 export interface MarkdownSourceEditorProps {
   value: string;
   diagnostics: ResumeMarkdownDiagnostic[];
+  focusRequest?: {
+    diagnostic: ResumeMarkdownDiagnostic;
+    requestId: number;
+  };
   ariaLabel: string;
   onChange: (value: string) => void;
   onFocusDiagnostic: (diagnostic: ResumeMarkdownDiagnostic) => void;
@@ -73,6 +77,7 @@ function toCodeMirrorDiagnostics(
 export function MarkdownSourceEditor({
   value,
   diagnostics,
+  focusRequest,
   ariaLabel,
   onChange,
   onFocusDiagnostic,
@@ -176,6 +181,24 @@ export function MarkdownSourceEditor({
       ),
     );
   }, [diagnostics, value]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !focusRequest) return;
+    const { diagnostic } = focusRequest;
+    const lineNumber = Math.min(
+      Math.max(1, diagnostic.line),
+      view.state.doc.lines,
+    );
+    const line = view.state.doc.line(lineNumber);
+    const anchor = Math.min(
+      line.to,
+      line.from + Math.max(0, diagnostic.column - 1),
+    );
+    view.dispatch({ selection: { anchor }, scrollIntoView: true });
+    view.focus();
+    onFocusDiagnosticRef.current(diagnostic);
+  }, [focusRequest]);
 
   return (
     <div

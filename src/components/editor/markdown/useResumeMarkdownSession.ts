@@ -49,6 +49,7 @@ export function useResumeMarkdownSession({
   const [recoveryDraft, setRecoveryDraft] =
     useState<LocalResumeMarkdownDraft>();
   const [active, setActive] = useState(false);
+  const [hasSourceChanges, setHasSourceChanges] = useState(false);
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -61,6 +62,14 @@ export function useResumeMarkdownSession({
     }
   };
 
+  const deleteSourceDraft = async () => {
+    try {
+      await draftRepository.deleteDraft(resumeId);
+    } catch {
+      // Local source recovery is best-effort and must not block editor controls.
+    }
+  };
+
   const setSource = (nextSource: string) => {
     const current = store.getState();
     const formatted = formatResumeMarkdown(
@@ -69,6 +78,7 @@ export function useResumeMarkdownSession({
       locale,
     );
     setSourceState(nextSource);
+    setHasSourceChanges(true);
     setDiagnostics(formatted.result.diagnostics);
 
     if (formatted.result.hasErrors || !formatted.result.document) {
@@ -90,12 +100,14 @@ export function useResumeMarkdownSession({
       }
     }
 
-    void draftRepository.saveDraft({
-      resumeId,
-      source: nextSource,
-      baseVersion: current.version,
-      updatedAt: Date.now(),
-    });
+    void draftRepository
+      .saveDraft({
+        resumeId,
+        source: nextSource,
+        baseVersion: current.version,
+        updatedAt: Date.now(),
+      })
+      .catch(() => undefined);
   };
 
   useEffect(
@@ -113,7 +125,12 @@ export function useResumeMarkdownSession({
     setPreviewDocument(current.document);
     setDiagnostics([]);
     setIsPreviewStale(false);
-    setRecoveryDraft(await draftRepository.getDraft(resumeId));
+    setHasSourceChanges(false);
+    try {
+      setRecoveryDraft(await draftRepository.getDraft(resumeId));
+    } catch {
+      setRecoveryDraft(undefined);
+    }
     setActive(true);
   };
 
@@ -123,7 +140,12 @@ export function useResumeMarkdownSession({
     setRecoveryDraft(undefined);
   };
 
-  const exit = async () => {
+  const dismissRecovery = async () => {
+    setRecoveryDraft(undefined);
+    await deleteSourceDraft();
+  };
+
+  const flush = async () => {
     const current = store.getState();
     const formatted = formatResumeMarkdown(source, current.document, locale);
     setDiagnostics(formatted.result.diagnostics);
@@ -138,12 +160,26 @@ export function useResumeMarkdownSession({
         history: "record",
       });
     }
+    setPreviewDocument(formatted.result.document);
+    setIsPreviewStale(false);
+    return true;
+  };
+
+  const exit = async () => {
+    if (!(await flush())) return false;
+    const formatted = formatResumeMarkdown(
+      source,
+      store.getState().document,
+      locale,
+    );
+    if (!formatted.result.document) return false;
     setSourceState(formatted.source);
     setPreviewDocument(formatted.result.document);
     setIsPreviewStale(false);
+    setHasSourceChanges(false);
     setActive(false);
     setRecoveryDraft(undefined);
-    await draftRepository.deleteDraft(resumeId);
+    await deleteSourceDraft();
     return true;
   };
 
@@ -154,9 +190,10 @@ export function useResumeMarkdownSession({
     setPreviewDocument(currentDocument);
     setDiagnostics([]);
     setIsPreviewStale(false);
+    setHasSourceChanges(false);
     setRecoveryDraft(undefined);
     setActive(false);
-    await draftRepository.deleteDraft(resumeId);
+    await deleteSourceDraft();
   };
 
   return {
@@ -170,9 +207,12 @@ export function useResumeMarkdownSession({
       recoveryDraft !== undefined &&
       recoveryDraft.baseVersion !== store.getState().version,
     active,
+    hasSourceChanges,
     enter,
+    flush,
     exit,
     discard,
+    dismissRecovery,
     recoverDraft: recoverDraftSource,
   };
 }

@@ -66,12 +66,17 @@ describe("useResumeMarkdownSession", () => {
     );
 
     act(() => result.current.setSource(nextSource));
+    expect(result.current.hasSourceChanges).toBe(true);
     await waitFor(() =>
       expect(result.current.previewDocument.meta.title).toBe("Markdown 简历"),
     );
     expect(store.getState().history.past).toHaveLength(0);
     await waitFor(() => expect(store.getState().history.past).toHaveLength(1));
     expect(store.getState().document.meta.title).toBe("Markdown 简历");
+    await act(async () => {
+      await expect(result.current.exit()).resolves.toBe(true);
+    });
+    expect(result.current.hasSourceChanges).toBe(false);
   });
 
   it("does not commit a semantic no-op", async () => {
@@ -82,6 +87,25 @@ describe("useResumeMarkdownSession", () => {
     await waitFor(() => expect(result.current.diagnostics).toEqual([]));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(store.getState().history.past).toHaveLength(0);
+  });
+
+  it("flushes a valid pending source change before the debounce expires", async () => {
+    const { result, store } = setup(undefined, 60_000);
+    await act(async () => result.current.enter());
+    const nextSource = result.current.source.replace(
+      'title: "AnonResume 基础简历"',
+      'title: "即时预览简历"',
+    );
+
+    act(() => result.current.setSource(nextSource));
+    expect(store.getState().document.meta.title).toBe("AnonResume 基础简历");
+
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(true);
+    });
+
+    expect(store.getState().document.meta.title).toBe("即时预览简历");
+    expect(store.getState().history.past).toHaveLength(1);
   });
 
   it("keeps the last valid preview and persists invalid source locally", async () => {

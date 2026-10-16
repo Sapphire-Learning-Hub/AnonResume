@@ -13,6 +13,13 @@ if (!globalThis.ResizeObserver) {
   };
 }
 
+if (!Range.prototype.getClientRects) {
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () => [new DOMRect(0, 0, 1, 16)] as unknown as DOMRectList,
+  });
+}
+
 vi.mock("next/navigation", () => ({
   notFound: vi.fn(() => {
     throw new Error("NEXT_NOT_FOUND");

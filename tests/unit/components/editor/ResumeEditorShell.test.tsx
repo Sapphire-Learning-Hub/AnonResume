@@ -45,12 +45,40 @@ vi.mock("@/lib/onboarding/client", () => ({
   updateEditorOnboardingRunClient: onboardingClientMocks.update,
 }));
 
+vi.mock("@/components/editor/markdown/MarkdownEditingWorkspace", () => ({
+  MarkdownEditingWorkspace: ({
+    source,
+    labels,
+    isPreviewStale,
+    onSourceChange,
+  }: {
+    source: string;
+    labels: { source: string; preview: string; stalePreview: string };
+    isPreviewStale?: boolean;
+    onSourceChange: (source: string) => void;
+  }) => (
+    <div data-testid="markdown-editing-workspace">
+      <textarea
+        aria-label={labels.source}
+        value={source}
+        onChange={(event) => onSourceChange(event.target.value)}
+      />
+      <section aria-label={labels.preview} />
+      {isPreviewStale ? <p role="status">{labels.stalePreview}</p> : null}
+    </div>
+  ),
+}));
+
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
 } from "@/lib/resume/client";
+import type {
+  LocalResumeMarkdownDraft,
+  ResumeMarkdownDraftRepository,
+} from "@/lib/resume/markdown-drafts";
 import type { RichTextContent } from "@/domain/resume/schema";
 import type { EditorOnboardingRun } from "@/lib/onboarding/types";
 
@@ -88,6 +116,25 @@ function createDeferredPromise<T>() {
     promise,
     resolve,
     reject,
+  };
+}
+
+function createMarkdownDraftRepository(
+  initialDraft: LocalResumeMarkdownDraft,
+): ResumeMarkdownDraftRepository & { deleteDraft: ReturnType<typeof vi.fn> } {
+  let draft: LocalResumeMarkdownDraft | undefined = initialDraft;
+  const deleteDraft = vi.fn(async () => {
+    draft = undefined;
+  });
+
+  return {
+    async getDraft(resumeId) {
+      return draft?.resumeId === resumeId ? draft : undefined;
+    },
+    async saveDraft(nextDraft) {
+      draft = nextDraft;
+    },
+    deleteDraft,
   };
 }
 
@@ -691,6 +738,155 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.blur(window);
     expect(contentMode).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("enters an exclusive Markdown editing mode without exposing canvas commands", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+
+    await screen.findByRole("textbox", { name: "Markdown 源码" });
+    expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "插入" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "设计" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "布局" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "AI 编辑助手" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "历史记录" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "简历标题" })).toBeDisabled();
+    expect(screen.getByRole("link", { name: spacedLabel("预览") })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^导\s*出$/ })).toBeEnabled();
+
+    fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
+    expect(
+      screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("blocks an invalid Markdown exit until the user explicitly discards it", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+    const source = await screen.findByRole("textbox", { name: "Markdown 源码" });
+    fireEvent.change(source, { target: { value: "---\nanonresume: 1" } });
+    await screen.findByRole("status");
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+    const dialog = await screen.findByRole("dialog", { name: "放弃 Markdown 修改？" });
+    expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "继续编辑" }));
+    expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "放弃 Markdown 修改？" }))
+        .getByRole("button", { name: "放弃修改" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId("markdown-editing-workspace")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("normalizes valid Markdown when leaving and protects source changes on unload", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+    const source = await screen.findByRole("textbox", { name: "Markdown 源码" });
+    const currentSource = (source as HTMLTextAreaElement).value;
+    fireEvent.change(source, {
+      target: {
+        value: currentSource.replace(
+          'title: "AnonResume 基础简历"',
+          'title: "Markdown 简历"',
+        ),
+      },
+    });
+
+    expect(
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue(
+        "Markdown 简历",
+      ),
+    );
+  });
+
+  it("requires an explicit choice before applying a recovered Markdown source draft", async () => {
+    const repository = createMarkdownDraftRepository({
+      resumeId: "resume-demo",
+      source: "local Markdown source",
+      baseVersion: 2,
+      updatedAt: 500,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        initialVersion={3}
+        markdownDraftRepository={repository}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+    const dialog = await screen.findByRole("dialog", { name: "恢复 Markdown 源码？" });
+    expect(within(dialog).getByText(/基于较早的简历版本/)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Markdown 源码" })).not.toHaveValue(
+      "local Markdown source",
+    );
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "恢复本地源码" }));
+    expect(screen.getByRole("textbox", { name: "Markdown 源码" })).toHaveValue(
+      "local Markdown source",
+    );
+    expect(repository.deleteDraft).not.toHaveBeenCalled();
+  });
+
+  it("can discard a recovered Markdown source without leaving Markdown mode", async () => {
+    const repository = createMarkdownDraftRepository({
+      resumeId: "resume-demo",
+      source: "discard this local source",
+      baseVersion: 3,
+      updatedAt: 500,
+    });
+
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        initialVersion={3}
+        markdownDraftRepository={repository}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+    const dialog = await screen.findByRole("dialog", { name: "恢复 Markdown 源码？" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "从当前简历开始" }));
+
+    await waitFor(() => expect(repository.deleteDraft).toHaveBeenCalledWith("resume-demo"));
+    expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Markdown 源码" })).not.toHaveValue(
+      "discard this local source",
+    );
   });
 
   it("opens a complete shortcut reference from the toolbar and keyboard", () => {

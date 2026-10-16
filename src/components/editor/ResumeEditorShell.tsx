@@ -32,6 +32,7 @@ import {
   BoldOutlined,
   DownOutlined,
   FileAddOutlined,
+  FileMarkdownOutlined,
   FileTextOutlined,
   ItalicOutlined,
   LinkOutlined,
@@ -65,6 +66,9 @@ import {
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
+import { MarkdownEditingWorkspace } from "@/components/editor/markdown/MarkdownEditingWorkspace";
+import { getResumeMarkdownDiagnosticMessage } from "@/components/editor/markdown/MarkdownDiagnostics";
+import { useResumeMarkdownSession } from "@/components/editor/markdown/useResumeMarkdownSession";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
 import { SectionPresetCommands } from "@/components/editor/section-presets/SectionPresetCommands";
 import {
@@ -136,6 +140,7 @@ import {
   createResumeDraftRepository,
   type ResumeDraftRepository,
 } from "@/lib/resume/drafts";
+import type { ResumeMarkdownDraftRepository } from "@/lib/resume/markdown-drafts";
 import {
   exportResumePdfDocument,
   createResumeVersionSnapshot,
@@ -320,7 +325,7 @@ function isNativeEditableTarget(target: EventTarget | null) {
   );
 }
 
-type EditSurfaceMode = "content" | "layout";
+type EditSurfaceMode = "content" | "layout" | "markdown";
 
 const TEMPORARY_LAYOUT_HOLD_DELAY_MS = 200;
 
@@ -333,6 +338,7 @@ export function ResumeEditorShell({
   initialUpdatedAt = 0,
   autosaveDelayMs = 800,
   draftRepository,
+  markdownDraftRepository,
   saveDocument,
   publishDocument,
   unpublishDocument,
@@ -354,6 +360,7 @@ export function ResumeEditorShell({
   initialUpdatedAt?: number;
   autosaveDelayMs?: number;
   draftRepository?: ResumeDraftRepository;
+  markdownDraftRepository?: ResumeMarkdownDraftRepository;
   saveDocument?: (params: {
     resumeId: string;
     version: number;
@@ -438,6 +445,12 @@ export function ResumeEditorShell({
       updatedAt: initialUpdatedAt,
     }),
   );
+  const markdownSession = useResumeMarkdownSession({
+    resumeId,
+    locale,
+    store,
+    draftRepository: markdownDraftRepository,
+  });
   const [resumeSummary, setResumeSummary] = useState(initialSummary);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
 
@@ -505,10 +518,13 @@ export function ResumeEditorShell({
   }, [resolvedDraftRepository, resolvedSaveDocument, store]);
 
   const handleManualSave = useCallback(() => {
-    void flushSave().catch(() => {
+    void (async () => {
+      if (markdownSession.active && !(await markdownSession.flush())) return;
+      await flushSave();
+    })().catch(() => {
       // The persistence layer exposes failures through the existing editor state.
     });
-  }, [flushSave]);
+  }, [flushSave, markdownSession]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -553,11 +569,18 @@ export function ResumeEditorShell({
     };
   }, [handleManualSave, store]);
 
+  useResumePersistence({
+    store,
+    draftRepository: resolvedDraftRepository,
+    saveDocument: resolvedSaveDocument,
+    flushSave,
+    debounceMs: autosaveDelayMs,
+    initialUpdatedAt,
+  });
+
   useEffect(() => {
     function handleBeforeUnload(event: BeforeUnloadEvent) {
-      if (!store.getState().dirty) {
-        return;
-      }
+      if (!store.getState().dirty && !markdownSession.hasSourceChanges) return;
 
       event.preventDefault();
       event.returnValue = "";
@@ -568,16 +591,7 @@ export function ResumeEditorShell({
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [store]);
-
-  useResumePersistence({
-    store,
-    draftRepository: resolvedDraftRepository,
-    saveDocument: resolvedSaveDocument,
-    flushSave,
-    debounceMs: autosaveDelayMs,
-    initialUpdatedAt,
-  });
+  }, [markdownSession.hasSourceChanges, store]);
 
   const document = useStore(store, (state) => state.document);
   const recoveryDraft = useStore(store, (state) => state.recoveryDraft);
@@ -615,6 +629,9 @@ export function ResumeEditorShell({
   const [previewBusy, setPreviewBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
+  const [pendingMarkdownExitMode, setPendingMarkdownExitMode] =
+    useState<Exclude<EditSurfaceMode, "markdown">>();
+  const [markdownModeBusy, setMarkdownModeBusy] = useState(false);
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
   const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
@@ -661,9 +678,12 @@ export function ResumeEditorShell({
   const [initialPaginationReady, setInitialPaginationReady] = useState(false);
   const [pageCount, setPageCount] = useState(1);
   const [activePage, setActivePage] = useState(1);
-  const activeEditSurfaceMode: EditSurfaceMode = temporaryLayoutMode
-    ? "layout"
-    : editSurfaceMode;
+  const activeEditSurfaceMode: EditSurfaceMode =
+    editSurfaceMode === "markdown"
+      ? "markdown"
+      : temporaryLayoutMode
+        ? "layout"
+        : editSurfaceMode;
   const resolvedActivePage = Math.min(Math.max(activePage, 1), pageCount);
   const canvasDocument =
     aiProposalPreview && aiPreviewMode === "effect"
@@ -719,6 +739,8 @@ export function ResumeEditorShell({
       if (event.key === "Control") {
         if (event.repeat || holdTimer !== undefined) return;
 
+        if (editSurfaceMode === "markdown") return;
+
         holdTimer = window.setTimeout(() => {
           holdTimer = undefined;
           setTemporaryLayoutMode(true);
@@ -755,7 +777,7 @@ export function ResumeEditorShell({
       window.removeEventListener("blur", stopTemporaryLayoutMode);
       globalThis.document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [editSurfaceMode]);
   const showSaveValidationNotification = useEffectEvent(() => {
     if (!saveValidation) return;
 
@@ -891,9 +913,11 @@ export function ResumeEditorShell({
     selectedBlock && selectedBlock.type !== "text" ? selectedBlock : undefined;
   const contextRibbonKind = getContextRibbonKind(selection, selectedBlock?.type);
   const effectiveRibbonTab =
-    activeRibbonTab === "context" && !contextRibbonKind
-      ? lastPermanentRibbonTab
-      : activeRibbonTab;
+    activeEditSurfaceMode === "markdown"
+      ? "home"
+      : activeRibbonTab === "context" && !contextRibbonKind
+        ? lastPermanentRibbonTab
+        : activeRibbonTab;
 
   useEffect(() => {
     if (activeRibbonTab !== "context" || contextRibbonKind) return;
@@ -1225,14 +1249,17 @@ export function ResumeEditorShell({
     (preset) => preset.id !== "custom",
   );
   const editSurfaceModeLabel =
-    activeEditSurfaceMode === "layout"
-      ? t("editor.layoutSorting")
-      : t("editor.contentEditing");
+    activeEditSurfaceMode === "markdown"
+      ? t("editor.markdownEditing")
+      : activeEditSurfaceMode === "layout"
+        ? t("editor.layoutSorting")
+        : t("editor.contentEditing");
 
   async function handlePublish() {
     setPublicationBusy(true);
 
     try {
+      if (markdownSession.active && !(await markdownSession.flush())) return;
       if (store.getState().dirty) {
         await flushSave();
       }
@@ -1256,6 +1283,7 @@ export function ResumeEditorShell({
     setPreviewBusy(true);
 
     try {
+      if (markdownSession.active && !(await markdownSession.flush())) return;
       if (store.getState().dirty) {
         await flushSave();
       }
@@ -1297,6 +1325,7 @@ export function ResumeEditorShell({
     setPdfBusy(true);
 
     try {
+      if (markdownSession.active && !(await markdownSession.flush())) return;
       if (store.getState().dirty) {
         await flushSave();
       }
@@ -1457,7 +1486,44 @@ export function ResumeEditorShell({
     }
   }
 
-  function handleEditSurfaceModeChange(nextMode: EditSurfaceMode) {
+  async function handleEditSurfaceModeChange(nextMode: EditSurfaceMode) {
+    if (nextMode === editSurfaceMode || markdownModeBusy) return;
+
+    if (nextMode === "markdown") {
+      setMarkdownModeBusy(true);
+      try {
+        setTemporaryLayoutMode(false);
+        setAiAssistantOpen(false);
+        setAiProposalPreview(undefined);
+        if (globalThis.document.activeElement instanceof HTMLElement) {
+          globalThis.document.activeElement.blur();
+        }
+        await Promise.resolve();
+        await markdownSession.enter();
+        store.getState().setSelection({});
+        setActiveRibbonTab("home");
+        setLastPermanentRibbonTab("home");
+        setEditSurfaceMode("markdown");
+      } finally {
+        setMarkdownModeBusy(false);
+      }
+      return;
+    }
+
+    if (editSurfaceMode === "markdown") {
+      setMarkdownModeBusy(true);
+      let exited = false;
+      try {
+        exited = await markdownSession.exit();
+      } finally {
+        setMarkdownModeBusy(false);
+      }
+      if (!exited) {
+        setPendingMarkdownExitMode(nextMode);
+        return;
+      }
+    }
+
     setEditSurfaceMode(nextMode);
 
     if (nextMode !== "layout") {
@@ -2468,7 +2534,53 @@ export function ResumeEditorShell({
     </EditorRibbonPropertyGroup>
   );
 
-  const ribbonTabs: EditorRibbonTabItem[] = [
+  function renderEditSurfaceModeControls(layoutAnchor = false) {
+    return (
+      <div className={styles.ribbonCommandStack}>
+        <Button
+          aria-label={t("editor.contentEditing")}
+          aria-pressed={activeEditSurfaceMode === "content"}
+          className={styles.ribbonModeButton}
+          disabled={markdownModeBusy}
+          icon={<FileTextOutlined />}
+          onClick={() => void handleEditSurfaceModeChange("content")}
+        >
+          {t("editor.contentEditing")}
+        </Button>
+        <Button
+          aria-label={t("editor.layoutSorting")}
+          aria-pressed={activeEditSurfaceMode === "layout"}
+          className={styles.ribbonModeButton}
+          data-onboarding-anchor={layoutAnchor ? "editor-reorder-content" : undefined}
+          disabled={markdownModeBusy}
+          icon={<AppstoreAddOutlined />}
+          onClick={() => void handleEditSurfaceModeChange("layout")}
+        >
+          {t("editor.layoutSorting")}
+        </Button>
+        <Button
+          aria-label={t("editor.markdownEditing")}
+          aria-pressed={activeEditSurfaceMode === "markdown"}
+          className={styles.ribbonModeButton}
+          disabled={markdownModeBusy}
+          icon={<FileMarkdownOutlined />}
+          onClick={() => void handleEditSurfaceModeChange("markdown")}
+        >
+          {t("editor.markdownEditing")}
+        </Button>
+      </div>
+    );
+  }
+
+  const ribbonTabs: EditorRibbonTabItem[] = activeEditSurfaceMode === "markdown"
+    ? [
+        {
+          key: "home",
+          label: t("editor.ribbon.tab.home"),
+          icon: <HomeIcon size={15} />,
+        },
+      ]
+    : [
     {
       key: "home",
       label: t("editor.ribbon.tab.home"),
@@ -2495,14 +2607,14 @@ export function ResumeEditorShell({
           label: t(`editor.ribbon.tab.context.${contextRibbonKind}`),
         }]
       : []),
-  ];
+      ];
 
   const quickActions = (
     <>
       <Button
         aria-label={t("editor.undo")}
         className={styles.ribbonIconButton}
-        disabled={!canUndo}
+        disabled={activeEditSurfaceMode === "markdown" || !canUndo}
         title={t("editor.undoShortcut")}
         type="text"
         onClick={() => store.getState().undo()}
@@ -2512,7 +2624,7 @@ export function ResumeEditorShell({
       <Button
         aria-label={t("editor.redo")}
         className={styles.ribbonIconButton}
-        disabled={!canRedo}
+        disabled={activeEditSurfaceMode === "markdown" || !canRedo}
         title={t("editor.redoShortcut")}
         type="text"
         onClick={() => store.getState().redo()}
@@ -2528,6 +2640,7 @@ export function ResumeEditorShell({
         <Button
           aria-label={t("ai.title")}
           className={styles.ribbonLabelButton}
+          disabled={activeEditSurfaceMode === "markdown"}
           type="text"
           onClick={() => setAiAssistantOpen(true)}
         >
@@ -2539,6 +2652,7 @@ export function ResumeEditorShell({
         <Button
           aria-label={t("editor.versionHistory")}
           className={styles.ribbonIconButton}
+          disabled={activeEditSurfaceMode === "markdown"}
           type="text"
           onClick={() => void handleOpenVersionHistory()}
         >
@@ -2579,8 +2693,12 @@ export function ResumeEditorShell({
         resumeId={resumeId}
         saveSummary={resolvedUpdateSummary}
         triggerType="default"
+        triggerDisabled={activeEditSurfaceMode === "markdown"}
         version={initialVersion}
         prepareSave={async () => {
+          if (markdownSession.active && !(await markdownSession.flush())) {
+            throw new Error("markdown_invalid");
+          }
           await flushSave();
           return store.getState().version;
         }}
@@ -2706,34 +2824,37 @@ export function ResumeEditorShell({
   );
 
   const ribbonCommandGroups: EditorRibbonGroup[] = (() => {
+    if (activeEditSurfaceMode === "markdown") {
+      return [
+        {
+          key: "mode",
+          label: t("editor.ribbon.group.mode"),
+          content: renderEditSurfaceModeControls(),
+        },
+        {
+          key: "markdown-help",
+          label: t("editor.markdown.helpGroup"),
+          content: (
+            <Button
+              href="/docs/anonresume-markdown"
+              icon={<HelpIcon size={16} />}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("editor.markdown.help")}
+            </Button>
+          ),
+        },
+      ];
+    }
+
     switch (effectiveRibbonTab) {
       case "home":
         return [
           {
             key: "mode",
             label: t("editor.ribbon.group.mode"),
-            content: (
-              <div className={styles.ribbonCommandStack}>
-                <Button
-                  aria-label={t("editor.contentEditing")}
-                  aria-pressed={activeEditSurfaceMode === "content"}
-                  className={styles.ribbonModeButton}
-                  icon={<FileTextOutlined />}
-                  onClick={() => handleEditSurfaceModeChange("content")}
-                >
-                  {t("editor.contentEditing")}
-                </Button>
-                <Button
-                  aria-label={t("editor.layoutSorting")}
-                  aria-pressed={activeEditSurfaceMode === "layout"}
-                  className={styles.ribbonModeButton}
-                  icon={<AppstoreAddOutlined />}
-                  onClick={() => handleEditSurfaceModeChange("layout")}
-                >
-                  {t("editor.layoutSorting")}
-                </Button>
-              </div>
-            ),
+            content: renderEditSurfaceModeControls(),
           },
           {
             key: "text",
@@ -2994,29 +3115,7 @@ export function ResumeEditorShell({
           {
             key: "reorder",
             label: t("editor.ribbon.group.mode"),
-            content: (
-              <div className={styles.ribbonCommandStack}>
-                <Button
-                  aria-label={t("editor.contentEditing")}
-                  aria-pressed={activeEditSurfaceMode === "content"}
-                  className={styles.ribbonModeButton}
-                  icon={<FileTextOutlined />}
-                  onClick={() => handleEditSurfaceModeChange("content")}
-                >
-                  {t("editor.contentEditing")}
-                </Button>
-                <Button
-                  aria-label={t("editor.layoutSorting")}
-                  aria-pressed={activeEditSurfaceMode === "layout"}
-                  className={styles.ribbonModeButton}
-                  data-onboarding-anchor="editor-reorder-content"
-                  icon={<AppstoreAddOutlined />}
-                  onClick={() => handleEditSurfaceModeChange("layout")}
-                >
-                  {t("editor.layoutSorting")}
-                </Button>
-              </div>
-            ),
+            content: renderEditSurfaceModeControls(true),
           },
           {
             key: "page",
@@ -3081,11 +3180,18 @@ export function ResumeEditorShell({
         commandGroups={ribbonCommandGroups}
         documentActions={documentActions}
         documentName={resumeName}
+        documentNameDisabled={activeEditSurfaceMode === "markdown"}
         documentNameLabel={t("editor.resumeTitle")}
         quickActions={quickActions}
-        saveStatus={formatSaveStatus(saveStatus, t)}
+        saveStatus={
+          activeEditSurfaceMode === "markdown" && markdownSession.isPreviewStale
+            ? t("editor.markdown.saveBlocked")
+            : formatSaveStatus(saveStatus, t)
+        }
         saveStatusTone={
-          saveStatus === "dirty"
+          activeEditSurfaceMode === "markdown" && markdownSession.isPreviewStale
+            ? "error"
+            : saveStatus === "dirty"
             ? "warning"
             : saveStatus === "saving"
               ? "processing"
@@ -3246,6 +3352,45 @@ export function ResumeEditorShell({
         title={t("publication.unpublishTitle")}
       />
 
+      <ActionConfirmationModal
+        cancelText={t("editor.markdown.continueEditing")}
+        confirmText={t("editor.markdown.discard")}
+        description={t("editor.markdown.discardDescription")}
+        open={pendingMarkdownExitMode !== undefined}
+        pending={markdownModeBusy}
+        title={t("editor.markdown.discardTitle")}
+        onCancel={() => setPendingMarkdownExitMode(undefined)}
+        onConfirm={() => {
+          const nextMode = pendingMarkdownExitMode;
+          if (!nextMode) return;
+          setMarkdownModeBusy(true);
+          void markdownSession.discard()
+            .then(() => {
+              setEditSurfaceMode(nextMode);
+              setPendingMarkdownExitMode(undefined);
+            })
+            .finally(() => setMarkdownModeBusy(false));
+        }}
+      />
+
+      <ActionConfirmationModal
+        cancelText={t("editor.markdown.recoveryDiscard")}
+        confirmText={t("editor.markdown.recoveryUse")}
+        danger={false}
+        description={t(
+          markdownSession.recoveryIsStale
+            ? "editor.markdown.recoveryStaleDescription"
+            : "editor.markdown.recoveryDescription",
+        )}
+        open={
+          activeEditSurfaceMode === "markdown" &&
+          markdownSession.recoveryDraft !== undefined
+        }
+        title={t("editor.markdown.recoveryTitle")}
+        onCancel={() => void markdownSession.dismissRecovery()}
+        onConfirm={() => markdownSession.recoverDraft()}
+      />
+
       {recoveryDraft || saveConflict ? (
         <>
           {recoveryDraft ? (
@@ -3299,6 +3444,35 @@ export function ResumeEditorShell({
         }}
       />
 
+      {activeEditSurfaceMode === "markdown" ? (
+        <MarkdownEditingWorkspace
+          diagnostics={markdownSession.diagnostics}
+          document={markdownSession.previewDocument}
+          getDiagnosticMessage={(diagnostic) =>
+            getResumeMarkdownDiagnosticMessage(t, diagnostic)
+          }
+          isPreviewStale={markdownSession.isPreviewStale}
+          labels={{
+            diagnostics: t("editor.markdown.diagnostics"),
+            emptyDiagnostics: t("editor.markdown.noDiagnostics"),
+            error: t("editor.markdown.error"),
+            line: t("editor.markdown.line"),
+            preview: t("editor.markdown.preview"),
+            source: t("editor.markdown.source"),
+            stalePreview: t("editor.markdown.stalePreview"),
+            warning: t("editor.markdown.warning"),
+          }}
+          paginationRevision={paginationRevision}
+          previewViewportRef={canvasViewportRef}
+          showPrintSafeArea={showPrintSafeArea}
+          source={markdownSession.source}
+          zoom={zoom}
+          onPageCountChange={handlePageCountChange}
+          onPaginationReadyChange={handlePaginationReadyChange}
+          onPreviewScroll={handleCanvasViewportScroll}
+          onSourceChange={markdownSession.setSource}
+        />
+      ) : (
       <section className={styles.body}>
         <aside
           aria-label={t("editor.outline")}
@@ -3481,6 +3655,7 @@ export function ResumeEditorShell({
         </section>
 
       </section>
+      )}
       <EditorStatusBar
         canZoomIn={canZoomIn}
         canZoomOut={canZoomOut}

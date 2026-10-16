@@ -86,6 +86,7 @@ export function EditorRibbon({
   commandGroups,
   documentActions,
   documentName,
+  documentNameDisabled = false,
   documentNameLabel,
   quickActions,
   saveStatus,
@@ -101,6 +102,7 @@ export function EditorRibbon({
   commandGroups: EditorRibbonGroup[];
   documentActions: ReactNode;
   documentName: string;
+  documentNameDisabled?: boolean;
   documentNameLabel: string;
   quickActions: ReactNode;
   saveStatus: string;
@@ -178,6 +180,7 @@ export function EditorRibbon({
             aria-label={documentNameLabel}
             className={styles.documentName}
             data-testid="resume-title-input"
+            disabled={documentNameDisabled}
             title={documentName}
             value={documentName}
             parseValue={(name) => (name.trim() ? name : undefined)}
