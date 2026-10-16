@@ -96,6 +96,10 @@ export interface ResumeEditorState {
 
 export interface ResumeEditorActions {
   setSelection: (selection: ResumeEditorSelection) => void;
+  replaceDocument: (params: {
+    document: ResumeDocument;
+    history: "record" | "skip";
+  }) => boolean;
   updateDocument: (
     updater: (document: ResumeDocument) => ResumeDocument,
   ) => void;
@@ -252,6 +256,32 @@ function getSelectionAfterSectionDeletion({
   return fallbackSection ? { sectionId: fallbackSection.id } : {};
 }
 
+function getSelectionForDocument(
+  document: ResumeDocument,
+  selection: ResumeEditorSelection,
+): ResumeEditorSelection {
+  if (!selection.sectionId) return {};
+  const section = document.sections.find(
+    (item) => item.id === selection.sectionId,
+  );
+  if (!section) return {};
+  if (!selection.blockPath?.length) return { sectionId: section.id };
+  const block = findBlockByPath(section.blocks, selection.blockPath);
+  if (!block) return { sectionId: section.id };
+  if (selection.badgeItemId) {
+    if (
+      block.type !== "badges" ||
+      !block.items.some((item) => item.id === selection.badgeItemId)
+    ) {
+      return { sectionId: section.id, blockPath: selection.blockPath };
+    }
+  }
+  if (selection.richTextField && block.type !== "text") {
+    return { sectionId: section.id, blockPath: selection.blockPath };
+  }
+  return selection;
+}
+
 export function createResumeEditorStore({
   resumeId,
   document,
@@ -281,6 +311,30 @@ export function createResumeEditorStore({
     },
     setSelection: (selection) => {
       set({ selection });
+    },
+    replaceDocument: ({ document: nextDocument, history }) => {
+      const current = get();
+
+      if (JSON.stringify(current.document) === JSON.stringify(nextDocument)) {
+        return false;
+      }
+
+      set({
+        document: nextDocument,
+        selection: getSelectionForDocument(nextDocument, current.selection),
+        dirty: true,
+        saveStatus: "dirty",
+        saveConflict: undefined,
+        saveValidation: undefined,
+        history: {
+          past:
+            history === "record"
+              ? [...current.history.past, current.document]
+              : current.history.past,
+          future: [],
+        },
+      });
+      return true;
     },
     updateDocument: (updater) => {
       const current = get();

@@ -8,6 +8,106 @@ import { validateResumeDocument } from "@/domain/resume/validation";
 import { createResumeEditorStore } from "@/stores/resume-editor";
 
 describe("createResumeEditorStore", () => {
+  it("replaces a Markdown candidate as one history transaction", () => {
+    const document = createDefaultResumeDocument();
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+    const replacement = structuredClone(document);
+    replacement.meta.title = "Markdown edit";
+
+    expect(
+      store.getState().replaceDocument({
+        document: replacement,
+        history: "record",
+      }),
+    ).toBe(true);
+    expect(store.getState()).toMatchObject({
+      document: replacement,
+      dirty: true,
+      saveStatus: "dirty",
+      history: { past: [document], future: [] },
+    });
+  });
+
+  it("ignores semantic no-op replacements without changing dirty state or history", () => {
+    const document = createDefaultResumeDocument();
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+
+    expect(
+      store.getState().replaceDocument({
+        document: structuredClone(document),
+        history: "record",
+      }),
+    ).toBe(false);
+    expect(store.getState()).toMatchObject({
+      dirty: false,
+      saveStatus: "idle",
+      history: { past: [], future: [] },
+    });
+  });
+
+  it("clears future history and invalid selections on replacement", () => {
+    const document = createDefaultResumeDocument();
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+    store.getState().setSelection({
+      sectionId: "section-profile",
+      blockPath: ["block-profile-summary"],
+      richTextField: "content",
+    });
+    store.getState().updateDocument((current) => ({
+      ...current,
+      meta: { ...current.meta, title: "First" },
+    }));
+    store.getState().undo();
+    const replacement = structuredClone(document);
+    replacement.sections[0]!.blocks = [];
+
+    store.getState().replaceDocument({ document: replacement, history: "record" });
+
+    expect(store.getState().history.future).toEqual([]);
+    expect(store.getState().history.past).toHaveLength(1);
+    expect(store.getState().selection).toEqual({ sectionId: "section-profile" });
+  });
+
+  it("can initialize recovery state without adding a history entry", () => {
+    const document = createDefaultResumeDocument();
+    const store = createResumeEditorStore({
+      resumeId: "resume-demo",
+      document,
+      version: 1,
+      updatedAt: 100,
+    });
+    const replacement = structuredClone(document);
+    replacement.meta.title = "Recovered Markdown";
+
+    expect(
+      store.getState().replaceDocument({
+        document: replacement,
+        history: "skip",
+      }),
+    ).toBe(true);
+    expect(store.getState()).toMatchObject({
+      document: replacement,
+      dirty: true,
+      saveStatus: "dirty",
+      history: { past: [], future: [] },
+    });
+  });
+
   it("keeps an empty text block while editing and prunes its empty parent on commit", () => {
     const document = createDefaultResumeDocument();
     const section = document.sections[0]!;
