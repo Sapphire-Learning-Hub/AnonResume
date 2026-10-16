@@ -1,5 +1,4 @@
 import { getResumeFontPresetByFamily } from "../font-presets";
-import { getPlainTextFromRichText } from "../operations";
 import type { ResumeBlock, ResumeDocument } from "../schema";
 import { serializeDirectiveAttributes } from "./directives";
 import { serializeResumeMarkdownFrontMatter } from "./frontmatter";

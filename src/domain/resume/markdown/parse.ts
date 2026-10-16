@@ -1,4 +1,4 @@
-import type { Heading, List, ListItem, Paragraph, Root, RootContent } from "mdast";
+import type { Heading, ListItem, Root, RootContent } from "mdast";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
