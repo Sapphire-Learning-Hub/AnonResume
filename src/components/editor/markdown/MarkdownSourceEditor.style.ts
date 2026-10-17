@@ -5,8 +5,7 @@ export const useMarkdownSourceEditorStyles = createStyles(({ css, token }) => ({
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border-top: 1px solid ${token.colorBorderSecondary};
     background: ${token.colorBgContainer};
 
     > .cm-editor {

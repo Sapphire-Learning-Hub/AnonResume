@@ -11,21 +11,24 @@ text-color: "#111827"
 muted-color: "#64748b"
 ---
 
-## 工作经历 {semantic="experience" visible=false title-color="#1677ff" title-size=24 columns=2 direction="horizontal" gap=14 padding="2 4 6 8" keep-together=true}
+<!-- 保留这条本地编辑说明 -->
+## 工作经历
 
 :::row {gap=16 align="center" justify="between"}
-:::group {direction="vertical" gap=8 align="start"}
 ### 高级工程师
 
 中文第一行  
-第二行 :tag[核心] :icon[simple-icons:github]
-:::
-:::group {direction="vertical" gap=8 align="end"}
-[联系我](mailto:test@example.com){color="inherit" underline=false}
-:::
+第二行 :icon[simple-icons:github]
+
+- 负责核心模块
+- 改善交付质量
+
+### 联系方式
+
+[联系我](mailto:test@example.com)
 :::
 
-:::badges {wrap=true gap=8}
+## 技能
+
 - TypeScript
 - React
-:::

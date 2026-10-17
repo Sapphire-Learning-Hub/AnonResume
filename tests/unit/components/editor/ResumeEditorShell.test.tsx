@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 
 const feedbackMocks = vi.hoisted(() => ({
   notificationDestroy: vi.fn(),
@@ -50,11 +51,13 @@ vi.mock("@/components/editor/markdown/MarkdownEditingWorkspace", () => ({
     source,
     labels,
     isPreviewStale,
+    resizeHandle,
     onSourceChange,
   }: {
     source: string;
     labels: { source: string; preview: string; stalePreview: string };
     isPreviewStale?: boolean;
+    resizeHandle?: ReactNode;
     onSourceChange: (source: string) => void;
   }) => (
     <div data-testid="markdown-editing-workspace">
@@ -63,13 +66,14 @@ vi.mock("@/components/editor/markdown/MarkdownEditingWorkspace", () => ({
         value={source}
         onChange={(event) => onSourceChange(event.target.value)}
       />
-      <section aria-label={labels.preview} />
       {isPreviewStale ? <p role="status">{labels.stalePreview}</p> : null}
+      {resizeHandle}
     </div>
   ),
 }));
 
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { serializeResumeMarkdown } from "@/domain/resume/markdown";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import {
   ResumeValidationClientError,
@@ -79,6 +83,7 @@ import type {
   LocalResumeMarkdownDraft,
   ResumeMarkdownDraftRepository,
 } from "@/lib/resume/markdown-drafts";
+import { LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION } from "@/lib/resume/markdown-drafts";
 import type { RichTextContent } from "@/domain/resume/schema";
 import type { EditorOnboardingRun } from "@/lib/onboarding/types";
 
@@ -120,9 +125,20 @@ function createDeferredPromise<T>() {
 }
 
 function createMarkdownDraftRepository(
-  initialDraft: LocalResumeMarkdownDraft,
+  initialDraft: Omit<
+    LocalResumeMarkdownDraft,
+    "schemaVersion" | "projection"
+  >,
 ): ResumeMarkdownDraftRepository & { deleteDraft: ReturnType<typeof vi.fn> } {
-  let draft: LocalResumeMarkdownDraft | undefined = initialDraft;
+  const projection = serializeResumeMarkdown(
+    createDefaultResumeDocument("zh-CN"),
+    { baseDocumentVersion: initialDraft.baseVersion },
+  ).projection;
+  let draft: LocalResumeMarkdownDraft | undefined = {
+    ...initialDraft,
+    schemaVersion: LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION,
+    projection,
+  };
   const deleteDraft = vi.fn(async () => {
     draft = undefined;
   });
@@ -189,17 +205,48 @@ async function findDialogByContent(accessibleName: string, content: string) {
   return dialog as HTMLElement;
 }
 
+const resizeObservers: MockResizeObserver[] = [];
+
 class MockResizeObserver {
-  observe() {}
+  readonly observedElements = new Set<Element>();
 
-  unobserve() {}
+  constructor(readonly callback: ResizeObserverCallback) {
+    resizeObservers.push(this);
+  }
 
-  disconnect() {}
+  observe(element: Element) {
+    this.observedElements.add(element);
+  }
+
+  unobserve(element: Element) {
+    this.observedElements.delete(element);
+  }
+
+  disconnect() {
+    this.observedElements.clear();
+  }
+}
+
+function resizeElement(element: Element, width: number) {
+  for (const observer of resizeObservers) {
+    if (!observer.observedElements.has(element)) continue;
+
+    observer.callback(
+      [
+        {
+          target: element,
+          contentRect: { width },
+        } as ResizeObserverEntry,
+      ],
+      observer as unknown as ResizeObserver,
+    );
+  }
 }
 
 describe("ResumeEditorShell", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resizeObservers.length = 0;
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
   });
 
@@ -748,26 +795,77 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
+    const workspaceNavigation = screen.getByRole("complementary", {
+      name: "编辑工作区",
+    });
+    const outlinePanel = screen.getByRole("complementary", { name: "大纲" });
+    expect(workspaceNavigation).not.toContainElement(outlinePanel);
+    expect(
+      within(screen.getByTestId("editor-ribbon")).queryByRole("button", {
+        name: spacedLabel("Markdown 编辑"),
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(workspaceNavigation).getByRole("button", { name: "大纲" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const workspaceBody = screen.getByTestId("editor-workspace-body");
+    act(() => resizeElement(workspaceBody, 1_200));
+    expect(
+      workspaceBody.style.getPropertyValue("--editor-workspace-panel-width"),
+    ).toBe("340px");
+    fireEvent.keyDown(screen.getByRole("separator", {
+      name: "调整侧栏宽度",
+    }), { key: "ArrowRight" });
+    expect(
+      workspaceBody.style.getPropertyValue("--editor-workspace-panel-width"),
+    ).toBe("356px");
+
+    fireEvent.click(
+      within(workspaceNavigation).getByRole("button", { name: "Markdown 编辑" }),
+    );
 
     await screen.findByRole("textbox", { name: "Markdown 源码" });
     expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "插入" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "设计" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "布局" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "AI 编辑助手" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "历史记录" })).toBeDisabled();
-    expect(screen.getByRole("textbox", { name: "简历标题" })).toBeDisabled();
-    expect(screen.getByRole("link", { name: "语法帮助" })).toHaveAttribute(
+    expect(screen.getByTestId("editor-ribbon")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("textbox", { name: "简历标题" })).toBeEnabled();
+    expect(screen.getByTestId("editor-ribbon-tools")).toHaveAttribute("inert");
+    expect(screen.getByTestId("editor-ribbon-tools")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByRole("region", { name: "画布" })).toBeInTheDocument();
+    const markdownCanvas = screen.getByTestId("resume-canvas-zoom");
+    expect(
+      markdownCanvas.querySelector('[data-resume-editing-canvas="true"]'),
+    ).toBeInTheDocument();
+    expect(markdownCanvas).toHaveAttribute("inert");
+    expect(within(workspaceNavigation).getByRole("button", {
+      name: "Markdown 编辑",
+    })).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.queryByRole("complementary", { name: "大纲" }),
+    ).not.toBeInTheDocument();
+    expect(
+      workspaceBody.style.getPropertyValue("--editor-workspace-panel-width"),
+    ).toBe("400px");
+    const markdownResizeHandle = screen.getByRole("separator", {
+      name: "调整侧栏宽度",
+    });
+    expect(markdownResizeHandle).toHaveAttribute("aria-valuemax", "600");
+    fireEvent.keyDown(markdownResizeHandle, { key: "End" });
+    expect(
+      workspaceBody.style.getPropertyValue("--editor-workspace-panel-width"),
+    ).toBe("600px");
+    expect(within(workspaceNavigation).getByRole("link", {
+      name: "语法帮助",
+    })).toHaveAttribute(
       "href",
       "/docs/markdown-editor",
     );
-    expect(screen.getByRole("link", { name: spacedLabel("预览") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /^导\s*出$/ })).toBeEnabled();
 
     fireEvent.keyDown(window, { key: "Control", ctrlKey: true });
     expect(
-      screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }),
+      within(workspaceNavigation).getByRole("button", { name: "Markdown 编辑" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -784,14 +882,14 @@ describe("ResumeEditorShell", () => {
     fireEvent.change(source, { target: { value: "---\nanonresume: 1" } });
     await screen.findByRole("status");
 
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+    fireEvent.click(screen.getByRole("button", { name: "大纲" }));
     const dialog = await screen.findByRole("dialog", { name: "放弃 Markdown 修改？" });
     expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "继续编辑" }));
     expect(screen.getByTestId("markdown-editing-workspace")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+    fireEvent.click(screen.getByRole("button", { name: "大纲" }));
     fireEvent.click(
       within(await screen.findByRole("dialog", { name: "放弃 Markdown 修改？" }))
         .getByRole("button", { name: "放弃修改" }),
@@ -825,7 +923,7 @@ describe("ResumeEditorShell", () => {
     expect(
       window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
     ).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: spacedLabel("内容编辑") }));
+    fireEvent.click(screen.getByRole("button", { name: "大纲" }));
 
     await waitFor(() =>
       expect(screen.getByRole("textbox", { name: "简历标题" })).toHaveValue(

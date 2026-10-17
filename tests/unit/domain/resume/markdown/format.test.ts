@@ -1,70 +1,137 @@
 import {
   formatResumeMarkdown,
+  normalizeResumeMarkdownSource,
   serializeResumeMarkdown,
 } from "@/domain/resume/markdown";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 
-describe("formatResumeMarkdown", () => {
-  it("normalizes attribute order, spacing, comments, and redundant blank lines", () => {
-    const baseDocument = createDefaultResumeDocument("zh-CN");
+describe("normalizeResumeMarkdownSource", () => {
+  it("preserves comments and Markdown spelling while collapsing redundant blank lines", () => {
+    const source = [
+      "<!-- local editing note",
+      "",
+      "",
+      "kept verbatim -->",
+      "## 经历",
+      "",
+      "",
+      "",
+      "_第一段_",
+      "",
+      "* 条目一",
+      "* 条目二",
+    ].join("\n");
+
+    expect(normalizeResumeMarkdownSource(source)).toBe(
+      [
+        "<!-- local editing note",
+        "",
+        "",
+        "kept verbatim -->",
+        "## 经历",
+        "",
+        "_第一段_",
+        "",
+        "* 条目一",
+        "* 条目二",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("normalizes line endings without rewriting fenced code or directive-looking code", () => {
     const source = [
       "---",
       "anonresume: 1",
       'title: "格式测试"',
-      "locale: zh-CN",
-      "page-margin: 32 32 32 32",
-      'font-family: "IBM Plex Sans"',
-      "font-size: 14",
-      "line-height: 1.45",
-      'accent: "#0f62fe"',
-      'text-color: "#0f172a"',
-      'muted-color: "#475569"',
       "---",
       "",
-      '<!-- local editing note -->',
-      '## 经历 {visible=true semantic="experience"}',
+      "## 项目",
+      "",
+      "```md",
+      "",
+      ":::row",
+      "",
+      ":::",
+      "```",
       "",
       "",
-      "第一段",
+      "",
+      "结尾",
+    ].join("\r\n");
+
+    const normalized = normalizeResumeMarkdownSource(source);
+
+    expect(normalized).toContain(
+      ["```md", "", ":::row", "", ":::", "```"].join("\n"),
+    );
+    expect(normalized).toContain("```\n\n结尾\n");
+    expect(normalized).not.toContain("\r");
+  });
+});
+
+describe("formatResumeMarkdown", () => {
+  it("returns minimally normalized source instead of canonical reserialization", () => {
+    const baseDocument = createDefaultResumeDocument("zh-CN");
+    const source = [
+      "<!-- keep this note -->",
+      "## 经历",
+      "",
+      "_自定义强调写法_",
+      "",
+      "* 条目一",
+      "* 条目二",
       "",
       "",
-      "",
-      "第二段",
-      "",
-      "- 条目一",
-      "- 条目二",
     ].join("\n");
 
     const formatted = formatResumeMarkdown(source, baseDocument, "zh-CN");
 
     expect(formatted.result.hasErrors).toBe(false);
-    expect(formatted.source).not.toContain("<!--");
-    expect(formatted.source).toContain(
-      '## 经历 {semantic="experience" visible=true direction="vertical"',
+    expect(formatted.source).toBe(
+      [
+        "<!-- keep this note -->",
+        "## 经历",
+        "",
+        "_自定义强调写法_",
+        "",
+        "* 条目一",
+        "* 条目二",
+        "",
+      ].join("\n"),
     );
-    expect(formatted.source).toContain("第一段\n\n第二段\n\n- 条目一\n- 条目二");
     expect(formatted.changed).toBe(true);
     expect(formatted.semanticChanged).toBe(true);
   });
 
-  it("detects a canonical semantic no-op", () => {
+  it("treats source-only normalization as a semantic no-op", () => {
     const baseDocument = createDefaultResumeDocument("zh-CN");
-    const source = serializeResumeMarkdown(baseDocument).source;
-    const formatted = formatResumeMarkdown(source, baseDocument, "zh-CN");
+    const serialized = serializeResumeMarkdown(baseDocument, {
+      baseDocumentVersion: 3,
+    });
+    const source = serialized.source.replaceAll("\n", "\r\n") + "\r\n\r\n";
+    const formatted = formatResumeMarkdown(source, baseDocument, "zh-CN", {
+      baseDocumentVersion: 3,
+      projection: serialized.projection,
+    });
 
     expect(formatted.result.hasErrors).toBe(false);
-    expect(formatted.source).toBe(source);
-    expect(formatted.changed).toBe(false);
+    expect(formatted.source).toBe(serialized.source);
+    expect(formatted.changed).toBe(true);
     expect(formatted.semanticChanged).toBe(false);
+    expect(formatted.projection).toEqual(formatted.result.projection);
   });
 
-  it("leaves blocking input intact for correction", () => {
+  it("keeps blocking input available for correction without canonicalizing it", () => {
     const baseDocument = createDefaultResumeDocument("zh-CN");
-    const source = "---\nanonresume: 1\n---\n\n:::group\nnot closed";
+    const source = "---\r\nanonresume: 1\r\n---\r\n\r\n:::group\r\nbroken";
     const formatted = formatResumeMarkdown(source, baseDocument, "zh-CN");
 
     expect(formatted.result.hasErrors).toBe(true);
-    expect(formatted.source).toBe(source);
-    expect(formatted.changed).toBe(false);
+    expect(formatted.source).toBe(
+      "---\nanonresume: 1\n---\n\n:::group\nbroken\n",
+    );
+    expect(formatted.changed).toBe(true);
+    expect(formatted.semanticChanged).toBe(false);
   });
 });

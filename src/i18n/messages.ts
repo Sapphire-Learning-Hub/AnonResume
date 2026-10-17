@@ -1088,6 +1088,8 @@ const messages = {
     "editor.restoreVersionTitle": "恢复到此版本？",
     "editor.restoreVersionDescription": "当前内容会自动保存为新的恢复点。",
     "editor.outline": "大纲",
+    "editor.workspaceNavigation": "编辑工作区",
+    "editor.workspaceResize": "调整侧栏宽度",
     "editor.dragSection": "拖动排序 {title}",
     "editor.editSectionTitle": "编辑章节标题 {title}",
     "editor.editSectionTitleAction": "直接编辑章节标题 {title}",
@@ -1250,6 +1252,8 @@ const messages = {
     "editor.markdown.diagnostic.invalidIcon": "图标名称无效或不受支持。",
     "editor.markdown.diagnostic.rawHtml": "Markdown 编辑不支持原始 HTML。",
     "editor.markdown.diagnostic.documentInvalid": "修改后的简历结构无法通过校验。",
+    "editor.markdown.diagnostic.projectionDegraded":
+      "此处原有布局或样式无法唯一对应，已仅对受影响内容使用默认设置重建。",
     "editor.markdown.diagnostic.generic": "无法解析此处内容，请检查写法。",
     "editor.layoutDirection": "布局方向",
     "editor.contentGap": "内容间距",
@@ -2878,6 +2882,8 @@ const messages = {
     "editor.restoreVersionDescription":
       "Your current content will be saved as a new restore point.",
     "editor.outline": "Outline",
+    "editor.workspaceNavigation": "Editor workspace",
+    "editor.workspaceResize": "Resize sidebar",
     "editor.dragSection": "Drag to reorder {title}",
     "editor.editSectionTitle": "Edit section title {title}",
     "editor.editSectionTitleAction": "Edit section title directly {title}",
@@ -3045,6 +3051,8 @@ const messages = {
     "editor.markdown.diagnostic.invalidIcon": "The icon name is invalid or unsupported.",
     "editor.markdown.diagnostic.rawHtml": "Raw HTML is not supported in Markdown editing.",
     "editor.markdown.diagnostic.documentInvalid": "The edited resume structure is invalid.",
+    "editor.markdown.diagnostic.projectionDegraded":
+      "The original layout or styling could not be matched uniquely, so only the affected content was rebuilt with defaults.",
     "editor.markdown.diagnostic.generic": "This content could not be parsed. Check its syntax.",
     "editor.layoutDirection": "Layout Direction",
     "editor.contentGap": "Content gap",

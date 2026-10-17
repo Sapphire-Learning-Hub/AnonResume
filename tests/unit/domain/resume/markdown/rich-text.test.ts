@@ -24,7 +24,7 @@ function documentWithContent(content: RichTextContent): ResumeDocument {
 }
 
 describe("AnonResume Markdown rich text dialect", () => {
-  it("round-trips nested standard and platform marks, breaks, icons, and links", () => {
+  it("keeps standard marks readable and projects presentation-only marks", () => {
     const content: RichTextContent = {
       type: "doc",
       content: [
@@ -78,25 +78,29 @@ describe("AnonResume Markdown rich text dialect", () => {
     const baseDocument = documentWithContent(content);
     const serialized = serializeResumeMarkdown(baseDocument);
 
-    expect(serialized.source).toContain(":tag[");
-    expect(serialized.source).toContain(":color[");
-    expect(serialized.source).toContain(":underline[");
+    expect(serialized.source).not.toContain(":tag[");
+    expect(serialized.source).not.toContain(":color[");
+    expect(serialized.source).not.toContain(":underline[");
+    expect(serialized.source).toContain("**_中文 Latin_**");
+    expect(serialized.source).toContain(" ~~删除~~");
+    expect(serialized.source).toContain(" `code`");
     expect(serialized.source).toContain(":icon[simple-icons:github]");
     expect(serialized.source).toContain(
-      '(mailto:test@example.com "发送邮件"){color="inherit" underline=false}',
+      '(mailto:test@example.com "发送邮件")',
     );
-
-    const parsed = parseResumeMarkdown({
-      source: serialized.source,
-      baseDocument,
-      locale: "zh-CN",
-    });
-
-    expect(parsed.hasErrors).toBe(false);
-    expect(parsed.document?.sections[0]?.blocks[0]).toMatchObject({
-      type: "text",
-      content,
-    });
+    expect(
+      serialized.projection.nodes.filter((entry) => entry.kind === "inline-span"),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ inlineSpan: expect.objectContaining({ mark: "tag" }) }),
+        expect.objectContaining({
+          inlineSpan: expect.objectContaining({ mark: "textColor", color: "#1677ff" }),
+        }),
+        expect.objectContaining({
+          inlineSpan: expect.objectContaining({ mark: "underline" }),
+        }),
+      ]),
+    );
   });
 
   it("parses nested directives inside standard Markdown marks", () => {

@@ -2,138 +2,312 @@ import { getResumeFontPresetByFamily } from "../font-presets";
 import type { ResumeBlock, ResumeDocument } from "../schema";
 import { serializeDirectiveAttributes } from "./directives";
 import { serializeResumeMarkdownFrontMatter } from "./frontmatter";
-import { serializeResumeMarkdownInline } from "./inline";
-import type {
-  ResumeMarkdownDiagnostic,
-  ResumeMarkdownSerializeResult,
-  ResumeMarkdownSourceMap,
+import {
+  serializeResumeMarkdownInline,
+  type ResumeMarkdownProjectedInlineSpan,
+} from "./inline";
+import { createResumeMarkdownProjection } from "./projection";
+import {
+  RESUME_MARKDOWN_SOURCE_VERSION,
+  type ResumeMarkdownDiagnostic,
+  type ResumeMarkdownProjectionEntry,
+  type ResumeMarkdownProjectionNodeKind,
+  type ResumeMarkdownSerializeResult,
+  type ResumeMarkdownSourceMap,
 } from "./types";
 
-function serializeTextBlock(block: Extract<ResumeBlock, { type: "text" }>) {
-  const content = serializeResumeMarkdownInline(block.content);
-  const style = block.style;
-  const headingOnly =
-    style &&
-    style.fontSize === 17 &&
-    style.fontWeight === 700 &&
-    style.lineHeight === undefined &&
-    style.color === undefined &&
-    style.tone === undefined &&
-    style.align === undefined;
-  if (headingOnly) return `### ${content}`;
-  if (!style || Object.keys(style).length === 0) return content;
-  return [
-    `:::text${serializeDirectiveAttributes([
-      ["font-size", style.fontSize],
-      ["font-weight", style.fontWeight],
-      ["line-height", style.lineHeight],
-      ["color", style.color],
-      ["tone", style.tone],
-      ["align", style.align],
-    ])}`,
-    content,
-    ":::",
-  ].join("\n");
+interface ProjectionSeed {
+  id: string;
+  kind: ResumeMarkdownProjectionNodeKind;
+  path: number[];
+  parentId?: string;
+  ordinal: number;
+  fingerprint: string;
+  inlineSpan?: ResumeMarkdownProjectionEntry["inlineSpan"];
 }
 
-function isSimpleList(block: Extract<ResumeBlock, { type: "list" }>) {
-  return (
-    (block.ordered || block.marker === undefined || block.marker === "disc") &&
-    block.gap === undefined &&
-    block.items.every(
-      (item) => item.children.length === 1 && item.children[0]?.type === "text",
-    )
+interface SerializedFragment {
+  source: string;
+  seeds: ProjectionSeed[];
+}
+
+function fingerprint(value: unknown) {
+  return JSON.stringify(value);
+}
+
+function blockSeed(
+  block: ResumeBlock,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+): ProjectionSeed {
+  return {
+    id: block.id,
+    kind: block.type,
+    path,
+    parentId,
+    ordinal,
+    fingerprint: `${block.type}:${fingerprint(block)}`,
+  };
+}
+
+function isSemanticHeading(block: Extract<ResumeBlock, { type: "text" }>) {
+  const style = block.style;
+  return Boolean(
+    style &&
+      style.fontSize === 17 &&
+      style.fontWeight === 700 &&
+      style.lineHeight === undefined &&
+      style.color === undefined &&
+      style.tone === undefined &&
+      style.align === undefined,
   );
 }
 
-function serializeSimpleList(block: Extract<ResumeBlock, { type: "list" }>) {
-  return block.items
-    .map((item, index) => {
-      const child = item.children[0];
-      const content =
-        child?.type === "text" ? serializeResumeMarkdownInline(child.content) : "";
-      return `${block.ordered ? `${index + 1}.` : "-"} ${content}`;
-    })
+function serializeInlineContent({
+  block,
+  path,
+  seeds,
+}: {
+  block: Extract<ResumeBlock, { type: "text" }>;
+  path: number[];
+  seeds: ProjectionSeed[];
+}) {
+  let inlineOrdinal = 0;
+  return serializeResumeMarkdownInline(block.content, {
+    onProjectedSpan(span: ResumeMarkdownProjectedInlineSpan) {
+      seeds.push({
+        id: `${block.id}:inline:${inlineOrdinal}`,
+        kind: "inline-span",
+        path,
+        parentId: block.id,
+        ordinal: inlineOrdinal,
+        fingerprint: `inline:${fingerprint(span)}`,
+        inlineSpan: span,
+      });
+      inlineOrdinal += 1;
+    },
+  });
+}
+
+function serializeTextBlock(
+  block: Extract<ResumeBlock, { type: "text" }>,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+): SerializedFragment {
+  const seeds = [blockSeed(block, path, parentId, ordinal)];
+  const content = serializeInlineContent({ block, path, seeds });
+  return {
+    source: isSemanticHeading(block) ? `### ${content}` : content,
+    seeds,
+  };
+}
+
+function indentSource(source: string, width: number) {
+  const indentation = " ".repeat(width);
+  return source
+    .split("\n")
+    .map((line) => (line ? `${indentation}${line}` : line))
     .join("\n");
 }
 
-function serializeBlock(block: ResumeBlock): string {
+function serializeListBlock(
+  block: Extract<ResumeBlock, { type: "list" }>,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+): SerializedFragment {
+  const seeds: ProjectionSeed[] = [blockSeed(block, path, parentId, ordinal)];
+  const items = block.items.map((item, itemIndex) => {
+    const itemPath = [...path, itemIndex];
+    seeds.push({
+      id: item.id,
+      kind: "list-item",
+      path: itemPath,
+      parentId: block.id,
+      ordinal: itemIndex,
+      fingerprint: `list-item:${fingerprint(item)}`,
+    });
+    const children = item.children.map((child, childIndex) =>
+      serializeBlock(
+        child,
+        [...itemPath, childIndex],
+        item.id,
+        childIndex,
+        { insideRow: false },
+      ),
+    );
+    children.forEach((child) => seeds.push(...child.seeds));
+
+    const marker = block.ordered ? `${itemIndex + 1}.` : "-";
+    const indentationWidth = marker.length + 1;
+    const [first, ...rest] = children;
+    if (!first) return `${marker} `;
+
+    const firstLines = first.source.split("\n");
+    const lines = [
+      `${marker} ${firstLines[0] ?? ""}`,
+      ...firstLines
+        .slice(1)
+        .map((line) => `${" ".repeat(indentationWidth)}${line}`),
+    ];
+    for (const [childIndex, child] of rest.entries()) {
+      const source = indentSource(child.source, indentationWidth);
+      if (item.children[childIndex + 1]?.type !== "list") lines.push("");
+      lines.push(source);
+    }
+    return lines.join("\n");
+  });
+  return { source: items.join("\n"), seeds };
+}
+
+function serializeBadgesBlock(
+  block: Extract<ResumeBlock, { type: "badges" }>,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+): SerializedFragment {
+  const seeds: ProjectionSeed[] = [blockSeed(block, path, parentId, ordinal)];
+  block.items.forEach((item, itemIndex) => {
+    seeds.push({
+      id: item.id,
+      kind: "badge",
+      path: [...path, itemIndex],
+      parentId: block.id,
+      ordinal: itemIndex,
+      fingerprint: `badge:${item.text}`,
+    });
+  });
+  return {
+    source: block.items.map((item) => `- ${item.text}`).join("\n"),
+    seeds,
+  };
+}
+
+function joinFragments(fragments: SerializedFragment[]) {
+  return fragments
+    .map((fragment) => fragment.source)
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function canUseHeadingBoundary(block: ResumeBlock) {
+  return (
+    block.type === "group" &&
+    block.direction === "vertical" &&
+    block.children[0]?.type === "text" &&
+    isSemanticHeading(block.children[0])
+  );
+}
+
+function serializeGroupBlock(
+  block: Extract<ResumeBlock, { type: "group" }>,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+  options: { insideRow: boolean },
+): SerializedFragment {
+  const children = block.children.map((child, childIndex) =>
+    serializeBlock(
+      child,
+      [...path, childIndex],
+      block.id,
+      childIndex,
+      { insideRow: false },
+    ),
+  );
+  const source = joinFragments(children);
+  const seeds = [
+    blockSeed(block, path, parentId, ordinal),
+    ...children.flatMap((child) => child.seeds),
+  ];
+  const requiresDirective =
+    block.direction === "horizontal" ||
+    (options.insideRow && !canUseHeadingBoundary(block));
+  if (!requiresDirective) return { source, seeds };
+  return {
+    source: [
+      `:::group${serializeDirectiveAttributes([
+        ["direction", block.direction === "vertical" ? undefined : block.direction],
+        ["gap", block.gap],
+        ["align", block.align],
+      ])}`,
+      source,
+      ":::",
+    ].join("\n"),
+    seeds,
+  };
+}
+
+function serializeRowBlock(
+  block: Extract<ResumeBlock, { type: "row" }>,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+): SerializedFragment {
+  const children = block.children.map((child, childIndex) =>
+    serializeBlock(
+      child,
+      [...path, childIndex],
+      block.id,
+      childIndex,
+      { insideRow: true },
+    ),
+  );
+  return {
+    source: [
+      `:::row${serializeDirectiveAttributes([
+        ["gap", block.gap],
+        ["align", block.align],
+        ["justify", block.justify],
+      ])}`,
+      joinFragments(children),
+      ":::",
+    ].join("\n"),
+    seeds: [
+      blockSeed(block, path, parentId, ordinal),
+      ...children.flatMap((child) => child.seeds),
+    ],
+  };
+}
+
+function serializeBlock(
+  block: ResumeBlock,
+  path: number[],
+  parentId: string,
+  ordinal: number,
+  options: { insideRow: boolean },
+): SerializedFragment {
   switch (block.type) {
     case "text":
-      return serializeTextBlock(block);
+      return serializeTextBlock(block, path, parentId, ordinal);
     case "list":
-      if (isSimpleList(block)) return serializeSimpleList(block);
-      return [
-        `:::list${serializeDirectiveAttributes([
-          ["ordered", block.ordered ?? false],
-          ["marker", block.ordered ? undefined : block.marker],
-          ["gap", block.gap],
-        ])}`,
-        ...block.items.flatMap((item) => [
-          ":::item",
-          item.children.map(serializeBlock).filter(Boolean).join("\n\n"),
-          ":::",
-        ]),
-        ":::",
-      ].join("\n");
+      return serializeListBlock(block, path, parentId, ordinal);
     case "badges":
-      return [
-        `:::badges${serializeDirectiveAttributes([
-          ["wrap", block.wrap],
-          ["gap", block.gap],
-        ])}`,
-        ...block.items.map((item) => `- ${item.text}`),
-        ":::",
-      ].join("\n");
+      return serializeBadgesBlock(block, path, parentId, ordinal);
     case "group":
-      return [
-        `:::group${serializeDirectiveAttributes([
-          ["direction", block.direction],
-          ["gap", block.gap],
-          ["align", block.align],
-        ])}`,
-        block.children.map(serializeBlock).filter(Boolean).join("\n\n"),
-        ":::",
-      ].join("\n");
+      return serializeGroupBlock(block, path, parentId, ordinal, options);
     case "row":
-      return [
-        `:::row${serializeDirectiveAttributes([
-          ["gap", block.gap],
-          ["align", block.align],
-          ["justify", block.justify],
-        ])}`,
-        block.children.map(serializeBlock).filter(Boolean).join("\n\n"),
-        ":::",
-      ].join("\n");
+      return serializeRowBlock(block, path, parentId, ordinal);
   }
 }
 
-function serializeSectionAttributes(section: ResumeDocument["sections"][number]) {
-  const padding = section.layout?.padding;
-  return serializeDirectiveAttributes([
-    ["semantic", section.semantic],
-    ["visible", section.visible],
-    ["title-color", section.titleStyle?.color],
-    ["title-size", section.titleStyle?.fontSize],
-    ["columns", section.layout?.columns],
-    ["direction", section.layout?.direction],
-    ["gap", section.layout?.gap],
-    [
-      "padding",
-      padding
-        ? `${padding.top} ${padding.right} ${padding.bottom} ${padding.left}`
-        : undefined,
-    ],
-    ["keep-together", section.pagination?.keepTogether],
-  ]);
+function rangeForLines(lines: string[], startLine: number) {
+  const finalLine = lines.at(-1) ?? "";
+  return {
+    start: { line: startLine, column: 1 },
+    end: { line: startLine + lines.length - 1, column: finalLine.length + 1 },
+  };
 }
 
 export function serializeResumeMarkdown(
   document: ResumeDocument,
+  options: { baseDocumentVersion?: number } = {},
 ): ResumeMarkdownSerializeResult {
   const diagnostics: ResumeMarkdownDiagnostic[] = [];
   const lines = serializeResumeMarkdownFrontMatter({
-    version: 1,
+    version: RESUME_MARKDOWN_SOURCE_VERSION,
     title: document.meta.title,
     ...(document.meta.locale ? { locale: document.meta.locale } : {}),
     pageMargin: document.settings.page.margin,
@@ -152,30 +326,60 @@ export function serializeResumeMarkdown(
     blocks: [],
   };
 
-  for (const section of document.sections) {
+  for (const [sectionIndex, section] of document.sections.entries()) {
     lines.push("");
     const sectionLine = lines.length + 1;
+    const sectionInlineSeeds: ProjectionSeed[] = [];
     const title = section.title
-      ? serializeResumeMarkdownInline(section.title)
+      ? serializeResumeMarkdownInline(section.title, {
+          onProjectedSpan(span) {
+            sectionInlineSeeds.push({
+              id: `${section.id}:inline:${sectionInlineSeeds.length}`,
+              kind: "inline-span",
+              path: [sectionIndex],
+              parentId: section.id,
+              ordinal: sectionInlineSeeds.length,
+              fingerprint: `inline:${fingerprint(span)}`,
+              inlineSpan: span,
+            });
+          },
+        })
       : "Section";
-    lines.push(`## ${title}${serializeSectionAttributes(section)}`);
+    const sectionSource = `## ${title}`;
+    lines.push(sectionSource);
+    const sectionRange = rangeForLines([sectionSource], sectionLine);
     sourceMap.sections.push({
       id: section.id,
-      start: { line: sectionLine, column: 1 },
-      end: { line: sectionLine, column: lines.at(-1)!.length + 1 },
+      kind: "section",
+      path: [sectionIndex],
+      ordinal: sectionIndex,
+      fingerprint: `section:${fingerprint({
+        title: section.title,
+        semantic: section.semantic,
+      })}`,
+      ...sectionRange,
     });
+    sourceMap.blocks.push(
+      ...sectionInlineSeeds.map((seed) => ({ ...seed, ...sectionRange })),
+    );
 
-    for (const block of section.blocks) {
-      const value = serializeBlock(block);
-      if (!value) continue;
+    for (const [blockIndex, block] of section.blocks.entries()) {
+      const fragment = serializeBlock(
+        block,
+        [sectionIndex, blockIndex],
+        section.id,
+        blockIndex,
+        { insideRow: false },
+      );
+      if (!fragment.source) continue;
       lines.push("");
       const startLine = lines.length + 1;
-      lines.push(...value.split("\n"));
-      sourceMap.blocks.push({
-        id: block.id,
-        start: { line: startLine, column: 1 },
-        end: { line: lines.length, column: lines.at(-1)!.length + 1 },
-      });
+      const fragmentLines = fragment.source.split("\n");
+      lines.push(...fragmentLines);
+      const range = rangeForLines(fragmentLines, startLine);
+      sourceMap.blocks.push(
+        ...fragment.seeds.map((seed) => ({ ...seed, ...range })),
+      );
     }
   }
 
@@ -185,5 +389,10 @@ export function serializeResumeMarkdown(
     line: finalLines.length,
     column: (finalLines.at(-1)?.length ?? 0) + 1,
   };
-  return { source, diagnostics, sourceMap };
+  const projection = createResumeMarkdownProjection(
+    document,
+    sourceMap,
+    options.baseDocumentVersion ?? 0,
+  );
+  return { source, diagnostics, sourceMap, projection };
 }

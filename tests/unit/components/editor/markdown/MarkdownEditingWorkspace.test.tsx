@@ -1,19 +1,29 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { MarkdownEditingWorkspace } from "@/components/editor/markdown/MarkdownEditingWorkspace";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { serializeResumeMarkdown } from "@/domain/resume/markdown";
 
 describe("MarkdownEditingWorkspace", () => {
-  it("renders an accessible source pane and inert shared-renderer preview", async () => {
-    const document = createDefaultResumeDocument("zh-CN");
-    const source = serializeResumeMarkdown(document).source;
-    const onPageCountChange = vi.fn();
+  it("renders an accessible source pane for the editor shell", () => {
+    const source = [
+      "## 项目",
+      "",
+      ":::row {gap=16}",
+      "### 项目 A",
+      "",
+      "- 负责核心模块",
+      "",
+      "### 项目 B",
+      "",
+      "- 改善交付质量",
+      ":::",
+      "",
+    ].join("\n");
 
     render(
       <MarkdownEditingWorkspace
         diagnostics={[]}
-        document={document}
         labels={{
           diagnostics: "问题",
           emptyDiagnostics: "没有问题",
@@ -25,23 +35,16 @@ describe("MarkdownEditingWorkspace", () => {
           warning: "警告",
         }}
         source={source}
-        zoom={1}
         getDiagnosticMessage={(diagnostic) => diagnostic.code}
-        onPageCountChange={onPageCountChange}
-        onPaginationReadyChange={() => undefined}
         onSourceChange={() => undefined}
       />,
     );
 
     expect(
       screen.getByRole("textbox", { name: "Markdown 源码" }),
-    ).toBeInTheDocument();
-    const preview = screen.getByRole("region", { name: "只读预览" });
-    expect(preview).toHaveAttribute("inert");
-    expect(within(preview).getByRole("article")).toBeInTheDocument();
-    expect(within(preview).queryByRole("textbox")).not.toBeInTheDocument();
-    expect(within(preview).queryByRole("button", { name: /拖动/ })).not.toBeInTheDocument();
-    await waitFor(() => expect(onPageCountChange).toHaveBeenCalled());
+    ).toHaveTextContent("## 项目");
+    expect(source).not.toContain(":::group");
+    expect(screen.queryByRole("region", { name: "只读预览" })).not.toBeInTheDocument();
   });
 
   it("shows stale-preview state and lets diagnostics focus the source", async () => {
@@ -57,7 +60,6 @@ describe("MarkdownEditingWorkspace", () => {
     render(
       <MarkdownEditingWorkspace
         diagnostics={[diagnostic]}
-        document={document}
         isPreviewStale
         labels={{
           diagnostics: "问题",
@@ -70,10 +72,7 @@ describe("MarkdownEditingWorkspace", () => {
           warning: "警告",
         }}
         source={serializeResumeMarkdown(document).source}
-        zoom={1}
         getDiagnosticMessage={() => "块指令未闭合"}
-        onPageCountChange={() => undefined}
-        onPaginationReadyChange={() => undefined}
         onSourceChange={() => undefined}
       />,
     );

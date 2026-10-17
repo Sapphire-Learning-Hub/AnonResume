@@ -23,6 +23,8 @@ import {
 } from "./directives";
 import { parseResumeMarkdownFrontMatter } from "./frontmatter";
 import { parseResumeMarkdownInline } from "./inline";
+import { applyResumeMarkdownProjection } from "./projection";
+import { serializeResumeMarkdown } from "./serialize";
 import type {
   ResumeMarkdownDiagnostic,
   ResumeMarkdownParseResult,
@@ -231,6 +233,7 @@ function blocksFromMdastNode(
         ),
       ];
     case "html":
+      if (/^<!--[\s\S]*-->$/.test(node.value.trim())) return [];
       diagnostic(context, "raw_html_not_allowed", line);
       return [];
     default:
@@ -535,6 +538,50 @@ function blocksFromDirective(
     case "row": {
       checkAllowedAttributes(node, ["gap", "align", "justify"], context);
       const baseRow = baseBlock?.type === "row" ? baseBlock : undefined;
+      const baseChildren =
+        baseRow?.children.flatMap((child) =>
+          child.type === "group" ? child.children : [child],
+        ) ?? [];
+      const parsedChildren = childBlocks(node.children, context, baseChildren);
+      const hasExplicitContainer = parsedChildren.some(
+        (child) => child.type === "group" || child.type === "row",
+      );
+      const startsWithHeading =
+        parsedChildren[0]?.type === "text" &&
+        parsedChildren[0].style?.fontWeight === 700 &&
+        parsedChildren[0].style?.fontSize === 17;
+      const children =
+        !hasExplicitContainer && startsWithHeading
+          ? parsedChildren.reduce<ResumeBlock[]>((groups, child) => {
+              const isHeading =
+                child.type === "text" &&
+                child.style?.fontWeight === 700 &&
+                child.style?.fontSize === 17;
+              if (isHeading || groups.length === 0) {
+                const groupIndex = groups.length;
+                const baseGroup = baseRow?.children[groupIndex];
+                groups.push({
+                  id:
+                    baseGroup?.type === "group"
+                      ? baseGroup.id
+                      : generatedId(context, "group"),
+                  type: "group",
+                  direction: "vertical",
+                  ...(baseGroup?.type === "group" && baseGroup.gap !== undefined
+                    ? { gap: baseGroup.gap }
+                    : {}),
+                  ...(baseGroup?.type === "group" && baseGroup.align !== undefined
+                    ? { align: baseGroup.align }
+                    : {}),
+                  children: [child],
+                });
+                return groups;
+              }
+              const current = groups.at(-1);
+              if (current?.type === "group") current.children.push(child);
+              return groups;
+            }, [])
+          : parsedChildren;
       return [
         {
           id,
@@ -544,7 +591,7 @@ function blocksFromDirective(
             : { gap: numberAttribute(node, "gap", context) }),
           align: enumAttribute(node, "align", ["start", "center", "end"] as const, context),
           justify: enumAttribute(node, "justify", ["start", "between", "end"] as const, context),
-          children: childBlocks(node.children, context, baseRow?.children),
+          children,
         },
       ];
     }
@@ -700,16 +747,20 @@ function buildSections(nodes: ResumeMarkdownSyntaxNode[], context: ParseContext)
 export function parseResumeMarkdown({
   source,
   baseDocument,
+  baseDocumentVersion = 0,
   locale,
+  projection,
 }: {
   source: string;
   baseDocument: ResumeDocument;
+  baseDocumentVersion?: number;
   locale: AppLocale;
+  projection?: unknown;
 }): ResumeMarkdownParseResult {
   const frontMatterResult = parseResumeMarkdownFrontMatter(source);
   const sourceMap = emptySourceMap(source);
   const diagnostics = [...frontMatterResult.diagnostics];
-  if (!frontMatterResult.frontMatter || diagnostics.some((item) => item.severity === "error")) {
+  if (diagnostics.some((item) => item.severity === "error")) {
     return { diagnostics, sourceMap, hasErrors: true };
   }
 
@@ -723,7 +774,10 @@ export function parseResumeMarkdown({
   }
 
   const context: ParseContext = {
-    baseDocument,
+    baseDocument:
+      projection === undefined
+        ? baseDocument
+        : { ...baseDocument, sections: [] },
     diagnostics,
     sourceMap,
     nextGeneratedId: 0,
@@ -731,7 +785,7 @@ export function parseResumeMarkdown({
 
   try {
     const frontMatter = frontMatterResult.frontMatter;
-    const requestedFont = frontMatter.fontFamily;
+    const requestedFont = frontMatter?.fontFamily;
     const matchedFont = requestedFont
       ? listResumeFontPresets().find(
           (preset) =>
@@ -744,29 +798,59 @@ export function parseResumeMarkdown({
     if (diagnostics.some((item) => item.severity === "error")) {
       return { diagnostics, sourceMap, hasErrors: true };
     }
-    const document = validateResumeDocument({
+    const parsedDocument = validateResumeDocument({
       ...baseDocument,
       meta: {
         ...baseDocument.meta,
-        title: frontMatter.title ?? baseDocument.meta.title,
-        locale: frontMatter.locale ?? locale,
+        title: frontMatter?.title ?? baseDocument.meta.title,
+        locale: frontMatter?.locale ?? baseDocument.meta.locale ?? locale,
       },
       settings: {
-        page: { size: "A4", margin: frontMatter.pageMargin ?? baseDocument.settings.page.margin },
+        page: {
+          size: "A4",
+          margin: frontMatter?.pageMargin ?? baseDocument.settings.page.margin,
+        },
         typography: {
           fontFamily: matchedFont?.fontFamily ?? baseDocument.settings.typography.fontFamily,
-          baseFontSize: frontMatter.fontSize ?? baseDocument.settings.typography.baseFontSize,
-          lineHeight: frontMatter.lineHeight ?? baseDocument.settings.typography.lineHeight,
+          baseFontSize:
+            frontMatter?.fontSize ?? baseDocument.settings.typography.baseFontSize,
+          lineHeight:
+            frontMatter?.lineHeight ?? baseDocument.settings.typography.lineHeight,
         },
         theme: {
-          accent: frontMatter.accent ?? baseDocument.settings.theme.accent,
-          textColor: frontMatter.textColor ?? baseDocument.settings.theme.textColor,
-          mutedColor: frontMatter.mutedColor ?? baseDocument.settings.theme.mutedColor,
+          accent: frontMatter?.accent ?? baseDocument.settings.theme.accent,
+          textColor: frontMatter?.textColor ?? baseDocument.settings.theme.textColor,
+          mutedColor: frontMatter?.mutedColor ?? baseDocument.settings.theme.mutedColor,
         },
       },
       sections,
     });
-    return { document, diagnostics, sourceMap, hasErrors: false };
+    if (projection !== undefined) {
+      const applied = applyResumeMarkdownProjection({
+        baseDocument,
+        parsedDocument,
+        sourceMap,
+        projection,
+        baseDocumentVersion,
+      });
+      diagnostics.push(...applied.diagnostics);
+      return {
+        document: applied.document,
+        diagnostics,
+        sourceMap,
+        projection: applied.projection,
+        hasErrors: false,
+      };
+    }
+    return {
+      document: parsedDocument,
+      diagnostics,
+      sourceMap,
+      projection: serializeResumeMarkdown(parsedDocument, {
+        baseDocumentVersion,
+      }).projection,
+      hasErrors: false,
+    };
   } catch {
     diagnostics.push({
       severity: "error",

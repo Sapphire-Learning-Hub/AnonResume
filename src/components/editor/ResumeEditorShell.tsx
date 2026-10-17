@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
@@ -32,7 +33,6 @@ import {
   BoldOutlined,
   DownOutlined,
   FileAddOutlined,
-  FileMarkdownOutlined,
   FileTextOutlined,
   ItalicOutlined,
   LinkOutlined,
@@ -66,6 +66,8 @@ import {
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
+import { EditorWorkspaceSidebar } from "@/components/editor/navigation/EditorWorkspaceSidebar";
+import { EditorWorkspaceResizeHandle } from "@/components/editor/navigation/EditorWorkspaceResizeHandle";
 import { MarkdownEditingWorkspace } from "@/components/editor/markdown/MarkdownEditingWorkspace";
 import { getResumeMarkdownDiagnosticMessage } from "@/components/editor/markdown/MarkdownDiagnostics";
 import { useResumeMarkdownSession } from "@/components/editor/markdown/useResumeMarkdownSession";
@@ -326,8 +328,16 @@ function isNativeEditableTarget(target: EventTarget | null) {
 }
 
 type EditSurfaceMode = "content" | "layout" | "markdown";
+type EditorWorkspaceStyle = CSSProperties & {
+  "--editor-workspace-panel-width": string;
+};
 
 const TEMPORARY_LAYOUT_HOLD_DELAY_MS = 200;
+const OUTLINE_PANEL_DEFAULT_WIDTH = 340;
+const MARKDOWN_PANEL_FALLBACK_WIDTH = 560;
+const WORKSPACE_PANEL_MIN_WIDTH = 260;
+const OUTLINE_PANEL_MAX_WIDTH = 640;
+const MARKDOWN_PANEL_INITIAL_MAX_WIDTH = 640;
 
 export function ResumeEditorShell({
   resumeId,
@@ -606,6 +616,8 @@ export function ResumeEditorShell({
   const textEditorRef = useRef<TiptapTextBlockEditorHandle>(null);
   const publicLinkCopiedTimerRef = useRef<number | undefined>(undefined);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const workspaceBodyRef = useRef<HTMLElement>(null);
+  const markdownPanelMeasuredRef = useRef(false);
   const [textEditorFormattingState, setTextEditorFormattingState] = useState<{
     selectionKey: string;
     value: TiptapTextBlockEditorFormatState;
@@ -629,6 +641,15 @@ export function ResumeEditorShell({
   const [previewBusy, setPreviewBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [editSurfaceMode, setEditSurfaceMode] = useState<EditSurfaceMode>("content");
+  const [outlinePanelWidth, setOutlinePanelWidth] = useState(
+    OUTLINE_PANEL_DEFAULT_WIDTH,
+  );
+  const [markdownPanelWidth, setMarkdownPanelWidth] = useState(
+    MARKDOWN_PANEL_FALLBACK_WIDTH,
+  );
+  const [markdownPanelMaxWidth, setMarkdownPanelMaxWidth] = useState(
+    MARKDOWN_PANEL_INITIAL_MAX_WIDTH,
+  );
   const [pendingMarkdownExitMode, setPendingMarkdownExitMode] =
     useState<Exclude<EditSurfaceMode, "markdown">>();
   const [markdownModeBusy, setMarkdownModeBusy] = useState(false);
@@ -684,6 +705,13 @@ export function ResumeEditorShell({
       : temporaryLayoutMode
         ? "layout"
         : editSurfaceMode;
+  const workspacePanelWidth =
+    activeEditSurfaceMode === "markdown"
+      ? Math.min(markdownPanelWidth, markdownPanelMaxWidth)
+      : outlinePanelWidth;
+  const workspaceStyle: EditorWorkspaceStyle = {
+    "--editor-workspace-panel-width": `${workspacePanelWidth}px`,
+  };
   const resolvedActivePage = Math.min(Math.max(activePage, 1), pageCount);
   const canvasDocument =
     aiProposalPreview && aiPreviewMode === "effect"
@@ -693,6 +721,38 @@ export function ResumeEditorShell({
   const handlePaginationReadyChange = useCallback((ready: boolean) => {
     setPaginationReady(ready);
     if (ready) setInitialPaginationReady(true);
+  }, []);
+
+  useEffect(() => {
+    const body = workspaceBodyRef.current;
+    if (!body || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries.find((entry) => entry.target === body)?.contentRect
+        .width;
+      if (!width) return;
+
+      const nextMaxWidth = Math.max(
+        WORKSPACE_PANEL_MIN_WIDTH,
+        Math.floor(width / 2),
+      );
+      const nextDefaultWidth = Math.max(
+        WORKSPACE_PANEL_MIN_WIDTH,
+        Math.floor(width / 3),
+      );
+      setMarkdownPanelMaxWidth(nextMaxWidth);
+      if (!markdownPanelMeasuredRef.current) {
+        markdownPanelMeasuredRef.current = true;
+        setMarkdownPanelWidth(Math.min(nextDefaultWidth, nextMaxWidth));
+      } else {
+        setMarkdownPanelWidth((currentWidth) =>
+          Math.min(currentWidth, nextMaxWidth),
+        );
+      }
+    });
+
+    observer.observe(body);
+    return () => observer.disconnect();
   }, []);
 
   function previewAiProposal(input: {
@@ -2558,29 +2618,11 @@ export function ResumeEditorShell({
         >
           {t("editor.layoutSorting")}
         </Button>
-        <Button
-          aria-label={t("editor.markdownEditing")}
-          aria-pressed={activeEditSurfaceMode === "markdown"}
-          className={styles.ribbonModeButton}
-          disabled={markdownModeBusy}
-          icon={<FileMarkdownOutlined />}
-          onClick={() => void handleEditSurfaceModeChange("markdown")}
-        >
-          {t("editor.markdownEditing")}
-        </Button>
       </div>
     );
   }
 
-  const ribbonTabs: EditorRibbonTabItem[] = activeEditSurfaceMode === "markdown"
-    ? [
-        {
-          key: "home",
-          label: t("editor.ribbon.tab.home"),
-          icon: <HomeIcon size={15} />,
-        },
-      ]
-    : [
+  const ribbonTabs: EditorRibbonTabItem[] = [
     {
       key: "home",
       label: t("editor.ribbon.tab.home"),
@@ -2607,7 +2649,7 @@ export function ResumeEditorShell({
           label: t(`editor.ribbon.tab.context.${contextRibbonKind}`),
         }]
       : []),
-      ];
+  ];
 
   const quickActions = (
     <>
@@ -2824,30 +2866,6 @@ export function ResumeEditorShell({
   );
 
   const ribbonCommandGroups: EditorRibbonGroup[] = (() => {
-    if (activeEditSurfaceMode === "markdown") {
-      return [
-        {
-          key: "mode",
-          label: t("editor.ribbon.group.mode"),
-          content: renderEditSurfaceModeControls(),
-        },
-        {
-          key: "markdown-help",
-          label: t("editor.markdown.helpGroup"),
-          content: (
-            <Button
-              href="/docs/markdown-editor"
-              icon={<HelpIcon size={16} />}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("editor.markdown.help")}
-            </Button>
-          ),
-        },
-      ];
-    }
-
     switch (effectiveRibbonTab) {
       case "home":
         return [
@@ -3178,9 +3196,9 @@ export function ResumeEditorShell({
         backHref="/app"
         backLabel={t("common.back")}
         commandGroups={ribbonCommandGroups}
+        disabled={activeEditSurfaceMode === "markdown"}
         documentActions={documentActions}
         documentName={resumeName}
-        documentNameDisabled={activeEditSurfaceMode === "markdown"}
         documentNameLabel={t("editor.resumeTitle")}
         quickActions={quickActions}
         saveStatus={
@@ -3444,72 +3462,95 @@ export function ResumeEditorShell({
         }}
       />
 
-      {activeEditSurfaceMode === "markdown" ? (
-        <MarkdownEditingWorkspace
-          diagnostics={markdownSession.diagnostics}
-          document={markdownSession.previewDocument}
-          getDiagnosticMessage={(diagnostic) =>
-            getResumeMarkdownDiagnosticMessage(t, diagnostic)
+      <section
+        className={styles.body}
+        data-workspace-view={
+          activeEditSurfaceMode === "markdown" ? "markdown" : "outline"
+        }
+        data-testid="editor-workspace-body"
+        ref={workspaceBodyRef}
+        style={workspaceStyle}
+      >
+        <EditorWorkspaceSidebar
+          activeView={
+            activeEditSurfaceMode === "markdown" ? "markdown" : "outline"
           }
-          isPreviewStale={markdownSession.isPreviewStale}
-          labels={{
-            diagnostics: t("editor.markdown.diagnostics"),
-            emptyDiagnostics: t("editor.markdown.noDiagnostics"),
-            error: t("editor.markdown.error"),
-            line: t("editor.markdown.line"),
-            preview: t("editor.markdown.preview"),
-            source: t("editor.markdown.source"),
-            stalePreview: t("editor.markdown.stalePreview"),
-            warning: t("editor.markdown.warning"),
-          }}
-          paginationRevision={paginationRevision}
-          previewViewportRef={canvasViewportRef}
-          showPrintSafeArea={showPrintSafeArea}
-          source={markdownSession.source}
-          zoom={zoom}
-          onPageCountChange={handlePageCountChange}
-          onPaginationReadyChange={handlePaginationReadyChange}
-          onPreviewScroll={handleCanvasViewportScroll}
-          onSourceChange={markdownSession.setSource}
-        />
-      ) : (
-      <section className={styles.body}>
-        <aside
-          aria-label={t("editor.outline")}
-          className={`${styles.panel} ${styles.sidebar}`}
+          busy={markdownModeBusy}
+          helpLabel={t("editor.markdown.help")}
+          markdownLabel={t("editor.markdownEditing")}
+          navigationLabel={t("editor.workspaceNavigation")}
+          outlineLabel={t("editor.outline")}
+          resizeHandle={
+            <EditorWorkspaceResizeHandle
+              label={t("editor.workspaceResize")}
+              max={OUTLINE_PANEL_MAX_WIDTH}
+              min={WORKSPACE_PANEL_MIN_WIDTH}
+              value={outlinePanelWidth}
+              onChange={setOutlinePanelWidth}
+            />
+          }
+          onSelectMarkdown={() => void handleEditSurfaceModeChange("markdown")}
+          onSelectOutline={() => void handleEditSurfaceModeChange("content")}
         >
-          <div
-            className={`${styles.columnStickyHeader} ${styles.sidebarHeader}`}
-            data-testid="editor-outline-header"
-          >
-            <h2 className={styles.panelHeading}>{t("editor.outline")}</h2>
-          </div>
-          <SectionOutline
-            sections={document.sections}
-            selectedSectionId={selection.sectionId}
-            onSelectSection={handleOutlineSectionSelection}
-            onRenameSection={({ sectionId, title }) =>
-              store.getState().setSectionTitle({
-                sectionId,
-                title: title ? createRichTextFromPlainText(title) : undefined,
-              })
+          {activeEditSurfaceMode !== "markdown" ? (
+            <SectionOutline
+              sections={document.sections}
+              selectedSectionId={selection.sectionId}
+              onSelectSection={handleOutlineSectionSelection}
+              onRenameSection={({ sectionId, title }) =>
+                store.getState().setSectionTitle({
+                  sectionId,
+                  title: title ? createRichTextFromPlainText(title) : undefined,
+                })
+              }
+              onMoveSection={(params) => store.getState().moveSection(params)}
+              classNames={{
+                outlineList: styles.outlineList,
+                outlineItem: styles.outlineItem,
+                outlineTitleArea: styles.outlineTitleArea,
+                outlineButton: styles.outlineButton,
+                outlineTitleText: styles.outlineTitleText,
+                outlineMeta: styles.outlineMeta,
+                outlineEditButton: styles.outlineEditButton,
+                outlineDragHandle: styles.outlineDragHandle,
+                outlineTitleInput: styles.outlineTitleInput,
+                compactActionRow: styles.compactActionRow,
+                outlineOrderButton: styles.outlineOrderButton,
+              }}
+            />
+          ) : null}
+        </EditorWorkspaceSidebar>
+
+        {activeEditSurfaceMode === "markdown" ? (
+          <MarkdownEditingWorkspace
+            diagnostics={markdownSession.diagnostics}
+            getDiagnosticMessage={(diagnostic) =>
+              getResumeMarkdownDiagnosticMessage(t, diagnostic)
             }
-            onMoveSection={(params) => store.getState().moveSection(params)}
-            classNames={{
-              outlineList: styles.outlineList,
-              outlineItem: styles.outlineItem,
-              outlineTitleArea: styles.outlineTitleArea,
-              outlineButton: styles.outlineButton,
-              outlineTitleText: styles.outlineTitleText,
-              outlineMeta: styles.outlineMeta,
-              outlineEditButton: styles.outlineEditButton,
-              outlineDragHandle: styles.outlineDragHandle,
-              outlineTitleInput: styles.outlineTitleInput,
-              compactActionRow: styles.compactActionRow,
-              outlineOrderButton: styles.outlineOrderButton,
+            isPreviewStale={markdownSession.isPreviewStale}
+            labels={{
+              diagnostics: t("editor.markdown.diagnostics"),
+              emptyDiagnostics: t("editor.markdown.noDiagnostics"),
+              error: t("editor.markdown.error"),
+              line: t("editor.markdown.line"),
+              preview: t("editor.markdown.preview"),
+              source: t("editor.markdown.source"),
+              stalePreview: t("editor.markdown.stalePreview"),
+              warning: t("editor.markdown.warning"),
             }}
+            resizeHandle={
+              <EditorWorkspaceResizeHandle
+                label={t("editor.workspaceResize")}
+                max={markdownPanelMaxWidth}
+                min={WORKSPACE_PANEL_MIN_WIDTH}
+                value={Math.min(markdownPanelWidth, markdownPanelMaxWidth)}
+                onChange={setMarkdownPanelWidth}
+              />
+            }
+            source={markdownSession.source}
+            onSourceChange={markdownSession.setSource}
           />
-        </aside>
+        ) : null}
 
         <section
           aria-label={t("editor.canvas")}
@@ -3584,13 +3625,21 @@ export function ResumeEditorShell({
           >
             <div
               className={styles.canvasZoom}
+              data-read-only={activeEditSurfaceMode === "markdown"}
               data-testid="resume-canvas-zoom"
+              inert={activeEditSurfaceMode === "markdown" || undefined}
               style={{ transform: `scale(${zoom})` }}
             >
-              {aiProposalPreview ? (
+              {activeEditSurfaceMode === "markdown" || aiProposalPreview ? (
                 <ResumeRenderer
-                  document={canvasDocument}
-                  mode="view"
+                  document={
+                    activeEditSurfaceMode === "markdown"
+                      ? markdownSession.previewDocument
+                      : canvasDocument
+                  }
+                  mode={
+                    activeEditSurfaceMode === "markdown" ? "edit" : "view"
+                  }
                   paginationRevision={paginationRevision}
                   showPrintSafeArea={showPrintSafeArea}
                   zoom={zoom}
@@ -3653,9 +3702,7 @@ export function ResumeEditorShell({
             </div>
           </div>
         </section>
-
       </section>
-      )}
       <EditorStatusBar
         canZoomIn={canZoomIn}
         canZoomOut={canZoomOut}

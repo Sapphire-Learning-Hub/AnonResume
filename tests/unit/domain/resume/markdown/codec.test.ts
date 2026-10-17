@@ -97,15 +97,18 @@ describe("AnonResume Markdown basic codec", () => {
     expect(first.diagnostics).toEqual([]);
     expect(second.source).toBe(first.source);
     expect(first.source).toContain('title: "后端工程师"');
-    expect(first.source).toContain(
-      '## 个人简介 {semantic="profile" visible=false}',
-    );
+    expect(first.source).toContain("## 个人简介\n");
     expect(first.source).toContain("第一段\n\n第二段");
-    expect(first.source).toContain(
-      '## 工作经历 {semantic="experience" visible=true}',
-    );
+    expect(first.source).toContain("## 工作经历\n");
     expect(first.source).toContain("### 高级工程师");
     expect(first.source).toContain("1. 交付核心功能\n2. 完善工程质量");
+    expect(first.source).not.toMatch(/:::(?:text|list|item)\b/);
+    expect(first.source).not.toContain("semantic=");
+    expect(first.source).not.toContain("visible=");
+    expect(first.projection).toMatchObject({
+      version: 1,
+      baseDocumentVersion: 0,
+    });
   });
 
   it("parses the canonical source into a validated candidate document", () => {
@@ -183,5 +186,29 @@ describe("AnonResume Markdown basic codec", () => {
     expect(result.diagnostics).toEqual([
       expect.objectContaining({ code: "frontmatter_unclosed" }),
     ]);
+  });
+
+  it("parses ordinary Markdown without front matter using current document settings", () => {
+    const baseDocument = createDocument();
+    const result = parseResumeMarkdown({
+      source: "## 新经历\n\n负责核心模块\n",
+      baseDocument,
+      baseDocumentVersion: 9,
+      locale: "zh-CN",
+    });
+
+    expect(result.hasErrors).toBe(false);
+    expect(result.document?.settings).toEqual(baseDocument.settings);
+    expect(result.document?.meta).toMatchObject(baseDocument.meta);
+    expect(result.document?.sections[0]).toMatchObject({
+      title: createRichTextFromPlainText("新经历"),
+      blocks: [
+        { type: "text", content: createRichTextFromPlainText("负责核心模块") },
+      ],
+    });
+    expect(result.projection).toMatchObject({
+      version: 1,
+      baseDocumentVersion: 9,
+    });
   });
 });

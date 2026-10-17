@@ -3,6 +3,7 @@ import type {
   ResumeMarkdownFrontMatter,
   ResumeMarkdownFrontMatterResult,
 } from "./types";
+import { RESUME_MARKDOWN_SOURCE_VERSION } from "./types";
 
 export const MAX_RESUME_MARKDOWN_BYTES = 512 * 1024;
 
@@ -83,7 +84,7 @@ export function parseResumeMarkdownFrontMatter(
     return {
       body: source,
       bodyStartLine: 1,
-      diagnostics: [diagnostic("frontmatter_required", 1, 1)],
+      diagnostics: [],
     };
   }
 
@@ -154,7 +155,7 @@ export function parseResumeMarkdownFrontMatter(
 
     switch (key) {
       case "anonresume":
-        if (scalar !== "1") {
+        if (scalar !== String(RESUME_MARKDOWN_SOURCE_VERSION)) {
           diagnostics.push(
             diagnostic(
               "frontmatter_unsupported_version",
@@ -164,7 +165,7 @@ export function parseResumeMarkdownFrontMatter(
             ),
           );
         } else {
-          parsed.version = 1;
+          parsed.version = RESUME_MARKDOWN_SOURCE_VERSION;
         }
         break;
       case "title":

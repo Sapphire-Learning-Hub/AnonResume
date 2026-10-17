@@ -250,22 +250,18 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   `,
   body: css`
     display: grid;
-    grid-template-columns: minmax(240px, 272px) minmax(0, 1fr);
+    grid-template-columns: 56px var(--editor-workspace-panel-width, 340px) minmax(0, 1fr);
     flex: 1;
     min-height: 0;
     align-items: stretch;
     overflow: hidden;
 
     @media (max-width: 1440px) {
-      grid-template-columns: 204px minmax(0, 1fr);
+      grid-template-columns: 52px var(--editor-workspace-panel-width, 340px) minmax(0, 1fr);
     }
 
     @media (max-width: 1180px) {
-      grid-template-columns: 180px minmax(0, 1fr);
-    }
-
-    @media (max-width: 960px) {
-      grid-template-columns: 1fr;
+      grid-template-columns: 52px var(--editor-workspace-panel-width, 340px) minmax(0, 1fr);
     }
   `,
   panel: css`
@@ -273,29 +269,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     flex-direction: column;
     gap: 16px;
     min-width: 0;
-  `,
-  sidebar: css`
-    position: relative;
-    height: 100%;
-    max-height: none;
-    min-height: 0;
-    overflow: auto;
-    padding: 10px 14px 18px;
-    border-right: 1px solid ${token.colorBorderSecondary};
-    background: color-mix(in srgb, ${token.colorBgContainer} 88%, transparent);
-
-    @media (max-width: 1180px) {
-      padding: 10px 12px 16px;
-    }
-
-    @media (max-width: 960px) {
-      position: static;
-      height: auto;
-      max-height: none;
-      overflow: visible;
-      border-right: 0;
-      border-bottom: 1px solid ${token.colorBorderSecondary};
-    }
   `,
   panelHeading: css`
     margin: 0;
@@ -311,14 +284,6 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     @media (max-width: 960px) {
       position: static;
     }
-  `,
-  sidebarHeader: css`
-    display: flex;
-    align-items: center;
-    min-height: 30px;
-    padding-bottom: 8px;
-    background: ${token.colorBgContainer};
-    box-shadow: 0 1px 0 ${token.colorBorderSecondary};
   `,
   outlineList: css`
     display: flex;
@@ -569,6 +534,11 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     transform-origin: top center;
     transition: transform 160ms ease;
     margin: 0 auto;
+
+    &[data-read-only="true"] {
+      pointer-events: none;
+      user-select: none;
+    }
   `,
   inspectorControlGrid: css`
     display: flex;

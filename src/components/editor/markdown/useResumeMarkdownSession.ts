@@ -13,11 +13,13 @@ import {
   formatResumeMarkdown,
   serializeResumeMarkdown,
   type ResumeMarkdownDiagnostic,
+  type ResumeMarkdownProjection,
 } from "@/domain/resume/markdown";
 import type { ResumeDocument } from "@/domain/resume/schema";
 import type { AppLocale } from "@/i18n/messages";
 import {
   createResumeMarkdownDraftRepository,
+  LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION,
   type LocalResumeMarkdownDraft,
   type ResumeMarkdownDraftRepository,
 } from "@/lib/resume/markdown-drafts";
@@ -50,6 +52,11 @@ export function useResumeMarkdownSession({
     useState<LocalResumeMarkdownDraft>();
   const [active, setActive] = useState(false);
   const [hasSourceChanges, setHasSourceChanges] = useState(false);
+  const activeProjectionRef = useRef<ResumeMarkdownProjection>(
+    serializeResumeMarkdown(initialDocument, {
+      baseDocumentVersion: store.getState().version,
+    }).projection,
+  );
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -76,6 +83,10 @@ export function useResumeMarkdownSession({
       nextSource,
       current.document,
       locale,
+      {
+        baseDocumentVersion: current.version,
+        projection: activeProjectionRef.current,
+      },
     );
     setSourceState(nextSource);
     setHasSourceChanges(true);
@@ -85,6 +96,7 @@ export function useResumeMarkdownSession({
       clearCommitTimer();
       setIsPreviewStale(true);
     } else {
+      activeProjectionRef.current = formatted.projection;
       setIsPreviewStale(false);
       startTransition(() => setPreviewDocument(formatted.result.document!));
       clearCommitTimer();
@@ -102,10 +114,12 @@ export function useResumeMarkdownSession({
 
     void draftRepository
       .saveDraft({
+        schemaVersion: LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION,
         resumeId,
         source: nextSource,
         baseVersion: current.version,
         updatedAt: Date.now(),
+        projection: activeProjectionRef.current,
       })
       .catch(() => undefined);
   };
@@ -120,8 +134,11 @@ export function useResumeMarkdownSession({
   const enter = async () => {
     clearCommitTimer();
     const current = store.getState();
-    const canonical = serializeResumeMarkdown(current.document).source;
-    setSourceState(canonical);
+    const serialized = serializeResumeMarkdown(current.document, {
+      baseDocumentVersion: current.version,
+    });
+    activeProjectionRef.current = serialized.projection;
+    setSourceState(serialized.source);
     setPreviewDocument(current.document);
     setDiagnostics([]);
     setIsPreviewStale(false);
@@ -136,6 +153,7 @@ export function useResumeMarkdownSession({
 
   const recoverDraftSource = () => {
     if (!recoveryDraft) return;
+    activeProjectionRef.current = recoveryDraft.projection;
     setSource(recoveryDraft.source);
     setRecoveryDraft(undefined);
   };
@@ -147,12 +165,21 @@ export function useResumeMarkdownSession({
 
   const flush = async () => {
     const current = store.getState();
-    const formatted = formatResumeMarkdown(source, current.document, locale);
+    const formatted = formatResumeMarkdown(
+      source,
+      current.document,
+      locale,
+      {
+        baseDocumentVersion: current.version,
+        projection: activeProjectionRef.current,
+      },
+    );
     setDiagnostics(formatted.result.diagnostics);
     if (formatted.result.hasErrors || !formatted.result.document) {
       setIsPreviewStale(true);
       return false;
     }
+    activeProjectionRef.current = formatted.projection;
     clearCommitTimer();
     if (formatted.semanticChanged) {
       store.getState().replaceDocument({
@@ -171,8 +198,13 @@ export function useResumeMarkdownSession({
       source,
       store.getState().document,
       locale,
+      {
+        baseDocumentVersion: store.getState().version,
+        projection: activeProjectionRef.current,
+      },
     );
     if (!formatted.result.document) return false;
+    activeProjectionRef.current = formatted.projection;
     setSourceState(formatted.source);
     setPreviewDocument(formatted.result.document);
     setIsPreviewStale(false);
@@ -185,9 +217,13 @@ export function useResumeMarkdownSession({
 
   const discard = async () => {
     clearCommitTimer();
-    const currentDocument = store.getState().document;
-    setSourceState(serializeResumeMarkdown(currentDocument).source);
-    setPreviewDocument(currentDocument);
+    const current = store.getState();
+    const serialized = serializeResumeMarkdown(current.document, {
+      baseDocumentVersion: current.version,
+    });
+    activeProjectionRef.current = serialized.projection;
+    setSourceState(serialized.source);
+    setPreviewDocument(current.document);
     setDiagnostics([]);
     setIsPreviewStale(false);
     setHasSourceChanges(false);

@@ -1,11 +1,15 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-import { serializeResumeMarkdown } from "@/domain/resume/markdown";
+import {
+  serializeResumeMarkdown,
+  type ResumeMarkdownProjection,
+} from "@/domain/resume/markdown";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import type {
   LocalResumeMarkdownDraft,
   ResumeMarkdownDraftRepository,
 } from "@/lib/resume/markdown-drafts";
+import { LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION } from "@/lib/resume/markdown-drafts";
 import { createResumeEditorStore } from "@/stores/resume-editor";
 import { useResumeMarkdownSession } from "@/components/editor/markdown/useResumeMarkdownSession";
 
@@ -54,6 +58,24 @@ function setup(initialDraft?: LocalResumeMarkdownDraft, commitDelayMs = 10) {
     }),
   );
   return { document, store, repository, ...hook };
+}
+
+function createRecoveryDraft(
+  overrides: Partial<LocalResumeMarkdownDraft> = {},
+) {
+  const serialized = serializeResumeMarkdown(
+    createDefaultResumeDocument("zh-CN"),
+    { baseDocumentVersion: overrides.baseVersion ?? 2 },
+  );
+  return {
+    schemaVersion: LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION,
+    resumeId: "resume-demo",
+    source: "invalid local source",
+    baseVersion: 2,
+    updatedAt: 500,
+    projection: serialized.projection,
+    ...overrides,
+  } satisfies LocalResumeMarkdownDraft;
 }
 
 describe("useResumeMarkdownSession", () => {
@@ -129,12 +151,7 @@ describe("useResumeMarkdownSession", () => {
   });
 
   it("offers exact local source recovery and marks version mismatches stale", async () => {
-    const draft: LocalResumeMarkdownDraft = {
-      resumeId: "resume-demo",
-      source: "invalid local source",
-      baseVersion: 2,
-      updatedAt: 500,
-    };
+    const draft = createRecoveryDraft();
     const { result } = setup(draft);
     await act(async () => result.current.enter());
 
@@ -158,5 +175,72 @@ describe("useResumeMarkdownSession", () => {
     expect(result.current.source).toBe(
       serializeResumeMarkdown(result.current.previewDocument).source,
     );
+  });
+
+  it("keeps the last valid projection when an invalid edit is saved for recovery", async () => {
+    const { result, repository } = setup(undefined, 60_000);
+    await act(async () => result.current.enter());
+    const validSource = result.current.source.replace(
+      "共享渲染器基础",
+      "投影重排基础",
+    );
+
+    act(() => result.current.setSource(validSource));
+    await waitFor(() =>
+      expect(repository.saved.at(-1)?.source).toBe(validSource),
+    );
+    const validProjection = repository.saved.at(-1)?.projection;
+    expect(validProjection).toBeDefined();
+
+    const invalidSource = `${validSource}\n:::group\nbroken`;
+    act(() => result.current.setSource(invalidSource));
+    await waitFor(() =>
+      expect(repository.saved.at(-1)?.source).toBe(invalidSource),
+    );
+    expect(repository.saved.at(-1)?.projection).toEqual(validProjection);
+  });
+
+  it("keeps user-authored source spelling when exiting Markdown mode", async () => {
+    const { result } = setup(undefined, 60_000);
+    await act(async () => result.current.enter());
+    const sourceWithComment = result.current.source.replace(
+      "## 个人简介",
+      "<!-- keep my note -->\n## 个人简介",
+    );
+
+    act(() => result.current.setSource(sourceWithComment));
+    await act(async () => {
+      await expect(result.current.exit()).resolves.toBe(true);
+    });
+
+    expect(result.current.source).toContain("<!-- keep my note -->");
+  });
+
+  it("rebases the saved projection after every valid edit", async () => {
+    const { result, repository } = setup(undefined, 60_000);
+    await act(async () => result.current.enter());
+    const firstSource = result.current.source.replace(
+      "共享渲染器基础",
+      "第一次编辑",
+    );
+
+    act(() => result.current.setSource(firstSource));
+    await waitFor(() =>
+      expect(repository.saved.at(-1)?.source).toBe(firstSource),
+    );
+    const firstProjection = repository.saved.at(-1)
+      ?.projection as ResumeMarkdownProjection;
+    expect(firstProjection.nodes.some((entry) =>
+      entry.fingerprint.includes("第一次编辑"),
+    )).toBe(true);
+
+    const secondSource = firstSource.replace("第一次编辑", "第二次编辑");
+    act(() => result.current.setSource(secondSource));
+    await waitFor(() =>
+      expect(repository.saved.at(-1)?.source).toBe(secondSource),
+    );
+    expect(repository.saved.at(-1)?.projection.nodes.some((entry) =>
+      entry.fingerprint.includes("第二次编辑"),
+    )).toBe(true);
   });
 });

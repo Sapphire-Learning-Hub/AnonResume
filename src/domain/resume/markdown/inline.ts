@@ -323,13 +323,22 @@ function escapeText(text: string) {
   return text.replace(/([\\`*_[\]<>])/g, "\\$1");
 }
 
+export interface ResumeMarkdownProjectedInlineSpan {
+  richTextPath: [paragraphIndex: number, nodeIndex: number];
+  start: number;
+  end: number;
+  contextFingerprint: string;
+  mark: "tag" | "underline" | "textColor";
+  color?: string;
+}
+
 function serializeMarkedText(text: string, marks: TextMark[]) {
-  let output = escapeText(text);
-  if (marks.length) {
-    output = output
-      .replace(/^ +/, (value) => "&#32;".repeat(value.length))
-      .replace(/ +$/, (value) => "&#32;".repeat(value.length));
-  }
+  const leadingSpace = text.match(/^ +/)?.[0] ?? "";
+  const trailingSpace = text.match(/ +$/)?.[0] ?? "";
+  const contentEnd = trailingSpace ? text.length - trailingSpace.length : text.length;
+  const content = text.slice(leadingSpace.length, contentEnd);
+  if (!content) return escapeText(text);
+  let output = escapeText(content);
   for (const mark of [...marks].reverse()) {
     switch (mark.type) {
       case "bold":
@@ -345,45 +354,69 @@ function serializeMarkedText(text: string, marks: TextMark[]) {
         output = `\`${output.replaceAll("`", "\\`")}\``;
         break;
       case "tag":
-        output = `:tag[${output}]`;
-        break;
       case "underline":
-        output = `:underline[${output}]`;
-        break;
       case "textColor":
-        output = `:color[${output}]{value=${JSON.stringify(mark.attrs.color)}}`;
         break;
       case "link": {
         const href = mark.attrs?.href ?? (mark.attrs?.title ? "<>" : "");
         const title = mark.attrs?.title
           ? ` ${JSON.stringify(mark.attrs.title)}`
           : "";
-        const attributes = [
-          ...(mark.attrs?.color ? [`color=${JSON.stringify(mark.attrs.color)}`] : []),
-          ...(mark.attrs?.underline === undefined
-            ? []
-            : [`underline=${mark.attrs.underline}`]),
-        ];
-        output = `[${output}](${href}${title})${
-          attributes.length ? `{${attributes.join(" ")}}` : ""
-        }`;
+        output = `[${output}](${href}${title})`;
         break;
       }
     }
   }
-  return output;
+  return `${leadingSpace}${output}${trailingSpace}`;
 }
 
-export function serializeResumeMarkdownInline(content: RichTextContent) {
+function paragraphContextFingerprint(
+  paragraph: RichTextContent["content"][number],
+) {
+  return paragraph.content
+    .map((node) => {
+      if (node.type === "text") return node.text;
+      if (node.type === "hardBreak") return "\n";
+      return `:${node.attrs.iconId}:`;
+    })
+    .join("");
+}
+
+export function serializeResumeMarkdownInline(
+  content: RichTextContent,
+  options: {
+    onProjectedSpan?: (span: ResumeMarkdownProjectedInlineSpan) => void;
+  } = {},
+) {
   return content.content
-    .map((paragraph) =>
+    .map((paragraph, paragraphIndex) => {
+      const contextFingerprint = paragraphContextFingerprint(paragraph);
+      return (
       paragraph.content
-        .map((node) => {
+        .map((node, nodeIndex) => {
           if (node.type === "hardBreak") return "  \n";
           if (node.type === "resumeIcon") return `:icon[${node.attrs.iconId}]`;
+          for (const mark of node.marks ?? []) {
+            if (
+              mark.type !== "tag" &&
+              mark.type !== "underline" &&
+              mark.type !== "textColor"
+            ) {
+              continue;
+            }
+            options.onProjectedSpan?.({
+              richTextPath: [paragraphIndex, nodeIndex],
+              start: 0,
+              end: node.text.length,
+              contextFingerprint,
+              mark: mark.type,
+              ...(mark.type === "textColor" ? { color: mark.attrs.color } : {}),
+            });
+          }
           return serializeMarkedText(node.text, node.marks ?? []);
         })
-        .join(""),
-    )
+        .join("")
+      );
+    })
     .join("\n\n");
 }

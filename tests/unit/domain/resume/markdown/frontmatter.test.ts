@@ -51,6 +51,16 @@ describe("AnonResume Markdown front matter", () => {
     );
   });
 
+  it("treats ordinary Markdown without a settings block as valid body content", () => {
+    const source = "## 经历\n\n负责核心模块\n";
+
+    expect(parseResumeMarkdownFrontMatter(source)).toEqual({
+      body: source,
+      bodyStartLine: 1,
+      diagnostics: [],
+    });
+  });
+
   it.each([
     {
       name: "a missing syntax version",
