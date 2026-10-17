@@ -44,6 +44,7 @@ export function ResumeSummaryEditor({
   resumeId,
   saveSummary = updateResumeSummary,
   triggerType = "link",
+  triggerDisabled = false,
   version,
 }: {
   initialSummary: string;
@@ -60,6 +61,7 @@ export function ResumeSummaryEditor({
     version: number;
   }) => Promise<ResumeSummaryUpdateResult>;
   triggerType?: ButtonProps["type"];
+  triggerDisabled?: boolean;
   version: number;
 }) {
   const { styles } = useStyles();
@@ -109,7 +111,7 @@ export function ResumeSummaryEditor({
   return (
     <>
       {renderTrigger ? (
-        <Button onClick={handleOpen} type={triggerType}>
+        <Button disabled={triggerDisabled} onClick={handleOpen} type={triggerType}>
           {t("dashboard.editSummary")}
         </Button>
       ) : null}

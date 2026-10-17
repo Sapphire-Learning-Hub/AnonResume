@@ -24,6 +24,7 @@ import {
   type RichTextContent,
 } from "../schema";
 import { validateResumeDocument } from "../validation";
+import { MAX_RESUME_MARKDOWN_BYTES } from "../markdown/frontmatter";
 import { createRichTextFromMdast } from "./markdown-rich-text";
 import {
   containsMujicvSyntax,
@@ -38,8 +39,6 @@ import type {
   ResumeMarkdownImportInput,
   ResumeMarkdownImportResult,
 } from "./types";
-
-const MAX_MARKDOWN_BYTES = 512 * 1024;
 
 interface ImportContext {
   diagnostics: ResumeImportDiagnostic[];
@@ -473,7 +472,8 @@ export function importResumeMarkdown(
   }
 
   if (
-    new TextEncoder().encode(input.markdown).byteLength > MAX_MARKDOWN_BYTES
+    new TextEncoder().encode(input.markdown).byteLength >
+    MAX_RESUME_MARKDOWN_BYTES
   ) {
     diagnostics.push({
       severity: "error",

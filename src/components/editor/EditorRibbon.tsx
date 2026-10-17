@@ -84,8 +84,10 @@ export function EditorRibbon({
   backHref,
   backLabel,
   commandGroups,
+  disabled = false,
   documentActions,
   documentName,
+  documentNameDisabled = false,
   documentNameLabel,
   quickActions,
   saveStatus,
@@ -99,8 +101,10 @@ export function EditorRibbon({
   backHref: string;
   backLabel: string;
   commandGroups: EditorRibbonGroup[];
+  disabled?: boolean;
   documentActions: ReactNode;
   documentName: string;
+  documentNameDisabled?: boolean;
   documentNameLabel: string;
   quickActions: ReactNode;
   saveStatus: string;
@@ -178,6 +182,7 @@ export function EditorRibbon({
             aria-label={documentNameLabel}
             className={styles.documentName}
             data-testid="resume-title-input"
+            disabled={documentNameDisabled}
             title={documentName}
             value={documentName}
             parseValue={(name) => (name.trim() ? name : undefined)}
@@ -194,46 +199,54 @@ export function EditorRibbon({
         <div className={styles.documentActions}>{documentActions}</div>
       </div>
 
-      <div className={styles.tabsViewport} ref={tabsViewportRef}>
-        <div aria-label={tablistLabel} className={styles.tablist} role="tablist">
-          {tabs.map((tab) => (
-            <button
-              aria-controls="editor-ribbon-command-panel"
-              aria-selected={tab.key === activeTab}
-              className={styles.tab}
-              data-contextual={tab.key === "context" ? "true" : undefined}
-              data-onboarding-anchor={`editor-ribbon-tab-${tab.key}`}
-              id={`editor-ribbon-tab-${tab.key}`}
-              key={tab.key}
-              role="tab"
-              tabIndex={tab.key === activeTab ? 0 : -1}
-              type="button"
-              onClick={() => onTabChange(tab.key)}
-              onKeyDown={(event) => handleTabKeyDown(event, tab.key)}
-            >
-              {tab.icon ? <span className={styles.tabIcon}>{tab.icon}</span> : null}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className={styles.commandViewport} ref={commandViewportRef}>
-        <div
-          aria-label={activeTabItem?.label}
-          aria-labelledby={`editor-ribbon-tab-${activeTab}`}
-          className={styles.commandSurface}
-          id="editor-ribbon-command-panel"
-          role="tabpanel"
-        >
-          {commandGroups.map((group) => group.embedded ? (
-            <Fragment key={group.key}>{group.content}</Fragment>
-          ) : (
-              <section className={styles.commandGroup} key={group.key}>
-                <div className={styles.commandBody}>{group.content}</div>
-                <span className={styles.commandLabel}>{group.label}</span>
-              </section>
+      <div
+        aria-disabled={disabled}
+        className={styles.tools}
+        data-disabled={disabled}
+        data-testid="editor-ribbon-tools"
+        inert={disabled || undefined}
+      >
+        <div className={styles.tabsViewport} ref={tabsViewportRef}>
+          <div aria-label={tablistLabel} className={styles.tablist} role="tablist">
+            {tabs.map((tab) => (
+              <button
+                aria-controls="editor-ribbon-command-panel"
+                aria-selected={tab.key === activeTab}
+                className={styles.tab}
+                data-contextual={tab.key === "context" ? "true" : undefined}
+                data-onboarding-anchor={`editor-ribbon-tab-${tab.key}`}
+                id={`editor-ribbon-tab-${tab.key}`}
+                key={tab.key}
+                role="tab"
+                tabIndex={tab.key === activeTab ? 0 : -1}
+                type="button"
+                onClick={() => onTabChange(tab.key)}
+                onKeyDown={(event) => handleTabKeyDown(event, tab.key)}
+              >
+                {tab.icon ? <span className={styles.tabIcon}>{tab.icon}</span> : null}
+                {tab.label}
+              </button>
             ))}
+          </div>
+        </div>
+
+        <div className={styles.commandViewport} ref={commandViewportRef}>
+          <div
+            aria-label={activeTabItem?.label}
+            aria-labelledby={`editor-ribbon-tab-${activeTab}`}
+            className={styles.commandSurface}
+            id="editor-ribbon-command-panel"
+            role="tabpanel"
+          >
+            {commandGroups.map((group) => group.embedded ? (
+              <Fragment key={group.key}>{group.content}</Fragment>
+            ) : (
+                <section className={styles.commandGroup} key={group.key}>
+                  <div className={styles.commandBody}>{group.content}</div>
+                  <span className={styles.commandLabel}>{group.label}</span>
+                </section>
+              ))}
+          </div>
         </div>
       </div>
     </header>

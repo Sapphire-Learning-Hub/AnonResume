@@ -101,6 +101,42 @@ describe("EditorRibbon", () => {
     );
   });
 
+  it("keeps the document row active while making ribbon tools inert", () => {
+    render(
+      <EditorRibbon
+        activeTab="home"
+        backHref="/app"
+        backLabel="返回工作台"
+        commandGroups={[
+          { key: "mode", label: "编辑模式", content: <button>内容编辑</button> },
+        ]}
+        disabled
+        documentActions={<button>预览</button>}
+        documentName="简历"
+        documentNameLabel="简历标题"
+        quickActions={<button>撤销</button>}
+        saveStatus="空闲"
+        tabs={tabs}
+        tablistLabel="编辑器功能区"
+        onDocumentNameChange={() => undefined}
+        onTabChange={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId("editor-ribbon")).not.toHaveAttribute("inert");
+    expect(screen.getByRole("textbox", { name: "简历标题" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "预览" })).toBeEnabled();
+    expect(screen.getByTestId("editor-ribbon-tools")).toHaveAttribute("inert");
+    expect(screen.getByTestId("editor-ribbon-tools")).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByTestId("editor-ribbon-tools")).toHaveAttribute(
+      "data-disabled",
+      "true",
+    );
+  });
+
   it("supports standard arrow-key navigation between ribbon tabs", () => {
     const onTabChange = vi.fn<(tab: EditorRibbonTab) => void>();
 

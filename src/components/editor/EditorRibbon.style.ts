@@ -62,6 +62,15 @@ export const useEditorRibbonStyles = createStyles(({ token, css }) => ({
       font-size: 12px;
     }
   `,
+  tools: css`
+    transition: opacity 160ms ease;
+
+    &[data-disabled="true"] {
+      opacity: 0.56;
+      cursor: not-allowed;
+      user-select: none;
+    }
+  `,
   documentBar: css`
     display: flex;
     align-items: center;

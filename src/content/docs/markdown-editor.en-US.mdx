@@ -1,0 +1,102 @@
+<h2 id="start-editing">Enter Markdown editing</h2>
+
+Open a resume and choose **Markdown editing** under **Start**. The source is on the left and a read-only preview is on the right. You can scroll, zoom, and inspect the preview, but you cannot edit the right-hand canvas directly. All content changes come from the source while this mode is active.
+
+Paragraphs, level-three headings, bold, italic, strike-through, inline code, links, ordered lists, and unordered lists use familiar Markdown syntax.
+
+```markdown
+### Senior backend engineer
+
+Built **core services** and improved *engineering efficiency*.
+
+- Delivered user authentication
+- Improved observability and recovery
+```
+
+<h2 id="page-theme">Set up the page and theme</h2>
+
+The settings block is optional. When you enter Markdown editing, the editor generates one from the current page and theme settings. If you write Markdown without this block, the resume keeps its current settings. `anonresume: 1` identifies the settings syntax version. The four page-margin numbers are top, right, bottom, and left.
+
+```markdown
+---
+anonresume: 1
+title: "Backend engineer resume"
+locale: en-US
+page-margin: 18 16 18 16
+font-family: "IBM Plex Sans"
+font-size: 10.5
+line-height: 1.55
+accent: "#1677ff"
+text-color: "#111827"
+muted-color: "#64748b"
+---
+```
+
+The font name must be available in the resume font collection for the current instance. Colors use hexadecimal values. You can remove settings that do not need an explicit override, or remove the whole settings block.
+
+<h2 id="content-structure">Write sections, layouts, and rich text</h2>
+
+A level-two heading starts a resume section. Most resume content can use standard Markdown directly.
+
+```markdown
+## Experience
+
+### Senior engineer
+
+Built core services and improved engineering efficiency.
+
+- Delivered user authentication
+- Improved observability and recovery
+```
+
+Use block directives only for layouts that standard Markdown cannot express. A directive starts with `:::name` and ends with `:::` on its own line. A horizontal `row` can use level-three headings as column boundaries:
+
+```markdown
+:::row {gap=16 align="center" justify="between"}
+### Senior engineer
+
+Example Company
+
+### Dates
+
+2024.01 - Present
+:::
+```
+
+Use the smallest necessary `group` directive when content has no stable heading boundary or requires horizontal grouping. Badges can remain a standard unordered list during a local editing session. Use `badges` when copied source must identify the collection explicitly:
+
+```markdown
+:::badges {wrap=true gap=8}
+- TypeScript
+- PostgreSQL
+:::
+```
+
+Links, bold, italic, strike-through, and inline code use standard Markdown. Icons and the few styles that must be explicit in source can use inline extensions:
+
+```markdown
+:tag[Core skill]
+:icon[simple-icons:github]
+:color[:underline[Important text]]{value="#1677ff"}
+[Contact me](mailto:hello@example.com "Send email"){color="inherit" underline=false}
+```
+
+For a line break within one paragraph, leave two spaces at the end of the line before pressing Enter. A normal blank line separates paragraphs.
+
+<h2 id="diagnostics">Resolve issues and normalization</h2>
+
+When the source has a problem, the left pane shows its line number and an explanation. Select an issue to move to that location. If an issue prevents parsing, the right pane keeps showing the last valid preview and the invalid changes are not saved to the resume.
+
+When you leave Markdown editing, the editor only normalizes line endings, removes redundant runs of blank lines, and adds the final newline. Comments, list markers, emphasis spelling, and fenced code contents remain intact. If the current source still has a blocking error, you can continue editing or explicitly discard the invalid changes.
+
+Some layout and styling details exist only in the visual editor instead of being repeated in Markdown. They remain available during the current local editing session. If edited content can no longer be matched safely, the issue list explains that only the affected content was rebuilt with defaults; other content is left unchanged.
+
+After an unexpected browser refresh, the page may find unfinished Markdown source saved on this device. You can choose to recover it or restart from the current resume.
+
+<h2 id="compatibility">Compatibility and portability</h2>
+
+The editor recognizes ordinary Markdown, supported legacy AnonResume directives, and the Mujicv `:::left`, `:::right`, and `icon:name` forms. Prefer standard Markdown for new content and use `row`, `group`, or `badges` only when the layout requires them.
+
+Copying the Markdown source carries visible content, explicit block directives, and public settings from the settings block. It does not carry design details retained only on the current device. Markdown source is therefore useful for editing and moving public semantics, but it is not a complete backup and should not replace the platform's normal save and export flows. Keep the relevant sparse directive in source when a special layout must survive across devices.
+
+Markdown comments are preserved. Other raw HTML, scripts, and custom CSS are not supported.
