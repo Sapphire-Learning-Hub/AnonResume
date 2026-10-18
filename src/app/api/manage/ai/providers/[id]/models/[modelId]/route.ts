@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -13,7 +15,7 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; modelId: string }> },
 ) {
@@ -40,7 +42,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; modelId: string }> },
 ) {
@@ -62,3 +64,6 @@ export async function DELETE(
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const PATCH = withRequestLogging("/api/manage/ai/providers/[id]/models/[modelId]", patchHandler);
+export const DELETE = withRequestLogging("/api/manage/ai/providers/[id]/models/[modelId]", deleteHandler);

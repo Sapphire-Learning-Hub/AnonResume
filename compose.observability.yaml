@@ -1,0 +1,32 @@
+services:
+  migrate:
+    logging:
+      driver: gelf
+      options:
+        gelf-address: ${ANONRESUME_GELF_ADDRESS:-udp://host.docker.internal:12201}
+        gelf-compression-type: none
+        tag: anonresume-migrate
+
+  web:
+    logging:
+      driver: gelf
+      options:
+        gelf-address: ${ANONRESUME_GELF_ADDRESS:-udp://host.docker.internal:12201}
+        gelf-compression-type: none
+        tag: anonresume-web
+
+  ai-worker:
+    logging:
+      driver: gelf
+      options:
+        gelf-address: ${ANONRESUME_GELF_ADDRESS:-udp://host.docker.internal:12201}
+        gelf-compression-type: none
+        tag: anonresume-ai-worker
+
+  pdf-worker:
+    logging:
+      driver: gelf
+      options:
+        gelf-address: ${ANONRESUME_GELF_ADDRESS:-udp://host.docker.internal:12201}
+        gelf-compression-type: none
+        tag: anonresume-pdf-worker

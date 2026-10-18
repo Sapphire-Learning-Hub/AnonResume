@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -5,7 +7,7 @@ import { configurationApiErrorResponse } from "@/lib/config/admin/api";
 import { prepareConfigurationRollback } from "@/lib/config/admin/service";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -26,3 +28,5 @@ export async function POST(
     return configurationApiErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/manage/configuration/revisions/[id]/rollback", postHandler);

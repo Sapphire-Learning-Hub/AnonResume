@@ -42,6 +42,7 @@ import {
   ConfigurationRevisionConflictError,
   ConfigurationStateError,
 } from "@/lib/config/store";
+import { initializeHttpLogCapture } from "../../../../../support/observability";
 
 const draftRevisionId = "4e86d4f7-f985-4bd1-9e87-a82dfe7acaeb";
 const sourceRevisionId = "c857abfc-2ed9-44ae-a0d6-9f59b49b9ef1";
@@ -131,6 +132,7 @@ describe("configuration management routes", () => {
   });
 
   it("requires recent MFA for publication and rollback", async () => {
+    const logs = initializeHttpLogCapture();
     const publishResponse = await publish(
       mutationRequest("http://localhost/api/manage/configuration/publish", {
         baseVersion: 1,
@@ -138,6 +140,11 @@ describe("configuration management routes", () => {
       }),
     );
     expect(publishResponse.status).toBe(200);
+    expect(publishResponse.headers.get("x-request-id")).toEqual(
+      expect.any(String),
+    );
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.lines.join("\n")).not.toContain(draftRevisionId);
     expect(mocks.requireAdmin).toHaveBeenLastCalledWith({
       permission: "configuration.publish",
       recentMfa: true,
@@ -166,6 +173,7 @@ describe("configuration management routes", () => {
   });
 
   it("preserves the existing recent-MFA response", async () => {
+    const logs = initializeHttpLogCapture();
     mocks.requireAdmin.mockRejectedValueOnce(new Error("mfa_required"));
 
     const response = await publish(
@@ -176,10 +184,16 @@ describe("configuration management routes", () => {
     );
 
     expect(response.status).toBe(428);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     await expect(response.json()).resolves.toEqual({
       error: "mfa_reauthentication_required",
     });
     expect(mocks.publish).not.toHaveBeenCalled();
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.outcome": "failure",
+      "http.response.status_code": 428,
+    });
   });
 
   it("maps validation, conflict, and missing revisions to stable errors", async () => {

@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -6,7 +8,7 @@ import {
   ResumeVersionSnapshotNotFoundError,
 } from "@/lib/resume/repository";
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string; snapshotId: string }> },
 ) {
@@ -34,3 +36,5 @@ export async function GET(
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/resumes/[id]/versions/[snapshotId]", getHandler);

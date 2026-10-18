@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getAccountMergeErrorStatus, AccountMergeError } from "@/lib/auth/account/merge/errors";
@@ -10,7 +12,7 @@ function readCookie(request: Request, name: string) {
     .find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const session = await getOptionalSession();
   const rawIntentToken = readCookie(request, ACCOUNT_MERGE_INTENT_COOKIE);
   if (!session || !rawIntentToken) {
@@ -32,3 +34,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/account/social-merge/intent", getHandler);

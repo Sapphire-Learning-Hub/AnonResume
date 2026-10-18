@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -24,7 +26,7 @@ function readCookie(request: Request, name: string) {
     .find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -67,3 +69,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/account/social-merge/verify", postHandler);

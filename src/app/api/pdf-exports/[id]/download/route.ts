@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -12,7 +14,7 @@ import {
 import { getBearerToken } from "@/lib/http/request-authorization";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 
-export async function GET(
+async function getHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -57,3 +59,5 @@ export async function GET(
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/pdf-exports/[id]/download", getHandler);

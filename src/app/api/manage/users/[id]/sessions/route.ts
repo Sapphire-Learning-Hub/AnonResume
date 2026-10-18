@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
@@ -7,7 +9,7 @@ import {
   revokeUserSessions,
 } from "@/lib/admin/management";
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function deleteHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAdminApi({ permission: "users.sessions.revoke", recentMfa: true });
     await revokeUserSessions(context.userId, (await params).id);
@@ -24,3 +26,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const DELETE = withRequestLogging("/api/manage/users/[id]/sessions", deleteHandler);

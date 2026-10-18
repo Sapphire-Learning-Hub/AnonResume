@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
@@ -7,7 +9,7 @@ import {
   removeAdminMfaDevice,
 } from "@/lib/admin/store";
 
-export async function DELETE(
+async function deleteHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -40,3 +42,5 @@ export async function DELETE(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const DELETE = withRequestLogging("/api/manage/security/mfa/[id]", deleteHandler);

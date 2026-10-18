@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -29,7 +31,7 @@ const verificationSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -90,7 +92,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -116,3 +118,6 @@ export async function PUT(request: Request) {
     return accountErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/account/email/challenge", postHandler);
+export const PUT = withRequestLogging("/api/account/email/challenge", putHandler);

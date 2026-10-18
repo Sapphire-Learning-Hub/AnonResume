@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -23,7 +25,7 @@ const transitionActionSchema = z.union([
   z.object({ type: z.literal("complete") }),
 ]);
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -60,3 +62,5 @@ export async function PATCH(
     throw error;
   }
 }
+
+export const PATCH = withRequestLogging("/api/onboarding/editor-basics/runs/[id]", patchHandler);

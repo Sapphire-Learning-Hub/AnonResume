@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { z } from "zod";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -22,7 +24,7 @@ const updateConversationSchema = z
   .strict()
   .refine((value) => value.title !== undefined || value.archived !== undefined);
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -46,7 +48,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -86,7 +88,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -111,3 +113,7 @@ export async function DELETE(
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/ai/conversations/[id]", getHandler);
+export const PATCH = withRequestLogging("/api/ai/conversations/[id]", patchHandler);
+export const DELETE = withRequestLogging("/api/ai/conversations/[id]", deleteHandler);

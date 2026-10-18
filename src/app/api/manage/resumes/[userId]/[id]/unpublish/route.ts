@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -9,7 +11,7 @@ import {
 
 const bodySchema = z.object({ reason: z.string().trim().min(1).max(240) });
 
-export async function POST(
+async function postHandler(
   _request: Request,
   { params }: { params: Promise<{ userId: string; id: string }> },
 ) {
@@ -34,3 +36,5 @@ export async function POST(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/manage/resumes/[userId]/[id]/unpublish", postHandler);

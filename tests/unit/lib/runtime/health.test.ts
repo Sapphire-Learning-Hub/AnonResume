@@ -66,4 +66,27 @@ describe("application readiness", () => {
       }),
     ).resolves.toEqual({ ready: false, reason: "core_unavailable" });
   });
+
+  it("bounds readiness when a core dependency stops responding", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const readiness = checkApplicationReadiness({
+        validateBootstrap: () => ({ valid: true, issues: [] }),
+        checkDatabase: () => new Promise<void>(() => undefined),
+        loadRuntime: vi.fn(),
+        loadSetupStatus: vi.fn(),
+        timeoutMs: 100,
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(readiness).resolves.toEqual({
+        ready: false,
+        reason: "core_unavailable",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

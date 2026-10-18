@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { SocialRegistrationError } from "@/lib/auth/social-registration/errors";
+import { initializeHttpLogCapture } from "../../../../support/observability";
 
 const mocks = vi.hoisted(() => ({
   cancelAttempt: vi.fn(),
@@ -163,6 +164,7 @@ describe("social registration routes", () => {
   });
 
   it("creates an HttpOnly attempt and returns product callback URLs", async () => {
+    const logs = initializeHttpLogCapture();
     const response = await createAttempt(request(
       "https://resume.example.com/api/registration/social/attempt",
       {
@@ -173,6 +175,7 @@ describe("social registration routes", () => {
     ));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     await expect(response.json()).resolves.toEqual({
       callbackURL:
         "/api/registration/social/result?provider=github&outcome=success",
@@ -182,6 +185,12 @@ describe("social registration routes", () => {
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
     expect(response.headers.get("set-cookie")).toContain("SameSite=lax");
     expect(response.headers.get("set-cookie")).toContain("Path=/api");
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "http.response.status_code": 200,
+      "url.path": "/api/registration/social/attempt",
+    });
   });
 
   it("redirects an authenticated callback to the app and cancels the intent", async () => {

@@ -20,6 +20,7 @@ vi.mock("@/lib/runtime/email", () => ({
 
 import { GET, POST } from "@/app/api/invitations/route";
 import { InvitationLimitError } from "@/lib/invitations/errors";
+import { initializeHttpLogCapture } from "../../../../support/observability";
 
 describe("product invitation collection route", () => {
   beforeEach(() => {
@@ -47,6 +48,7 @@ describe("product invitation collection route", () => {
   });
 
   it("accepts only an email and derives inviter identity from the session", async () => {
+    const logs = initializeHttpLogCapture();
     const response = await POST(
       new Request("http://localhost/api/invitations", {
         method: "POST",
@@ -56,6 +58,7 @@ describe("product invitation collection route", () => {
     );
 
     expect(response.status).toBe(202);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     expect(await response.json()).toEqual({ status: "processed" });
     expect(mocks.createInvitation).toHaveBeenCalledWith({
       inviterUserId: "user-1",
@@ -63,6 +66,12 @@ describe("product invitation collection route", () => {
       inviterEmail: "me@example.com",
       invitedEmail: "new@example.com",
       deliverInvitation: mocks.sendInvitation,
+    });
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "http.response.status_code": 202,
+      "url.path": "/api/invitations",
     });
   });
 

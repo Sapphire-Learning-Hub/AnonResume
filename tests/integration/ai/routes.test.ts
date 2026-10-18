@@ -29,6 +29,7 @@ import { GET as getConversation } from "@/app/api/ai/conversations/[id]/route";
 import { POST as sendMessage } from "@/app/api/ai/conversations/[id]/messages/route";
 import { GET as streamRun } from "@/app/api/ai/runs/[id]/stream/route";
 import { POST as stopRun } from "@/app/api/ai/runs/[id]/stop/route";
+import { initializeHttpLogCapture } from "../../support/observability";
 
 vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
@@ -169,6 +170,7 @@ describe("AI conversation routes", () => {
   });
 
   it("queues a message and exposes its reconnectable persisted stream", async () => {
+    const creationLogs = initializeHttpLogCapture();
     const queuedResponse = await sendMessage(
       mutationRequest(
         `http://localhost/api/ai/conversations/${conversationId}/messages`,
@@ -177,7 +179,12 @@ describe("AI conversation routes", () => {
       { params: Promise.resolve({ id: conversationId }) },
     );
     expect(queuedResponse.status).toBe(202);
+    expect(queuedResponse.headers.get("x-request-id")).toEqual(
+      expect.any(String),
+    );
     latestRunId = (await queuedResponse.json()).runId;
+    expect(creationLogs.events()).toHaveLength(1);
+    expect(creationLogs.lines.join("\n")).not.toContain("帮我优化表达");
 
     const [prepared] = await claimQueuedAiRuns({
       workerId: "route-test-worker",
@@ -192,15 +199,21 @@ describe("AI conversation routes", () => {
       void event;
     }
 
+    const streamLogs = initializeHttpLogCapture();
     const streamResponse = await streamRun(
       new Request(`http://localhost/api/ai/runs/${latestRunId}/stream`),
       { params: Promise.resolve({ id: latestRunId }) },
     );
     expect(streamResponse.status).toBe(200);
+    expect(streamResponse.headers.get("x-request-id")).toEqual(
+      expect.any(String),
+    );
     expect(streamResponse.headers.get("content-type")).toContain(
       "application/x-ndjson",
     );
     expect(await streamResponse.text()).toContain("建议突出可量化成果");
+    expect(streamLogs.events()).toHaveLength(1);
+    expect(streamLogs.lines.join("\n")).not.toContain("建议突出可量化成果");
 
     const detailResponse = await getConversation(
       new Request(`http://localhost/api/ai/conversations/${conversationId}`),

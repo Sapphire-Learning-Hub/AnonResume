@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -15,7 +17,7 @@ const assignSchema = z.object({
 });
 const removeSchema = z.object({ userId: z.string().min(1) });
 
-export async function PUT(request: Request) {
+async function putHandler(request: Request) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     const parsed = assignSchema.safeParse(await request.json().catch(() => null));
@@ -31,7 +33,7 @@ export async function PUT(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     const parsed = removeSchema.safeParse(await request.json().catch(() => null));
@@ -45,3 +47,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const PUT = withRequestLogging("/api/manage/administrators", putHandler);
+export const DELETE = withRequestLogging("/api/manage/administrators", deleteHandler);

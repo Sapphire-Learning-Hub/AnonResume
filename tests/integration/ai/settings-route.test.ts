@@ -20,6 +20,7 @@ import {
   DELETE as DELETE_MODEL,
   PATCH as UPDATE_MODEL,
 } from "@/app/api/ai/settings/providers/[providerId]/models/[modelId]/route";
+import { initializeHttpLogCapture } from "../../support/observability";
 
 vi.mock("@/lib/auth/session", () => ({ getOptionalSession: vi.fn() }));
 vi.mock("@/lib/ai/security/endpoint-policy", () => ({
@@ -65,6 +66,7 @@ describe("personal AI provider and model routes", () => {
   });
 
   it("manages multiple providers with multiple models per provider", async () => {
+    const logs = initializeHttpLogCapture();
     const firstProviderResponse = await CREATE_PROVIDER(actionRequest(
       "http://localhost/api/ai/settings/providers",
       "POST",
@@ -75,7 +77,13 @@ describe("personal AI provider and model routes", () => {
         allowCrossOriginRedirects: true,
       },
     ));
+    expect(firstProviderResponse.headers.get("x-request-id")).toEqual(
+      expect.any(String),
+    );
     const firstProvider = (await firstProviderResponse.json()).provider as { id: string };
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.lines.join("\n")).not.toContain("sk-provider-one");
+    expect(logs.lines.join("\n")).not.toContain("one.example.com");
     const secondProviderResponse = await CREATE_PROVIDER(actionRequest(
       "http://localhost/api/ai/settings/providers",
       "POST",

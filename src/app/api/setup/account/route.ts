@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,7 +19,7 @@ const bodySchema = z.object({
   deviceName: z.string().trim().min(1).max(60),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const forbidden = requireSameOrigin(request);
   if (forbidden) return forbidden;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -52,3 +54,5 @@ function errorResponse(error: string, status: number) {
     { status, headers: { "Cache-Control": "no-store" } },
   );
 }
+
+export const POST = withRequestLogging("/api/setup/account", postHandler);

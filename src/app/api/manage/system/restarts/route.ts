@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -13,7 +15,7 @@ import {
 import { requireSameOrigin } from "@/lib/http/request-origin";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -37,3 +39,5 @@ export async function POST(request: Request) {
     return systemRestartApiErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/manage/system/restarts", postHandler);

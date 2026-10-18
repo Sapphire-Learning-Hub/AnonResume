@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
@@ -17,7 +19,7 @@ async function requireProviderConfiguration() {
   return resolveAiConfiguration(runtime.values);
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ permission: "ai.providers.manage" });
     const params = new URL(request.url).searchParams;
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -59,3 +61,6 @@ export async function POST(request: Request) {
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/ai/providers", getHandler);
+export const POST = withRequestLogging("/api/manage/ai/providers", postHandler);

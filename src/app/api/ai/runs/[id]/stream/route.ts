@@ -1,9 +1,11 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { getOptionalSession } from "@/lib/auth/session";
 import { streamAiRunSnapshots } from "@/lib/ai/runs/run-stream";
 import { getAiRunSnapshot } from "@/lib/ai/runs/service";
 import { encodeAiStreamEvent } from "@/lib/ai/runs/stream-events";
 
-export async function GET(
+async function getHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -43,3 +45,5 @@ export async function GET(
     },
   });
 }
+
+export const GET = withRequestLogging("/api/ai/runs/[id]/stream", getHandler);

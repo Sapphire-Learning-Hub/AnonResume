@@ -78,6 +78,8 @@ Application data lives in the `postgres-data` volume, while generated deployment
 
 The default stack starts one AI worker and one PDF worker with stable instance identities. Every additional worker replica must receive a unique `ANONRESUME_INSTANCE_ID`. When using a registry mirror, authenticate through Docker's credential store and configure the image source without placing registry passwords in `compose.env` or Compose files.
 
+Web and worker processes emit structured operational logs to standard output. See the [logging and ELK operations guide](./docs/operations/observability.md) for the event contract, local stack, and enterprise collection patterns. Ordinary deployments do not depend on ELK.
+
 ### Run Locally
 
 ```bash
@@ -213,6 +215,8 @@ AnonResume is built with Next.js 16, React 19, TypeScript, Ant Design, Tiptap, Z
 | `bun run admin:doctor` | Inspect management-system health |
 | `bun run admin:repair-super-admin` | Repair an invalid multiple-super-admin state |
 | `bun run admin:reset-mfa` | Reset super-admin MFA through the CLI |
+
+The [observability operations guide](./docs/operations/observability.md) documents log fields, security boundaries, local ELK, and enterprise collection patterns.
 
 Before publishing a release, run at least:
 

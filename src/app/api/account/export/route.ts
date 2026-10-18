@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { isManagementOnlyIdentity } from "@/lib/admin/store";
@@ -6,7 +8,7 @@ import { getAccountLifecycle } from "@/lib/auth/account/repository";
 import { getOptionalIdentitySession } from "@/lib/auth/session";
 import { createDownloadContentDisposition } from "@/lib/shared/download-filename";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const identity = await getOptionalIdentitySession();
   if (!identity) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -36,3 +38,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const GET = withRequestLogging("/api/account/export", getHandler);

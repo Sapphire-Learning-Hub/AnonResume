@@ -22,6 +22,12 @@ import {
   markWorkerStopped,
   recordWorkerHeartbeat,
 } from "@/lib/runtime/worker-heartbeat";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
+
+const runtimeLog = getLogger("anonresume.runtime");
 
 export interface AiWorkerConfiguration {
   batchSize: number;
@@ -128,8 +134,13 @@ export async function runAiWorker(options: {
   let nextRecoveryAt = 0;
   let nextRetentionAt = 0;
   let activeExecution: Promise<void> | undefined;
+  let heartbeatFailed = false;
 
   logger.info(`[AnonResume] AI worker started: ${workerId}`);
+  runtimeLog.info("worker_started", {
+    labels: { workerType: "ai-runtime" },
+    outcome: "success",
+  });
 
   while (!options.signal?.aborted) {
     await runtime.refreshIfDue();
@@ -162,8 +173,23 @@ export async function runAiWorker(options: {
           retentionIntervalMs: configuration.retentionIntervalMs,
         },
       });
+      if (heartbeatFailed) {
+        heartbeatFailed = false;
+        runtimeLog.info("worker_heartbeat_recovered", {
+          labels: { workerType: "ai-runtime" },
+          outcome: "success",
+        });
+      }
     } catch (error) {
       logger.error("[AnonResume] AI worker heartbeat failed", error);
+      if (!heartbeatFailed) {
+        heartbeatFailed = true;
+        runtimeLog.error("worker_heartbeat_failed", {
+          error: serializeSafeError(error),
+          labels: { workerType: "ai-runtime" },
+          outcome: "failure",
+        });
+      }
     }
 
     if (currentMs >= nextRecoveryAt) {
@@ -253,4 +279,8 @@ export async function runAiWorker(options: {
   }
 
   logger.info(`[AnonResume] AI worker stopped: ${workerId}`);
+  runtimeLog.info("worker_stopped", {
+    labels: { workerType: "ai-runtime" },
+    outcome: "success",
+  });
 }

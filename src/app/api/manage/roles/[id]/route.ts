@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -16,7 +18,7 @@ const schema = z.object({
   permissions: z.array(z.enum(ADMIN_PERMISSION_KEYS)).max(ADMIN_PERMISSION_KEYS.length),
 });
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function putHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -32,7 +34,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function deleteHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     await deleteAdminRole(context.userId, (await params).id);
@@ -45,3 +47,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const PUT = withRequestLogging("/api/manage/roles/[id]", putHandler);
+export const DELETE = withRequestLogging("/api/manage/roles/[id]", deleteHandler);

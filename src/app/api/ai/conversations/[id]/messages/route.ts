@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { z } from "zod";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -22,7 +24,7 @@ const sendMessageSchema = z
   })
   .strict();
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -75,3 +77,5 @@ export async function POST(
     throw error;
   }
 }
+
+export const POST = withRequestLogging("/api/ai/conversations/[id]/messages", postHandler);

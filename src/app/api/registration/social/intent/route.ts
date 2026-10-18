@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -8,7 +10,7 @@ import {
 } from "@/lib/auth/social-registration/http";
 import { inspectSocialRegistrationIntent } from "@/lib/auth/social-registration/repository";
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const rawToken = getSocialRegistrationCookie(request);
   if (!rawToken) {
     return NextResponse.json(
@@ -39,3 +41,5 @@ export async function GET(request: NextRequest) {
     return response;
   }
 }
+
+export const GET = withRequestLogging("/api/registration/social/intent", getHandler);

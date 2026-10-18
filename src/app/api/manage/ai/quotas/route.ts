@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -23,7 +25,7 @@ const quotaSchema = z.object({
   { message: "invalid_quota_period", path: ["periodEndsAt"] },
 );
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ permission: "ai.quotas.manage" });
     const runtime = await getRuntimeConfig("web");
@@ -44,7 +46,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function PATCH(request: Request) {
+async function patchHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -63,3 +65,6 @@ export async function PATCH(request: Request) {
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/ai/quotas", getHandler);
+export const PATCH = withRequestLogging("/api/manage/ai/quotas", patchHandler);

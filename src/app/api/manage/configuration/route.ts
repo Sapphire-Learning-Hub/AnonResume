@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -13,7 +15,7 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function GET() {
+async function getHandler() {
   try {
     await requireAdminApi({ permission: "configuration.read" });
     return NextResponse.json(await getManagedConfiguration());
@@ -22,7 +24,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
+async function patchHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -42,3 +44,6 @@ export async function PATCH(request: Request) {
     return configurationApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/configuration", getHandler);
+export const PATCH = withRequestLogging("/api/manage/configuration", patchHandler);

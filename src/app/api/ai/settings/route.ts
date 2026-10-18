@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { getOptionalSession } from "@/lib/auth/session";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
 import { getRuntimeConfig } from "@/lib/config/runtime";
@@ -8,7 +10,7 @@ import {
 import { listPersonalAiProviders } from "@/lib/ai/settings/service";
 import { getAiQuotaSnapshot } from "@/lib/ai/usage/ledger";
 
-export async function GET() {
+async function getHandler() {
   const session = await getOptionalSession();
   if (!session) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -42,3 +44,5 @@ export async function GET() {
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/ai/settings", getHandler);

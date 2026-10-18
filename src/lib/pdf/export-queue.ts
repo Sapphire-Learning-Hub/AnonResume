@@ -17,8 +17,10 @@ import {
   PDF_EXPORT_ACTIVE_POLL_MS,
   PDF_EXPORT_OFFLINE_POLL_MS,
 } from "@/lib/pdf/export-availability";
+import { getLogger } from "@/lib/observability/logging";
 
 const PDF_QUEUE_LOCK = "anonresume:pdf-export-capacity";
+const pdfLog = getLogger("anonresume.pdf");
 
 export interface PdfExportConfiguration {
   allowAnonymous: boolean;
@@ -60,9 +62,7 @@ export function warnIfAnonymousPdfExportIsEnabled(
 ) {
   if (configuration.allowAnonymous && !anonymousExportWarningShown) {
     anonymousExportWarningShown = true;
-    console.warn(
-      "[AnonResume] Anonymous PDF export is enabled. This is not recommended because public callers can consume shared export capacity.",
-    );
+    pdfLog.warn("anonymous_export_enabled", { outcome: "unknown" });
   }
 }
 

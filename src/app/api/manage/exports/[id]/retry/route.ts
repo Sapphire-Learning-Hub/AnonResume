@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
@@ -8,7 +10,7 @@ import {
   PdfExportStateConflictError,
 } from "@/lib/pdf/export-queue";
 
-export async function POST(
+async function postHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -34,3 +36,5 @@ export async function POST(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/manage/exports/[id]/retry", postHandler);

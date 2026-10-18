@@ -14,6 +14,7 @@ import {
 
 import { DELETE, GET } from "@/app/api/pdf-exports/[id]/route";
 import { GET as DOWNLOAD } from "@/app/api/pdf-exports/[id]/download/route";
+import { initializeHttpLogCapture } from "../../../../../support/observability";
 
 vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
@@ -92,6 +93,7 @@ describe("PDF export job routes", () => {
   });
 
   it("slows queued polling while the PDF worker is unavailable", async () => {
+    const logs = initializeHttpLogCapture();
     vi.mocked(getPdfExportWorkerAvailability).mockResolvedValue({
       available: false,
     });
@@ -104,6 +106,7 @@ describe("PDF export job routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     expect(response.headers.get("retry-after")).toBe("30");
     await expect(response.json()).resolves.toMatchObject({
       job: {
@@ -112,9 +115,15 @@ describe("PDF export job routes", () => {
         workerAvailable: false,
       },
     });
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "url.path": "/api/pdf-exports/[id]",
+    });
   });
 
   it("downloads only completed jobs", async () => {
+    const logs = initializeHttpLogCapture();
     const queued = await createPublicJob();
     const [claimed] = await claimPdfExportJobs({
       workerId: "worker-one",
@@ -136,6 +145,7 @@ describe("PDF export job routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     expect(response.headers.get("content-type")).toBe("application/pdf");
     expect(response.headers.get("content-disposition")).toBe(
       'attachment; filename="demo.pdf"',
@@ -143,6 +153,11 @@ describe("PDF export job routes", () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(
       new Uint8Array([4, 5, 6]),
     );
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "url.path": "/api/pdf-exports/[id]/download",
+    });
   });
 
   it("does not accept a capability token from the URL query string", async () => {

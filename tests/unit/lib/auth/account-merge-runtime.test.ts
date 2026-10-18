@@ -12,20 +12,40 @@ import {
   startAccountMergeRuntime,
   stopAccountMergeRuntime,
 } from "@/lib/auth/account/merge/runtime";
+import { initializeLogCapture } from "../../../support/observability";
 
 describe("account merge runtime", () => {
   beforeEach(() => {
     stopAccountMergeRuntime();
     vi.useFakeTimers();
     vi.clearAllMocks();
-    mocks.runAccountMergeExecutor.mockResolvedValue({});
-    mocks.deliverAccountMergeNotices.mockResolvedValue({});
+    mocks.runAccountMergeExecutor.mockResolvedValue({
+      completed: 0,
+      failed: 0,
+      processed: 0,
+      waiting: 0,
+    });
+    mocks.deliverAccountMergeNotices.mockResolvedValue({
+      delivered: 0,
+      failed: 0,
+      processed: 0,
+    });
   });
 
   it("runs operation recovery and durable notice delivery", async () => {
+    const capture = initializeLogCapture();
     await executeAccountMergeMaintenance();
     expect(mocks.runAccountMergeExecutor).toHaveBeenCalledOnce();
     expect(mocks.deliverAccountMergeNotices).toHaveBeenCalledOnce();
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "merge_maintenance_completed",
+          "event.dataset": "anonresume.account",
+          "event.outcome": "success",
+        }),
+      ]),
+    );
   });
 
   it("does not overlap interval executions", async () => {

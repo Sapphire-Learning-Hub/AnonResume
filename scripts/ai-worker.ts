@@ -1,41 +1,51 @@
-import { runAiWorker } from "@/lib/ai/worker";
-import { getAiCredentialsEncryptionKey } from "@/lib/ai/config/configuration";
-import { getRuntimeConfigManager } from "@/lib/config/runtime";
-import { getDatabasePool } from "@/lib/runtime/database";
-import { validateBootstrapConfiguration } from "@/lib/runtime/configuration";
-import { startWorkerRestartRuntime } from "@/lib/runtime/restart/process-runtime";
-import { withWorkerInstanceLock } from "@/lib/runtime/worker-instance-lock";
+import {
+  getLogger,
+  initializeLogging,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
-const configuration = validateBootstrapConfiguration();
-if (!configuration.valid) {
-  throw new Error(
-    `Invalid production configuration: ${configuration.issues.join(", ")}`,
-  );
-}
+initializeLogging({ role: "ai-worker" });
+const runtimeLog = getLogger("anonresume.runtime");
 const controller = new AbortController();
 const stop = () => controller.abort();
-const runtimeManager = getRuntimeConfigManager("ai-worker");
 
 process.once("SIGINT", stop);
 process.once("SIGTERM", stop);
+runtimeLog.info("process_started", { outcome: "success" });
+
+const { getAiCredentialsEncryptionKey } = await import("@/lib/ai/config/configuration");
+const { runAiWorker } = await import("@/lib/ai/worker");
+const { getRuntimeConfigManager } = await import("@/lib/config/runtime");
+const { getDatabasePool } = await import("@/lib/runtime/database");
+const { validateBootstrapConfiguration } = await import("@/lib/runtime/configuration");
+const { startWorkerRestartRuntime } = await import("@/lib/runtime/restart/process-runtime");
+const { withWorkerInstanceLock } = await import("@/lib/runtime/worker-instance-lock");
+const runtimeManager = getRuntimeConfigManager("ai-worker");
 
 try {
+  const configuration = validateBootstrapConfiguration();
+  if (!configuration.valid) throw new Error("invalid_production_configuration");
   await runtimeManager.start();
   const identity = await runtimeManager.snapshot();
   await startWorkerRestartRuntime({
     abort: stop,
     consumer: "ai-worker",
     runtimeManager,
-    work: () =>
-      withWorkerInstanceLock(identity.instanceId, () =>
-        runAiWorker({
-          signal: controller.signal,
-          encryptionKey: getAiCredentialsEncryptionKey(),
-          runtimeManager,
-        })
-      ),
+    work: () => withWorkerInstanceLock(identity.instanceId, () =>
+      runAiWorker({
+        signal: controller.signal,
+        encryptionKey: getAiCredentialsEncryptionKey(),
+        runtimeManager,
+      })),
   });
+} catch (error) {
+  runtimeLog.error("process_failed", {
+    error: serializeSafeError(error),
+    outcome: "failure",
+  });
+  throw error;
 } finally {
   await runtimeManager.stop();
   await getDatabasePool().end();
+  runtimeLog.info("process_stopped", { outcome: "success" });
 }

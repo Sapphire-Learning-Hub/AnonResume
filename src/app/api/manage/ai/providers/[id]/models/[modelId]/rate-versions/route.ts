@@ -1,10 +1,12 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
 import { listAiAdminModelRateVersions } from "@/lib/ai/admin/service";
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string; modelId: string }> },
 ) {
@@ -20,3 +22,5 @@ export async function GET(
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/ai/providers/[id]/models/[modelId]/rate-versions", getHandler);

@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -32,7 +34,7 @@ function clearCallbackCookies(response: NextResponse) {
   });
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const session = await getOptionalSession();
   const rawToken = request.cookies.get(SOCIAL_LINK_ATTEMPT_COOKIE)?.value;
   const providerId = request.nextUrl.searchParams.get("provider");
@@ -92,3 +94,5 @@ export async function GET(request: NextRequest) {
     return response;
   }
 }
+
+export const GET = withRequestLogging("/api/account/social-link/result", getHandler);

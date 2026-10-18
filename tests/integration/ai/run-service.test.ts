@@ -37,6 +37,7 @@ import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
 import { releaseAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
+import { initializeLogCapture } from "../../support/observability";
 
 function waitForAbort(signal: AbortSignal) {
   if (signal.aborted) {
@@ -130,6 +131,7 @@ describe("AI run service", () => {
   });
 
   it("streams and persists a validated proposal before settling usage", async () => {
+    const capture = initializeLogCapture("ai-worker");
     const section = document.sections[0]!;
     const block = section.blocks[0]!;
     if (block.type !== "text") throw new Error("Expected text block");
@@ -273,6 +275,22 @@ describe("AI run service", () => {
           ),
         ),
     ).toHaveLength(2);
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "run_first_response",
+          "event.dataset": "anonresume.ai",
+          "event.outcome": "success",
+          "transaction.id": prepared.runId,
+        }),
+        expect.objectContaining({
+          "event.action": "run_completed",
+          "event.dataset": "anonresume.ai",
+          "event.outcome": "success",
+          "transaction.id": prepared.runId,
+        }),
+      ]),
+    );
   });
 
   it("does not queue a run that recovery interrupted during preflight", async () => {
@@ -1006,6 +1024,7 @@ describe("AI run service", () => {
   });
 
   it("stores encrypted diagnostics when execution fails after usage arrives", async () => {
+    const capture = initializeLogCapture("ai-worker");
     const adapter: AiProviderAdapter = {
       async *start() {
         yield { type: "request_id", requestId: "provider-request-failed" };
@@ -1077,6 +1096,61 @@ describe("AI run service", () => {
         outputTokens: 80,
       },
     });
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "run_failed",
+          "event.dataset": "anonresume.ai",
+          "event.outcome": "failure",
+          "transaction.id": prepared.runId,
+        }),
+      ]),
+    );
+    expect(capture.lines.join("\n")).not.toContain("已生成的部分内容");
+  });
+
+  it("classifies provider timeouts without logging request content", async () => {
+    const capture = initializeLogCapture("ai-worker");
+    const adapter: AiProviderAdapter = {
+      async *start() {
+        throw new AiProviderError("timeout", {
+          elapsedMs: 45_000,
+          timeoutPhase: "stream_idle",
+        });
+      },
+    };
+    const prepared = await prepareAiRun({
+      userId,
+      conversationId,
+      message: "sensitive timeout prompt",
+      resumeVersion: 1,
+      configuration: {
+        credentialsEncryptionKey: encryptionKey,
+        auditRetentionDays: 30,
+        defaultMonthlyPoints,
+        requestsPerMinute,
+        streamCheckpointMs: 10,
+        runLeaseSeconds: 90,
+      },
+    });
+
+    const claimed = await claimPreparedRun(prepared.runId);
+    for await (const event of executePreparedAiRun(claimed, { adapter })) {
+      void event;
+    }
+
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "run_timed_out",
+          "event.dataset": "anonresume.ai",
+          "event.outcome": "failure",
+          "labels.timeoutPhase": "stream_idle",
+          "transaction.id": prepared.runId,
+        }),
+      ]),
+    );
+    expect(capture.lines.join("\n")).not.toContain("sensitive timeout prompt");
   });
 
   it("retracts a failed turn that produced no user-visible output", async () => {

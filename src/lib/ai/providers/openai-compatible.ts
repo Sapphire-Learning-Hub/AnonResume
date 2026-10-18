@@ -10,6 +10,7 @@ import {
   type AiResolvedAddress,
   type AiDnsResolver,
 } from "@/lib/ai/security/endpoint-policy";
+import { getLogger } from "@/lib/observability/logging";
 
 import {
   AiProviderError,
@@ -42,6 +43,8 @@ interface OpenAiChunk {
     completion_tokens?: unknown;
   };
 }
+
+const aiLog = getLogger("anonresume.ai");
 
 type UndiciRequestOptions = NonNullable<Parameters<typeof undiciRequest>[1]>;
 
@@ -605,12 +608,14 @@ export function createOpenAiCompatibleAdapter(
         ];
         if (!firstChunkLogged) {
           firstChunkLogged = true;
-          console.info("[AnonResume][AI provider]", "first_chunk", {
-            runId: request.diagnosticRunId ?? null,
-            elapsedMs: Date.now() - startedAt,
-            choiceCount: chunk.choices?.length ?? 0,
-            deltaKeys,
-            hasUsage: Boolean(chunk.usage),
+          aiLog.info("provider_first_chunk", {
+            durationNs: (Date.now() - startedAt) * 1_000_000,
+            labels: {
+              choiceCount: chunk.choices?.length ?? 0,
+              hasUsage: Boolean(chunk.usage),
+            },
+            outcome: "success",
+            transactionId: request.diagnosticRunId,
           });
         }
 
@@ -685,18 +690,11 @@ export function createOpenAiCompatibleAdapter(
           !firstUnhandledDeltaLogged
         ) {
           firstUnhandledDeltaLogged = true;
-          console.info("[AnonResume][AI provider]", "unhandled_delta", {
-            runId: request.diagnosticRunId ?? null,
-            elapsedMs: Date.now() - startedAt,
-            deltaKeys,
-            reasoningCharacters: (chunk.choices ?? []).reduce(
-              (total, choice) =>
-                total +
-                (typeof choice.delta?.reasoning_content === "string"
-                  ? choice.delta.reasoning_content.length
-                  : 0),
-              0,
-            ),
+          aiLog.warn("provider_unhandled_delta", {
+            durationNs: (Date.now() - startedAt) * 1_000_000,
+            labels: { deltaKeyCount: deltaKeys.length },
+            outcome: "unknown",
+            transactionId: request.diagnosticRunId,
           });
         }
 

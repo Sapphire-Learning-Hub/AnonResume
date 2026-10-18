@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -18,7 +20,7 @@ const schema = z.object({
   permissions: z.array(z.enum(ADMIN_PERMISSION_KEYS)).max(ADMIN_PERMISSION_KEYS.length),
 });
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ superAdminOnly: true });
     const url = new URL(request.url);
@@ -51,7 +53,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const context = await requireAdminApi({ superAdminOnly: true, recentMfa: true });
     const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -64,3 +66,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/manage/roles", getHandler);
+export const POST = withRequestLogging("/api/manage/roles", postHandler);

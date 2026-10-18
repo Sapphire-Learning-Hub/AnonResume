@@ -308,7 +308,7 @@ export async function reconcileSystemRestartTargetStartup(
           updatedAt: input.now,
         })
         .where(eq(systemRestartOperations.id, operation.id));
-      return "failed" as const;
+      return { operationId: operation.id, status: "failed" as const };
     }
 
     await transaction
@@ -343,7 +343,7 @@ export async function reconcileSystemRestartTargetStartup(
         updatedAt: input.now,
       })
       .where(eq(systemRestartOperations.id, operation.id));
-    return "healthy" as const;
+    return { operationId: operation.id, status: "healthy" as const };
   });
 }
 

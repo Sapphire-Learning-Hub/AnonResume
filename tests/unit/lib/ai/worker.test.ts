@@ -7,6 +7,7 @@ import {
   getManagedConfigDefaults,
   parseManagedConfig,
 } from "@/lib/config/registry";
+import { initializeLogCapture } from "../../../support/observability";
 
 function createOperations(
   overrides: Partial<AiWorkerOperations> = {},
@@ -68,6 +69,57 @@ function preparedRun() {
 }
 
 describe("AI worker", () => {
+  it("emits structured lifecycle and heartbeat recovery events", async () => {
+    const capture = initializeLogCapture("ai-worker");
+    const controller = new AbortController();
+    const recordHeartbeat = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("database unavailable"))
+      .mockImplementationOnce(async () => controller.abort());
+    let currentMs = 0;
+
+    await runAiWorker({
+      runtimeManager: runtimeManager({
+        aiWorkerPollIntervalMs: 250,
+        aiWorkerRecoveryIntervalMs: 1_000,
+        aiWorkerRetentionIntervalMs: 1_000,
+      }),
+      now: () => new Date(currentMs),
+      operations: createOperations({ recordHeartbeat }),
+      signal: controller.signal,
+      wait: async (ms) => {
+        currentMs += ms;
+      },
+      workerId: "ai-worker-observed",
+      sessionId: "session-observed",
+    });
+
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "worker_started",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+        }),
+        expect.objectContaining({
+          "event.action": "worker_heartbeat_failed",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "failure",
+        }),
+        expect.objectContaining({
+          "event.action": "worker_heartbeat_recovered",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+        }),
+        expect.objectContaining({
+          "event.action": "worker_stopped",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+        }),
+      ]),
+    );
+  });
+
   it("uses bounded production defaults and rejects invalid overrides", () => {
     expect(getAiWorkerConfiguration(getManagedConfigDefaults())).toEqual({
       batchSize: 100,

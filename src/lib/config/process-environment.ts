@@ -17,6 +17,17 @@ export function readRuntimeIdentityEnvironment(
   };
 }
 
+export function readLoggingEnvironment(
+  environment: ProcessEnvironment = process.env,
+) {
+  return {
+    ANONRESUME_LOG_ENVIRONMENT: environment.ANONRESUME_LOG_ENVIRONMENT,
+    ANONRESUME_LOG_FORMAT: environment.ANONRESUME_LOG_FORMAT,
+    ANONRESUME_LOG_LEVEL: environment.ANONRESUME_LOG_LEVEL,
+    NODE_ENV: environment.NODE_ENV,
+  };
+}
+
 export function readRuntimeSupervisorEnvironment(
   environment: ProcessEnvironment = process.env,
 ) {

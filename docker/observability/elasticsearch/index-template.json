@@ -1,0 +1,24 @@
+{
+  "index_patterns": ["logs-anonresume.*-*"],
+  "data_stream": {},
+  "priority": 500,
+  "template": {
+    "settings": {
+      "index.lifecycle.name": "anonresume-logs-7d",
+      "index.number_of_replicas": 0,
+      "index.number_of_shards": 1
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "@timestamp": { "type": "date" },
+        "event.duration": { "type": "long" },
+        "event.outcome": { "type": "keyword" },
+        "http.response.status_code": { "type": "integer" },
+        "log.level": { "type": "keyword" },
+        "request.id": { "type": "keyword" },
+        "transaction.id": { "type": "keyword" }
+      }
+    }
+  }
+}

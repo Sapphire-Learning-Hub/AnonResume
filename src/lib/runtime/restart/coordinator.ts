@@ -13,10 +13,12 @@ import {
   PostgresRuntimeRestartNotifier,
   type RuntimeRestartNotifier,
 } from "@/lib/runtime/restart/notifications";
+import { getLogger } from "@/lib/observability/logging";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
 const DEFAULT_WORKER_DRAIN_TIMEOUT_MS = 600_000;
+const runtimeLog = getLogger("anonresume.runtime");
 
 interface RestartRuntimeSnapshot {
   healthState: SystemConfigHealthState;
@@ -156,7 +158,33 @@ export class RuntimeRestartCoordinator {
       sessionId: this.identity.sessionId,
       stableId: this.identity.stableId,
     });
-    if (reconciled) await this.notify().catch(() => undefined);
+    if (reconciled) {
+      await this.notify().catch(() => undefined);
+      if (
+        typeof reconciled === "object" &&
+        reconciled !== null &&
+        "status" in reconciled &&
+        "operationId" in reconciled
+      ) {
+        const status = reconciled.status;
+        const operationId = reconciled.operationId;
+        if (
+          (status === "healthy" || status === "failed") &&
+          typeof operationId === "string"
+        ) {
+          runtimeLog[status === "healthy" ? "info" : "error"](
+            status === "healthy"
+              ? "restart_service_recovered"
+              : "restart_service_recovery_failed",
+            {
+              labels: { consumer: this.identity.role },
+              outcome: status === "healthy" ? "success" : "failure",
+              transactionId: operationId,
+            },
+          );
+        }
+      }
+    }
 
     const claim = await this.store.claimNextTarget({
       consumer: this.identity.role,

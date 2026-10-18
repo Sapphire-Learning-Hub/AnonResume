@@ -4,6 +4,7 @@ import {
   type RestartCoordinatorStore,
 } from "@/lib/runtime/restart/coordinator";
 import type { RuntimeRestartNotifier } from "@/lib/runtime/restart/notifications";
+import { initializeLogCapture } from "../../../../support/observability";
 
 describe("runtime restart coordinator", () => {
   const identity: RuntimeIdentity = {
@@ -106,5 +107,37 @@ describe("runtime restart coordinator", () => {
 
     await coordinator.stop();
     vi.useRealTimers();
+  });
+
+  it("emits a recovery event when a replacement runtime becomes healthy", async () => {
+    const capture = initializeLogCapture();
+    const store = createStore(vi.fn(async () => null));
+    store.reconcileStartup = vi.fn(async () => ({
+      operationId: "operation-1",
+      status: "healthy" as const,
+    }));
+    const coordinator = new RuntimeRestartCoordinator({
+      getSnapshot: async () => ({
+        healthState: "healthy",
+        loadedRestartRevisionId: "revision-new",
+      }),
+      identity: { ...identity, sessionId: "session-new" },
+      notifier: createNotifier(),
+      store,
+    });
+
+    await coordinator.start();
+    await coordinator.stop();
+
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "restart_service_recovered",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+          "transaction.id": "operation-1",
+        }),
+      ]),
+    );
   });
 });

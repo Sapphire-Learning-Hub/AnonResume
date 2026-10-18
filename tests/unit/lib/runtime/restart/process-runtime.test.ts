@@ -6,6 +6,7 @@ import {
   startWebRestartRuntime,
   startWorkerRestartRuntime,
 } from "@/lib/runtime/restart/process-runtime";
+import { initializeLogCapture } from "../../../../support/observability";
 
 function restartRequest() {
   return {
@@ -83,6 +84,7 @@ describe("managed restart process runtime", () => {
   });
 
   it("lets a worker finish active work before recording exit", async () => {
+    const capture = initializeLogCapture("ai-worker");
     const request = {
       ...restartRequest(),
       consumer: "ai-worker" as const,
@@ -116,6 +118,22 @@ describe("managed restart process runtime", () => {
     expect(request.markExiting).toHaveBeenCalled();
     expect(request.markAwaitingStartup).toHaveBeenCalled();
     expect(runtimeCoordinator.stop).toHaveBeenCalled();
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "restart_drain_started",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+          "transaction.id": "operation-1",
+        }),
+        expect.objectContaining({
+          "event.action": "restart_awaiting_startup",
+          "event.dataset": "anonresume.runtime",
+          "event.outcome": "success",
+          "transaction.id": "operation-1",
+        }),
+      ]),
+    );
   });
 
   it("runs a worker normally when online restart is unsupported", async () => {

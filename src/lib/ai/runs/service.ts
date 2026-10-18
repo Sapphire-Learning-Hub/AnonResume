@@ -45,6 +45,10 @@ import {
 } from "@/lib/ai/usage/ledger";
 import { calculateAiUsagePoints, type AiPointRates } from "@/lib/ai/usage/rates";
 import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
 import type {
   AiClientStreamEvent,
@@ -57,6 +61,7 @@ const MAX_AGENT_ROUNDS = 10;
 const MAX_PROVIDER_PROTOCOL_ATTEMPTS = 2;
 const MAX_ERROR_DETAIL_LENGTH = 4_096;
 const activeRunControllers = new Map<string, AbortController>();
+const aiLog = getLogger("anonresume.ai");
 
 function aiCredentialKeys(configuration: {
   credentialKeys?: VersionedSecretKeys;
@@ -906,6 +911,7 @@ export async function* executePreparedAiRun(
   prepared: ClaimedAiRun,
   options: { adapter: AiProviderAdapter; signal?: AbortSignal },
 ): AsyncGenerator<AiClientStreamEvent> {
+  const executionStartedAt = process.hrtime.bigint();
   const controller = new AbortController();
   let callerAborted = false;
   let leaseLost = false;
@@ -930,6 +936,7 @@ export async function* executePreparedAiRun(
   let failurePhase: AiRunFailurePhase = "checkpoint_persistence";
   let finishReason: string | null = null;
   let proposal: unknown;
+  let firstResponseLogged = false;
 
   if (callerAborted) {
     options.signal?.removeEventListener("abort", abortFromCaller);
@@ -1068,6 +1075,20 @@ export async function* executePreparedAiRun(
             controller.signal,
           )) {
             if (controller.signal.aborted) throw new Error("ai_run_stopped");
+
+            if (
+              !firstResponseLogged &&
+              event.type !== "request_id" &&
+              event.type !== "usage" &&
+              event.type !== "complete"
+            ) {
+              firstResponseLogged = true;
+              aiLog.info("run_first_response", {
+                durationNs: Number(process.hrtime.bigint() - executionStartedAt),
+                outcome: "success",
+                transactionId: prepared.runId,
+              });
+            }
 
             const progressStage =
               event.type === "reasoning_progress"
@@ -1293,6 +1314,12 @@ export async function* executePreparedAiRun(
     }
     stopMonitoring();
 
+    aiLog.info("run_completed", {
+      durationNs: Number(process.hrtime.bigint() - executionStartedAt),
+      outcome: "success",
+      transactionId: prepared.runId,
+    });
+
     sequence += 1;
     yield { sequence, type: "complete", finishReason };
   } catch (error) {
@@ -1336,11 +1363,11 @@ export async function* executePreparedAiRun(
         }),
       });
     } catch (auditError) {
-      console.error("[AnonResume][AI run] failed to persist failure evidence", {
-        runId: prepared.runId,
-        phase: failurePhase,
-        failureCode,
-        errorName: auditError instanceof Error ? auditError.name : "UnknownError",
+      aiLog.error("run_failure_evidence_persistence_failed", {
+        error: serializeSafeError(auditError),
+        labels: { failureCode, phase: failurePhase },
+        outcome: "failure",
+        transactionId: prepared.runId,
       });
     }
     const serializedError = serializeAiRunError(error);
@@ -1348,23 +1375,25 @@ export async function* executePreparedAiRun(
       && typeof serializedError.diagnostics === "object"
       ? serializedError.diagnostics as Record<string, unknown>
       : undefined;
-    console.error("[AnonResume][AI run] execution failed", {
-      runId: prepared.runId,
-      providerRequestId: providerRequestId ?? null,
-      phase: failurePhase,
-      failureCode,
-      errorName: serializedError.name,
-      errorCode: serializedError.code,
-      message: serializedError.message,
-      timeoutPhase:
-        typeof diagnostics?.timeoutPhase === "string"
-          ? diagnostics.timeoutPhase
-          : undefined,
-      elapsedMs:
-        typeof diagnostics?.elapsedMs === "number"
-          ? diagnostics.elapsedMs
-          : undefined,
-    });
+    const timeoutPhase = typeof diagnostics?.timeoutPhase === "string"
+      ? diagnostics.timeoutPhase
+      : undefined;
+    aiLog.error(
+      error instanceof AiProviderError && error.code === "timeout"
+        ? "run_timed_out"
+        : "run_failed",
+      {
+        durationNs: Number(process.hrtime.bigint() - executionStartedAt),
+        error: serializeSafeError(error),
+        labels: {
+          failureCode,
+          phase: failurePhase,
+          ...(timeoutPhase ? { timeoutPhase } : {}),
+        },
+        outcome: "failure",
+        transactionId: prepared.runId,
+      },
+    );
     await db
       .update(aiRuns)
       .set({
@@ -1405,12 +1434,10 @@ export async function* executePreparedAiRun(
         runId: prepared.runId,
         mode: "if-empty",
       }).catch((retractionError) => {
-        console.error("[AnonResume][AI run] failed to retract empty turn", {
-          runId: prepared.runId,
-          errorName:
-            retractionError instanceof Error
-              ? retractionError.name
-              : "UnknownError",
+        aiLog.error("run_empty_turn_retraction_failed", {
+          error: serializeSafeError(retractionError),
+          outcome: "failure",
+          transactionId: prepared.runId,
         });
       });
     }
@@ -1579,10 +1606,11 @@ export async function stopAiRun(input: {
         operationId: input.runId,
       });
     } catch (error) {
-      console.error(
-        `[AnonResume] Failed to release quota for stopped AI run ${input.runId}; settlement remains pending.`,
-        error,
-      );
+      aiLog.error("run_stop_quota_release_failed", {
+        error: serializeSafeError(error),
+        outcome: "failure",
+        transactionId: input.runId,
+      });
       return true;
     }
     await db

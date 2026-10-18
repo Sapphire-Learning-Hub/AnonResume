@@ -1,0 +1,1 @@
+{"type":"index-pattern","id":"anonresume-logs","attributes":{"title":"logs-anonresume.*-*","name":"AnonResume logs","timeFieldName":"@timestamp"},"references":[]}

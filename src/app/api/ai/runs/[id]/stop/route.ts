@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { z } from "zod";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -14,7 +16,7 @@ const stopRunSchema = z
   })
   .strict();
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -45,3 +47,5 @@ export async function POST(
   }
   return Response.json({ stopped: true });
 }
+
+export const POST = withRequestLogging("/api/ai/runs/[id]/stop", postHandler);

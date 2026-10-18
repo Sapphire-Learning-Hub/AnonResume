@@ -24,10 +24,16 @@ import {
   markWorkerStopped,
   recordWorkerHeartbeat,
 } from "@/lib/runtime/worker-heartbeat";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;
 const MAX_CLEANUP_INTERVAL_MS = 60_000;
+const pdfLog = getLogger("anonresume.pdf");
+const runtimeLog = getLogger("anonresume.runtime");
 
 type ClaimedPdfExportJob = Awaited<
   ReturnType<typeof claimPdfExportJobs>
@@ -67,6 +73,7 @@ export async function processPdfExportJob(
     exportPdf?: PdfExporter;
   },
 ) {
+  const startedAt = process.hrtime.bigint();
   const controller = new AbortController();
   const exportPdf = options.exportPdf ?? exportResumePdf;
   const heartbeatMs = Math.min(
@@ -132,12 +139,24 @@ export async function processPdfExportJob(
       result,
       configuration: options.configuration,
     });
+    pdfLog.info("export_completed", {
+      durationNs: Number(process.hrtime.bigint() - startedAt),
+      outcome: "success",
+      transactionId: job.id,
+    });
   } catch (error) {
     await failPdfExport({
       jobId: job.id,
       workerId: options.workerId,
       error: getErrorMessage(error),
       cancelled: controller.signal.aborted,
+    });
+    pdfLog.error("export_failed", {
+      durationNs: Number(process.hrtime.bigint() - startedAt),
+      error: serializeSafeError(error),
+      labels: { cancelled: controller.signal.aborted },
+      outcome: "failure",
+      transactionId: job.id,
     });
   } finally {
     clearInterval(heartbeat);
@@ -175,6 +194,12 @@ export async function runPdfExportWorker(options?: {
   const release = getApplicationRelease();
   const activeJobs = new Set<Promise<void>>();
   const processJob = options?.processJob ?? processPdfExportJob;
+  let heartbeatFailed = false;
+
+  runtimeLog.info("worker_started", {
+    labels: { workerType: "pdf-export" },
+    outcome: "success",
+  });
 
   while (!options?.signal?.aborted) {
     await runtime.refreshIfDue();
@@ -182,21 +207,39 @@ export async function runPdfExportWorker(options?: {
     const config = getPdfExportQueueConfig(snapshot.values);
     const now = Date.now();
 
-    await recordWorkerHeartbeat({
-      workerId,
-      sessionId,
-      workerType: "pdf-export",
-      release,
-      startedAt,
-      metadata: {
-        configurationHealth: snapshot.health,
-        desiredRevisionId: snapshot.desiredRevisionId,
-        hotRevisionId: snapshot.hotRevisionId,
-        maxConcurrency: config.maxConcurrency,
-        restartRevisionId: snapshot.restartRevisionId,
-      },
-      now: new Date(now),
-    });
+    try {
+      await recordWorkerHeartbeat({
+        workerId,
+        sessionId,
+        workerType: "pdf-export",
+        release,
+        startedAt,
+        metadata: {
+          configurationHealth: snapshot.health,
+          desiredRevisionId: snapshot.desiredRevisionId,
+          hotRevisionId: snapshot.hotRevisionId,
+          maxConcurrency: config.maxConcurrency,
+          restartRevisionId: snapshot.restartRevisionId,
+        },
+        now: new Date(now),
+      });
+      if (heartbeatFailed) {
+        heartbeatFailed = false;
+        runtimeLog.info("worker_heartbeat_recovered", {
+          labels: { workerType: "pdf-export" },
+          outcome: "success",
+        });
+      }
+    } catch (error) {
+      if (!heartbeatFailed) {
+        heartbeatFailed = true;
+        runtimeLog.error("worker_heartbeat_failed", {
+          error: serializeSafeError(error),
+          labels: { workerType: "pdf-export" },
+          outcome: "failure",
+        });
+      }
+    }
 
     const cleanupIntervalMs = Math.min(
       MAX_CLEANUP_INTERVAL_MS,
@@ -229,4 +272,8 @@ export async function runPdfExportWorker(options?: {
 
   await Promise.allSettled(activeJobs);
   await markWorkerStopped({ workerId, sessionId });
+  runtimeLog.info("worker_stopped", {
+    labels: { workerType: "pdf-export" },
+    outcome: "success",
+  });
 }

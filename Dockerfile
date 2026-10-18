@@ -3,14 +3,15 @@ FROM oven/bun:${BUN_VERSION}-slim AS base
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG DEBIAN_FRONTEND=noninteractive
+ARG BUN_INSTALL_REGISTRY=https://registry.npmjs.org
 
 FROM base AS dependencies
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --registry=${BUN_INSTALL_REGISTRY}
 
 FROM base AS production-dependencies
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production --omit=peer
+RUN bun install --frozen-lockfile --production --omit=peer --registry=${BUN_INSTALL_REGISTRY}
 
 FROM dependencies AS builder
 ARG ANONRESUME_BUILD_COMMIT=""

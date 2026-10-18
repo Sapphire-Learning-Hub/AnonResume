@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -13,7 +15,7 @@ const passwordSchema = z.object({
   locale: z.enum(["zh-CN", "en-US"]).optional().default("zh-CN"),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -46,3 +48,5 @@ export async function POST(request: Request) {
     return accountErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/account/password", postHandler);

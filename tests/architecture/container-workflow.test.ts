@@ -24,6 +24,20 @@ it("keeps optional peer tooling out of runtime images", async () => {
   );
 });
 
+it("keeps container dependency downloads independent from lockfile registry URLs", async () => {
+  const dockerfile = await readFile(
+    path.join(process.cwd(), "Dockerfile"),
+    "utf8",
+  );
+
+  expect(dockerfile).toContain(
+    "ARG BUN_INSTALL_REGISTRY=https://registry.npmjs.org",
+  );
+  expect(
+    dockerfile.match(/--registry=\$\{BUN_INSTALL_REGISTRY\}/g),
+  ).toHaveLength(2);
+});
+
 it("publishes release images on native architecture runners", async () => {
   const workflow = await readFile(
     path.join(process.cwd(), ".github/workflows/container.yml"),
@@ -149,4 +163,36 @@ it("does not upgrade the base distribution during every image build", async () =
   );
 
   expect(dockerfile).not.toContain("apt-get upgrade");
+});
+
+it("keeps the optional ELK stack isolated and locally bound", async () => {
+  const baseCompose = await readFile(
+    path.join(process.cwd(), "compose.yaml"),
+    "utf8",
+  );
+  const observability = await readFile(
+    path.join(process.cwd(), "docker/observability/compose.yaml"),
+    "utf8",
+  );
+  const overlay = await readFile(
+    path.join(process.cwd(), "compose.observability.yaml"),
+    "utf8",
+  );
+
+  expect(baseCompose).not.toContain("elasticsearch");
+  expect(baseCompose).not.toContain("logstash");
+  expect(baseCompose).not.toContain("kibana");
+  expect(observability).toContain("elasticsearch:8.19.23");
+  expect(observability).toContain("logstash:8.19.23");
+  expect(observability).toContain("kibana:8.19.23");
+  expect(observability.match(/127\.0\.0\.1:/g)).toHaveLength(3);
+  expect(observability.match(/mem_limit:/g)).toHaveLength(3);
+
+  expect(overlay).toMatch(/^services:/);
+  expect(overlay.match(/driver: gelf/g)).toHaveLength(4);
+  expect(overlay).toContain("web:");
+  expect(overlay).toContain("ai-worker:");
+  expect(overlay).toContain("pdf-worker:");
+  expect(overlay).toContain("migrate:");
+  expect(overlay).not.toMatch(/\b(?:image|build|depends_on|ports|volumes):/);
 });

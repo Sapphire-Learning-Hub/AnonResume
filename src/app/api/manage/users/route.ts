@@ -1,10 +1,12 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { adminApiErrorResponse, requireAdminApi } from "@/lib/admin/api";
 import { listAssignableAdminUsers } from "@/lib/admin/query";
 import { parsePageRequest } from "@/lib/shared/pagination";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ superAdminOnly: true });
     const url = new URL(request.url);
@@ -26,3 +28,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/manage/users", getHandler);

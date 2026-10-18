@@ -43,6 +43,7 @@ vi.mock("better-auth/next-js", () => ({
 
 import { GET, POST } from "@/app/api/auth/[...all]/route";
 import { AccountMergeError } from "@/lib/auth/account/merge/errors";
+import { initializeHttpLogCapture } from "../../../../support/observability";
 
 describe("authentication setup gate", () => {
   beforeEach(() => {
@@ -131,9 +132,10 @@ describe("authentication setup gate", () => {
   });
 
   it("forwards registration after legal consent", async () => {
+    const logs = initializeHttpLogCapture();
     mocks.decision.mockResolvedValue("allowed");
 
-    await expect(POST(
+    const response = await POST(
       new Request("http://localhost/api/auth/sign-up/email", {
         method: "POST",
         headers: {
@@ -146,9 +148,17 @@ describe("authentication setup gate", () => {
           password: "strong-password",
         }),
       }) as never,
-    )).resolves.toMatchObject({ status: 204 });
+    );
 
+    expect(response.status).toBe(204);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     expect(mocks.handlerPost).toHaveBeenCalledOnce();
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "http.response.status_code": 204,
+      "url.path": "/api/auth/[...all]",
+    });
   });
 
   it("blocks auth callbacks while initial setup is pending", async () => {

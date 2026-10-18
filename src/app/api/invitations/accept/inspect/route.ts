@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import {
@@ -5,7 +7,7 @@ import {
   InvalidUserInvitationError,
 } from "@/lib/invitations/acceptance";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const token = new URL(request.url).searchParams.get("token") ?? "";
   try {
     return NextResponse.json(await inspectUserInvitation(token));
@@ -19,3 +21,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/invitations/accept/inspect", getHandler);

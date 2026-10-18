@@ -20,6 +20,7 @@ import { runAiMaintenance } from "@/lib/ai/maintenance";
 import { recoverExpiredAiRuns } from "@/lib/ai/runs/recovery";
 import { reserveAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
+import { initializeLogCapture } from "../../support/observability";
 
 describe("AI maintenance recovery", () => {
   const marker = randomUUID();
@@ -119,6 +120,7 @@ describe("AI maintenance recovery", () => {
   });
 
   it("releases only provably unused leases and leaves uncertain usage for settlement", async () => {
+    const capture = initializeLogCapture("ai-worker");
     expect(await recoverExpiredAiRuns({ now, batchSize: 10 })).toEqual({
       interrupted: 1,
       settlementPending: 1,
@@ -153,6 +155,16 @@ describe("AI maintenance recovery", () => {
       .where(inArray(aiQuotaAccounts.userId, userIds));
     expect(quotas.find((quota) => quota.userId === userIds[0])?.reservedPoints).toBe(0);
     expect(quotas.find((quota) => quota.userId === userIds[1])?.reservedPoints).toBe(40);
+    expect(capture.events()).toEqual(
+      expect.arrayContaining(
+        runIds.map((runId) => expect.objectContaining({
+          "event.action": "run_lease_recovered",
+          "event.dataset": "anonresume.ai",
+          "event.outcome": "success",
+          "transaction.id": runId,
+        })),
+      ),
+    );
   });
 
   it("leaves quota renewal to the usage path", async () => {

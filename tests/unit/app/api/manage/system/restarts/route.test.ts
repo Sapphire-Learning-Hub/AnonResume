@@ -35,6 +35,7 @@ import { GET } from "@/app/api/manage/system/restarts/current/route";
 import { systemRestartApiErrorResponse } from "@/lib/admin/system-restart/api";
 import { SystemRestartOperationError } from "@/lib/admin/system-restart/errors";
 import { RequestBodyTooLargeError } from "@/lib/http/request-body";
+import { initializeHttpLogCapture } from "../../../../../../support/observability";
 
 const idempotencyKey = "c857abfc-2ed9-44ae-a0d6-9f59b49b9ef1";
 const operation = {
@@ -84,9 +85,11 @@ describe("managed system restart routes", () => {
   });
 
   it("requires restart permission and recent MFA and propagates the actor", async () => {
+    const logs = initializeHttpLogCapture();
     const response = await POST(request());
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     expect(mocks.requireAdmin).toHaveBeenCalledWith({
       permission: "system.restart",
       recentMfa: true,
@@ -96,6 +99,8 @@ describe("managed system restart routes", () => {
       deploymentId: "production",
       idempotencyKey,
     });
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.lines.join("\n")).not.toContain(idempotencyKey);
   });
 
   it("returns the same operation for an idempotent replay", async () => {

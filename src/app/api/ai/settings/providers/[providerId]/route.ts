@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import {
   personalAiApiErrorResponse,
   requirePersonalAiApi,
@@ -17,7 +19,7 @@ interface RouteContext {
   params: Promise<{ providerId: string }>;
 }
 
-export async function PATCH(request: Request, { params }: RouteContext) {
+async function patchHandler(request: Request, { params }: RouteContext) {
   const forbiddenResponse = requireSameOrigin(request);
   if (forbiddenResponse) return forbiddenResponse;
   try {
@@ -42,7 +44,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(request: Request, { params }: RouteContext) {
+async function deleteHandler(request: Request, { params }: RouteContext) {
   const forbiddenResponse = requireSameOrigin(request);
   if (forbiddenResponse) return forbiddenResponse;
   try {
@@ -59,3 +61,6 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     throw error;
   }
 }
+
+export const PATCH = withRequestLogging("/api/ai/settings/providers/[providerId]", patchHandler);
+export const DELETE = withRequestLogging("/api/ai/settings/providers/[providerId]", deleteHandler);
