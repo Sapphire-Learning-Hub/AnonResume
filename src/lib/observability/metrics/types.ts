@@ -1,7 +1,10 @@
 import type { Attributes } from "@opentelemetry/api";
 
+import type { ManagedConfigurationHealthState } from "@/lib/config/health";
+
 export type MetricOutcome = "success" | "failure" | "cancelled" | "unknown";
 export type MetricJobType = "ai" | "pdf" | "unknown";
+export type RuntimeConfigurationHealth = ManagedConfigurationHealthState;
 
 export interface HttpMetricInput {
   method: string;

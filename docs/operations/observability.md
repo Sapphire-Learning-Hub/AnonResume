@@ -224,7 +224,7 @@ http://otel-collector:4318/v1/metrics
 bun run metrics:smoke
 ```
 
-Prometheus 位于 <http://127.0.0.1:9090>，Grafana 位于 <http://127.0.0.1:3001>。Grafana 会自动加载 `AnonResume overview` 看板，展示服务存活、HTTP 吞吐与错误率、P95/P99 延迟、队列深度与最老等待时间、任务成功率和耗时、数据库连接池、进程资源、事件循环延迟以及 Collector 收发状态。示例告警规则不会配置通知渠道。
+Prometheus 位于 <http://127.0.0.1:9090>，Grafana 位于 <http://127.0.0.1:3001>。Grafana 会自动加载 `AnonResume overview` 看板，展示服务存活、运行时配置健康状态、HTTP 吞吐与错误率、P95/P99 延迟、队列深度与最老等待时间、任务成功率和耗时、数据库连接池、进程资源、事件循环延迟以及 Collector 收发状态。示例告警规则不会配置通知渠道。
 
 停止并保留数据：
 

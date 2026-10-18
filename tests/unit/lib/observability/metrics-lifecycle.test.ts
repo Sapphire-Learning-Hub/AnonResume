@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
 import type { ManagedConfig } from "@/lib/config/registry";
+import { applicationMetrics } from "@/lib/observability/metrics/instruments";
 import { startServiceMetrics } from "@/lib/observability/metrics/lifecycle";
 
 const {
@@ -92,12 +93,21 @@ it("fails closed when an enabled configuration is incomplete", async () => {
 });
 
 it("starts process and queue samplers and shuts them down before the runtime", async () => {
-  const lifecycle = await startServiceMetrics({ identity, values: values() });
+  const recordHealth = vi.spyOn(
+    applicationMetrics,
+    "recordRuntimeConfigurationHealth",
+  );
+  const lifecycle = await startServiceMetrics({
+    configurationHealth: "restart_required",
+    identity,
+    values: values(),
+  });
 
   expect(lifecycle.enabled).toBe(true);
   expect(initializeMetrics).toHaveBeenCalledOnce();
   expect(startRuntimeMetricsSampler).toHaveBeenCalledOnce();
   expect(startQueueMetricsSampler).toHaveBeenCalledOnce();
+  expect(recordHealth).toHaveBeenCalledWith("restart_required");
 
   await lifecycle.stop();
   await lifecycle.stop();

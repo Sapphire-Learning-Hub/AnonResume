@@ -43,6 +43,7 @@ try {
   await runtimeManager.start();
   const snapshot = await runtimeManager.snapshot();
   metricsLifecycle = await startServiceMetrics({
+    configurationHealth: snapshot.health,
     identity,
     values: snapshot.values,
   });

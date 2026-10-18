@@ -14,9 +14,11 @@ import { getDatabasePool } from "@/lib/runtime/database";
 import type { RuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { resolveReleaseMetadata } from "@/lib/runtime/release-metadata";
 
+import { applicationMetrics } from "./instruments";
 import { startQueueMetricsSampler } from "./queue-sampler";
 import { initializeMetrics } from "./runtime";
 import { startRuntimeMetricsSampler } from "./runtime-sampler";
+import type { RuntimeConfigurationHealth } from "./types";
 
 const metricsLog = getLogger("anonresume.metrics");
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
@@ -27,6 +29,7 @@ export interface ServiceMetricsLifecycle {
 }
 
 interface ServiceMetricsOptions {
+  configurationHealth?: RuntimeConfigurationHealth;
   identity: RuntimeIdentity;
   shutdownTimeoutMs?: number;
   values: ManagedConfig;
@@ -82,6 +85,10 @@ export async function startServiceMetrics(
     serviceVersion: resolveReleaseMetadata().tag,
   });
   if (!runtime.enabled) return disabledLifecycle();
+
+  applicationMetrics.recordRuntimeConfigurationHealth(
+    options.configurationHealth ?? "healthy",
+  );
 
   const runtimeSampler = startRuntimeMetricsSampler({
     pool: getDatabasePool(),

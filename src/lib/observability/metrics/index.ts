@@ -19,6 +19,7 @@ export type {
   MetricOutcome,
   QueueMetricsSnapshot,
   RuntimeMetricsSnapshot,
+  RuntimeConfigurationHealth,
   WorkerMetricInput,
   WorkerOperationFailureMetric,
 } from "./types";

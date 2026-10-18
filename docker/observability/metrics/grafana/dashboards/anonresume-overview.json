@@ -135,6 +135,17 @@
       ],
       "title": "Collector metric points",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anonresume-prometheus" },
+      "description": "Reports whether any service is waiting for restart, degraded, or requires configuration recovery.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "options": { "0": { "color": "green", "text": "Healthy" }, "1": { "color": "red", "text": "Action required" } }, "type": "value" }], "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 32 },
+      "id": 13,
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "editorMode": "code", "expr": "max(anonresume_runtime_configuration_health_ratio{deployment_environment_name=~\"$environment\",state!=\"healthy\"})", "legendFormat": "configuration", "range": true, "refId": "A" }],
+      "title": "Runtime configuration health",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

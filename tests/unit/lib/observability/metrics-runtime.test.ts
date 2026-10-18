@@ -172,6 +172,7 @@ describe("metrics runtime", () => {
       routePattern: "/api/health/live",
       statusCode: 200,
     });
+    applicationMetrics.recordRuntimeConfigurationHealth("recovery_required");
     await runtime.forceFlush();
 
     const exported = exporter.getMetrics().at(-1);
@@ -193,6 +194,7 @@ describe("metrics runtime", () => {
       "anonresume.http.server.requests",
       "anonresume.http.server.active_requests",
       "anonresume.http.server.request.duration",
+      "anonresume.runtime.configuration.health",
     ]));
     const activeMetric = exported?.scopeMetrics
       .flatMap((scope) => scope.metrics)
@@ -209,5 +211,22 @@ describe("metrics runtime", () => {
         value: 0,
       }),
     ]);
+    const configurationHealth = exported?.scopeMetrics
+      .flatMap((scope) => scope.metrics)
+      .find(
+        (metric) =>
+          metric.descriptor.name ===
+            "anonresume.runtime.configuration.health",
+      );
+    expect(configurationHealth?.dataPoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        attributes: { state: "healthy" },
+        value: 0,
+      }),
+      expect.objectContaining({
+        attributes: { state: "recovery_required" },
+        value: 1,
+      }),
+    ]));
   });
 });

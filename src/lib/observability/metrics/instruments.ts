@@ -15,6 +15,7 @@ import type {
   MetricAttributes,
   QueueMetricsSnapshot,
   RuntimeMetricsSnapshot,
+  RuntimeConfigurationHealth,
   WorkerMetricInput,
   WorkerOperationFailureMetric,
 } from "./types";
@@ -42,6 +43,12 @@ const WORKER_OPERATIONS = new Set([
   "recovery",
   "retention",
 ]);
+const CONFIGURATION_HEALTH_STATES = [
+  "healthy",
+  "restart_required",
+  "degraded",
+  "recovery_required",
+] as const satisfies readonly RuntimeConfigurationHealth[];
 
 interface ApplicationInstrumentBindings {
   databaseConnections: {
@@ -87,6 +94,9 @@ interface ApplicationInstrumentBindings {
     record(value: number, attributes?: MetricAttributes): void;
   };
   queueOldestAge: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  runtimeConfigurationHealth: {
     record(value: number, attributes?: MetricAttributes): void;
   };
   workerHeartbeat: {
@@ -197,6 +207,13 @@ function createApplicationInstrumentBindings(
         unit: "s",
       },
     ),
+    runtimeConfigurationHealth: meter.createGauge(
+      "anonresume.runtime.configuration.health",
+      {
+        description: "Runtime managed configuration health by state",
+        unit: "1",
+      },
+    ),
     workerHeartbeat: meter.createCounter("anonresume.worker.heartbeat", {
       description: "Worker heartbeat attempts by outcome",
       unit: "{heartbeat}",
@@ -263,6 +280,15 @@ class ApplicationMetrics {
       bindings.processMemoryUsage.record(value, { type });
     }
     bindings.processUptime.record(snapshot.uptimeSeconds);
+  }
+
+  recordRuntimeConfigurationHealth(state: RuntimeConfigurationHealth) {
+    for (const candidate of CONFIGURATION_HEALTH_STATES) {
+      this.bindings?.runtimeConfigurationHealth.record(
+        candidate === state ? 1 : 0,
+        { state: candidate },
+      );
+    }
   }
 
   recordJobStarted(input: JobMetricStart) {

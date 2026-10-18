@@ -29,6 +29,7 @@ try {
   await runtimeManager.start();
   const identity = await runtimeManager.snapshot();
   metricsLifecycle = await startServiceMetrics({
+    configurationHealth: identity.health,
     identity: processIdentity,
     values: identity.values,
   });

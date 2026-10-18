@@ -36,3 +36,14 @@ groups:
           severity: warning
         annotations:
           summary: An AnonResume worker heartbeat failed
+
+      - alert: AnonResumeConfigurationUnhealthy
+        expr: |
+          max by (service_name, state) (
+            anonresume_runtime_configuration_health_ratio{state!="healthy"}
+          ) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: An AnonResume service has an unhealthy runtime configuration

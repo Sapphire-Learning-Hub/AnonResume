@@ -52,11 +52,18 @@ describe("optional metrics infrastructure", () => {
     expect(prometheus).toContain("alerts.yaml");
     expect(alerts).toContain("AnonResumeHighHttpErrorRate");
     expect(alerts).toContain("AnonResumeQueueBacklogOldest");
+    expect(alerts).toContain("AnonResumeConfigurationUnhealthy");
+    expect(alerts).toContain(
+      "anonresume_runtime_configuration_health_ratio",
+    );
     expect(datasource).toContain("http://prometheus:9090");
     expect(dashboardProvider).toContain("/var/lib/grafana/dashboards");
     expect(dashboard).toContain("anonresume_http_server_requests");
     expect(dashboard).toContain("anonresume_queue_jobs");
     expect(dashboard).toContain("anonresume_process_memory_usage");
+    expect(dashboard).toContain(
+      "anonresume_runtime_configuration_health_ratio",
+    );
     expect(dashboard).toContain("otelcol_receiver_accepted_metric_points");
   });
 
