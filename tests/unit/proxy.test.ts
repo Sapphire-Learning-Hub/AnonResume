@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -43,6 +47,63 @@ function stubValidProductionEnvironment() {
 }
 
 describe("production configuration proxy", () => {
+  it.each([
+    ["/app", true],
+    ["/api/resumes/example", true],
+    ["/help", true],
+    ["/_next/static/chunk.js", false],
+    ["/_next/image?url=%2Fbrand%2Flogo.png", false],
+    ["/marketing/hero.webp", false],
+    ["/favicon.ico", false],
+    ["/robots.txt", false],
+    ["/sitemap.xml", false],
+  ])("matches %s: %s", (url, expected) => {
+    expect(
+      unstable_doesMiddlewareMatch({ config, nextConfig: {}, url }),
+    ).toBe(expected);
+  });
+
+  it("forwards a fresh canonical request ID and preserves a safe upstream ID", () => {
+    const response = proxy(
+      new NextRequest("https://resume.example.com/app", {
+        headers: {
+          "x-anonresume-upstream-request-id": "attacker-controlled",
+          "x-request-id": "gateway.request-42",
+        },
+      }),
+    );
+
+    const requestId = response.headers.get(
+      "x-middleware-request-x-request-id",
+    );
+    expect(requestId).not.toBeNull();
+    expect(requestId ?? "").toMatch(UUID_PATTERN);
+    expect(requestId).not.toBe("gateway.request-42");
+    expect(response.headers.get("x-request-id")).toBe(requestId);
+    expect(
+      response.headers.get(
+        "x-middleware-request-x-anonresume-upstream-request-id",
+      ),
+    ).toBe("gateway.request-42");
+  });
+
+  it("does not forward a malicious upstream request ID", () => {
+    const response = proxy(
+      new NextRequest("https://resume.example.com/app", {
+        headers: {
+          "x-anonresume-upstream-request-id": "attacker-controlled",
+          "x-request-id": "x".repeat(129),
+        },
+      }),
+    );
+
+    expect(
+      response.headers.get(
+        "x-middleware-request-x-anonresume-upstream-request-id",
+      ),
+    ).toBeNull();
+  });
+
   it("rejects cross-origin and originless management mutations", async () => {
     const crossOrigin = proxy(
       new NextRequest("https://resume.example.com/api/manage/roles", {
