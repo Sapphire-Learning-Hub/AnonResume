@@ -238,6 +238,35 @@ describe("configuration administration service", () => {
     ).rejects.toMatchObject({ code: "configuration_invalid" });
   });
 
+  it("preserves an incomplete metrics draft but rejects publishing it", async () => {
+    let state = await getManagedConfiguration({ keyring });
+    state = await patchConfigurationDraft({
+      actorUserId,
+      baseVersion: state.activeRevision.version,
+      changes: [{ key: "metricsEnabled", operation: "set", value: true }],
+      draftRevisionId: state.draftRevision.id,
+      keyring,
+    });
+
+    expect(
+      state.fields.find((field) => field.key === "metricsEnabled"),
+    ).toMatchObject({ changed: true, value: true });
+    await expect(
+      publishManagedConfiguration({
+        actorUserId,
+        baseVersion: state.activeRevision.version,
+        draftRevisionId: state.draftRevision.id,
+        keyring,
+      }),
+    ).rejects.toMatchObject({ code: "configuration_invalid" });
+
+    const unchanged = await getManagedConfiguration({ keyring });
+    expect(unchanged.activeRevision.version).toBe(1);
+    expect(
+      unchanged.fields.find((field) => field.key === "metricsEnabled"),
+    ).toMatchObject({ changed: true, value: true });
+  });
+
   it("rejects stale draft and active revision preconditions", async () => {
     const state = await getManagedConfiguration({ keyring });
 

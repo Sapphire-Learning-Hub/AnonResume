@@ -18,6 +18,7 @@ import {
   type ConfigKey,
   type ManagedConfig,
 } from "@/lib/config/registry";
+import { validatePublishableManagedConfig } from "@/lib/config/observability";
 import type {
   ConfigApplyMode,
   ConfigConsumer,
@@ -378,6 +379,7 @@ export async function publishConfigurationDraft(input: {
       .from(systemConfigValues)
       .where(eq(systemConfigValues.revisionId, draft.id));
     const values = decodeSnapshot(draftRows, input.keyring);
+    validatePublishableManagedConfig(values);
     const now = new Date();
 
     await transaction
