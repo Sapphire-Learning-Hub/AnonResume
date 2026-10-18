@@ -19,6 +19,7 @@ import { initializeMetrics } from "./runtime";
 import { startRuntimeMetricsSampler } from "./runtime-sampler";
 
 const metricsLog = getLogger("anonresume.metrics");
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 export interface ServiceMetricsLifecycle {
   readonly enabled: boolean;
@@ -27,7 +28,24 @@ export interface ServiceMetricsLifecycle {
 
 interface ServiceMetricsOptions {
   identity: RuntimeIdentity;
+  shutdownTimeoutMs?: number;
   values: ManagedConfig;
+}
+
+async function settlesWithin(
+  cleanup: Promise<unknown>,
+  timeoutMs: number,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const completed = await Promise.race([
+    cleanup.then(() => true),
+    new Promise<false>((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      timer.unref();
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+  return completed;
 }
 
 function disabledLifecycle(): ServiceMetricsLifecycle {
@@ -81,9 +99,19 @@ export async function startServiceMetrics(
     async stop() {
       if (stopped) return;
       stopped = true;
-      await queueSampler.stop();
       runtimeSampler.stop();
-      await runtime.shutdown();
+      const completed = await settlesWithin(
+        Promise.allSettled([
+          queueSampler.stop(),
+          runtime.shutdown(),
+        ]),
+        options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS,
+      );
+      if (!completed) {
+        metricsLog.warn("metrics_runtime_shutdown_timed_out", {
+          outcome: "failure",
+        });
+      }
     },
   };
 }

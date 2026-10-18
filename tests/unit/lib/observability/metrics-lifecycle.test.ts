@@ -103,8 +103,23 @@ it("starts process and queue samplers and shuts them down before the runtime", a
   await lifecycle.stop();
 
   expect(calls).toEqual([
-    "queue-stop",
     "process-stop",
+    "queue-stop",
     "runtime-shutdown",
   ]);
+});
+
+it("does not let a stalled queue sample block service shutdown", async () => {
+  startQueueMetricsSampler.mockImplementationOnce(() => ({
+    refresh: async () => undefined,
+    stop: () => new Promise<void>(() => undefined),
+  }));
+  const lifecycle = await startServiceMetrics({
+    identity,
+    shutdownTimeoutMs: 10,
+    values: values(),
+  });
+
+  await expect(lifecycle.stop()).resolves.toBeUndefined();
+  expect(calls).toEqual(["process-stop", "runtime-shutdown"]);
 });
