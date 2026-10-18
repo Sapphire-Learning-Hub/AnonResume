@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/admin/api";
 import { aiAdminApiErrorResponse } from "@/lib/ai/admin/api";
@@ -19,7 +21,7 @@ async function requireProviderConfiguration() {
   return resolveAiConfiguration(runtime.values);
 }
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -48,7 +50,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -68,3 +70,6 @@ export async function DELETE(
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const PATCH = withRequestLogging("/api/manage/ai/providers/[id]", patchHandler);
+export const DELETE = withRequestLogging("/api/manage/ai/providers/[id]", deleteHandler);

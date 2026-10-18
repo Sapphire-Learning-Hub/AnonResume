@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -8,7 +10,7 @@ import {
 } from "@/lib/announcements/management";
 import { parseAnnouncementDraft } from "@/lib/announcements/validation";
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -27,7 +29,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -45,3 +47,6 @@ export async function DELETE(
     return announcementApiErrorResponse(error);
   }
 }
+
+export const PATCH = withRequestLogging("/api/manage/announcements/[id]", patchHandler);
+export const DELETE = withRequestLogging("/api/manage/announcements/[id]", deleteHandler);

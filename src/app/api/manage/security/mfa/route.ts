@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -20,7 +22,7 @@ const confirmSchema = z.object({
   code: z.string().regex(/^\d{6}$/),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const context = await requireAdminApi({
       recentMfa: true,
@@ -90,3 +92,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/manage/security/mfa", postHandler);

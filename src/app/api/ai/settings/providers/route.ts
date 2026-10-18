@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import {
   personalAiApiErrorResponse,
   requirePersonalAiApi,
@@ -10,7 +12,7 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const forbiddenResponse = requireSameOrigin(request);
   if (forbiddenResponse) return forbiddenResponse;
   try {
@@ -29,3 +31,5 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+
+export const POST = withRequestLogging("/api/ai/settings/providers", postHandler);

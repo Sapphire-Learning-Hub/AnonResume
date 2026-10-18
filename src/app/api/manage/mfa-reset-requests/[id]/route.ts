@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -20,7 +22,7 @@ const reviewSchema = z.discriminatedUnion("decision", [
   }),
 ]);
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -55,3 +57,5 @@ export async function PATCH(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const PATCH = withRequestLogging("/api/manage/mfa-reset-requests/[id]", patchHandler);

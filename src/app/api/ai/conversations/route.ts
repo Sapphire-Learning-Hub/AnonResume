@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { z } from "zod";
 
 import type { AiProviderKind } from "@/db/ai-schema";
@@ -48,7 +50,7 @@ function allowedKeySources(configuration: {
   return sources;
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const session = await getOptionalSession();
   if (!session) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -82,7 +84,7 @@ export async function GET(request: Request) {
   });
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const forbiddenResponse = requireSameOrigin(request);
   if (forbiddenResponse) return forbiddenResponse;
 
@@ -110,3 +112,6 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/ai/conversations", getHandler);
+export const POST = withRequestLogging("/api/ai/conversations", postHandler);

@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -14,7 +16,7 @@ const bodySchema = z.object({
   suspendedUntil: z.iso.datetime().nullable().optional(),
 });
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function postHandler(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAdminApi({ permission: "users.suspend", recentMfa: true });
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -35,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function deleteHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await requireAdminApi({ permission: "users.suspend", recentMfa: true });
     await restoreUser(context.userId, (await params).id);
@@ -52,3 +54,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/manage/users/[id]/suspension", postHandler);
+export const DELETE = withRequestLogging("/api/manage/users/[id]/suspension", deleteHandler);

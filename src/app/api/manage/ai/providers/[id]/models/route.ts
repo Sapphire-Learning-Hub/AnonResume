@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -10,7 +12,7 @@ import {
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -34,3 +36,5 @@ export async function POST(
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/manage/ai/providers/[id]/models", postHandler);

@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -9,7 +11,7 @@ import {
 import { parseAnnouncementDraft } from "@/lib/announcements/validation";
 import { parsePageRequest } from "@/lib/shared/pagination";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ permission: "announcements.read" });
     const searchParams = new URL(request.url).searchParams;
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const context = await requireAdminApi({
       permission: "announcements.manage",
@@ -40,3 +42,6 @@ export async function POST(request: Request) {
     return announcementApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/announcements", getHandler);
+export const POST = withRequestLogging("/api/manage/announcements", postHandler);

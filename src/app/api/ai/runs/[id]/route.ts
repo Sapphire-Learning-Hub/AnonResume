@@ -1,7 +1,9 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { getOptionalSession } from "@/lib/auth/session";
 import { getAiRunSnapshot } from "@/lib/ai/runs/recovery";
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -17,3 +19,5 @@ export async function GET(
   }
   return Response.json({ run });
 }
+
+export const GET = withRequestLogging("/api/ai/runs/[id]", getHandler);

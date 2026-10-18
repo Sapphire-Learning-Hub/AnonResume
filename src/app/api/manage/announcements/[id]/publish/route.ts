@@ -1,10 +1,12 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
 import { announcementApiErrorResponse } from "@/lib/announcements/api";
 import { publishAnnouncement } from "@/lib/announcements/management";
 
-export async function POST(
+async function postHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -22,3 +24,5 @@ export async function POST(
     return announcementApiErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/manage/announcements/[id]/publish", postHandler);

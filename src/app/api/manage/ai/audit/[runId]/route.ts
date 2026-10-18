@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { requireAdminApi } from "@/lib/admin/api";
@@ -6,7 +8,7 @@ import { getAiAdminAuditEvidence } from "@/lib/ai/admin/service";
 import { resolveAiConfiguration } from "@/lib/ai/config/configuration";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ runId: string }> },
 ) {
@@ -28,3 +30,5 @@ export async function GET(
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/ai/audit/[runId]", getHandler);

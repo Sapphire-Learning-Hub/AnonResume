@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,7 +19,7 @@ const bodySchema = z.object({
   code: z.string().min(1).max(256),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const forbidden = requireSameOrigin(request);
   if (forbidden) return forbidden;
 
@@ -72,3 +74,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withRequestLogging("/api/setup/claim", postHandler);

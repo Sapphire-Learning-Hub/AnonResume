@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -20,7 +22,7 @@ const settlementSchema = z.object({
   decision: z.enum(["charge_reserved", "release"]),
 }).strict();
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAdminApi({ permission: "ai.usage.read" });
     const params = new URL(request.url).searchParams;
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -58,3 +60,6 @@ export async function POST(request: Request) {
     return aiAdminApiErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/manage/ai/usage", getHandler);
+export const POST = withRequestLogging("/api/manage/ai/usage", postHandler);

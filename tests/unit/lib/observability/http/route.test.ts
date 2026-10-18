@@ -134,9 +134,10 @@ describe("route request logging", () => {
     const original = new Response(stream, {
       headers: { "content-type": "text/event-stream" },
     });
-    const handler = withRequestLogging("/api/stream", (_request: Request) =>
-      original
-    );
+    const handler = withRequestLogging("/api/stream", (input: Request) => {
+      expect(input.bodyUsed).toBe(false);
+      return original;
+    });
 
     const response = await handler(request);
 

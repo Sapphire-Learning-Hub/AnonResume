@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -53,7 +55,7 @@ async function setManagementSessionCookie(
   );
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const session = await getOptionalIdentitySession();
   if (
     !session ||
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+async function deleteHandler() {
   const cookieStore = await cookies();
   const rawToken = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
   if (rawToken) await revokeAdminSessionByToken(rawToken);
@@ -161,3 +163,6 @@ export async function DELETE() {
   );
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withRequestLogging("/api/manage/session", postHandler);
+export const DELETE = withRequestLogging("/api/manage/session", deleteHandler);

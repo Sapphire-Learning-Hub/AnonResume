@@ -39,6 +39,7 @@ import {
   AdminMfaLockedError,
   AdminMfaVerificationError,
 } from "@/lib/admin/store";
+import { initializeHttpLogCapture } from "../../../../support/observability";
 
 const setupSession = {
   sessionId: "75307c75-23ba-4308-9796-e953d93e38f5",
@@ -85,6 +86,7 @@ describe("setup completion routes", () => {
   });
 
   it("completes setup and returns recovery codes", async () => {
+    const logs = initializeHttpLogCapture();
     const response = await completeRoute(
       request("/api/setup/complete", {
         deviceId: "4db73a13-640f-4385-8a29-b9fe053c28cb",
@@ -94,10 +96,16 @@ describe("setup completion routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     await expect(response.json()).resolves.toEqual({
       email: "owner@example.com",
       recoveryCodes: ["AAAA-BBBB-CCCC-DDDD-EEEE"],
     });
+    expect(logs.events()).toHaveLength(1);
+    const serializedLogs = logs.lines.join("\n");
+    expect(serializedLogs).not.toContain("long-secure-password");
+    expect(serializedLogs).not.toContain("123456");
+    expect(serializedLogs).not.toContain("AAAA-BBBB-CCCC-DDDD-EEEE");
   });
 
   it.each([

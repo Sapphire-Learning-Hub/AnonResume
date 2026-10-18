@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -12,7 +14,7 @@ const bodySchema = z.object({
   deviceName: z.string().trim().min(1).max(60),
 });
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -37,3 +39,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withRequestLogging("/api/manage/activation/start", postHandler);

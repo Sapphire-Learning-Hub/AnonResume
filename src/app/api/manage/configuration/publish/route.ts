@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,7 +19,7 @@ const publishRequestSchema = z
   })
   .strict();
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const forbiddenResponse = requireSameOrigin(request);
     if (forbiddenResponse) return forbiddenResponse;
@@ -38,3 +40,5 @@ export async function POST(request: Request) {
     return configurationApiErrorResponse(error);
   }
 }
+
+export const POST = withRequestLogging("/api/manage/configuration/publish", postHandler);
