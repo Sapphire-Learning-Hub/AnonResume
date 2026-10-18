@@ -47,6 +47,15 @@ export function readHealthcheckEnvironment(
   };
 }
 
+export function readMetricsSmokeEnvironment(
+  environment: ProcessEnvironment = process.env,
+) {
+  return {
+    GRAFANA_URL: environment.GRAFANA_URL,
+    PROMETHEUS_URL: environment.PROMETHEUS_URL,
+  };
+}
+
 export function readDeploymentSecretEnvironment(
   environment: ProcessEnvironment = process.env,
 ) {
