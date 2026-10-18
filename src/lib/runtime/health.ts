@@ -8,6 +8,23 @@ interface ReadinessDependencies {
   checkDatabase: () => Promise<void>;
   loadRuntime: () => Promise<{ health: string }>;
   loadSetupStatus: typeof inspectPublicSetupStatus;
+  timeoutMs?: number;
+}
+
+const DEFAULT_READINESS_TIMEOUT_MS = 5_000;
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error("readiness_timeout")), timeoutMs);
+    timeout.unref?.();
+  });
+
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 const defaultDependencies: ReadinessDependencies = {
@@ -33,13 +50,18 @@ export async function checkApplicationReadiness(
   }
 
   try {
-    await dependencies.checkDatabase();
-    const runtime = await dependencies.loadRuntime();
-    if (runtime.health === "recovery_required") {
-      return { ready: false, reason: "configuration_unavailable" };
-    }
-    const setup = await dependencies.loadSetupStatus();
-    return { ready: true, setupRequired: setup.required };
+    return await withTimeout(
+      (async () => {
+        await dependencies.checkDatabase();
+        const runtime = await dependencies.loadRuntime();
+        if (runtime.health === "recovery_required") {
+          return { ready: false as const, reason: "configuration_unavailable" };
+        }
+        const setup = await dependencies.loadSetupStatus();
+        return { ready: true as const, setupRequired: setup.required };
+      })(),
+      dependencies.timeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS,
+    );
   } catch {
     return { ready: false, reason: "core_unavailable" };
   }
