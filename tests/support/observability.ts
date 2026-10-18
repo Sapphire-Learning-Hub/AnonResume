@@ -1,6 +1,8 @@
 import { initializeLogging } from "@/lib/observability/logging";
 
-export function initializeHttpLogCapture() {
+export function initializeLogCapture(
+  role: "web" | "ai-worker" | "pdf-worker" = "web",
+) {
   const lines: string[] = [];
   initializeLogging({
     destination: {
@@ -10,12 +12,12 @@ export function initializeHttpLogCapture() {
     },
     identity: {
       deploymentId: "test-deployment",
-      instanceId: "web-1",
-      role: "web",
+      instanceId: `${role}-1`,
+      role,
       sessionId: "session-1",
-      stableId: "test-deployment/web/web-1",
+      stableId: `test-deployment/${role}/${role}-1`,
     },
-    role: "web",
+    role,
   });
 
   return {
@@ -24,3 +26,5 @@ export function initializeHttpLogCapture() {
     lines,
   };
 }
+
+export const initializeHttpLogCapture = initializeLogCapture;

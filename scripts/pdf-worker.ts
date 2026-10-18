@@ -1,15 +1,24 @@
-import { getDatabasePool } from "@/lib/runtime/database";
-import { runPdfExportWorker } from "@/lib/pdf/export-worker";
-import { getRuntimeConfigManager } from "@/lib/config/runtime";
-import { withWorkerInstanceLock } from "@/lib/runtime/worker-instance-lock";
-import { startWorkerRestartRuntime } from "@/lib/runtime/restart/process-runtime";
+import {
+  getLogger,
+  initializeLogging,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
+initializeLogging({ role: "pdf-worker" });
+const runtimeLog = getLogger("anonresume.runtime");
 const controller = new AbortController();
 const stop = () => controller.abort();
-const runtimeManager = getRuntimeConfigManager("pdf-worker");
 
 process.once("SIGINT", stop);
 process.once("SIGTERM", stop);
+runtimeLog.info("process_started", { outcome: "success" });
+
+const { getDatabasePool } = await import("@/lib/runtime/database");
+const { runPdfExportWorker } = await import("@/lib/pdf/export-worker");
+const { getRuntimeConfigManager } = await import("@/lib/config/runtime");
+const { withWorkerInstanceLock } = await import("@/lib/runtime/worker-instance-lock");
+const { startWorkerRestartRuntime } = await import("@/lib/runtime/restart/process-runtime");
+const runtimeManager = getRuntimeConfigManager("pdf-worker");
 
 try {
   await runtimeManager.start();
@@ -18,15 +27,17 @@ try {
     abort: stop,
     consumer: "pdf-worker",
     runtimeManager,
-    work: () =>
-      withWorkerInstanceLock(identity.instanceId, () =>
-        runPdfExportWorker({
-          signal: controller.signal,
-          runtimeManager,
-        })
-      ),
+    work: () => withWorkerInstanceLock(identity.instanceId, () =>
+      runPdfExportWorker({ signal: controller.signal, runtimeManager })),
   });
+} catch (error) {
+  runtimeLog.error("process_failed", {
+    error: serializeSafeError(error),
+    outcome: "failure",
+  });
+  throw error;
 } finally {
   await runtimeManager.stop();
   await getDatabasePool().end();
+  runtimeLog.info("process_stopped", { outcome: "success" });
 }

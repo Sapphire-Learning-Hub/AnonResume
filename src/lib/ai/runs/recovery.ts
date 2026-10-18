@@ -2,8 +2,11 @@ import type { PoolClient } from "pg";
 
 import { getDatabaseSchemaName } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
+import { getLogger } from "@/lib/observability/logging";
 
 export { getAiRunSnapshot, stopAiRun } from "./service";
+
+const aiLog = getLogger("anonresume.ai");
 
 interface ExpiredRunRow {
   id: string;
@@ -142,6 +145,11 @@ export async function recoverExpiredAiRuns({
       } else {
         settlementPending += 1;
       }
+      aiLog.info("run_lease_recovered", {
+        labels: { recoveryStatus: status },
+        outcome: "success",
+        transactionId: run.id,
+      });
     }
 
     return { interrupted, settlementPending, releasedPoints };

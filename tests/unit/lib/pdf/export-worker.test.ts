@@ -19,6 +19,7 @@ import {
   createGeneratedResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume/repository";
+import { initializeLogCapture } from "../../../support/observability";
 
 describe("PDF export worker", () => {
   function configuration(overrides: Record<string, unknown> = {}) {
@@ -70,6 +71,7 @@ describe("PDF export worker", () => {
   });
 
   it("renders the queued document snapshot and completes the job", async () => {
+    const capture = initializeLogCapture("pdf-worker");
     const queued = await enqueuePdfExport(
       {
         resumeUserId: "user-demo",
@@ -130,6 +132,55 @@ describe("PDF export worker", () => {
         configuration(),
       ),
     ).resolves.toMatchObject({ result: Buffer.from([7, 8, 9]) });
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "export_completed",
+          "event.dataset": "anonresume.pdf",
+          "event.outcome": "success",
+          "transaction.id": queued.jobId,
+        }),
+      ]),
+    );
+  });
+
+  it("emits a safe failure event when rendering fails", async () => {
+    const capture = initializeLogCapture("pdf-worker");
+    const queued = await enqueuePdfExport(
+      {
+        resumeUserId: "user-demo",
+        resumeId: "resume-demo",
+        requesterUserId: "user-demo",
+        document: (
+          await import("@/domain/resume/default-document")
+        ).createDefaultResumeDocument(),
+        filename: "failed.pdf",
+      },
+      configuration(),
+    );
+    const [job] = await claimPdfExportJobs({
+      workerId: "worker-failure",
+      configuration: configuration(),
+    });
+
+    await processPdfExportJob(job!, {
+      workerId: "worker-failure",
+      appOrigin: "https://resume.example.com",
+      configuration: configuration(),
+      exportPdf: vi.fn().mockRejectedValue(new Error("secret document text")),
+    });
+
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "export_failed",
+          "event.dataset": "anonresume.pdf",
+          "event.outcome": "failure",
+          "transaction.id": queued.jobId,
+        }),
+      ]),
+    );
+    expect(capture.lines.join("\n")).not.toContain("secret document text");
   });
 
   it("cleans forced-expired jobs while the queue is otherwise idle", async () => {

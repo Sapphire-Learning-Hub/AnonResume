@@ -1,13 +1,26 @@
 import { getMigrations } from "better-auth/db/migration";
 
-import { getDatabasePool } from "@/lib/runtime/database";
+import {
+  getLogger,
+  initializeLogging,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
-import { auth } from "./auth-migration-config";
+initializeLogging({ role: "migrate" });
+const configurationLog = getLogger("anonresume.configuration");
+const { getDatabasePool } = await import("@/lib/runtime/database");
+const { auth } = await import("./auth-migration-config");
 
 try {
   const { runMigrations } = await getMigrations(auth.options);
   await runMigrations();
-  console.info("Better Auth migrations applied.");
+  configurationLog.info("auth_migration_completed", { outcome: "success" });
+} catch (error) {
+  configurationLog.error("auth_migration_failed", {
+    error: serializeSafeError(error),
+    outcome: "failure",
+  });
+  throw error;
 } finally {
   await getDatabasePool().end();
 }

@@ -40,7 +40,7 @@ describe("OpenAI-compatible provider Bun runtime", () => {
       }, new AbortController().signal)) {
         events.push(event);
       }
-      console.log(JSON.stringify({ destroyed, events }));
+      console.log("RESULT:" + JSON.stringify({ destroyed, events }));
     `;
     const result = spawnSync("bun", ["-e", script], {
       cwd: process.cwd(),
@@ -48,8 +48,10 @@ describe("OpenAI-compatible provider Bun runtime", () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
-    const output = result.stdout.trim().split("\n").at(-1);
-    const parsed = JSON.parse(output ?? "null") as {
+    const output = result.stdout.trim().split("\n").find((line) =>
+      line.startsWith("RESULT:")
+    );
+    const parsed = JSON.parse(output?.slice("RESULT:".length) ?? "null") as {
       destroyed: number;
       events: unknown[];
     };
@@ -94,7 +96,7 @@ describe("OpenAI-compatible provider Bun runtime", () => {
           void event;
         }
       } catch (error) {
-        console.log(JSON.stringify({ code: error.code }));
+        console.log("RESULT:" + JSON.stringify({ code: error.code }));
       }
     `;
     const result = spawnSync("bun", ["-e", script], {
@@ -104,7 +106,11 @@ describe("OpenAI-compatible provider Bun runtime", () => {
     });
 
     expect(result.status, result.stderr).toBe(0);
-    const output = result.stdout.trim().split("\n").at(-1);
-    expect(JSON.parse(output ?? "null")).toEqual({ code: "timeout" });
+    const output = result.stdout.trim().split("\n").find((line) =>
+      line.startsWith("RESULT:")
+    );
+    expect(JSON.parse(output?.slice("RESULT:".length) ?? "null")).toEqual({
+      code: "timeout",
+    });
   });
 });

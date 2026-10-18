@@ -15,8 +15,10 @@ import {
   resolveRuntimeSupervisor,
   type RuntimeSupervisorCapability,
 } from "@/lib/runtime/restart/supervisor";
+import { getLogger } from "@/lib/observability/logging";
 
 const DEFAULT_WEB_RESPONSE_GRACE_MS = 1_500;
+const runtimeLog = getLogger("anonresume.runtime");
 
 type RestartRuntimeManager = Pick<
   RuntimeConfigManager,
@@ -100,9 +102,21 @@ export async function startWebRestartRuntime(
 
   void coordinator.waitForDrainRequest().then(async (request) => {
     if (!await request.markExiting()) return;
+    runtimeLog.info("restart_drain_started", {
+      labels: { consumer: request.consumer },
+      outcome: "success",
+      transactionId: request.operationId,
+    });
     schedule(() => {
       void request.markAwaitingStartup().then((changed) => {
-        if (changed) signalProcess("SIGTERM");
+        if (changed) {
+          runtimeLog.info("restart_awaiting_startup", {
+            labels: { consumer: request.consumer },
+            outcome: "success",
+            transactionId: request.operationId,
+          });
+          signalProcess("SIGTERM");
+        }
       });
     }, options.responseGraceMs ?? DEFAULT_WEB_RESPONSE_GRACE_MS);
   }).catch(() => undefined);
@@ -137,6 +151,11 @@ export async function startWorkerRestartRuntime(options: SharedRuntimeOptions & 
     ]);
     if (result.kind === "work") return;
 
+    runtimeLog.info("restart_drain_started", {
+      labels: { consumer: result.request.consumer },
+      outcome: "success",
+      transactionId: result.request.operationId,
+    });
     options.abort();
     await work;
     await finishWorkerRestart(result.request);
@@ -147,5 +166,11 @@ export async function startWorkerRestartRuntime(options: SharedRuntimeOptions & 
 
 async function finishWorkerRestart(request: RuntimeRestartDrainRequest) {
   if (!await request.markExiting()) return;
-  await request.markAwaitingStartup();
+  if (await request.markAwaitingStartup()) {
+    runtimeLog.info("restart_awaiting_startup", {
+      labels: { consumer: request.consumer },
+      outcome: "success",
+      transactionId: request.operationId,
+    });
+  }
 }
