@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="AGPL-3.0-or-later" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-d63b72" /></a>
-  <img alt="Bun 1.3+" src="https://img.shields.io/badge/Bun-1.3+-14151a?logo=bun" />
+  <img alt="Bun 1.4+" src="https://img.shields.io/badge/Bun-1.4+-14151a?logo=bun" />
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-14151a?logo=next.js" />
   <img alt="PostgreSQL 14+" src="https://img.shields.io/badge/PostgreSQL-14+-4169e1?logo=postgresql&logoColor=white" />
 </p>
@@ -50,7 +50,7 @@ The editor is optimized for precise desktop interaction. Mobile users can still 
 
 ### Source Requirements
 
-- [Bun](https://bun.sh/) 1.3 or later
+- [Bun](https://bun.sh/) 1.4 or later
 - [PostgreSQL](https://www.postgresql.org/) 14 or later
 - A Chromium runtime for PDF export
 
