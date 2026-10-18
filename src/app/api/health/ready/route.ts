@@ -1,8 +1,10 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { checkApplicationReadiness } from "@/lib/runtime/health";
 
-export async function GET() {
+async function getHandler() {
   const readiness = await checkApplicationReadiness();
   return NextResponse.json(
     readiness.ready
@@ -14,3 +16,5 @@ export async function GET() {
     },
   );
 }
+
+export const GET = withRequestLogging("/api/health/ready", getHandler, { suppressSuccessfulAccessLog: true });

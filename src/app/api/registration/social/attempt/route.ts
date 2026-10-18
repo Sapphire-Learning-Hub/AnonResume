@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -21,7 +23,7 @@ import { requireSameOrigin } from "@/lib/http/request-origin";
 
 const inputSchema = z.object({ provider: z.literal("github") });
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   if (
@@ -68,3 +70,5 @@ export async function POST(request: NextRequest) {
   setSocialRegistrationCookie(response, request, attempt.rawToken);
   return response;
 }
+
+export const POST = withRequestLogging("/api/registration/social/attempt", postHandler);

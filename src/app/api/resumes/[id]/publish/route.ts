@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -8,7 +10,7 @@ import {
   ResumePublicationForbiddenError,
 } from "@/lib/resume/repository";
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -44,3 +46,5 @@ export async function POST(
     throw error;
   }
 }
+
+export const POST = withRequestLogging("/api/resumes/[id]/publish", postHandler);

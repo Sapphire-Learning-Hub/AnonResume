@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -32,7 +34,7 @@ function requestErrorResponse(error: unknown) {
   return NextResponse.json({ error: "internal_error" }, { status: 500 });
 }
 
-export async function GET() {
+async function getHandler() {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -47,7 +49,7 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -92,3 +94,7 @@ export async function DELETE(request: Request) {
     return requestErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/account/management-mfa-reset", getHandler);
+export const POST = withRequestLogging("/api/account/management-mfa-reset", postHandler);
+export const DELETE = withRequestLogging("/api/account/management-mfa-reset", deleteHandler);

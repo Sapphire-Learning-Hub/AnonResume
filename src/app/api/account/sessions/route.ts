@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -42,7 +44,7 @@ function readClientHint(request: Request, name: string) {
   return rawValue;
 }
 
-export async function GET() {
+async function getHandler() {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -73,7 +75,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(request: Request) {
+async function patchHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -116,7 +118,7 @@ export async function PATCH(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+async function deleteHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -141,7 +143,7 @@ export async function DELETE(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -158,3 +160,8 @@ export async function POST(request: Request) {
     return accountErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/account/sessions", getHandler);
+export const PATCH = withRequestLogging("/api/account/sessions", patchHandler);
+export const DELETE = withRequestLogging("/api/account/sessions", deleteHandler);
+export const POST = withRequestLogging("/api/account/sessions", postHandler);

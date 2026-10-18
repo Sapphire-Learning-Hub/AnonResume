@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -38,7 +40,7 @@ async function fail(
   return response;
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const rawToken = getSocialRegistrationCookie(request);
   const provider = request.nextUrl.searchParams.get("provider");
   const outcome = request.nextUrl.searchParams.get("outcome");
@@ -82,3 +84,5 @@ export async function GET(request: NextRequest) {
     return fail(request, rawToken, "social_registration_invalid");
   }
 }
+
+export const GET = withRequestLogging("/api/registration/social/result", getHandler);

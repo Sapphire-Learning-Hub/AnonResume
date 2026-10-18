@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -14,7 +16,7 @@ import { sendProductInvitationEmail } from "@/lib/runtime/email";
 
 const bodySchema = z.object({ email: z.email().max(254) }).strict();
 
-export async function GET() {
+async function getHandler() {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -22,7 +24,7 @@ export async function GET() {
   return NextResponse.json(await listUserInvitations(session.user.id));
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const session = await getOptionalSession();
   if (!session) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -53,3 +55,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/invitations", getHandler);
+export const POST = withRequestLogging("/api/invitations", postHandler);

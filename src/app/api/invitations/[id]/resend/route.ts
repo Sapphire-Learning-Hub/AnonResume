@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -9,7 +11,7 @@ import {
 import { resendUserInvitation } from "@/lib/invitations/service";
 import { sendProductInvitationEmail } from "@/lib/runtime/email";
 
-export async function POST(
+async function postHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -50,3 +52,5 @@ export async function POST(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/invitations/[id]/resend", postHandler);

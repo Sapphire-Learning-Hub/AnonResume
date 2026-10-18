@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { toNextJsHandler } from "better-auth/next-js";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -19,7 +21,7 @@ import {
   requiresRegistrationConsent,
 } from "@/lib/auth/registration-consent";
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const blocked = await blockAuthDuringInitialSetup(request);
   if (blocked) return blocked;
   const mergeBlocked = await blockSocialMutationDuringMerge(request);
@@ -28,7 +30,7 @@ export async function GET(request: NextRequest) {
   return attachSocialLinkResultProof(request, response);
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const blocked = await blockAuthDuringInitialSetup(request);
   if (blocked) return blocked;
   const missingConsent = await blockRegistrationWithoutConsent(request);
@@ -144,3 +146,6 @@ function attachSocialLinkResultProof(
   );
   return wrapped;
 }
+
+export const GET = withRequestLogging("/api/auth/[...all]", getHandler);
+export const POST = withRequestLogging("/api/auth/[...all]", postHandler);

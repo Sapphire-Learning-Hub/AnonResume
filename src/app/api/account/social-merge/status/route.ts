@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { AccountMergeError, getAccountMergeErrorStatus } from "@/lib/auth/account/merge/errors";
@@ -11,7 +13,7 @@ function readCookie(request: Request, name: string) {
     .find((part) => part.startsWith(`${name}=`))?.slice(name.length + 1);
 }
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const rawStatusToken = readCookie(request, ACCOUNT_MERGE_STATUS_COOKIE);
   if (!rawStatusToken) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -36,3 +38,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const GET = withRequestLogging("/api/account/social-merge/status", getHandler);

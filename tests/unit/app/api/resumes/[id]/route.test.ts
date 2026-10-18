@@ -12,6 +12,7 @@ import {
 
 import { GET, PATCH, PUT } from "@/app/api/resumes/[id]/route";
 import { MAX_RESUME_JSON_REQUEST_BYTES } from "@/lib/http/request-body";
+import { initializeHttpLogCapture } from "../../../../../support/observability";
 
 vi.mock("@/lib/auth/session", () => ({
   getOptionalSession: vi.fn(),
@@ -82,6 +83,7 @@ describe("resume route", () => {
   });
 
   it("updates a resume document with optimistic versioning", async () => {
+    const logs = initializeHttpLogCapture();
     await createResumeRecord("user-demo", "resume-demo");
 
     const document = createDefaultResumeDocument();
@@ -105,6 +107,7 @@ describe("resume route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
 
     const body = await response.json();
 
@@ -122,6 +125,12 @@ describe("resume route", () => {
         })
       ).version,
     ).toBe(3);
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "http.response.status_code": 200,
+      "url.path": "/api/resumes/[id]",
+    });
   });
 
   it("persists an empty editable text block", async () => {

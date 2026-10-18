@@ -74,3 +74,9 @@ for (const key of Object.values(CONFIG_REGISTRY).flatMap((definition) =>
 
 process.env.BETTER_AUTH_SECRET ??= "anonresume-test-secret-2026-08-28";
 process.env.CONFIG_MASTER_KEY ??= Buffer.alloc(32, 7).toString("base64");
+
+const { initializeLogging } = await import("@/lib/observability/logging");
+initializeLogging({
+  destination: { write() {} },
+  role: "web",
+});

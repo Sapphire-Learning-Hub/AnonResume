@@ -95,10 +95,7 @@ describe("route request logging", () => {
       Response.json({ error: "not_exposed" }, { status }),
     );
 
-    const response = await handler(
-      new Request("https://resume.example.com/api/example"),
-      undefined,
-    );
+    const response = await handler();
 
     expect(response.status).toBe(status);
     expect(capture.events()[0]).toMatchObject({
@@ -115,10 +112,7 @@ describe("route request logging", () => {
       new Response(null, { status: 204 }),
     );
 
-    const response = await handler(
-      new Request("https://resume.example.com/api/direct"),
-      undefined,
-    );
+    const response = await handler();
 
     const requestId = response.headers.get(REQUEST_ID_HEADER) ?? "";
     expect(requestId).toMatch(UUID_PATTERN);
@@ -140,9 +134,11 @@ describe("route request logging", () => {
     const original = new Response(stream, {
       headers: { "content-type": "text/event-stream" },
     });
-    const handler = withRequestLogging("/api/stream", () => original);
+    const handler = withRequestLogging("/api/stream", (_request: Request) =>
+      original
+    );
 
-    const response = await handler(request, undefined);
+    const response = await handler(request);
 
     expect(request.bodyUsed).toBe(false);
     expect(response).toBe(original);
@@ -160,10 +156,7 @@ describe("route request logging", () => {
     });
 
     await expect(
-      handler(
-        new Request("https://resume.example.com/api/failure"),
-        undefined,
-      ),
+      handler(),
     ).rejects.toBe(thrown);
 
     expect(capture.events()).toHaveLength(1);
@@ -190,16 +183,10 @@ describe("route request logging", () => {
       { suppressSuccessfulAccessLog: true },
     );
 
-    await healthy(
-      new Request("https://resume.example.com/api/health/ready"),
-      undefined,
-    );
+    await healthy();
     expect(capture.events()).toHaveLength(0);
 
-    await unhealthy(
-      new Request("https://resume.example.com/api/health/ready"),
-      undefined,
-    );
+    await unhealthy();
     expect(capture.events()).toHaveLength(1);
     expect(capture.events()[0]).toMatchObject({
       "event.outcome": "failure",

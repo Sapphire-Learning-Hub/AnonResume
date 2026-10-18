@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -17,7 +19,7 @@ function toVersionSummary(snapshot: Awaited<ReturnType<typeof snapshotResumeVers
   };
 }
 
-export async function GET(
+async function getHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -44,7 +46,7 @@ export async function GET(
   });
 }
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -77,3 +79,6 @@ export async function POST(
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/resumes/[id]/versions", getHandler);
+export const POST = withRequestLogging("/api/resumes/[id]/versions", postHandler);

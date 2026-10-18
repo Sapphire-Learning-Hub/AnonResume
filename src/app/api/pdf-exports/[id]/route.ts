@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
@@ -32,7 +34,7 @@ function handleAccessError(error: unknown) {
   throw error;
 }
 
-export async function GET(
+async function getHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -65,7 +67,7 @@ export async function GET(
   }
 }
 
-export async function DELETE(
+async function deleteHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -102,3 +104,6 @@ export async function DELETE(
     return handleAccessError(error);
   }
 }
+
+export const GET = withRequestLogging("/api/pdf-exports/[id]", getHandler);
+export const DELETE = withRequestLogging("/api/pdf-exports/[id]", deleteHandler);

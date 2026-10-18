@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -26,7 +28,7 @@ async function getProductIdentity() {
   return identity;
 }
 
-export async function GET() {
+async function getHandler() {
   const identity = await getProductIdentity();
   if (!identity) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -38,7 +40,7 @@ export async function GET() {
   return NextResponse.json({ lifecycle });
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const session = await getOptionalSession();
@@ -71,3 +73,6 @@ export async function POST(request: Request) {
     return accountErrorResponse(error);
   }
 }
+
+export const GET = withRequestLogging("/api/account/deletion", getHandler);
+export const POST = withRequestLogging("/api/account/deletion", postHandler);

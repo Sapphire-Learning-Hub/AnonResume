@@ -15,16 +15,22 @@ export interface RequestLoggingOptions {
   suppressSuccessfulAccessLog?: boolean;
 }
 
-type RouteHandler<TContext> = (
-  request: Request,
-  context: TContext,
-) => Response | Promise<Response>;
+type RouteHandler<
+  TArguments extends readonly unknown[],
+  TResponse extends Response,
+> = (
+  ...arguments_: TArguments
+) => TResponse | Promise<TResponse>;
 
 function elapsedNanoseconds(startedAt: number) {
   return Math.max(0, Math.round((performance.now() - startedAt) * 1_000_000));
 }
 
-function correlateResponse(response: Response, requestId: string) {
+function correlateResponse<TResponse extends Response>(
+  response: TResponse,
+  requestId: string,
+): TResponse;
+function correlateResponse(response: Response, requestId: string): Response {
   try {
     response.headers.set(REQUEST_ID_HEADER, requestId);
     return response;
@@ -39,12 +45,18 @@ function correlateResponse(response: Response, requestId: string) {
   }
 }
 
-export function withRequestLogging<TContext>(
+export function withRequestLogging<
+  TArguments extends readonly unknown[],
+  TResponse extends Response,
+>(
   routePattern: string,
-  handler: RouteHandler<TContext>,
+  handler: RouteHandler<TArguments, TResponse>,
   options: RequestLoggingOptions = {},
 ) {
-  return async (request: Request, context: TContext): Promise<Response> => {
+  return async (...arguments_: TArguments): Promise<TResponse> => {
+    const request = arguments_[0] instanceof Request
+      ? arguments_[0]
+      : new Request(new URL(routePattern, "http://localhost"));
     const identity = resolveRequestIdentity(request.headers);
     const startedAt = performance.now();
     const logContext = {
@@ -57,7 +69,7 @@ export function withRequestLogging<TContext>(
     return runWithLogContext(logContext, async () => {
       try {
         const response = correlateResponse(
-          await handler(request, context),
+          await handler(...arguments_),
           identity.requestId,
         );
         const failed = response.status >= 400;

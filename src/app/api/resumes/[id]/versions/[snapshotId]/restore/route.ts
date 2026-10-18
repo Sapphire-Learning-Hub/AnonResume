@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -19,7 +21,7 @@ const restoreVersionSchema = z.object({
   version: z.number().int().positive(),
 });
 
-export async function POST(
+async function postHandler(
   request: Request,
   { params }: { params: Promise<{ id: string; snapshotId: string }> },
 ) {
@@ -78,3 +80,5 @@ export async function POST(
     throw error;
   }
 }
+
+export const POST = withRequestLogging("/api/resumes/[id]/versions/[snapshotId]/restore", postHandler);

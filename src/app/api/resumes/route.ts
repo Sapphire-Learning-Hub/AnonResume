@@ -1,10 +1,12 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
 import { parsePageRequest } from "@/lib/shared/pagination";
 import { paginateResumeEntries } from "@/lib/resume/repository";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   const session = await getOptionalSession();
 
   if (!session) {
@@ -37,3 +39,5 @@ export async function GET(request: Request) {
     }),
   );
 }
+
+export const GET = withRequestLogging("/api/resumes", getHandler);

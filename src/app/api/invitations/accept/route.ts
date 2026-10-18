@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -13,7 +15,7 @@ const bodySchema = z.object({
   password: z.string().min(12).max(128),
 }).strict();
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   if (!hasRegistrationConsent(request)) {
     return NextResponse.json(
       { error: "REGISTRATION_CONSENT_REQUIRED" },
@@ -38,3 +40,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const POST = withRequestLogging("/api/invitations/accept", postHandler);

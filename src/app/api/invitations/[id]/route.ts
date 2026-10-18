@@ -1,10 +1,12 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 
 import { getOptionalSession } from "@/lib/auth/session";
 import { InvitationNotActionableError } from "@/lib/invitations/errors";
 import { revokeUserInvitation } from "@/lib/invitations/service";
 
-export async function DELETE(
+async function deleteHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -28,3 +30,5 @@ export async function DELETE(
     return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
+
+export const DELETE = withRequestLogging("/api/invitations/[id]", deleteHandler);

@@ -56,6 +56,7 @@ import {
   POST as REVOKE_OTHER_SESSIONS,
 } from "@/app/api/account/sessions/route";
 import { AccountSecurityError } from "@/lib/auth/account/errors";
+import { initializeHttpLogCapture } from "../../../../support/observability";
 
 const session = {
   user: {
@@ -127,6 +128,7 @@ describe("account security routes", () => {
   });
 
   it("returns a stable password error code", async () => {
+    const logs = initializeHttpLogCapture();
     mocks.changeAccountPassword.mockRejectedValue(
       new AccountSecurityError("password_incorrect"),
     );
@@ -139,8 +141,15 @@ describe("account security routes", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("x-request-id")).toEqual(expect.any(String));
     await expect(response.json()).resolves.toEqual({
       error: "password_incorrect",
+    });
+    expect(logs.events()).toHaveLength(1);
+    expect(logs.events()[0]).toMatchObject({
+      "event.action": "http_request_completed",
+      "http.response.status_code": 400,
+      "url.path": "/api/account/password",
     });
   });
 

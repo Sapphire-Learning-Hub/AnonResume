@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -18,7 +20,7 @@ const inputSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const originError = requireSameOrigin(request);
   if (originError) return originError;
   const rawToken = getSocialRegistrationCookie(request);
@@ -57,3 +59,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLogging("/api/registration/social/complete", postHandler);

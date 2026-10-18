@@ -1,3 +1,5 @@
+import { withRequestLogging } from "@/lib/observability/http";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -28,7 +30,7 @@ const updateResumeSummarySchema = z.object({
   summary: z.string().trim().min(1).max(160),
 });
 
-export async function GET(
+async function getHandler(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -48,7 +50,7 @@ export async function GET(
   return NextResponse.json({ resume });
 }
 
-export async function PUT(
+async function putHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -132,7 +134,7 @@ export async function PUT(
   }
 }
 
-export async function PATCH(
+async function patchHandler(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -194,3 +196,7 @@ export async function PATCH(
     throw error;
   }
 }
+
+export const GET = withRequestLogging("/api/resumes/[id]", getHandler);
+export const PUT = withRequestLogging("/api/resumes/[id]", putHandler);
+export const PATCH = withRequestLogging("/api/resumes/[id]", patchHandler);
