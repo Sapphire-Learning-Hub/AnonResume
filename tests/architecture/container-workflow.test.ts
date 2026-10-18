@@ -24,6 +24,20 @@ it("keeps optional peer tooling out of runtime images", async () => {
   );
 });
 
+it("keeps container dependency downloads independent from lockfile registry URLs", async () => {
+  const dockerfile = await readFile(
+    path.join(process.cwd(), "Dockerfile"),
+    "utf8",
+  );
+
+  expect(dockerfile).toContain(
+    "ARG BUN_INSTALL_REGISTRY=https://registry.npmjs.org",
+  );
+  expect(
+    dockerfile.match(/--registry=\$\{BUN_INSTALL_REGISTRY\}/g),
+  ).toHaveLength(2);
+});
+
 it("publishes release images on native architecture runners", async () => {
   const workflow = await readFile(
     path.join(process.cwd(), ".github/workflows/container.yml"),

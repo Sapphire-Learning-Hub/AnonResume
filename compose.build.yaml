@@ -6,6 +6,7 @@ services:
       args:
         ANONRESUME_BUILD_COMMIT: ${ANONRESUME_BUILD_COMMIT:-local}
         ANONRESUME_BUILD_TAG: ${ANONRESUME_BUILD_TAG:-development}
+        BUN_INSTALL_REGISTRY: ${BUN_INSTALL_REGISTRY:-https://registry.npmjs.org}
   migrate:
     build: *core-build
   web:
@@ -19,3 +20,4 @@ services:
       args:
         ANONRESUME_BUILD_COMMIT: ${ANONRESUME_BUILD_COMMIT:-local}
         ANONRESUME_BUILD_TAG: ${ANONRESUME_BUILD_TAG:-development}
+        BUN_INSTALL_REGISTRY: ${BUN_INSTALL_REGISTRY:-https://registry.npmjs.org}
