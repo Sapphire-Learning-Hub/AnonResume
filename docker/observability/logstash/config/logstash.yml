@@ -1,0 +1,7 @@
+api.http.host: 0.0.0.0
+config.reload.automatic: true
+config.reload.interval: 5s
+log.level: info
+pipeline.buffer.type: heap
+pipeline.ecs_compatibility: v8
+xpack.monitoring.enabled: false
