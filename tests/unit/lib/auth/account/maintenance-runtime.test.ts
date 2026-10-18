@@ -16,6 +16,7 @@ import {
   startAccountMaintenanceLoop,
   stopAccountMaintenanceLoop,
 } from "@/lib/auth/account/maintenance-runtime";
+import { initializeLogCapture } from "../../../../support/observability";
 
 describe("account maintenance runtime", () => {
   beforeEach(() => {
@@ -35,6 +36,7 @@ describe("account maintenance runtime", () => {
   });
 
   it("starts once, runs immediately, and schedules non-overlapping maintenance", async () => {
+    const capture = initializeLogCapture();
     let finishFirstRun: (() => void) | undefined;
     mocks.runAccountMaintenance.mockImplementationOnce(
       () => new Promise((resolve) => {
@@ -54,5 +56,15 @@ describe("account maintenance runtime", () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(mocks.runAccountMaintenance).toHaveBeenCalledTimes(2);
+    await Promise.resolve();
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "deletion_maintenance_completed",
+          "event.dataset": "anonresume.account",
+          "event.outcome": "success",
+        }),
+      ]),
+    );
   });
 });

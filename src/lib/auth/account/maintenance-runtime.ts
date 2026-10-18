@@ -1,7 +1,12 @@
 import { runAccountMaintenance } from "./maintenance";
 import { sendAccountSecurityNotice } from "@/lib/runtime/email";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
 const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
+const accountLog = getLogger("anonresume.account");
 
 type AccountMaintenanceRuntime = {
   running: boolean;
@@ -27,7 +32,7 @@ async function executeMaintenance() {
   if (state.running) return;
   state.running = true;
   try {
-    await runAccountMaintenance({
+    const result = await runAccountMaintenance({
       notifyDeleted: ({ email, name }) =>
         sendAccountSecurityNotice({
           email,
@@ -36,8 +41,22 @@ async function executeMaintenance() {
           locale: "zh-CN",
         }),
     });
+    accountLog[result.failed > 0 ? "warn" : "info"](
+      "deletion_maintenance_completed",
+      {
+        labels: {
+          deleted: result.deleted,
+          failed: result.failed,
+          processed: result.processed,
+        },
+        outcome: result.failed > 0 ? "failure" : "success",
+      },
+    );
   } catch (error) {
-    console.error("[AnonResume] Account maintenance failed", error);
+    accountLog.error("deletion_maintenance_failed", {
+      error: serializeSafeError(error),
+      outcome: "failure",
+    });
   } finally {
     state.running = false;
   }

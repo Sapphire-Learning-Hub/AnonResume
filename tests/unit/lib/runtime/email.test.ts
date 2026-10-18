@@ -1,3 +1,16 @@
+const mocks = vi.hoisted(() => ({
+  createTransport: vi.fn(),
+  getRuntimeConfig: vi.fn(),
+  sendMail: vi.fn(),
+}));
+
+vi.mock("nodemailer", () => ({
+  default: { createTransport: mocks.createTransport },
+}));
+vi.mock("@/lib/config/runtime", () => ({
+  getRuntimeConfig: mocks.getRuntimeConfig,
+}));
+
 import {
   buildAccountSecurityNoticeEmail,
   buildAccountVerificationCodeEmail,
@@ -7,8 +20,10 @@ import {
   buildVerificationEmail,
   closeEmailTransporter,
   resolveEmailDeliveryConfig,
+  sendVerificationEmail,
 } from "@/lib/runtime/email";
 import { getManagedConfigDefaults } from "@/lib/config/registry";
+import { initializeLogCapture } from "../../../support/observability";
 
 function managedConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -18,6 +33,17 @@ function managedConfig(overrides: Record<string, unknown> = {}) {
 }
 
 describe("email delivery configuration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    closeEmailTransporter();
+    mocks.createTransport.mockReturnValue({
+      close: vi.fn(),
+      sendMail: mocks.sendMail,
+      verify: vi.fn(),
+    });
+    mocks.getRuntimeConfig.mockResolvedValue({ values: managedConfig() });
+  });
+
   it("closes and clears the shared SMTP transporter", () => {
     const close = vi.fn();
     globalThis.__anonResumeEmailTransporter = { close } as never;
@@ -93,6 +119,77 @@ describe("email delivery configuration", () => {
     expect(() => resolveEmailDeliveryConfig(managedConfig(), "production")).toThrow(
       "SMTP configuration is required in production",
     );
+  });
+
+  it("marks console delivery secrets as local-only", async () => {
+    const capture = initializeLogCapture();
+
+    await sendVerificationEmail({
+      email: "private@example.com",
+      name: "Private user",
+      url: "https://resume.example.com/verify?token=secret-token",
+    });
+
+    const events = capture.events();
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "verification_email_console_delivery",
+          "event.dataset": "anonresume.local",
+          "labels.centralize": false,
+        }),
+      ]),
+    );
+    const centralizable = events.filter(
+      (event) => event["labels.centralize"] !== false,
+    );
+    expect(JSON.stringify(centralizable)).not.toContain("private@example.com");
+    expect(JSON.stringify(centralizable)).not.toContain("secret-token");
+  });
+
+  it("emits safe SMTP success and failure events", async () => {
+    const capture = initializeLogCapture();
+    mocks.getRuntimeConfig.mockResolvedValue({
+      values: managedConfig({
+        emailFrom: "AnonResume <mailer@example.com>",
+        smtpHost: "smtp.example.com",
+        smtpPassword: "smtp-secret",
+        smtpPort: 587,
+        smtpUser: "mailer@example.com",
+      }),
+    });
+
+    await sendVerificationEmail({
+      email: "recipient@example.com",
+      name: "Recipient",
+      url: "https://resume.example.com/verify?token=delivery-secret",
+    });
+    mocks.sendMail.mockRejectedValueOnce(new Error("server exposed recipient@example.com"));
+    await expect(sendVerificationEmail({
+      email: "recipient@example.com",
+      name: "Recipient",
+      url: "https://resume.example.com/verify?token=delivery-secret",
+    })).rejects.toThrow();
+
+    expect(capture.events()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          "event.action": "verification_email_sent",
+          "event.dataset": "anonresume.email",
+          "event.outcome": "success",
+          "labels.transport": "smtp",
+        }),
+        expect.objectContaining({
+          "event.action": "verification_email_failed",
+          "event.dataset": "anonresume.email",
+          "event.outcome": "failure",
+          "labels.transport": "smtp",
+        }),
+      ]),
+    );
+    expect(capture.lines.join("\n")).not.toContain("recipient@example.com");
+    expect(capture.lines.join("\n")).not.toContain("delivery-secret");
+    expect(capture.lines.join("\n")).not.toContain("smtp-secret");
   });
 });
 

@@ -2,6 +2,12 @@ import type { PoolClient } from "pg";
 
 import { getDatabaseSchemaName } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
+
+const accountLog = getLogger("anonresume.account");
 
 function quoteIdentifier(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
@@ -160,14 +166,17 @@ export async function runAccountMaintenance(input: {
       if (!identity) continue;
       deleted += 1;
       await input.notifyDeleted?.(identity).catch((error: unknown) => {
-        console.error("[AnonResume] Failed to send account deletion notice", error);
+        accountLog.error("deletion_notice_delivery_failed", {
+          error: serializeSafeError(error),
+          outcome: "failure",
+        });
       });
     } catch (error) {
       failed += 1;
-      console.error(
-        `[AnonResume] Failed to finalize account deletion for ${candidate.userId}`,
-        error,
-      );
+      accountLog.error("deletion_finalization_failed", {
+        error: serializeSafeError(error),
+        outcome: "failure",
+      });
     }
   }
   return { processed: candidates.rows.length, deleted, failed };

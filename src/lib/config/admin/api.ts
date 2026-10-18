@@ -7,8 +7,14 @@ import {
   ConfigurationRevisionConflictError,
   ConfigurationStateError,
 } from "@/lib/config/store";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
 import { ConfigurationValidationError } from "./validation";
+
+const configurationLog = getLogger("anonresume.configuration");
 
 export function configurationApiErrorResponse(error: unknown) {
   const authError = adminApiErrorResponse(error);
@@ -40,8 +46,9 @@ export function configurationApiErrorResponse(error: unknown) {
     );
   }
 
-  console.error("[AnonResume][configuration] operation failed", {
-    errorType: error instanceof Error ? error.name : typeof error,
+  configurationLog.error("operation_failed", {
+    error: serializeSafeError(error),
+    outcome: "failure",
   });
   return NextResponse.json(
     { error: "configuration_operation_failed" },

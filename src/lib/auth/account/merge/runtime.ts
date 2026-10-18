@@ -2,8 +2,13 @@ import {
   deliverAccountMergeNotices,
   runAccountMergeExecutor,
 } from "./executor";
+import {
+  getLogger,
+  serializeSafeError,
+} from "@/lib/observability/logging";
 
 const DEFAULT_INTERVAL_MS = 2_000;
+const accountLog = getLogger("anonresume.account");
 
 type MergeRuntime = {
   running: boolean;
@@ -27,10 +32,24 @@ export async function executeAccountMergeMaintenance() {
   if (state.running) return;
   state.running = true;
   try {
-    await runAccountMergeExecutor();
-    await deliverAccountMergeNotices();
+    const result = await runAccountMergeExecutor();
+    const notices = await deliverAccountMergeNotices();
+    accountLog.info("merge_maintenance_completed", {
+      labels: {
+        completed: result.completed,
+        deliveredNotices: notices.delivered,
+        failed: result.failed + notices.failed,
+        processed: result.processed,
+        processedNotices: notices.processed,
+        waiting: result.waiting,
+      },
+      outcome: "success",
+    });
   } catch (error) {
-    console.error("[AnonResume] Account merge maintenance failed", error);
+    accountLog.error("merge_maintenance_failed", {
+      error: serializeSafeError(error),
+      outcome: "failure",
+    });
   } finally {
     state.running = false;
   }

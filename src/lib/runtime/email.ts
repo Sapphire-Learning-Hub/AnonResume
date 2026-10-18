@@ -6,6 +6,13 @@ import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
 import { getBootstrapNodeEnvironment } from "@/lib/config/bootstrap";
 import type { AccountEmailChallengePurpose } from "@/lib/auth/account/types";
+import {
+  getLogger,
+  serializeSafeError,
+  writeLocalSensitiveEvent,
+} from "@/lib/observability/logging";
+
+const emailLog = getLogger("anonresume.email");
 
 export type EmailDeliveryConfig =
   | {
@@ -624,6 +631,36 @@ async function getEmailDeliveryConfig() {
   return resolveEmailDeliveryConfig(runtime.values);
 }
 
+async function deliverEmail(
+  action: string,
+  config: EmailDeliveryConfig,
+  message: Parameters<Transporter["sendMail"]>[0],
+  localMessage: string,
+) {
+  if (config.transport === "console") {
+    writeLocalSensitiveEvent({
+      action: `${action}_console_delivery`,
+      message: localMessage,
+    });
+    return;
+  }
+
+  try {
+    await getSmtpTransporter(config).sendMail(message);
+    emailLog.info(`${action}_sent`, {
+      labels: { transport: "smtp" },
+      outcome: "success",
+    });
+  } catch (error) {
+    emailLog.error(`${action}_failed`, {
+      error: serializeSafeError(error),
+      labels: { transport: "smtp" },
+      outcome: "failure",
+    });
+    throw error;
+  }
+}
+
 export async function sendVerificationEmail({
   email,
   name,
@@ -641,12 +678,12 @@ export async function sendVerificationEmail({
     url,
   });
 
-  if (config.transport === "console") {
-    console.info(`[AnonResume] Verification URL for ${email}: ${url}`);
-    return;
-  }
-
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "verification_email",
+    config,
+    message,
+    `[AnonResume] Verification URL for ${email}: ${url}`,
+  );
 }
 
 export async function sendPasswordResetEmail({
@@ -666,12 +703,12 @@ export async function sendPasswordResetEmail({
     url,
   });
 
-  if (config.transport === "console") {
-    console.info(`[AnonResume] Password reset URL for ${email}: ${url}`);
-    return;
-  }
-
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "password_reset_email",
+    config,
+    message,
+    `[AnonResume] Password reset URL for ${email}: ${url}`,
+  );
 }
 
 export async function sendSuperAdminActivationEmail({
@@ -688,12 +725,12 @@ export async function sendSuperAdminActivationEmail({
     url,
   });
 
-  if (config.transport === "console") {
-    console.info(`[AnonResume] Super-admin activation URL for ${email}: ${url}`);
-    return;
-  }
-
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "super_admin_activation_email",
+    config,
+    message,
+    `[AnonResume] Super-admin activation URL for ${email}: ${url}`,
+  );
 }
 
 export async function sendUserInvitationEmail({
@@ -716,12 +753,12 @@ export async function sendUserInvitationEmail({
     grantsManagementAccess,
   });
 
-  if (config.transport === "console") {
-    console.info(`[AnonResume] Invitation URL for ${email}: ${url}`);
-    return;
-  }
-
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "user_invitation_email",
+    config,
+    message,
+    `[AnonResume] Invitation URL for ${email}: ${url}`,
+  );
 }
 
 export async function sendProductInvitationEmail({
@@ -744,12 +781,12 @@ export async function sendProductInvitationEmail({
     url,
   });
 
-  if (config.transport === "console") {
-    console.info(`[AnonResume] Product invitation URL for ${email}: ${url}`);
-    return;
-  }
-
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "product_invitation_email",
+    config,
+    message,
+    `[AnonResume] Product invitation URL for ${email}: ${url}`,
+  );
 }
 
 export async function sendAccountVerificationCode(input: {
@@ -765,13 +802,12 @@ export async function sendAccountVerificationCode(input: {
     to: input.email,
     ...input,
   });
-  if (config.transport === "console") {
-    console.info(
-      `[AnonResume] Account verification code for ${input.email}: ${input.code}`,
-    );
-    return;
-  }
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "account_verification_email",
+    config,
+    message,
+    `[AnonResume] Account verification code for ${input.email}: ${input.code}`,
+  );
 }
 
 export async function sendSocialRegistrationVerificationCode(input: {
@@ -786,13 +822,12 @@ export async function sendSocialRegistrationVerificationCode(input: {
     to: input.email,
     ...input,
   });
-  if (config.transport === "console") {
-    console.info(
-      `[AnonResume] Social registration verification code for ${input.email}: ${input.code}`,
-    );
-    return;
-  }
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "social_registration_email",
+    config,
+    message,
+    `[AnonResume] Social registration verification code for ${input.email}: ${input.code}`,
+  );
 }
 
 export async function sendAccountSecurityNotice(input: {
@@ -808,13 +843,12 @@ export async function sendAccountSecurityNotice(input: {
     to: input.email,
     ...input,
   });
-  if (config.transport === "console") {
-    console.info(
-      `[AnonResume] Account security notice for ${input.email}: ${input.event}`,
-    );
-    return;
-  }
-  await getSmtpTransporter(config).sendMail(message);
+  await deliverEmail(
+    "account_security_notice",
+    config,
+    message,
+    `[AnonResume] Account security notice for ${input.email}: ${input.event}`,
+  );
 }
 
 export async function verifyEmailDelivery() {
