@@ -2,6 +2,7 @@ import { initializePendingInstanceSetup } from "@/lib/admin/setup/startup";
 import { startAccountMaintenanceLoop } from "@/lib/auth/account/maintenance-runtime";
 import { startAccountMergeRuntime } from "@/lib/auth/account/merge/runtime";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
+import { getRuntimeConfigManager } from "@/lib/config/runtime";
 import { logNextRequestError } from "@/lib/observability/http/framework-error";
 import {
   getLogger,
@@ -9,6 +10,10 @@ import {
   serializeSafeError,
   writeLocalSensitiveEvent,
 } from "@/lib/observability/logging";
+import {
+  startServiceMetrics,
+  type ServiceMetricsLifecycle,
+} from "@/lib/observability/metrics";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { startWebRestartRuntime } from "@/lib/runtime/restart/process-runtime";
 
@@ -16,6 +21,10 @@ const identity = resolveRuntimeIdentity("web");
 initializeLogging({ identity, role: "web" });
 const runtimeLog = getLogger("anonresume.runtime");
 runtimeLog.info("process_started", { outcome: "success" });
+let metricsLifecycle: ServiceMetricsLifecycle | undefined;
+const stopMetrics = () => {
+  void metricsLifecycle?.stop();
+};
 
 try {
   readBootstrapConfig();
@@ -30,10 +39,27 @@ try {
     });
   }
 
+  const runtimeManager = getRuntimeConfigManager("web");
+  await runtimeManager.start();
+  const snapshot = await runtimeManager.snapshot();
+  metricsLifecycle = await startServiceMetrics({
+    identity,
+    values: snapshot.values,
+  });
+  process.once("SIGINT", stopMetrics);
+  process.once("SIGTERM", stopMetrics);
+
   startAccountMaintenanceLoop();
   startAccountMergeRuntime();
-  await startWebRestartRuntime({ identity });
+  await startWebRestartRuntime({
+    beforeSignal: () => metricsLifecycle?.stop() ?? Promise.resolve(),
+    identity,
+    runtimeManager,
+  });
 } catch (error) {
+  process.off("SIGINT", stopMetrics);
+  process.off("SIGTERM", stopMetrics);
+  await metricsLifecycle?.stop();
   runtimeLog.error("process_startup_failed", {
     error: serializeSafeError(error),
     outcome: "failure",

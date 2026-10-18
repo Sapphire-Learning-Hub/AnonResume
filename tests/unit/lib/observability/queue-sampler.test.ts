@@ -62,6 +62,6 @@ it("exports cached queue state and skips overlapping refreshes", async () => {
     }),
   ]);
 
-  sampler.stop();
+  await sampler.stop();
   await capture.shutdown();
 });

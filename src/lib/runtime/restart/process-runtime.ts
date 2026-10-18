@@ -80,6 +80,7 @@ async function resolveCoordinator(
 
 export async function startWebRestartRuntime(
   options: SharedRuntimeOptions & {
+    beforeSignal?: () => Promise<void>;
     responseGraceMs?: number;
     schedule?: (callback: () => void, delay: number) => unknown;
     signalProcess?: (signal: NodeJS.Signals) => void;
@@ -108,16 +109,24 @@ export async function startWebRestartRuntime(
       transactionId: request.operationId,
     });
     schedule(() => {
-      void request.markAwaitingStartup().then((changed) => {
-        if (changed) {
-          runtimeLog.info("restart_awaiting_startup", {
+      void (async () => {
+        try {
+          await options.beforeSignal?.();
+        } catch {
+          runtimeLog.warn("restart_pre_signal_cleanup_failed", {
             labels: { consumer: request.consumer },
-            outcome: "success",
+            outcome: "failure",
             transactionId: request.operationId,
           });
-          signalProcess("SIGTERM");
         }
-      });
+        if (!await request.markAwaitingStartup()) return;
+        runtimeLog.info("restart_awaiting_startup", {
+          labels: { consumer: request.consumer },
+          outcome: "success",
+          transactionId: request.operationId,
+        });
+        signalProcess("SIGTERM");
+      })();
     }, options.responseGraceMs ?? DEFAULT_WEB_RESPONSE_GRACE_MS);
   }).catch(() => undefined);
 

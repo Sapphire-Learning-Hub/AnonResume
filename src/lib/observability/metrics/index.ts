@@ -1,5 +1,9 @@
 export { applicationMetrics } from "./instruments";
 export {
+  startServiceMetrics,
+  type ServiceMetricsLifecycle,
+} from "./lifecycle";
+export {
   initializeMetrics,
   shutdownMetrics,
   type MetricsRuntime,

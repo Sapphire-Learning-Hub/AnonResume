@@ -84,10 +84,11 @@ export function startQueueMetricsSampler(
 
   return {
     refresh,
-    stop() {
-      if (stopped) return;
+    async stop() {
+      if (stopped) return inFlight;
       stopped = true;
       scheduled.cancel();
+      await inFlight;
     },
   };
 }
