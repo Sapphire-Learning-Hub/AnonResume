@@ -3,6 +3,7 @@ import {
   runWithLogContext,
   serializeSafeError,
 } from "@/lib/observability/logging";
+import { applicationMetrics } from "@/lib/observability/metrics";
 
 import {
   REQUEST_ID_HEADER,
@@ -65,6 +66,10 @@ export function withRequestLogging<
       requestId: identity.requestId,
       upstreamRequestId: identity.upstreamRequestId,
     };
+    applicationMetrics.recordHttpRequestStarted({
+      method: request.method,
+      routePattern,
+    });
 
     return runWithLogContext(logContext, async () => {
       try {
@@ -73,10 +78,18 @@ export function withRequestLogging<
           identity.requestId,
         );
         const failed = response.status >= 400;
+        const durationNs = elapsedNanoseconds(startedAt);
+        applicationMetrics.recordHttpRequestCompleted({
+          durationSeconds: durationNs / 1_000_000_000,
+          method: request.method,
+          outcome: failed ? "failure" : "success",
+          routePattern,
+          statusCode: response.status,
+        });
 
         if (!(options.suppressSuccessfulAccessLog && !failed)) {
           const fields = {
-            durationNs: elapsedNanoseconds(startedAt),
+            durationNs,
             outcome: failed ? "failure" as const : "success" as const,
             statusCode: response.status,
           };
@@ -104,10 +117,17 @@ export function withRequestLogging<
 
         return response;
       } catch (error) {
+        const durationNs = elapsedNanoseconds(startedAt);
+        applicationMetrics.recordHttpRequestCompleted({
+          durationSeconds: durationNs / 1_000_000_000,
+          method: request.method,
+          outcome: "failure",
+          routePattern,
+        });
         logger.error(
           "http_request_failed",
           {
-            durationNs: elapsedNanoseconds(startedAt),
+            durationNs,
             error: serializeSafeError(error),
             outcome: "failure",
           },

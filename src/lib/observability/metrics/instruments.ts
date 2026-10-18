@@ -8,9 +8,13 @@ import type {
   HttpMetricCompletion,
   HttpMetricInput,
   MetricAttributes,
+  RuntimeMetricsSnapshot,
 } from "./types";
 
 interface ApplicationInstrumentBindings {
+  databaseConnections: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
   httpActiveRequests: {
     add(value: number, attributes?: MetricAttributes): void;
   };
@@ -20,12 +24,31 @@ interface ApplicationInstrumentBindings {
   httpRequests: {
     add(value: number, attributes?: MetricAttributes): void;
   };
+  processCpuTime: {
+    add(value: number, attributes?: MetricAttributes): void;
+  };
+  processEventLoopDelay: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  processMemoryUsage: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  processUptime: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
 }
 
 function createApplicationInstrumentBindings(
   meter: Meter,
 ): ApplicationInstrumentBindings {
   return {
+    databaseConnections: meter.createGauge(
+      "anonresume.db.client.connections",
+      {
+        description: "PostgreSQL client connections by state",
+        unit: "{connection}",
+      },
+    ),
     httpActiveRequests: meter.createUpDownCounter(
       "anonresume.http.server.active_requests",
       {
@@ -59,6 +82,28 @@ function createApplicationInstrumentBindings(
       description: "Number of completed HTTP API requests",
       unit: "{request}",
     }),
+    processCpuTime: meter.createCounter("anonresume.process.cpu.time", {
+      description: "CPU time consumed by the process",
+      unit: "s",
+    }),
+    processEventLoopDelay: meter.createGauge(
+      "anonresume.process.event_loop.delay",
+      {
+        description: "Node.js event loop delay",
+        unit: "s",
+      },
+    ),
+    processMemoryUsage: meter.createGauge(
+      "anonresume.process.memory.usage",
+      {
+        description: "Memory used by the process",
+        unit: "By",
+      },
+    ),
+    processUptime: meter.createGauge("anonresume.process.uptime", {
+      description: "Process uptime",
+      unit: "s",
+    }),
   };
 }
 
@@ -91,6 +136,29 @@ class ApplicationMetrics {
       Math.max(0, input.durationSeconds),
       attributes,
     );
+  }
+
+  recordRuntimeSnapshot(snapshot: RuntimeMetricsSnapshot) {
+    const bindings = this.bindings;
+    if (!bindings) return;
+
+    for (const [state, value] of Object.entries(snapshot.database)) {
+      bindings.databaseConnections.record(value, { state });
+    }
+    bindings.processCpuTime.add(snapshot.cpuSystemSeconds, { mode: "system" });
+    bindings.processCpuTime.add(snapshot.cpuUserSeconds, { mode: "user" });
+    bindings.processEventLoopDelay.record(
+      snapshot.eventLoopDelayMeanSeconds,
+      { quantile: "mean" },
+    );
+    bindings.processEventLoopDelay.record(
+      snapshot.eventLoopDelayP99Seconds,
+      { quantile: "p99" },
+    );
+    for (const [type, value] of Object.entries(snapshot.memory)) {
+      bindings.processMemoryUsage.record(value, { type });
+    }
+    bindings.processUptime.record(snapshot.uptimeSeconds);
   }
 }
 

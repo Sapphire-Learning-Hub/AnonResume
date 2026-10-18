@@ -19,4 +19,25 @@ export interface JobMetricInput {
   outcome: string;
 }
 
+export interface RuntimeMetricsSnapshot {
+  cpuSystemSeconds: number;
+  cpuUserSeconds: number;
+  database: {
+    active: number;
+    idle: number;
+    total: number;
+    waiting: number;
+  };
+  eventLoopDelayMeanSeconds: number;
+  eventLoopDelayP99Seconds: number;
+  memory: {
+    arrayBuffers: number;
+    external: number;
+    heapTotal: number;
+    heapUsed: number;
+    rss: number;
+  };
+  uptimeSeconds: number;
+}
+
 export type MetricAttributes = Attributes;
