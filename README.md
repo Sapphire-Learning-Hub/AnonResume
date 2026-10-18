@@ -78,6 +78,8 @@ docker compose --env-file compose.env logs web
 
 默认编排各启动一个 AI Worker 和 PDF Worker，并为它们提供稳定实例标识。扩容 Worker 时，每个副本必须设置唯一的 `ANONRESUME_INSTANCE_ID`。如需使用镜像代理，请通过 Docker 凭据存储登录并配置镜像来源，不要把仓库密码写入 `compose.env` 或 Compose 文件。
 
+Web 与 Worker 会向标准输出写入结构化运行日志。需要接入 ELK、企业日志平台或启动本地三件套时，请参阅[日志与 ELK 可观测性指南](./docs/operations/observability.md)。普通部署不依赖 ELK。
+
 ### 本地运行
 
 ```bash
@@ -217,6 +219,8 @@ AnonResume 使用 Next.js 16、React 19、TypeScript、Ant Design、Tiptap、Zus
 | `bun run admin:doctor` | 检查管理系统状态 |
 | `bun run admin:repair-super-admin` | 修复多超管异常状态 |
 | `bun run admin:reset-mfa` | 通过 CLI 重置超管 MFA |
+
+日志字段、安全边界、本地 ELK 和企业采集方式见[可观测性运维文档](./docs/operations/observability.md)。
 
 提交公开版本前请至少运行：
 
