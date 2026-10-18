@@ -84,6 +84,7 @@ describe("useResumeMarkdownSession", () => {
   });
 
   it("shows a valid candidate immediately and commits it as one debounced transaction", async () => {
+    vi.useFakeTimers();
     const { result, store } = setup(undefined, 5);
     await act(async () => result.current.enter());
     const nextSource = result.current.source.replace(
@@ -93,11 +94,13 @@ describe("useResumeMarkdownSession", () => {
 
     act(() => result.current.setSource(nextSource));
     expect(result.current.hasSourceChanges).toBe(true);
-    await waitFor(() =>
-      expect(result.current.previewDocument.meta.title).toBe("Markdown 简历"),
-    );
+    expect(result.current.previewDocument.meta.title).toBe("Markdown 简历");
+
+    await act(async () => vi.advanceTimersByTimeAsync(4));
     expect(store.getState().history.past).toHaveLength(0);
-    await waitFor(() => expect(store.getState().history.past).toHaveLength(1));
+
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(store.getState().history.past).toHaveLength(1);
     expect(store.getState().document.meta.title).toBe("Markdown 简历");
     await act(async () => {
       await expect(result.current.exit()).resolves.toBe(true);
