@@ -8,7 +8,13 @@ export { startRuntimeMetricsSampler } from "./runtime-sampler";
 export type {
   HttpMetricCompletion,
   HttpMetricInput,
+  JobMetricCompletion,
   JobMetricInput,
+  JobMetricStart,
   MetricJobType,
   MetricOutcome,
+  QueueMetricsSnapshot,
+  RuntimeMetricsSnapshot,
+  WorkerMetricInput,
+  WorkerOperationFailureMetric,
 } from "./types";

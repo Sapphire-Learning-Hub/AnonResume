@@ -26,7 +26,7 @@ const JOB_TYPES = new Set<MetricJobType>(["ai", "pdf", "unknown"]);
 const SAFE_ROUTE_PATTERN =
   /^\/api(?:\/(?:[A-Za-z0-9_-]+|\[(?:\.\.\.)?[A-Za-z0-9_-]+\])){0,8}$/;
 
-function normalizeOutcome(value: string): MetricOutcome {
+export function normalizeMetricOutcome(value: string): MetricOutcome {
   return OUTCOMES.has(value as MetricOutcome)
     ? value as MetricOutcome
     : "unknown";
@@ -61,7 +61,7 @@ export function normalizeHttpMetricAttributes(
 ): MetricAttributes {
   return {
     ...normalizeHttpActiveAttributes(input),
-    "event.outcome": normalizeOutcome(input.outcome),
+    "event.outcome": normalizeMetricOutcome(input.outcome),
     "http.response.status_code_class": normalizeStatusClass(input.statusCode),
   };
 }
@@ -70,9 +70,17 @@ export function normalizeJobMetricAttributes(
   input: JobMetricInput,
 ): MetricAttributes {
   return {
-    "event.outcome": normalizeOutcome(input.outcome),
+    "event.outcome": normalizeMetricOutcome(input.outcome),
     "job.type": JOB_TYPES.has(input.jobType as MetricJobType)
       ? input.jobType
+      : "unknown",
+  };
+}
+
+export function normalizeJobTypeAttributes(jobType: string): MetricAttributes {
+  return {
+    "job.type": JOB_TYPES.has(jobType as MetricJobType)
+      ? jobType
       : "unknown",
   };
 }

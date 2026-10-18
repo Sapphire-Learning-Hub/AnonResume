@@ -5,7 +5,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-import { and, asc, count, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, lt, min, or, sql } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
 import type { ResumeDocument } from "@/domain/resume/schema";
@@ -21,6 +21,33 @@ import { getLogger } from "@/lib/observability/logging";
 
 const PDF_QUEUE_LOCK = "anonresume:pdf-export-capacity";
 const pdfLog = getLogger("anonresume.pdf");
+const PDF_QUEUE_STATES = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+
+export async function readPdfQueueMetricsSnapshot() {
+  const rows = await db
+    .select({
+      count: count(),
+      oldestCreatedAt: min(pdfExportJobs.createdAt),
+      status: pdfExportJobs.status,
+    })
+    .from(pdfExportJobs)
+    .groupBy(pdfExportJobs.status);
+  const counts: Record<string, number> = Object.fromEntries(
+    PDF_QUEUE_STATES.map((status) => [status, 0]),
+  );
+  let oldestQueuedAt: Date | null = null;
+  for (const row of rows) {
+    counts[row.status] = row.count;
+    if (row.status === "queued") oldestQueuedAt = row.oldestCreatedAt;
+  }
+  return { counts, oldestQueuedAt };
+}
 
 export interface PdfExportConfiguration {
   allowAnonymous: boolean;

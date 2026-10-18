@@ -26,6 +26,7 @@ import {
   getLogger,
   serializeSafeError,
 } from "@/lib/observability/logging";
+import { applicationMetrics } from "@/lib/observability/metrics";
 
 const runtimeLog = getLogger("anonresume.runtime");
 
@@ -173,6 +174,10 @@ export async function runAiWorker(options: {
           retentionIntervalMs: configuration.retentionIntervalMs,
         },
       });
+      applicationMetrics.recordWorkerHeartbeat({
+        outcome: "success",
+        workerType: "ai",
+      });
       if (heartbeatFailed) {
         heartbeatFailed = false;
         runtimeLog.info("worker_heartbeat_recovered", {
@@ -181,6 +186,14 @@ export async function runAiWorker(options: {
         });
       }
     } catch (error) {
+      applicationMetrics.recordWorkerHeartbeat({
+        outcome: "failure",
+        workerType: "ai",
+      });
+      applicationMetrics.recordWorkerOperationFailure({
+        operation: "heartbeat",
+        workerType: "ai",
+      });
       logger.error("[AnonResume] AI worker heartbeat failed", error);
       if (!heartbeatFailed) {
         heartbeatFailed = true;
@@ -203,6 +216,10 @@ export async function runAiWorker(options: {
           );
         }
       } catch (error) {
+        applicationMetrics.recordWorkerOperationFailure({
+          operation: "recovery",
+          workerType: "ai",
+        });
         logger.error("[AnonResume] AI worker recovery failed", error);
       } finally {
         nextRecoveryAt = currentMs + configuration.recoveryIntervalMs;
@@ -220,6 +237,10 @@ export async function runAiWorker(options: {
           );
         }
       } catch (error) {
+        applicationMetrics.recordWorkerOperationFailure({
+          operation: "retention",
+          workerType: "ai",
+        });
         logger.error("[AnonResume] AI worker retention failed", error);
       } finally {
         nextRetentionAt = currentMs + configuration.retentionIntervalMs;
@@ -240,6 +261,14 @@ export async function runAiWorker(options: {
           encryptionKey,
         });
         if (prepared) {
+          const executionStartedAt = process.hrtime.bigint();
+          applicationMetrics.recordJobStarted({
+            jobType: "ai",
+            queueWaitSeconds: Math.max(
+              0,
+              (current.getTime() - prepared.queuedAt.getTime()) / 1_000,
+            ),
+          });
           const claimedConfiguration = Object.freeze({
             ...prepared.configuration,
             credentialKeys,
@@ -253,7 +282,23 @@ export async function runAiWorker(options: {
           };
           const execution = operations
             .executeRun(claimed, options.signal)
+            .then(() => {
+              applicationMetrics.recordJobCompleted({
+                durationSeconds: Number(
+                  process.hrtime.bigint() - executionStartedAt,
+                ) / 1_000_000_000,
+                jobType: "ai",
+                outcome: "success",
+              });
+            })
             .catch((error) => {
+              applicationMetrics.recordJobCompleted({
+                durationSeconds: Number(
+                  process.hrtime.bigint() - executionStartedAt,
+                ) / 1_000_000_000,
+                jobType: "ai",
+                outcome: "failure",
+              });
               logger.error("[AnonResume] AI worker execution failed", error);
             })
             .finally(() => {
@@ -262,6 +307,10 @@ export async function runAiWorker(options: {
           activeExecution = execution;
         }
       } catch (error) {
+        applicationMetrics.recordWorkerOperationFailure({
+          operation: "claim",
+          workerType: "ai",
+        });
         logger.error("[AnonResume] AI worker queue claim failed", error);
       }
     }

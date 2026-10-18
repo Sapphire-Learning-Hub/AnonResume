@@ -19,6 +19,31 @@ export interface JobMetricInput {
   outcome: string;
 }
 
+export interface JobMetricStart {
+  jobType: string;
+  queueWaitSeconds: number;
+}
+
+export interface JobMetricCompletion extends JobMetricInput {
+  durationSeconds: number;
+}
+
+export interface QueueMetricsSnapshot {
+  counts: Readonly<Record<string, number>>;
+  jobType: string;
+  oldestQueuedAgeSeconds: number;
+}
+
+export interface WorkerMetricInput {
+  outcome: string;
+  workerType: string;
+}
+
+export interface WorkerOperationFailureMetric {
+  operation: string;
+  workerType: string;
+}
+
 export interface RuntimeMetricsSnapshot {
   cpuSystemSeconds: number;
   cpuUserSeconds: number;

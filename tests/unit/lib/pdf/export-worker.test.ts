@@ -19,7 +19,10 @@ import {
   createGeneratedResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume/repository";
-import { initializeLogCapture } from "../../../support/observability";
+import {
+  initializeLogCapture,
+  initializeMetricCapture,
+} from "../../../support/observability";
 
 describe("PDF export worker", () => {
   function configuration(overrides: Record<string, unknown> = {}) {
@@ -71,6 +74,7 @@ describe("PDF export worker", () => {
   });
 
   it("renders the queued document snapshot and completes the job", async () => {
+    const metricCapture = await initializeMetricCapture("pdf-worker");
     const capture = initializeLogCapture("pdf-worker");
     const queued = await enqueuePdfExport(
       {
@@ -142,6 +146,16 @@ describe("PDF export worker", () => {
         }),
       ]),
     );
+    const metricNames = (await metricCapture.metrics()).map(
+      (metric) => metric.descriptor.name,
+    );
+    expect(metricNames).toEqual(expect.arrayContaining([
+      "anonresume.jobs.started",
+      "anonresume.jobs.completed",
+      "anonresume.jobs.active",
+      "anonresume.jobs.queue_wait.duration",
+    ]));
+    await metricCapture.shutdown();
   });
 
   it("emits a safe failure event when rendering fails", async () => {

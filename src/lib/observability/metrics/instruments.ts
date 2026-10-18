@@ -3,13 +3,45 @@ import type { Meter } from "@opentelemetry/api";
 import {
   normalizeHttpActiveAttributes,
   normalizeHttpMetricAttributes,
+  normalizeJobMetricAttributes,
+  normalizeJobTypeAttributes,
+  normalizeMetricOutcome,
 } from "./attributes";
 import type {
   HttpMetricCompletion,
   HttpMetricInput,
+  JobMetricCompletion,
+  JobMetricStart,
   MetricAttributes,
+  QueueMetricsSnapshot,
   RuntimeMetricsSnapshot,
+  WorkerMetricInput,
+  WorkerOperationFailureMetric,
 } from "./types";
+
+const QUEUE_STATES = new Set([
+  "cancelled",
+  "complete",
+  "completed",
+  "failed",
+  "interrupted",
+  "preparing",
+  "queued",
+  "running",
+  "settlement_pending",
+  "stopped",
+  "streaming",
+]);
+const WORKER_TYPES = new Set(["ai", "pdf", "web"]);
+const WORKER_OPERATIONS = new Set([
+  "claim",
+  "cleanup",
+  "heartbeat",
+  "poll",
+  "queue_sample",
+  "recovery",
+  "retention",
+]);
 
 interface ApplicationInstrumentBindings {
   databaseConnections: {
@@ -24,6 +56,21 @@ interface ApplicationInstrumentBindings {
   httpRequests: {
     add(value: number, attributes?: MetricAttributes): void;
   };
+  jobsActive: {
+    add(value: number, attributes?: MetricAttributes): void;
+  };
+  jobsCompleted: {
+    add(value: number, attributes?: MetricAttributes): void;
+  };
+  jobsDuration: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  jobsQueueWait: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  jobsStarted: {
+    add(value: number, attributes?: MetricAttributes): void;
+  };
   processCpuTime: {
     add(value: number, attributes?: MetricAttributes): void;
   };
@@ -35,6 +82,18 @@ interface ApplicationInstrumentBindings {
   };
   processUptime: {
     record(value: number, attributes?: MetricAttributes): void;
+  };
+  queueJobs: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  queueOldestAge: {
+    record(value: number, attributes?: MetricAttributes): void;
+  };
+  workerHeartbeat: {
+    add(value: number, attributes?: MetricAttributes): void;
+  };
+  workerOperationFailures: {
+    add(value: number, attributes?: MetricAttributes): void;
   };
 }
 
@@ -82,6 +141,29 @@ function createApplicationInstrumentBindings(
       description: "Number of completed HTTP API requests",
       unit: "{request}",
     }),
+    jobsActive: meter.createUpDownCounter("anonresume.jobs.active", {
+      description: "Number of jobs currently being processed",
+      unit: "{job}",
+    }),
+    jobsCompleted: meter.createCounter("anonresume.jobs.completed", {
+      description: "Number of completed jobs by outcome",
+      unit: "{job}",
+    }),
+    jobsDuration: meter.createHistogram("anonresume.jobs.duration", {
+      description: "Job processing duration",
+      unit: "s",
+    }),
+    jobsQueueWait: meter.createHistogram(
+      "anonresume.jobs.queue_wait.duration",
+      {
+        description: "Time a job waited before being claimed",
+        unit: "s",
+      },
+    ),
+    jobsStarted: meter.createCounter("anonresume.jobs.started", {
+      description: "Number of jobs started",
+      unit: "{job}",
+    }),
     processCpuTime: meter.createCounter("anonresume.process.cpu.time", {
       description: "CPU time consumed by the process",
       unit: "s",
@@ -104,6 +186,28 @@ function createApplicationInstrumentBindings(
       description: "Process uptime",
       unit: "s",
     }),
+    queueJobs: meter.createGauge("anonresume.queue.jobs", {
+      description: "Jobs in the shared queue by state",
+      unit: "{job}",
+    }),
+    queueOldestAge: meter.createGauge(
+      "anonresume.queue.oldest_queued.age",
+      {
+        description: "Age of the oldest queued job",
+        unit: "s",
+      },
+    ),
+    workerHeartbeat: meter.createCounter("anonresume.worker.heartbeat", {
+      description: "Worker heartbeat attempts by outcome",
+      unit: "{heartbeat}",
+    }),
+    workerOperationFailures: meter.createCounter(
+      "anonresume.worker.operation.failures",
+      {
+        description: "Worker operation failures",
+        unit: "{failure}",
+      },
+    ),
   };
 }
 
@@ -159,6 +263,62 @@ class ApplicationMetrics {
       bindings.processMemoryUsage.record(value, { type });
     }
     bindings.processUptime.record(snapshot.uptimeSeconds);
+  }
+
+  recordJobStarted(input: JobMetricStart) {
+    const attributes = normalizeJobTypeAttributes(input.jobType);
+    this.bindings?.jobsStarted.add(1, attributes);
+    this.bindings?.jobsActive.add(1, attributes);
+    this.bindings?.jobsQueueWait.record(
+      Math.max(0, input.queueWaitSeconds),
+      attributes,
+    );
+  }
+
+  recordJobCompleted(input: JobMetricCompletion) {
+    const typeAttributes = normalizeJobTypeAttributes(input.jobType);
+    this.bindings?.jobsActive.add(-1, typeAttributes);
+    const attributes = normalizeJobMetricAttributes(input);
+    this.bindings?.jobsCompleted.add(1, attributes);
+    this.bindings?.jobsDuration.record(
+      Math.max(0, input.durationSeconds),
+      attributes,
+    );
+  }
+
+  recordQueueSnapshot(snapshot: QueueMetricsSnapshot) {
+    const typeAttributes = normalizeJobTypeAttributes(snapshot.jobType);
+    for (const [state, value] of Object.entries(snapshot.counts)) {
+      if (!QUEUE_STATES.has(state)) continue;
+      this.bindings?.queueJobs.record(Math.max(0, value), {
+        ...typeAttributes,
+        "queue.state": state,
+      });
+    }
+    this.bindings?.queueOldestAge.record(
+      Math.max(0, snapshot.oldestQueuedAgeSeconds),
+      typeAttributes,
+    );
+  }
+
+  recordWorkerHeartbeat(input: WorkerMetricInput) {
+    this.bindings?.workerHeartbeat.add(1, {
+      "event.outcome": normalizeMetricOutcome(input.outcome),
+      "worker.type": WORKER_TYPES.has(input.workerType)
+        ? input.workerType
+        : "unknown",
+    });
+  }
+
+  recordWorkerOperationFailure(input: WorkerOperationFailureMetric) {
+    this.bindings?.workerOperationFailures.add(1, {
+      operation: WORKER_OPERATIONS.has(input.operation)
+        ? input.operation
+        : "unknown",
+      "worker.type": WORKER_TYPES.has(input.workerType)
+        ? input.workerType
+        : "unknown",
+    });
   }
 }
 

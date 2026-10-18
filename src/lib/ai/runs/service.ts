@@ -190,6 +190,7 @@ export interface PreparedAiRun {
 
 export interface ClaimedAiRun extends PreparedAiRun {
   leaseOwner: string;
+  queuedAt: Date;
 }
 
 export class AiRunRateLimitedError extends Error {
