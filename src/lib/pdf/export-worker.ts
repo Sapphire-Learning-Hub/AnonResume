@@ -29,6 +29,9 @@ import {
   serializeSafeError,
 } from "@/lib/observability/logging";
 import { applicationMetrics } from "@/lib/observability/metrics";
+import { withTaskDiagnostics, recordDiagnosticFailure } from "@/lib/observability/diagnostics/tasks";
+import { finishDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
+import { withDiagnosticSpan } from "@/lib/observability/tracing/span";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;
@@ -47,7 +50,7 @@ type PdfRuntimeManager = Pick<
 >;
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "PDF export failed";
+  return serializeSafeError(error).code ?? "pdf_export_failed";
 }
 
 function delay(ms: number, signal?: AbortSignal) {
@@ -65,7 +68,11 @@ function delay(ms: number, signal?: AbortSignal) {
   });
 }
 
-export async function processPdfExportJob(
+export function processPdfExportJob(job: ClaimedPdfExportJob, options: Parameters<typeof executePdfExportJob>[1]) {
+  return withTaskDiagnostics(job.id, job.diagnosticContext, "pdf", () => executePdfExportJob(job, options));
+}
+
+async function executePdfExportJob(
   job: ClaimedPdfExportJob,
   options: {
     workerId: string;
@@ -109,7 +116,7 @@ export async function processPdfExportJob(
     const workerToken = createPdfExportWorkerToken(job.id);
     const printUrl = new URL(`/pdf-export/${job.id}/print`, options.appOrigin);
 
-    const result = await exportPdf({
+    const result = await withDiagnosticSpan("app.pdf.render",() => exportPdf({
       printUrl: printUrl.toString(),
       readyFlag: PRINT_READY_FLAG,
       requestCookies: [
@@ -125,7 +132,7 @@ export async function processPdfExportJob(
         },
       ],
       signal: controller.signal,
-    });
+    }));
     const cancelRequested = await renewPdfExportLease({
       jobId: job.id,
       workerId: options.workerId,
@@ -143,12 +150,12 @@ export async function processPdfExportJob(
       return;
     }
 
-    await completePdfExport({
+    await withDiagnosticSpan("app.pdf.save",() => completePdfExport({
       jobId: job.id,
       workerId: options.workerId,
       result,
       configuration: options.configuration,
-    });
+    }));
     outcome = "success";
     pdfLog.info("export_completed", {
       durationNs: Number(process.hrtime.bigint() - startedAt),
@@ -157,6 +164,7 @@ export async function processPdfExportJob(
     });
   } catch (error) {
     outcome = controller.signal.aborted ? "cancelled" : "failure";
+    if (!controller.signal.aborted) recordDiagnosticFailure(error, "pdf.render", job.id);
     await failPdfExport({
       jobId: job.id,
       workerId: options.workerId,
@@ -171,6 +179,7 @@ export async function processPdfExportJob(
       transactionId: job.id,
     });
   } finally {
+    finishDiagnosticTask(job.id,"pdf",outcome);
     applicationMetrics.recordJobCompleted({
       durationSeconds: Number(process.hrtime.bigint() - startedAt) /
         1_000_000_000,

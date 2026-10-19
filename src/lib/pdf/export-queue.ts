@@ -8,6 +8,9 @@ import {
 import { and, asc, count, eq, gte, inArray, lt, min, or, sql } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
+import { getDiagnosticContext, taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
+import { withTaskDiagnostics } from "@/lib/observability/diagnostics/tasks";
+import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
 import type { ResumeDocument } from "@/domain/resume/schema";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
 import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/executor";
@@ -230,11 +233,13 @@ export async function enqueuePdfExport(
         requesterUserId: params.requesterUserId ?? null,
         accessTokenHash: hashAccessToken(accessToken),
         document: params.document,
+        diagnosticContext: getDiagnosticContext() ?? null,
         filename: params.filename,
       })
       .returning({ id: pdfExportJobs.id });
   });
 
+  handoffDiagnosticTask(job!.id, "pdf");
   return {
     jobId: job!.id,
     accessToken,
@@ -288,6 +293,7 @@ export async function getPdfExportStatus(
 
   return {
     id: row.id,
+    diagnosticId: taskDiagnosticContext(row.id, row.diagnosticContext).diagnosticId,
     status: row.status,
     position,
     queuedCount,
@@ -415,6 +421,7 @@ export async function adminRetryPdfExport(
         requesterUserId: row.requesterUserId,
         accessTokenHash: hashAccessToken(randomBytes(32).toString("base64url")),
         document: row.document,
+        diagnosticContext: getDiagnosticContext() ?? null,
         filename: row.filename,
       })
       .returning({ id: pdfExportJobs.id });
@@ -651,6 +658,7 @@ export async function getPdfExportDocumentForWorker(
   const rows = await db
     .select({
       document: pdfExportJobs.document,
+      diagnosticContext: pdfExportJobs.diagnosticContext,
       filename: pdfExportJobs.filename,
       status: pdfExportJobs.status,
       createdAt: pdfExportJobs.createdAt,
@@ -668,11 +676,10 @@ export async function getPdfExportDocumentForWorker(
     throw new PdfExportNotFoundError(params.jobId);
   }
 
-  return {
-    document: row.document,
-    filename: row.filename,
-    status: row.status,
-  };
+  return withTaskDiagnostics(params.jobId, row.diagnosticContext, "pdf", async () => {
+    getLogger("anonresume.pdf").info("print_document_loaded", { outcome: "success", transactionId: params.jobId });
+    return { document: row.document, filename: row.filename, status: row.status };
+  });
 }
 
 export async function deleteExpiredPdfExportResults(

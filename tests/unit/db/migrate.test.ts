@@ -207,6 +207,7 @@ describe("database migrations", () => {
       "configuration.publish",
       "configuration.history",
       "configuration.rollback",
+      "diagnostics.read",
     ]);
   });
 

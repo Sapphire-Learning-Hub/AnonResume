@@ -1,4 +1,6 @@
 "use client";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 import { Button, Input } from "antd";
 import { useState } from "react";
@@ -53,7 +55,7 @@ export function EmailChangeFlow({
     } catch (error) {
       toast.error({
         key: "account-action-error",
-        content: accountRequestErrorMessage(error, t),
+        content: getErrorDiagnostic(error) ? <>{accountRequestErrorMessage(error, t)}<DiagnosticReference diagnosticId={getErrorDiagnostic(error)} /></> : accountRequestErrorMessage(error, t),
       });
     } finally {
       setBusy(undefined);

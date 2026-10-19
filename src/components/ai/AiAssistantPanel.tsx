@@ -77,7 +77,7 @@ export function AiAssistantPanel({
 }) {
   const { styles } = useAiAssistantPanelStyles();
   const { t } = useI18n();
-  const { notification, toast } = useAppFeedback();
+  const { toast, failure } = useAppFeedback();
   const [draft, setDraft] = useState("");
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -85,7 +85,7 @@ export function AiAssistantPanel({
   function reportError(error: unknown) {
     const code =
       error instanceof AiClientError ? error.code : "ai_request_failed";
-    notification.error({
+    failure(error, {
       key: "ai-assistant-error",
       title: t("ai.error.title"),
       description: t(

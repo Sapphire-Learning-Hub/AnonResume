@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -38,7 +40,7 @@ export function AdminExportActions({
 
   async function run(action: ExportAction) {
     setPending(true);
-    const response = await fetch(
+    const response = await managementFetch(
       `/api/manage/exports/${encodeURIComponent(jobId)}/${action}`,
       { method: "POST" },
     );
@@ -64,7 +66,7 @@ export function AdminExportActions({
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),

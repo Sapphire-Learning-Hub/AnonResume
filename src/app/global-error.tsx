@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { RenderErrorDiagnostic } from "@/components/system/DiagnosticReference";
 
 import { SystemStatePage } from "@/components/system/SystemStatePage";
 import { defaultLocale, getMessages } from "@/i18n/messages";
@@ -18,12 +18,6 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
-  useEffect(() => {
-    console.error("[AnonResume] Root rendering failed", {
-      digest: error.digest,
-    });
-  }, [error.digest]);
-
   return (
     <html
       data-app-accent="anon"
@@ -39,7 +33,7 @@ export default function GlobalError({
           description={messages["system.globalError.description"]}
           onAction={retry}
           title={messages["system.globalError.title"]}
-        />
+        ><RenderErrorDiagnostic error={error} /></SystemStatePage>
       </body>
     </html>
   );

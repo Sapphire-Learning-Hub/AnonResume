@@ -23,6 +23,11 @@ COPY . .
 # Runtime containers replace this non-secret placeholder through DATABASE_URL_FILE.
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build bun run build
 
+# Export only to a restricted local destination when private symbolication is needed.
+# Never publish this target or attach its contents to a public release.
+FROM scratch AS diagnostics-artifacts
+COPY --from=builder /app/.anonresume/diagnostics /diagnostics
+
 FROM base AS runtime-base
 ARG ANONRESUME_BUILD_COMMIT=""
 ARG ANONRESUME_BUILD_TAG="untagged"
@@ -43,6 +48,8 @@ RUN apt-get update \
 COPY --from=production-dependencies --chown=anonresume:anonresume /app/node_modules ./node_modules
 COPY --from=builder --chown=anonresume:anonresume /app/.next/standalone ./
 COPY --from=builder --chown=anonresume:anonresume /app/.next/static ./.next/static
+# Local-only symbolication: not under public/ or .next/static, never served as an asset.
+COPY --from=builder --chown=anonresume:anonresume /app/.anonresume/diagnostics ./.anonresume/diagnostics
 COPY --from=builder --chown=anonresume:anonresume /app/public ./public
 COPY --from=builder --chown=anonresume:anonresume /app/drizzle ./drizzle
 COPY --from=builder --chown=anonresume:anonresume /app/scripts ./scripts

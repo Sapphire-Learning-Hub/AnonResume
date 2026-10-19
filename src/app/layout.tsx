@@ -109,6 +109,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       const runtime = await getRuntimeConfig("web");
       publicRuntimeConfig = {
         aiEnabled: runtime.values.aiEnabled,
+        clientErrorsEnabled: runtime.values.clientErrorsEnabled,
         configurationHealth:
           runtime.health === "restart_required" ? "healthy" : runtime.health,
         privacyPolicyUrl: runtime.values.privacyPolicyUrl,

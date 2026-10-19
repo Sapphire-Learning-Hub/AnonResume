@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 import type { StoreApi } from "zustand/vanilla";
 
 import {
@@ -122,7 +123,7 @@ export function useResumePersistence({
             return;
           }
 
-          store.getState().setSaveStatus("error");
+          store.getState().setSaveStatus("error", getErrorDiagnostic(error));
         }
       }, debounceMs);
     });

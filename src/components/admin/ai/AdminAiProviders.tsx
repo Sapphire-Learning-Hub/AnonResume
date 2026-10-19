@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { ExclamationCircleFilled, PlusOutlined } from "@ant-design/icons";
 import {
   Button,
@@ -191,7 +193,7 @@ export function AdminAiProviders({
   async function saveProvider() {
     const draft = providerDraft;
     if (!draft) return;
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       draft.providerId
         ? `/api/manage/ai/providers/${encodeURIComponent(draft.providerId)}`
         : "/api/manage/ai/providers",
@@ -230,7 +232,7 @@ export function AdminAiProviders({
       return;
     }
     const basePath = `/api/manage/ai/providers/${encodeURIComponent(draft.providerId)}/models`;
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       draft.modelId ? `${basePath}/${encodeURIComponent(draft.modelId)}` : basePath,
       {
         method: draft.modelId ? "PATCH" : "POST",
@@ -260,7 +262,7 @@ export function AdminAiProviders({
   }
 
   async function updateProviderEnabled(item: ProviderItem, enabled: boolean) {
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       `/api/manage/ai/providers/${encodeURIComponent(item.providerId)}`,
       {
         method: "PATCH",
@@ -279,7 +281,7 @@ export function AdminAiProviders({
   }
 
   async function deleteProvider(item: ProviderItem) {
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       `/api/manage/ai/providers/${encodeURIComponent(item.providerId)}`,
       { method: "DELETE" },
     ));
@@ -293,7 +295,7 @@ export function AdminAiProviders({
     model: ProviderModelItem,
     enabled: boolean,
   ) {
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       `/api/manage/ai/providers/${encodeURIComponent(provider.providerId)}/models/${encodeURIComponent(model.modelId)}`,
       {
         method: "PATCH",
@@ -322,7 +324,7 @@ export function AdminAiProviders({
   }
 
   async function deleteModel(model: ProviderModelItem) {
-    const response = await runSensitive(() => fetch(
+    const response = await runSensitive(() => managementFetch(
       `/api/manage/ai/providers/${encodeURIComponent(model.providerId)}/models/${encodeURIComponent(model.modelId)}`,
       { method: "DELETE" },
     ));

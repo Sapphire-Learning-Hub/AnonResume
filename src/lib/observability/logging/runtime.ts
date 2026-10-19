@@ -8,9 +8,12 @@ import {
   type RuntimeIdentity,
 } from "@/lib/runtime/instance-identity";
 import { resolveReleaseMetadata } from "@/lib/runtime/release-metadata";
+import { applicationBuildId } from "@/lib/config/build-metadata";
 
 import { readLoggingConfiguration } from "./config";
 import { redactLogFields } from "./redaction";
+import { getDiagnosticContext } from "@/lib/observability/diagnostics/context";
+import { captureDiagnosticLog } from "@/lib/observability/diagnostics/store/runtime";
 import type {
   ApplicationLogger,
   LogContext,
@@ -90,6 +93,8 @@ function createLogger(
     base: {
       "service.deployment.id": identity.deploymentId,
       "service.session.id": identity.sessionId,
+      "service.build.id": applicationBuildId === "development" ? release.commit ?? "unknown" : applicationBuildId,
+      "service.commit.id": release.commit,
     },
     level: configuration.level,
   };
@@ -135,6 +140,8 @@ function getState() {
 }
 
 function mapFields(fields: LogFields = {}) {
+  const diagnostic = getDiagnosticContext();
+  const span = diagnostic?.traceparent?.split("-");
   fields = redactLogFields(fields);
   const activeContext = getLogContext();
   const context = activeContext
@@ -153,6 +160,8 @@ function mapFields(fields: LogFields = {}) {
 
   return {
     ...(fields.details ?? {}),
+    ...(diagnostic ? { "diagnostic.id": diagnostic.diagnosticId } : {}),
+    ...(span ? { "trace.id": span[1], "span.id": span[2] } : {}),
     ...(fields.durationNs === undefined
       ? {}
       : { "event.duration": fields.durationNs }),
@@ -163,6 +172,7 @@ function mapFields(fields: LogFields = {}) {
           "error.message": fields.error.message,
           "error.stack_trace": fields.error.stackTrace,
           "error.type": fields.error.type,
+          "error.causes": fields.error.causes,
         }
       : {}),
     ...(fields.keyId === undefined ? {} : { key_id: fields.keyId }),
@@ -198,6 +208,7 @@ function write(
   message?: string,
 ) {
   const { logger } = getState();
+  captureDiagnosticLog(level, dataset, action, fields);
   logger[level](
     {
       ...mapFields(fields),

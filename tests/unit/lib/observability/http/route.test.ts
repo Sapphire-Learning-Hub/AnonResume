@@ -82,6 +82,7 @@ describe("route request logging", () => {
     expect(response.status).toBe(201);
     expect(response.headers.get("x-existing")).toBe("preserved");
     expect(response.headers.get(REQUEST_ID_HEADER)).toBe(requestId);
+    expect(response.headers.get("x-diagnostic-id")).toBe(requestId);
     await expect(response.text()).resolves.toBe("private-response-body");
     expect(capture.lines.join("\n")).not.toContain("private-response-body");
     expect(capture.lines.join("\n")).not.toContain("token=secret");
@@ -95,6 +96,7 @@ describe("route request logging", () => {
       "http.request.method": "GET",
       "http.response.status_code": 201,
       "request.id": requestId,
+      "diagnostic.id": requestId,
       "url.path": "/api/resumes/[id]",
     });
   });

@@ -360,6 +360,7 @@ export const aiMessages =
       ]);
 
 const runColumns = {
+  diagnosticContext: jsonb("diagnostic_context").$type<import("@/lib/observability/diagnostics/schema").DiagnosticContext>(),
   id: uuid("id").primaryKey().defaultRandom(),
   kind: text("kind").$type<"conversation" | "resume_review">().notNull().default("conversation"),
   userId: text("user_id").notNull(),

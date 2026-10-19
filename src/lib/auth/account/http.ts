@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { AccountSecurityError } from "./errors";
+import { recordDiagnosticFailure } from "@/lib/observability/diagnostics/tasks";
 
 export function accountErrorResponse(error: unknown) {
   if (error instanceof AccountSecurityError) {
@@ -20,5 +21,6 @@ export function accountErrorResponse(error: unknown) {
     return NextResponse.json({ error: error.code }, { status });
   }
 
+  recordDiagnosticFailure(error, "account.operation");
   return NextResponse.json({ error: "internal_error" }, { status: 500 });
 }

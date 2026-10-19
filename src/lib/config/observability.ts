@@ -33,7 +33,9 @@ function isPrivateHttpHostname(hostname: string) {
     normalized === "::1" ||
     normalized.endsWith(".localhost") ||
     normalized.endsWith(".local") ||
-    !normalized.includes(".")
+    (!normalized.includes(".") && !normalized.includes(":")) ||
+    /^(fc|fd)[a-f0-9]{2}:/.test(normalized) ||
+    /^fe[89ab][a-f0-9]:/.test(normalized)
   ) {
     return true;
   }
@@ -51,12 +53,12 @@ function isPrivateHttpHostname(hostname: string) {
   );
 }
 
-function parseEndpoint(value: string) {
+function parseEndpoint(value: string, field = "metricsOtlpEndpoint", suffix = "/v1/metrics") {
   let endpoint: URL;
   try {
     endpoint = new URL(value);
   } catch {
-    throw new MetricsConfigurationValidationError(["metricsOtlpEndpoint"]);
+    throw new MetricsConfigurationValidationError([field]);
   }
 
   const isHttpAllowed =
@@ -67,14 +69,14 @@ function parseEndpoint(value: string) {
     endpoint.password ||
     endpoint.search ||
     endpoint.hash ||
-    !endpoint.pathname.endsWith("/v1/metrics")
+    !endpoint.pathname.endsWith(suffix)
   ) {
-    throw new MetricsConfigurationValidationError(["metricsOtlpEndpoint"]);
+    throw new MetricsConfigurationValidationError([field]);
   }
   return endpoint.toString();
 }
 
-function parseHeaders(value: string) {
+function parseHeaders(value: string, field = "metricsOtlpHeaders") {
   const headers: Record<string, string> = {};
   if (!value.trim()) return headers;
 
@@ -90,7 +92,7 @@ function parseHeaders(value: string) {
       Object.hasOwn(headers, name) ||
       /[\u0000-\u001f\u007f]/.test(headerValue)
     ) {
-      throw new MetricsConfigurationValidationError(["metricsOtlpHeaders"]);
+      throw new MetricsConfigurationValidationError([field]);
     }
     headers[name] = headerValue;
   }
@@ -120,5 +122,17 @@ export function parseMetricsConfiguration(
 
 export function validatePublishableManagedConfig(config: ManagedConfig) {
   parseMetricsConfiguration(config);
+  parseTracingConfiguration(config);
   return config;
+}
+
+export function parseTracingConfiguration(config: ManagedConfig) {
+  if (!config.tracingEnabled) return { enabled: false } as const;
+  return {
+    enabled: true as const,
+    endpoint: parseEndpoint(config.tracingOtlpEndpoint, "tracingOtlpEndpoint", "/v1/traces"),
+    headers: parseHeaders(config.tracingOtlpHeaders, "tracingOtlpHeaders"),
+    sampleRate: config.tracingSampleRate,
+    exportTimeoutMs: config.tracingExportTimeoutMs,
+  };
 }

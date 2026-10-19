@@ -1,4 +1,5 @@
 import { and, desc, eq, lt, or } from "drizzle-orm";
+import { taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { alias } from "drizzle-orm/pg-core";
 import { aiResumeReviews, aiRuns, db, resumes } from "@/db";
 import { buildReviewContext } from "@/domain/resume/ai/review/context";
@@ -27,6 +28,7 @@ export async function getOwnedResumeReview(input: { userId: string; reviewId: st
   const current = buildReviewContext(validateResumeDocument(row.document));
   return {
     id: row.review.id, runId: row.run.id, input: row.review.input,
+    diagnosticId: taskDiagnosticContext(row.run.id, row.run.diagnosticContext).diagnosticId,
     modelName: row.review.modelName, report: row.review.report, ignoredIssueIds: row.review.ignoredIssueIds,
     createdAt: row.review.createdAt.toISOString(), status: row.run.status, progress: row.run.checkpointProgress,
     failureCode: row.run.failureCode, finalPoints: row.run.finalPoints,

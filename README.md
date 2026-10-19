@@ -80,6 +80,8 @@ docker compose --env-file compose.env logs web
 
 Web 与 Worker 会输出结构化日志，并可通过 OpenTelemetry 向外部平台发送运行指标。接入 ELK、Collector、Prometheus、Grafana 或企业可观测平台时，请参阅[日志与指标可观测性指南](./docs/operations/observability.md)。普通部署不依赖这些外部设施。
 
+获授权的管理员无需安装外部观测平台，即可在管理中台查询故障记录、诊断编号、源码位置和关键阶段时间线。浏览器异常上报及可选的 OTLP 追踪通过配置中心管理。请使用 `bun run build` 私有归档浏览器和服务端源码映射；保留策略、私有归档挂载及离线定位方式也见上述运维指南。
+
 ### 本地运行
 
 ```bash

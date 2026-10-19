@@ -7,6 +7,9 @@ const release = resolveReleaseMetadata();
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  productionBrowserSourceMaps: process.env.ANONRESUME_PRIVATE_MAP_BUILD === "1",
+  experimental: { serverSourceMaps: process.env.ANONRESUME_PRIVATE_MAP_BUILD === "1" },
+  generateBuildId: async () => process.env.ANONRESUME_BUILD_ID ?? crypto.randomUUID(),
   pageExtensions: ["js", "jsx", "md", "mdx", "ts", "tsx"],
   headers() {
     return [
@@ -22,6 +25,7 @@ const nextConfig: NextConfig = {
     ];
   },
   env: {
+    ANONRESUME_BUILD_ID: process.env.ANONRESUME_BUILD_ID ?? "development",
     ANONRESUME_BUILD_COMMIT: release.commit ?? "",
     ANONRESUME_BUILD_TAG: release.tag,
   },

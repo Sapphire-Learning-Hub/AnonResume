@@ -62,7 +62,7 @@ export type AiClientStreamEvent =
     }
   | { sequence: number; type: "proposal_reset" }
   | ({ sequence: number } & Exclude<AiProviderEvent, { type: "tool_call" }>)
-  | { sequence: number; type: "error"; code: string };
+  | { sequence: number; type: "error"; code: string; diagnosticId?: string };
 
 export function encodeAiStreamEvent(event: AiClientStreamEvent) {
   return `${JSON.stringify(event)}\n`;

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { AdminPagedSelect } from "@/components/admin/AdminPagedSelect";
 
 describe("AdminPagedSelect", () => {
+  afterEach(() => vi.unstubAllGlobals());
   it("loads server-filtered options and exposes numbered pages in the popup", async () => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -12,19 +13,13 @@ describe("AdminPagedSelect", () => {
         removeEventListener: vi.fn(),
       }),
     });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [{ id: "role-1", label: "Support" }],
-          page: 1,
-          pageSize: 10,
-          total: 11,
-          totalPages: 2,
-        }),
-        { status: 200 },
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const page=Number(new URL(String(input),"https://example.com").searchParams.get("page"));
+      return Response.json({
+        items:[{id:`role-${page}`,label:page===1 ? "Support" : "Auditor"}],
+        page,pageSize:10,total:11,totalPages:2,
+      });
+    });
 
     render(
       <AdminPagedSelect
@@ -35,19 +30,9 @@ describe("AdminPagedSelect", () => {
     );
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "选择角色" }));
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/manage/roles?page=1&pageSize=10",
-      );
-    });
+    await screen.findByText("Support");
     fireEvent.click(await screen.findByTitle("2"));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/manage/roles?page=2&pageSize=10",
-      );
-    });
-    vi.unstubAllGlobals();
+    await screen.findByText("Auditor");
   });
 
   it("supports selecting multiple roles without losing initial labels", async () => {
@@ -85,6 +70,5 @@ describe("AdminPagedSelect", () => {
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "选择角色" }));
     fireEvent.click(await screen.findByText("Auditor"));
     expect(onChange).toHaveBeenCalledWith(["role-1", "role-2"]);
-    vi.unstubAllGlobals();
   });
 });

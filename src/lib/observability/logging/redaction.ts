@@ -14,7 +14,7 @@ const MAX_STRING_LENGTH = 1_024;
 const MAX_KEY_LENGTH = 128;
 const UNSAFE_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-const RESERVED_DETAIL_KEYS = /^(?:@|ecs\.|event\.|error\.|http\.|labels\.|log\.|request\.|service\.|transaction\.|url\.|key_id$|status_code$)/i;
+const RESERVED_DETAIL_KEYS = /^(?:@|ecs\.|event\.|error\.|http\.|labels\.|log\.|request\.|service\.|transaction\.|diagnostic\.|trace\.|span\.|url\.|key_id$|status_code$)/i;
 const SENSITIVE_NAMES = [
   "authorization",
   "body",
@@ -116,6 +116,7 @@ function sanitizeError(error: SafeErrorFields | undefined) {
   }
 
   return {
+    causes: error.causes?.slice(0, 4).map((cause) => ({ ...cause, stackTrace: sanitizeOptionalString(cause.stackTrace) })),
     code: sanitizeOptionalString(error.code),
     digest: sanitizeOptionalString(error.digest),
     message: truncate(error.message),

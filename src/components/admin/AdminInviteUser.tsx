@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,7 +27,7 @@ export function AdminInviteUser() {
 
   async function submit() {
     setPending(true);
-    const response = await fetch("/api/manage/users/invite", {
+    const response = await managementFetch("/api/manage/users/invite", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, email, roleIds }),
@@ -50,7 +52,7 @@ export function AdminInviteUser() {
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),

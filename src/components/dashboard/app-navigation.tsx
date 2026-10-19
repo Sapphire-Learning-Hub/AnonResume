@@ -127,6 +127,7 @@ const managementItems: ManagementNavigationDefinition[] = [
     labelKey: "management.navigation.configuration",
     permission: "configuration.read",
   },
+  { href: "/app/manage/diagnostics", icon: "audit", id: "manage-diagnostics", labelKey: "management.navigation.diagnostics", permission: "diagnostics.read" },
   {
     href: "/app/manage/mfa-resets",
     icon: "approvals",

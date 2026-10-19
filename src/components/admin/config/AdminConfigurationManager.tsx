@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Alert, Button, Collapse, Form, Modal, Space, Tag } from "antd";
 import { createStyles } from "antd-style";
 import { useRouter } from "next/navigation";
@@ -9,6 +11,8 @@ import { z } from "zod";
 import { useAdminAiSensitiveAction } from "@/components/admin/ai/useAdminAiSensitiveAction";
 import { AdminPage } from "@/components/admin/AdminPage";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { ManagedConfigFieldView } from "@/lib/config/admin/types";
@@ -134,7 +138,7 @@ export function AdminConfigurationManager({
   }
 
   async function loadCurrentState() {
-    const response = await fetch("/api/manage/configuration", {
+    const response = await managementFetch("/api/manage/configuration", {
       cache: "no-store",
     });
     if (!response.ok) return false;
@@ -147,7 +151,7 @@ export function AdminConfigurationManager({
     if (changeEntries.length === 0) return;
     setSaving(true);
     try {
-      const response = await fetch("/api/manage/configuration", {
+      const response = await managementFetch("/api/manage/configuration", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -162,7 +166,7 @@ export function AdminConfigurationManager({
         return;
       }
       if (!response.ok) {
-        toast.error(t("configuration.saveFailed"));
+        toast.error({ key: "configuration-save-error", content: <>{t("configuration.saveFailed")}<DiagnosticReference diagnosticId={readResponseDiagnostic(response)} /></> });
         return;
       }
       setState(parseManagedConfigurationView(await response.json()));
@@ -192,7 +196,7 @@ export function AdminConfigurationManager({
 
   async function publishConfiguration() {
     const response = await runSensitive(() =>
-      fetch("/api/manage/configuration/publish", {
+      managementFetch("/api/manage/configuration/publish", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -217,7 +221,7 @@ export function AdminConfigurationManager({
     setHistoryOpen(true);
     setHistoryLoading(true);
     try {
-      const response = await fetch("/api/manage/configuration/history", {
+      const response = await managementFetch("/api/manage/configuration/history", {
         cache: "no-store",
       });
       if (!response.ok) throw new Error(await responseError(response));
@@ -233,7 +237,7 @@ export function AdminConfigurationManager({
     if (!rollbackRevision) return;
     const revision = rollbackRevision;
     const response = await runSensitive(() =>
-      fetch(
+      managementFetch(
         `/api/manage/configuration/revisions/${encodeURIComponent(revision.id)}/rollback`,
         { method: "POST" },
       ),

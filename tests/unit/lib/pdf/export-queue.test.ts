@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 
 import { db, pdfExportJobs } from "@/db";
+import { createDiagnosticContext, runWithDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import { getManagedConfigDefaults } from "@/lib/config/registry";
 import {
@@ -86,6 +87,17 @@ describe("PDF export queue", () => {
       position: 2,
       queuedCount: 2,
     });
+  });
+
+  it("persists root diagnostics through queue claiming but exposes only the id to an authorized requester", async () => {
+    const diagnostic = createDiagnosticContext(crypto.randomUUID());
+    const queued = await runWithDiagnosticContext(diagnostic, () => enqueue());
+    const [claimed] = await claimPdfExportJobs({ workerId: "diagnostics-worker", configuration: configuration() });
+    expect(claimed?.diagnosticContext).toEqual(diagnostic);
+    const status = await getPdfExportStatus({ jobId: queued.jobId, accessToken: queued.accessToken }, configuration());
+    expect(status.diagnosticId).toBe(diagnostic.diagnosticId);
+    expect(status).not.toHaveProperty("diagnosticContext");
+    await expect(getPdfExportStatus({ jobId: queued.jobId, requesterUserId: "other-user" }, configuration())).rejects.toBeInstanceOf(PdfExportAccessError);
   });
 
   it("allows an administrator to cancel queued and running jobs by id", async () => {

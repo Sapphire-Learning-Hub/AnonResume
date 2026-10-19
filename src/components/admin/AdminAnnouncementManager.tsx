@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { GlobalOutlined } from "@ant-design/icons";
 import { Button, Checkbox, DatePicker, Input, Modal, Select, Tooltip } from "antd";
 import { createStyles } from "antd-style";
@@ -260,7 +262,7 @@ export function AdminAnnouncementManager({
   async function saveDraft() {
     if (!canSave) return;
     setPending(true);
-    const response = await fetch(
+    const response = await managementFetch(
       editingId
         ? `/api/manage/announcements/${encodeURIComponent(editingId)}`
         : "/api/manage/announcements",
@@ -292,7 +294,7 @@ export function AdminAnnouncementManager({
     announcement: AnnouncementListItem,
   ) {
     setPending(true);
-    const response = await fetch(
+    const response = await managementFetch(
       action === "delete"
         ? `/api/manage/announcements/${encodeURIComponent(announcement.id)}`
         : `/api/manage/announcements/${encodeURIComponent(announcement.id)}/${action}`,
@@ -329,7 +331,7 @@ export function AdminAnnouncementManager({
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),

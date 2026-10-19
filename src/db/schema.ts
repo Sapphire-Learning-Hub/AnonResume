@@ -224,6 +224,7 @@ export const resumeVersions =
       ]);
 
 const pdfExportJobColumns = {
+  diagnosticContext: jsonb("diagnostic_context").$type<import("@/lib/observability/diagnostics/schema").DiagnosticContext>(),
   id: uuid("id").primaryKey().defaultRandom(),
   resumeUserId: text("resume_user_id").notNull(),
   resumeId: text("resume_id").notNull(),

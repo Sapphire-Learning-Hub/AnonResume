@@ -37,6 +37,7 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
       error: feedbackMocks.notificationError,
       warning: feedbackMocks.notificationWarning,
     },
+    failure: (_error: unknown, options: unknown) => feedbackMocks.notificationError(options),
     toast: { error: feedbackMocks.toastError },
   }),
 }));

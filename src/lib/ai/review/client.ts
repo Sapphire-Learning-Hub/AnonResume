@@ -1,14 +1,15 @@
 import { z } from "zod";
+import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 import { AiClientError } from "@/lib/ai/client";
 import type { AiReviewInput } from "@/domain/resume/ai/review/schema";
 import { reviewDetailsSchema, reviewPageSchema, type ReviewPage } from "./validation";
 
 async function request<T>(path: string, schema: z.ZodType<T>, method = "GET", body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/ai/reviews${path}`, { method, signal, cache: "no-store", ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
-  const payload: unknown = await response.json();
+  const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = z.object({ error: z.string(), currentVersion: z.number().optional() }).safeParse(payload);
-    throw new AiClientError(error.success ? error.data.error : "ai_request_failed", response.status, error.success ? error.data.currentVersion : undefined);
+    throw attachErrorDiagnostic(new AiClientError(error.success ? error.data.error : "ai_request_failed", response.status, error.success ? error.data.currentVersion : undefined), readResponseDiagnostic(response));
   }
   return schema.parse(payload);
 }

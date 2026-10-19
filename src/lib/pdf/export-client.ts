@@ -1,3 +1,5 @@
+import { attachErrorDiagnostic, getErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
+
 export type PdfExportClientStatus =
   | "queued"
   | "running"
@@ -6,6 +8,7 @@ export type PdfExportClientStatus =
   | "cancelled";
 
 export interface PdfExportClientTask {
+  diagnosticId?: string;
   id: string;
   accessToken: string;
   status: PdfExportClientStatus;
@@ -82,13 +85,13 @@ function updateTask(
 }
 
 async function parseJson(response: Response) {
-  const payload = await response.json();
+  const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new PdfExportRequestError(
+    throw attachErrorDiagnostic(new PdfExportRequestError(
       typeof payload.error === "string" ? payload.error : "pdf_export_failed",
       typeof payload.limit === "number" ? payload.limit : undefined,
-    );
+    ), readResponseDiagnostic(response));
   }
 
   return payload;
@@ -133,6 +136,7 @@ async function startPdfExport(endpoint: string) {
         queuedCount: 0,
         cancelRequested: false,
         errorCode: requestError.code,
+        diagnosticId: getErrorDiagnostic(requestError),
         errorLimit: requestError.limit,
         downloaded: false,
       },

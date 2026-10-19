@@ -9,6 +9,7 @@ export const storedReportSchema = reviewResultSchema.extend({
 });
 export const reviewStatusSchema = z.enum(["queued", "preparing", "streaming", "complete", "failed", "stopped", "interrupted", "settlement_pending"]);
 export const reviewDetailsSchema = z.object({
+  diagnosticId: z.uuid().optional(),
   id: z.string().uuid(), runId: z.string().uuid(), input: reviewInputSchema, modelName: z.string(),
   report: storedReportSchema.nullable(), ignoredIssueIds: z.array(z.string()), createdAt: z.string(),
   status: reviewStatusSchema, progress: z.array(z.enum(aiRunProgressStages)), failureCode: z.string().nullable(), finalPoints: z.number().nullable(), stale: z.boolean(),

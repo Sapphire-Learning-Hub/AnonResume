@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect } from "react";
+import { useLayoutEffect } from "react";
+import { RenderErrorDiagnostic } from "@/components/system/DiagnosticReference";
 
 import { SystemStatePage } from "@/components/system/SystemStatePage";
 import { useI18n } from "@/i18n/I18nProvider";
@@ -18,12 +19,6 @@ export default function AppError({
     document.title = t("system.error.documentTitle");
   }, [t]);
 
-  useEffect(() => {
-    console.error("[AnonResume] Route rendering failed", {
-      digest: error.digest,
-    });
-  }, [error.digest]);
-
   return (
     <SystemStatePage
       actionLabel={t("system.error.retry")}
@@ -31,6 +26,6 @@ export default function AppError({
       description={t("system.error.description")}
       onAction={retry}
       title={t("system.error.title")}
-    />
+    ><RenderErrorDiagnostic error={error} /></SystemStatePage>
   );
 }

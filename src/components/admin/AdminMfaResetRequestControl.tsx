@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal, Spin } from "antd";
 import { createStyles } from "antd-style";
 import { useRouter } from "next/navigation";
@@ -60,7 +62,7 @@ export function AdminMfaResetRequestControl({
 
   const loadRequest = useEffectEvent(async (signal: AbortSignal) => {
     try {
-      const response = await fetch("/api/account/management-mfa-reset", {
+      const response = await managementFetch("/api/account/management-mfa-reset", {
         signal,
       });
       const body = (await response.json()) as {
@@ -90,7 +92,7 @@ export function AdminMfaResetRequestControl({
   async function submitRequest() {
     setPending(true);
     try {
-      const response = await fetch("/api/account/management-mfa-reset", {
+      const response = await managementFetch("/api/account/management-mfa-reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reason }),
@@ -114,7 +116,7 @@ export function AdminMfaResetRequestControl({
     if (!request) return;
     setPending(true);
     try {
-      const response = await fetch("/api/account/management-mfa-reset", {
+      const response = await managementFetch("/api/account/management-mfa-reset", {
         method: "DELETE",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ requestId: request.id }),

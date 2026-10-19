@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Button, Empty, Popconfirm, Segmented, Select, Spin, Tag } from "antd";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
 import { AiPanelFrame } from "@/components/ai/AiPanelFrame";
 import { AiClientError, stopAiRun } from "@/lib/ai/client";
 import { deleteResumeReview, generateReviewSuggestions, ignoreReviewIssue, startResumeReview } from "@/lib/ai/review/client";
@@ -21,7 +22,7 @@ export function AiReviewPanel({ resumeId, resumeVersion, onClose, onEnsureSaved,
   onOpenSuggestions: (conversationId: string) => Promise<boolean>;
 }) {
   const { t, locale } = useI18n();
-  const { notification } = useAppFeedback();
+  const { failure } = useAppFeedback();
   const { styles } = useAiReviewStyles();
   const [view, setView] = useState<"new" | "history">("new");
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,7 @@ export function AiReviewPanel({ resumeId, resumeVersion, onClose, onEnsureSaved,
   function reportError(error: unknown) {
     const code = error instanceof AiClientError ? error.code : "unknown";
     const description = t(code === "ai_unavailable" ? "aiReview.unavailable" : code === "ai_quota_exceeded" ? "ai.error.quota" : code === "ai_resume_version_conflict" ? "ai.error.versionConflict" : code === "ai_run_already_active" ? "ai.error.activeRun" : code === "ai_review_empty" ? "aiReview.emptyError" : code === "ai_review_context_limit" ? "aiReview.contextError" : code === "ai_review_facts_required" ? "aiReview.factsRequired" : code === "ai_review_save_failed" ? "aiReview.saveError" : "aiReview.error");
-    notification.error({ key: "ai-review-error", title: t("aiReview.title"), description, duration: false, actions: <Button size="small" onClick={() => review.refresh()}>{t("aiReview.retry")}</Button> });
+    failure(error, { key: "ai-review-error", title: t("aiReview.title"), description, duration: false, actions: <Button size="small" onClick={() => review.refresh()}>{t("aiReview.retry")}</Button> });
   }
   const review = useAiReview({ resumeId, resumeVersion, onError: reportError });
   const details = review.details;
@@ -83,6 +84,7 @@ export function AiReviewPanel({ resumeId, resumeVersion, onClose, onEnsureSaved,
       {running ? <div className={styles.card} role="status" aria-live="polite"><Spin /><strong>{t(details.status === "queued" ? "aiReview.queued" : "aiReview.running")}</strong>{stage ? <span>{t(reviewProgressMessage(stage))}</span> : null}{completedDimensions ? <span>{t("aiReview.dimensionsProgress", { count: completedDimensions })}</span> : null}<div className={styles.actions}><Button disabled={busy} onClick={() => void perform(async () => { await stopAiRun(details.runId); review.refresh(); })}>{t("aiReview.stop")}</Button></div></div> : null}
       {details && !running ? <>
         <div className={styles.filters}><Tag>{details.input.targetRole || details.input.jobDescription ? t("aiReview.job") : t("aiReview.general")}</Tag><span className={styles.muted}>{details.modelName}</span></div>
+        {!details.report && details.status !== "stopped" ? <DiagnosticReference diagnosticId={details.diagnosticId} /> : null}
         {!details.report ? <Empty description={t(details.status === "stopped" ? "aiReview.stopped" : reviewFailureMessage(details.failureCode))} /> : <AiReviewReport key={details.id} details={details} busy={busy}
           onLocate={onLocate}
           onIgnore={(issueId, ignored) => void perform(async () => { review.setDetails(await ignoreReviewIssue(details.id, issueId, ignored)); })}

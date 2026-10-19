@@ -6,6 +6,7 @@ import type {
 } from "@/lib/ai/runs/stream-events";
 
 export interface AiRunSnapshot {
+  diagnosticId?: string;
   id: string;
   status: AiRunStatus;
   sequence: number;
@@ -51,6 +52,7 @@ function terminalEvent(snapshot: AiRunSnapshot): AiClientStreamEvent | undefined
   return {
     sequence: snapshot.sequence + 1,
     type: "error",
+    ...(snapshot.diagnosticId ? { diagnosticId: snapshot.diagnosticId } : {}),
     code: snapshot.failureCode ?? snapshot.status,
   };
 }

@@ -1,4 +1,5 @@
 import type { ResumeDocument } from "@/domain/resume/schema";
+import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 import type { ResumeValidationIssue } from "@/domain/resume/validation";
 import type { PageResult } from "@/lib/shared/pagination";
 import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
@@ -109,13 +110,13 @@ async function parseJson(response: Response) {
       );
     }
 
-    throw new Error(
+    throw attachErrorDiagnostic(new Error(
       typeof payload?.error === "string" ? payload.error : "request_failed",
-    );
+    ), readResponseDiagnostic(response));
   }
 
   if (!payload) {
-    throw new Error("invalid_response");
+    throw attachErrorDiagnostic(new Error("invalid_response"), readResponseDiagnostic(response));
   }
 
   return payload;

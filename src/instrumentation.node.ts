@@ -16,14 +16,19 @@ import {
 } from "@/lib/observability/metrics";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { startWebRestartRuntime } from "@/lib/runtime/restart/process-runtime";
+import { startServiceTracing, type ServiceTracingLifecycle } from "@/lib/observability/tracing/runtime";
+import { stopDiagnosticStore } from "@/lib/observability/diagnostics/store/runtime";
 
 const identity = resolveRuntimeIdentity("web");
 initializeLogging({ identity, role: "web" });
 const runtimeLog = getLogger("anonresume.runtime");
 runtimeLog.info("process_started", { outcome: "success" });
 let metricsLifecycle: ServiceMetricsLifecycle | undefined;
+let tracingLifecycle: ServiceTracingLifecycle | undefined;
 const stopMetrics = () => {
+  void stopDiagnosticStore();
   void metricsLifecycle?.stop();
+  void tracingLifecycle?.stop();
 };
 
 try {
@@ -42,6 +47,7 @@ try {
   const runtimeManager = getRuntimeConfigManager("web");
   await runtimeManager.start();
   const snapshot = await runtimeManager.snapshot();
+  tracingLifecycle = await startServiceTracing({ identity, values: snapshot.values });
   metricsLifecycle = await startServiceMetrics({
     configurationHealth: snapshot.health,
     identity,
@@ -53,7 +59,7 @@ try {
   startAccountMaintenanceLoop();
   startAccountMergeRuntime();
   await startWebRestartRuntime({
-    beforeSignal: () => metricsLifecycle?.stop() ?? Promise.resolve(),
+    beforeSignal: async () => { await Promise.all([metricsLifecycle?.stop(), tracingLifecycle?.stop(), stopDiagnosticStore()]); },
     identity,
     runtimeManager,
   });
@@ -61,6 +67,7 @@ try {
   process.off("SIGINT", stopMetrics);
   process.off("SIGTERM", stopMetrics);
   await metricsLifecycle?.stop();
+  await tracingLifecycle?.stop();
   runtimeLog.error("process_startup_failed", {
     error: serializeSafeError(error),
     outcome: "failure",

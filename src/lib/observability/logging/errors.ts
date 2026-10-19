@@ -1,12 +1,39 @@
 import { createHash } from "node:crypto";
 
 import type { SafeErrorFields } from "./types";
+import { safeServerFrames } from "@/lib/observability/diagnostics/frames";
 
 const UNKNOWN_ERROR_MESSAGE = "Unexpected application error";
-const MAX_STACK_FRAMES = 16;
-const MAX_STACK_FRAME_LENGTH = 512;
 
 const SAFE_ERROR_MESSAGES = {
+  ECONNREFUSED: "Dependency connection refused",
+  ECONNRESET: "Dependency connection reset",
+  ENOTFOUND: "Dependency DNS lookup failed",
+  EAI_AGAIN: "Dependency DNS lookup temporarily unavailable",
+  ETIMEDOUT: "Dependency connection timed out",
+  CERT_HAS_EXPIRED: "Dependency TLS certificate expired",
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: "Dependency TLS verification failed",
+  EAUTH: "Mail service authentication failed",
+  ETLS: "Mail service TLS negotiation failed",
+  ESOCKET: "Mail service connection failed",
+  "23505": "Database uniqueness conflict",
+  "23503": "Database reference constraint conflict",
+  "40001": "Database serialization conflict",
+  "40P01": "Database deadlock detected",
+  "53300": "Database connection limit exceeded",
+  "08006": "Database connection failed",
+  "42P01": "Database schema table missing",
+  "42703": "Database schema column missing",
+  "28P01": "Database authentication failed",
+  "3D000": "Database does not exist",
+  "57P01": "Database connection terminated",
+  "57014": "Database operation cancelled",
+  timeout: "Upstream response timed out",
+  authentication: "Upstream authentication failed",
+  unavailable: "Upstream service unavailable",
+  invalid_response: "Upstream response protocol invalid",
+  context_limit: "Upstream context limit exceeded",
+  aborted: "Operation aborted",
   operation_conflict: "Operation conflicts with the current state",
   operation_timeout: "Operation timed out",
   rate_limited: "Request rate limit exceeded",
@@ -36,7 +63,7 @@ function readSafeCode(error: unknown): SafeErrorCode | undefined {
 function errorType(error: unknown) {
   if (error instanceof Error) {
     const name = error.name.trim();
-    return /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(name) ? name : "Error";
+    return ["Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "URIError", "AggregateError", "DOMException", "AiProviderError", "ZodError", "DrizzleQueryError"].includes(name) ? name : "Error";
   }
 
   return "NonError";
@@ -54,31 +81,25 @@ function errorFingerprint(error: unknown, type: string, code?: string) {
     .slice(0, 16);
 }
 
-function sanitizeStack(error: Error) {
-  if (!error.stack) {
-    return undefined;
-  }
-
-  const frames = error.stack
-    .split("\n")
-    .slice(1)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith("at "))
-    .slice(0, MAX_STACK_FRAMES)
-    .map((line) => line.slice(0, MAX_STACK_FRAME_LENGTH));
-
-  return frames.length > 0 ? frames.join("\n") : undefined;
-}
-
 export function serializeSafeError(error: unknown): SafeErrorFields {
   const type = errorType(error);
   const code = readSafeCode(error);
 
+  const causes: Array<Omit<SafeErrorFields, "causes">> = [];
+  const seen = new Set<unknown>([error]);
+  let cause = error instanceof Error ? error.cause : undefined;
+  while (cause instanceof Error && !seen.has(cause) && causes.length < 4) {
+    seen.add(cause);
+    const causeCode = readSafeCode(cause);
+    causes.push({ type: errorType(cause), code: causeCode, message: causeCode ? SAFE_ERROR_MESSAGES[causeCode] : UNKNOWN_ERROR_MESSAGE, stackTrace: safeServerFrames(cause.stack) });
+    cause = cause.cause;
+  }
   return {
+    ...(causes.length ? { causes } : {}),
     code,
     digest: errorFingerprint(error, type, code),
     message: code ? SAFE_ERROR_MESSAGES[code] : UNKNOWN_ERROR_MESSAGE,
-    stackTrace: error instanceof Error ? sanitizeStack(error) : undefined,
+    stackTrace: error instanceof Error ? safeServerFrames(error.stack) : undefined,
     type,
   };
 }

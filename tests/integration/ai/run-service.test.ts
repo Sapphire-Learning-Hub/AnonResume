@@ -38,6 +38,7 @@ import { encryptAiCredential } from "@/lib/ai/security/credentials";
 import { releaseAiQuota } from "@/lib/ai/usage/ledger";
 import { getDatabasePool } from "@/lib/runtime/database";
 import { initializeLogCapture } from "../../support/observability";
+import { createDiagnosticContext, runWithDiagnosticContext } from "@/lib/observability/diagnostics/context";
 
 function waitForAbort(signal: AbortSignal) {
   if (signal.aborted) {
@@ -171,7 +172,8 @@ describe("AI run service", () => {
         yield { type: "complete", finishReason: "tool_calls" };
       },
     };
-    const prepared = await prepareAiRun({
+    const diagnostic = createDiagnosticContext(randomUUID());
+    const prepared = await runWithDiagnosticContext(diagnostic, () => prepareAiRun({
       userId,
       conversationId,
       message: "帮我优化个人简介",
@@ -184,7 +186,7 @@ describe("AI run service", () => {
         streamCheckpointMs: 10,
         runLeaseSeconds: 90,
       },
-    });
+    }));
     expect(prepared.request.latencyPreference).toBe("fast");
     expect(prepared.request.allowCrossOriginRedirects).toBe(true);
     expect(prepared.request.timeoutPolicy).toEqual({
@@ -205,9 +207,11 @@ describe("AI run service", () => {
       leaseExpiresAt: null,
     });
     expect(queuedRun?.encryptedExecutionPayload).toBeInstanceOf(Buffer);
+    expect(queuedRun?.diagnosticContext).toEqual(diagnostic);
 
     const events = [];
     const claimed = await claimPreparedRun(prepared.runId);
+    expect(claimed.diagnosticContext).toEqual(diagnostic);
     for await (const event of executePreparedAiRun(claimed, { adapter })) {
       events.push(event);
     }

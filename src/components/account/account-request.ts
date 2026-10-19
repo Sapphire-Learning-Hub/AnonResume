@@ -1,4 +1,5 @@
 import type { MessageKey } from "@/i18n/messages";
+import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 type Translate = (
   key: MessageKey,
@@ -21,9 +22,9 @@ export async function requestAccountJson<T>(
     const payload = await response.json().catch(() => null) as {
       error?: unknown;
     } | null;
-    throw new AccountRequestError(
+    throw attachErrorDiagnostic(new AccountRequestError(
       typeof payload?.error === "string" ? payload.error : "unknown",
-    );
+    ), readResponseDiagnostic(response));
   }
   return response.json() as Promise<T>;
 }

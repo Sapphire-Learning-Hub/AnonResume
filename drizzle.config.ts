@@ -49,6 +49,7 @@ export default defineConfig({
     "./src/db/invitation-schema.ts",
     "./src/db/font-schema.ts",
     "./src/db/social-registration-schema.ts",
+    "./src/db/diagnostics-schema.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",

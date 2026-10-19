@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { recordDiagnosticFailure } from "@/lib/observability/diagnostics/tasks";
 import { nextCookies } from "better-auth/next-js";
 import { after } from "next/server";
 
@@ -50,6 +51,7 @@ function createAuth(configuration: {
     secret: configuration.authSecret,
     database: getDatabasePool(),
     onAPIError: {
+      onError: (error) => { recordDiagnosticFailure(error, "auth.operation"); },
       errorURL: new URL("/sign-in", configuration.applicationOrigin).toString(),
     },
     account: {

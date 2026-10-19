@@ -183,7 +183,7 @@ export function ConfigurationField({
         disabled={disabled}
         max={bounds?.max}
         min={bounds?.min}
-        precision={0}
+        precision={field.key === "tracingSampleRate" ? 3 : 0}
         value={typeof value === "number" ? value : undefined}
         onChange={(next) => {
           if (next !== null) onChange({ operation: "set", value: next });

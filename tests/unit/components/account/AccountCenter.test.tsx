@@ -105,10 +105,11 @@ describe("AccountCenter", () => {
   });
 
   it("isolates a profile load failure from the sessions section", async () => {
+    const diagnosticId = "123e4567-e89b-42d3-a456-426614174000";
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/account/profile" && !init?.method) {
-        return jsonResponse({ error: "unknown" }, 503);
+        return Promise.resolve(new Response(JSON.stringify({ error: "unknown" }), { status: 503, headers: { "content-type": "application/json", "x-diagnostic-id": diagnosticId } }));
       }
       if (url === "/api/account/sessions" && !init?.method) {
         return jsonResponse({ sessions });
@@ -119,6 +120,7 @@ describe("AccountCenter", () => {
     render(<AccountCenter />);
 
     expect(await screen.findByText("个人资料暂时无法加载。")).toBeInTheDocument();
+    expect(screen.getByText(diagnosticId)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重新加载个人资料" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "登录设备" }));
     expect(await screen.findByText("Windows PC")).toBeInTheDocument();

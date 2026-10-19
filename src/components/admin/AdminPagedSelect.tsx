@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Pagination, Select } from "antd";
 import { createStyles } from "antd-style";
 import { useEffect, useRef, useState } from "react";
@@ -113,7 +115,7 @@ export function AdminPagedSelect(props: AdminPagedSelectProps) {
         pageSize: "10",
       });
       if (nextQuery.trim()) params.set("q", nextQuery.trim());
-      const response = await fetch(`${props.endpoint}?${params.toString()}`);
+      const response = await managementFetch(`${props.endpoint}?${params.toString()}`);
       if (!response.ok) return;
       const payload: unknown = await response.json();
       if (currentRequestId === requestId.current && isAdminSelectPage(payload)) {
