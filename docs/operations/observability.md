@@ -224,7 +224,7 @@ http://otel-collector:4318/v1/metrics
 bun run metrics:smoke
 ```
 
-Prometheus 位于 <http://127.0.0.1:9090>，Grafana 位于 <http://127.0.0.1:3001>。Grafana 会自动加载 `AnonResume overview` 看板，展示服务存活、运行时配置健康状态、HTTP 吞吐与错误率、P95/P99 延迟、队列深度与最老等待时间、任务成功率和耗时、数据库连接池、进程资源、事件循环延迟以及 Collector 收发状态。示例告警规则不会配置通知渠道。
+Prometheus 位于 <http://127.0.0.1:9090>，Grafana 位于 <http://127.0.0.1:3001>。Grafana 会自动加载 `AnonResume overview` 看板，展示实例存活、运行时配置健康状态、HTTP 吞吐与错误率、P95/P99 延迟、队列深度与最老等待时间、各 Worker 实例的任务吞吐、成功率和耗时、数据库连接池、进程资源、事件循环延迟、心跳以及 Collector 收发状态。看板支持按环境、服务角色和实例逐级筛选。示例告警规则会识别停止上报的 Worker 实例，但不会配置通知渠道。
 
 停止并保留数据：
 
@@ -244,7 +244,9 @@ docker compose -f compose.metrics.yaml down -v
 
 所有指标带有 `service.namespace`、`service.name`、`service.version`、`service.instance.id`、部署环境和部署 ID。业务属性只允许固定路由模式和有限枚举，不包含用户 ID、邮箱、简历 ID、任务 ID、请求 ID、完整 URL、异常文本、模型名称或简历内容。
 
-AI 和 PDF 队列是全局队列，每个副本都可能观察到相同数量。查询队列深度和最老等待时间时，应按部署与任务类型使用 `max` 聚合，不要跨副本求和。计数器和直方图则按需要跨实例求和。
+AI 和 PDF 队列是全局队列，每个副本都可能观察到相同数量。查询队列深度和最老等待时间时，应按部署与任务类型使用 `max` 聚合，不要跨副本求和。任务计数器、任务耗时、进程资源、连接池、事件循环和心跳应保留 `service.name` 与 `service.instance.id`，以便定位单个异常副本；只有查看部署总体吞吐时才跨实例求和。
+
+`service.instance.id` 来自 `ANONRESUME_INSTANCE_ID`。默认 Compose 编排已为每个服务配置稳定标识；扩容 Worker 或在同一主机运行多个相同角色的进程时，必须为每个副本提供唯一且重启后不变的值。复用实例 ID 会让指标时间序列、心跳和受控重启状态互相覆盖。
 
 删除或重命名指标、改变单位、直方图语义或属性含义属于可观测契约变化；采集平台应允许新增时间序列和标签值，但不要依赖 Grafana 面板标题或描述文案。
 

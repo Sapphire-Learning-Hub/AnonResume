@@ -35,15 +35,44 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: An AnonResume worker heartbeat failed
+          summary: Worker {{ $labels.service_name }} / {{ $labels.service_instance_id }} reported a heartbeat failure
+
+      - alert: AnonResumeWorkerInstanceMissing
+        expr: |
+          group by (
+            deployment_environment_name,
+            service_deployment_id,
+            service_name,
+            service_instance_id
+          ) (
+            max_over_time(
+              anonresume_process_uptime_seconds{service_name=~"anonresume-(ai|pdf)-worker"}[1h]
+            )
+          )
+          unless
+          group by (
+            deployment_environment_name,
+            service_deployment_id,
+            service_name,
+            service_instance_id
+          ) (
+            max_over_time(
+              anonresume_process_uptime_seconds{service_name=~"anonresume-(ai|pdf)-worker"}[3m]
+            )
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker {{ $labels.service_name }} / {{ $labels.service_instance_id }} stopped reporting metrics
 
       - alert: AnonResumeConfigurationUnhealthy
         expr: |
-          max by (service_name, state) (
+          max by (service_name, service_instance_id, state) (
             anonresume_runtime_configuration_health_ratio{state!="healthy"}
           ) > 0
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: An AnonResume service has an unhealthy runtime configuration
+          summary: Service {{ $labels.service_name }} / {{ $labels.service_instance_id }} has an unhealthy runtime configuration

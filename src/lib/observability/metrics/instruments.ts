@@ -348,4 +348,10 @@ class ApplicationMetrics {
   }
 }
 
-export const applicationMetrics = new ApplicationMetrics();
+declare global {
+  var __anonResumeApplicationMetrics: ApplicationMetrics | undefined;
+}
+
+globalThis.__anonResumeApplicationMetrics ??= new ApplicationMetrics();
+
+export const applicationMetrics = globalThis.__anonResumeApplicationMetrics;

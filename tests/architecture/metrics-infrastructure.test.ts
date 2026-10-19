@@ -5,6 +5,34 @@ async function read(relativePath: string) {
   return readFile(path.join(process.cwd(), relativePath), "utf8");
 }
 
+interface DashboardTarget {
+  expr?: string;
+}
+
+interface DashboardPanel {
+  targets?: DashboardTarget[];
+  title?: string;
+}
+
+interface DashboardVariable {
+  name?: string;
+  query?: { query?: string };
+}
+
+interface DashboardDefinition {
+  panels?: DashboardPanel[];
+  templating?: { list?: DashboardVariable[] };
+}
+
+function parseDashboard(source: string) {
+  return JSON.parse(source) as DashboardDefinition;
+}
+
+function panelExpression(dashboard: DashboardDefinition, title: string) {
+  const panel = dashboard.panels?.find((candidate) => candidate.title === title);
+  return panel?.targets?.map((target) => target.expr ?? "").join("\n") ?? "";
+}
+
 describe("optional metrics infrastructure", () => {
   it("pins an isolated, locally bound Collector, Prometheus, and Grafana stack", async () => {
     const base = await read("compose.yaml");
@@ -89,5 +117,61 @@ describe("optional metrics infrastructure", () => {
     ]) {
       expect(metricSources).not.toContain(`\"${forbidden}\"`);
     }
+  });
+
+  it("separates process metrics by instance without multiplying shared queues", async () => {
+    const dashboard = parseDashboard(
+      await read(
+        "docker/observability/metrics/grafana/dashboards/anonresume-overview.json",
+      ),
+    );
+    const alerts = await read("docker/observability/metrics/alerts.yaml");
+    const variables = new Map(
+      dashboard.templating?.list?.map((variable) => [variable.name, variable]) ?? [],
+    );
+
+    expect(variables.has("service")).toBe(true);
+    expect(variables.has("instance")).toBe(true);
+    expect(variables.get("service")?.query?.query ?? "").toContain(
+      "service_name",
+    );
+    expect(variables.get("instance")?.query?.query ?? "").toContain(
+      'service_name=~"$service"',
+    );
+    expect(variables.get("instance")?.query?.query ?? "").toContain(
+      "service_instance_id",
+    );
+
+    for (const title of [
+      "Instances reporting",
+      "Job throughput",
+      "Job success rate",
+      "Job duration",
+      "PostgreSQL pool",
+      "Process memory",
+      "Process CPU",
+      "Event loop delay",
+      "Runtime configuration health",
+    ]) {
+      expect(panelExpression(dashboard, title), title).toContain(
+        "service_instance_id",
+      );
+    }
+
+    expect(panelExpression(dashboard, "Queue depth")).toContain(
+      "max by (job_type, queue_state)",
+    );
+    expect(panelExpression(dashboard, "Oldest queued job")).toContain(
+      "max by (job_type)",
+    );
+    expect(panelExpression(dashboard, "Queue depth")).not.toContain(
+      "service_instance_id",
+    );
+    expect(panelExpression(dashboard, "Oldest queued job")).not.toContain(
+      "service_instance_id",
+    );
+
+    expect(alerts).toContain("AnonResumeWorkerInstanceMissing");
+    expect(alerts).toContain("service_instance_id");
   });
 });
