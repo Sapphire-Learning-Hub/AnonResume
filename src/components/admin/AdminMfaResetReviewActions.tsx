@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -60,7 +62,7 @@ export function AdminMfaResetReviewActions({
     if (!decision) return;
     setPending(true);
     try {
-      const response = await fetch(
+      const response = await managementFetch(
         `/api/manage/mfa-reset-requests/${encodeURIComponent(requestId)}`,
         {
           method: "PATCH",
@@ -91,7 +93,7 @@ export function AdminMfaResetReviewActions({
   async function reauthenticate() {
     setPending(true);
     try {
-      const response = await fetch("/api/manage/session/reauth", {
+      const response = await managementFetch("/api/manage/session/reauth", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: reauthCode }),

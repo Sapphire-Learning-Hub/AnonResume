@@ -27,6 +27,7 @@ import {
   serializeSafeError,
 } from "@/lib/observability/logging";
 import { applicationMetrics } from "@/lib/observability/metrics";
+import { withTaskDiagnostics } from "@/lib/observability/diagnostics/tasks";
 
 const runtimeLog = getLogger("anonresume.runtime");
 
@@ -123,11 +124,14 @@ export async function runAiWorker(options: {
         adapter,
         signal,
       })) {
-        if (event.type === "error") throw new Error("ai_run_failed");
+        if (event.type === "error") throw Object.assign(new Error("ai_run_failed"), { code: event.code === "stopped" ? "aborted" : event.code });
       }
     },
   };
-  const logger = options.logger ?? console;
+  const logger = options.logger ?? {
+    info: (message: string) => console.info(message),
+    error: (_message: string, error: unknown) => runtimeLog.error("worker_operation_failed", { error: serializeSafeError(error), outcome: "failure" }),
+  };
   const now = options.now ?? (() => new Date());
   const wait = options.wait ?? waitForNextPoll;
   const startedAt = now();
@@ -281,8 +285,7 @@ export async function runAiWorker(options: {
             ...prepared,
             configuration: claimedConfiguration,
           };
-          const execution = operations
-            .executeRun(claimed, options.signal)
+          const execution = withTaskDiagnostics(claimed.runId, claimed.diagnosticContext, "ai", () => operations.executeRun(claimed, options.signal))
             .then(() => {
               applicationMetrics.recordJobCompleted({
                 aiTaskType: prepared.kind ?? "conversation",

@@ -90,8 +90,8 @@ describe("safe error serialization", () => {
     const error = new Error("token=secret-value");
     error.stack = [
       "Error: token=secret-value",
-      "    at operation (/srv/anonresume/worker.ts:10:2)",
-      "    at main (/srv/anonresume/worker.ts:20:4)",
+      "    at operation (/srv/anonresume/src/lib/worker.ts:10:2)",
+      "    at main (/srv/anonresume/src/lib/worker.ts:20:4)",
     ].join("\n");
 
     const result = serializeSafeError(error);
@@ -100,7 +100,9 @@ describe("safe error serialization", () => {
       message: "Unexpected application error",
       type: "Error",
     });
-    expect(result.stackTrace).toContain("at operation");
+    expect(result.stackTrace).toContain("src/lib/worker.ts:10:2");
+    expect(result.stackTrace).not.toContain("operation");
+    expect(result.stackTrace).not.toContain("/srv/anonresume");
     expect(JSON.stringify(result)).not.toContain("secret-value");
   });
 

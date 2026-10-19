@@ -31,6 +31,7 @@ import {
 } from "@/components/dashboard/app-navigation";
 import { WorkbenchAccountMenu } from "@/components/dashboard/WorkbenchAccountMenu";
 import { SessionDeviceReporter } from "@/components/account/SessionDeviceReporter";
+import { ManagementSessionRecovery } from "@/components/admin/session/ManagementSessionRecovery";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { AppShellAccess } from "@/lib/auth/app-shell-access";
 import type { LocalizedAnnouncement } from "@/lib/announcements/rules";
@@ -419,6 +420,7 @@ export function AppShell({
   return (
     <main className={styles.shell}>
       <SessionDeviceReporter />
+      {access.mode === "management" ? <ManagementSessionRecovery /> : null}
       <header className={styles.topbar}>
         <div className={styles.brandGroup}>
           <AnonResumeLogo

@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -116,7 +118,7 @@ export function AdminSecurityPanel({
 
   async function beginEnrollment() {
     await withReauth(
-      () => fetch("/api/manage/security/mfa", {
+      () => managementFetch("/api/manage/security/mfa", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name }),
@@ -131,7 +133,7 @@ export function AdminSecurityPanel({
   async function confirmEnrollment() {
     if (!enrollment) return;
     await withReauth(
-      () => fetch("/api/manage/security/mfa", {
+      () => managementFetch("/api/manage/security/mfa", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ deviceId: enrollment.deviceId, code }),
@@ -150,7 +152,7 @@ export function AdminSecurityPanel({
 
   async function removeDevice(deviceId: string) {
     await withReauth(
-      () => fetch(`/api/manage/security/mfa/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
+      () => managementFetch(`/api/manage/security/mfa/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
       async () => {
         toast.success(t("security.removed"));
         router.refresh();
@@ -160,7 +162,7 @@ export function AdminSecurityPanel({
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),

@@ -1,4 +1,6 @@
 "use client";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { attachErrorDiagnostic, getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 import {
   useCallback,
@@ -510,10 +512,10 @@ export function ResumeEditorShell({
             issues: error.issues,
           });
         } else {
-          store.getState().setSaveStatus("error");
+          store.getState().setSaveStatus("error", getErrorDiagnostic(error));
         }
 
-        throw new Error("save_failed");
+        throw attachErrorDiagnostic(new Error("save_failed"), getErrorDiagnostic(error));
       }
     })();
 
@@ -610,6 +612,7 @@ export function ResumeEditorShell({
   const saveValidation = useStore(store, (state) => state.saveValidation);
   const selection = useStore(store, (state) => state.selection);
   const saveStatus = useStore(store, (state) => state.saveStatus);
+  const saveDiagnosticId = useStore(store, (state) => state.saveDiagnosticId);
   const version = useStore(store, (state) => state.version);
   const history = useStore(store, (state) => state.history);
   const zoom = useStore(store, (state) => state.zoom);
@@ -891,9 +894,10 @@ export function ResumeEditorShell({
       key,
       role: "alert",
       title: t("editor.saveError"),
+      description: <DiagnosticReference diagnosticId={saveDiagnosticId} />,
     });
     return () => notification.destroy(key);
-  }, [handleManualSave, notification, saveStatus, t]);
+  }, [handleManualSave, notification, saveDiagnosticId, saveStatus, t]);
 
   useEffect(() => {
     function syncFullscreenState() {

@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -66,7 +68,7 @@ export function AdminUserActions({
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),
@@ -97,7 +99,7 @@ export function AdminUserActions({
           suspended ? (
             <Button
               loading={pending}
-              onClick={() => run(() => fetch(`/api/manage/users/${userId}/suspension`, { method: "DELETE" }))}
+              onClick={() => run(() => managementFetch(`/api/manage/users/${userId}/suspension`, { method: "DELETE" }))}
               type="link"
             >{t("users.restore")}</Button>
           ) : (
@@ -120,7 +122,7 @@ export function AdminUserActions({
         onCancel={() => setResendOpen(false)}
         onConfirm={() => {
           void run(
-            () => fetch(`/api/manage/users/${userId}/invitation`, { method: "POST" }),
+            () => managementFetch(`/api/manage/users/${userId}/invitation`, { method: "POST" }),
             t("invite.resent"),
           );
         }}
@@ -133,7 +135,7 @@ export function AdminUserActions({
         okButtonProps={{ danger: true, disabled: !reason.trim(), loading: pending }}
         okText={t("users.suspendConfirm")}
         onCancel={() => setSuspendOpen(false)}
-        onOk={() => run(() => fetch(`/api/manage/users/${userId}/suspension`, {
+        onOk={() => run(() => managementFetch(`/api/manage/users/${userId}/suspension`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ reason }),
@@ -156,7 +158,7 @@ export function AdminUserActions({
         onCancel={() => setRevokeOpen(false)}
         onConfirm={() => {
           setRevokeOpen(false);
-          void run(() => fetch(`/api/manage/users/${userId}/sessions`, { method: "DELETE" }));
+          void run(() => managementFetch(`/api/manage/users/${userId}/sessions`, { method: "DELETE" }));
         }}
         open={revokeOpen}
         pending={pending}

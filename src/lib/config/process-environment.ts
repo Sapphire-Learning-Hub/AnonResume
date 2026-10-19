@@ -1,5 +1,9 @@
 type ProcessEnvironment = Record<string, string | undefined>;
 
+export function readDiagnosticArtifactsDirectory(environment: ProcessEnvironment = process.env) {
+  return environment.ANONRESUME_DIAGNOSTICS_ARTIFACTS_DIR ?? ".anonresume/diagnostics";
+}
+
 export function readNodeEnvironment(
   environment: ProcessEnvironment = process.env,
 ) {

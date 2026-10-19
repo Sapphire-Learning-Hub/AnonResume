@@ -73,7 +73,7 @@ export class LegacyEnvironmentImportConflictError extends Error {
 }
 
 function parseEnvironmentValue(key: ConfigKey, rawValue: string) {
-  if (key === "metricsEnabled") {
+  if (key === "metricsEnabled" || key === "tracingEnabled") {
     if (rawValue === "otlp") return true;
     if (rawValue === "none") return false;
     throw new Error("invalid_metrics_exporter");
@@ -86,6 +86,7 @@ function parseEnvironmentValue(key: ConfigKey, rawValue: string) {
   }
   if (typeof defaultValue === "number") {
     const value = Number(rawValue);
+    if (key === "tracingSampleRate" && rawValue.trim() && Number.isFinite(value)) return value;
     if (!Number.isSafeInteger(value)) throw new Error("invalid_integer");
     return value;
   }
@@ -104,6 +105,9 @@ export function resolveLegacyManagedConfig(
   const values: Record<string, unknown> = {};
   const entries: LegacyEnvironmentEntry[] = [];
   const issues: string[] = [];
+  if (environment.OTEL_TRACES_SAMPLER && !["traceidratio", "parentbased_traceidratio"].includes(environment.OTEL_TRACES_SAMPLER)) {
+    issues.push("OTEL_TRACES_SAMPLER:invalid");
+  }
 
   for (const [environmentKey, key] of Object.entries(
     LEGACY_MANAGED_ENVIRONMENT_KEYS,

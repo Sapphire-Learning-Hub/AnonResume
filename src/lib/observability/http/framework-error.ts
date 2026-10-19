@@ -1,4 +1,8 @@
 import type { Instrumentation } from "next";
+import {
+  createDiagnosticContext,
+  runWithDiagnosticContext,
+} from "@/lib/observability/diagnostics/context";
 
 import {
   getLogger,
@@ -44,26 +48,40 @@ export const logNextRequestError: Instrumentation.onRequestError = (
   }
   const identity = resolveRequestIdentity(selectedHeaders);
 
-  return runWithLogContext(
-    {
-      method: request.method,
-      path: context.routePath,
-      requestId: identity.requestId,
-      upstreamRequestId: identity.upstreamRequestId,
-    },
-    () => {
-      logger.error(
-        "next_request_error",
+  return runWithDiagnosticContext(
+    createDiagnosticContext(identity.requestId),
+    () =>
+      runWithLogContext(
         {
-          error: serializeSafeError(error),
-          labels: {
-            route_type: context.routeType,
-            router_kind: context.routerKind,
-          },
-          outcome: "failure",
+          method: request.method,
+          path: context.routePath,
+          requestId: identity.requestId,
+          upstreamRequestId: identity.upstreamRequestId,
         },
-        "Next.js request failed",
-      );
-    },
+        () => {
+          logger.error(
+            "next_request_error",
+            {
+              error: serializeSafeError(error),
+              details: {
+                "next.error.digest":
+                  error &&
+                  typeof error === "object" &&
+                  "digest" in error &&
+                  typeof error.digest === "string" &&
+                  /^[a-zA-Z0-9_-]{1,128}$/.test(error.digest)
+                    ? error.digest
+                    : null,
+              },
+              labels: {
+                route_type: context.routeType,
+                router_kind: context.routerKind,
+              },
+              outcome: "failure",
+            },
+            "Next.js request failed",
+          );
+        },
+      ),
   );
 };

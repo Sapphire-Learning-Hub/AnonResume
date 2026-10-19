@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 const personalModelSchema = z.object({
   id: z.string().uuid(),
@@ -73,7 +74,7 @@ async function responseJson(response: Response) {
   const payload: unknown = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = z.object({ error: z.string() }).safeParse(payload);
-    throw new Error(error.success ? error.data.error : "ai_request_failed");
+    throw attachErrorDiagnostic(new Error(error.success ? error.data.error : "ai_request_failed"), readResponseDiagnostic(response));
   }
   return payload;
 }

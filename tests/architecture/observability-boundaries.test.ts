@@ -2,7 +2,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
-const ROUTE_EXEMPTIONS = new Map<string, string>();
+const ROUTE_EXEMPTIONS = new Map<string, string>([
+  ["src/app/api/diagnostics/client-errors/route.ts", "Dedicated bounded intake logs only accepted reports; generic access logging would permit unauthenticated log flooding"],
+]);
 
 async function listTypescriptFiles(directory: string): Promise<string[]> {
   const entries = await readdir(path.join(process.cwd(), directory), {
@@ -55,7 +57,7 @@ describe("observability boundaries", () => {
       const source = await readFile(path.join(process.cwd(), file), "utf8");
       if (
         /^\s*["']use client["'];/m.test(source) &&
-        /from\s+["']@\/lib\/observability(?:\/[^"']*)?["']/.test(source)
+        /from\s+["']@\/lib\/observability\/(?!browser\/(?:client|sanitize|state|schema)["']|diagnostics\/(?:schema|store\/schema)["'])[^"']+["']/.test(source)
       ) {
         offenders.push(file);
       }

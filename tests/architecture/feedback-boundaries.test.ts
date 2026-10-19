@@ -31,6 +31,8 @@ describe("application feedback architecture", () => {
       "src/components/announcements/AnnouncementBanner.tsx",
       "src/components/admin/config/AdminConfigurationManager.tsx",
       "src/components/admin/setup/AdminSetupWizard.tsx",
+      "src/components/admin/diagnostics/DiagnosticsManager.tsx",
+      "src/components/admin/diagnostics/DiagnosticDetails.tsx",
       "src/components/config/ConfigurationHealthBanner.tsx",
       "src/components/dashboard/ResumeMarkdownImportDialog.tsx",
     ]);

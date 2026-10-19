@@ -43,6 +43,7 @@ export const adminAuditActionMessageKeys = {
   "configuration.publish": "audit.action.configuration.publish",
   "configuration.rollback": "audit.action.configuration.rollback",
   "system.restart": "audit.action.system.restart",
+  "diagnostics.read": "audit.action.diagnostics.read",
   "instance.setup.completed": "audit.action.instance.setup.completed",
   "instance.setup.deactivate": "audit.action.instance.setup.deactivate",
   "instance.admin_recovery.completed": "audit.action.instance.adminRecovery.completed",
@@ -65,6 +66,7 @@ export const adminAuditTargetMessageKeys = {
   ai_run: "audit.target.ai_run",
   configuration_revision: "audit.target.configuration_revision",
   system_restart_operation: "audit.target.system_restart_operation",
+  diagnostic: "audit.target.diagnostic",
   instance_setup: "audit.target.instance_setup",
 } as const satisfies Record<string, AdminMessageKey>;
 

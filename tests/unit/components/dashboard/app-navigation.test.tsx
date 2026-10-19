@@ -85,6 +85,7 @@ describe("app navigation", () => {
           "/app/manage/audit",
           "/app/manage/system",
           "/app/manage/configuration",
+          "/app/manage/diagnostics",
           "/app/manage/mfa-resets",
           "/app/manage/security",
         ],

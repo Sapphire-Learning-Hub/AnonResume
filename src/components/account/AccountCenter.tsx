@@ -18,6 +18,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 import { useVerificationCooldown } from "@/components/ui/useVerificationCooldown";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
@@ -135,6 +137,8 @@ export function AccountCenter({
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [profileState, setProfileState] = useState<AccountLoadState>("loading");
   const [sessionsState, setSessionsState] = useState<AccountLoadState>("loading");
+  const [profileDiagnosticId, setProfileDiagnosticId] = useState<string>();
+  const [sessionsDiagnosticId, setSessionsDiagnosticId] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const [activeSection, setActiveSection] = useState<AccountSection>(
     initialSection === "connections" && !githubEnabled ? "profile" : initialSection,
@@ -162,8 +166,11 @@ export function AccountCenter({
       setProfile(result.profile);
       setName(result.profile.name);
       setProfileState("ready");
-    } catch {
-      if (!signal?.aborted) setProfileState("error");
+    } catch (error) {
+      if (!signal?.aborted) {
+        setProfileDiagnosticId(getErrorDiagnostic(error));
+        setProfileState("error");
+      }
     }
   }, []);
   const loadSessions = useCallback(async (signal?: AbortSignal) => {
@@ -174,8 +181,11 @@ export function AccountCenter({
       );
       setSessions(result.sessions);
       setSessionsState("ready");
-    } catch {
-      if (!signal?.aborted) setSessionsState("error");
+    } catch (error) {
+      if (!signal?.aborted) {
+        setSessionsDiagnosticId(getErrorDiagnostic(error));
+        setSessionsState("error");
+      }
     }
   }, []);
   const retryProfile = useCallback(async () => {
@@ -196,8 +206,11 @@ export function AccountCenter({
       setProfile(result.profile);
       setName(result.profile.name);
       setProfileState("ready");
-    }).catch(() => {
-      if (!controller.signal.aborted) setProfileState("error");
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setProfileDiagnosticId(getErrorDiagnostic(error));
+        setProfileState("error");
+      }
     });
     void requestAccountJson<{ sessions: AccountSession[] }>(
       "/api/account/sessions",
@@ -205,8 +218,11 @@ export function AccountCenter({
     ).then((result) => {
       setSessions(result.sessions);
       setSessionsState("ready");
-    }).catch(() => {
-      if (!controller.signal.aborted) setSessionsState("error");
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setSessionsDiagnosticId(getErrorDiagnostic(error));
+        setSessionsState("error");
+      }
     });
     return () => controller.abort();
   }, []);
@@ -246,7 +262,7 @@ export function AccountCenter({
     } catch (error) {
       toast.error({
         key: "account-action-error",
-        content: accountRequestErrorMessage(error, t),
+        content: getErrorDiagnostic(error) ? <>{accountRequestErrorMessage(error, t)}<DiagnosticReference diagnosticId={getErrorDiagnostic(error)} /></> : accountRequestErrorMessage(error, t),
       });
     } finally {
       setBusy(undefined);
@@ -382,10 +398,12 @@ export function AccountCenter({
     message: string,
     action: string,
     retry: () => Promise<void>,
+    diagnosticId?: string,
   ) => (
     <div className={styles.sectionError} role="status">
       <ExclamationCircleOutlined aria-hidden="true" className={styles.sectionErrorIcon} />
       <span>{message}</span>
+      <DiagnosticReference diagnosticId={diagnosticId} />
       <Button icon={<ReloadOutlined aria-hidden="true" />} onClick={() => void retry()}>
         {action}
       </Button>
@@ -397,6 +415,7 @@ export function AccountCenter({
       t("account.error.profileLoad"),
       t("account.error.retryProfile"),
       retryProfile,
+      profileDiagnosticId,
     );
 
   return (
@@ -516,6 +535,7 @@ export function AccountCenter({
             t("account.error.sessionsLoad"),
             t("account.error.retrySessions"),
             retrySessions,
+            sessionsDiagnosticId,
           ) : <>
           <ul className={styles.sessionList}>
             {sessions.map((session) => {

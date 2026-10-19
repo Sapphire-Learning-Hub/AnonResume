@@ -22,6 +22,7 @@ export type LogValue =
   | { readonly [key: string]: LogValue };
 
 export interface SafeErrorFields {
+  causes?: Array<Omit<SafeErrorFields, "causes">>;
   code?: string;
   digest?: string;
   message: string;

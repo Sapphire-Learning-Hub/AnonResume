@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, DatePicker, Form, InputNumber, Modal, Tag } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useRouter } from "next/navigation";
@@ -52,7 +54,7 @@ export function AdminAiQuotas({
       toast.error(t("ai.invalidQuotaPeriod"));
       return;
     }
-    const response = await runSensitive(() => fetch("/api/manage/ai/quotas", {
+    const response = await runSensitive(() => managementFetch("/api/manage/ai/quotas", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

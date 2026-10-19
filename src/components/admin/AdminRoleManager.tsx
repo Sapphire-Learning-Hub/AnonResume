@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { CheckCircleFilled, MinusCircleOutlined } from "@ant-design/icons";
 import { Button, Checkbox, Input, Modal, Tag, theme } from "antd";
 import { createStyles } from "antd-style";
@@ -170,6 +172,7 @@ const permissionMessageKeys: Record<AdminPermission, AdminMessageKey> = {
   "ai.audit.sensitive.read": "permission.ai.audit.sensitive.read",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
+  "diagnostics.read": "permission.diagnostics.read",
   "system.restart": "permission.system.restart",
   "configuration.read": "permission.configuration.read",
   "configuration.edit": "permission.configuration.edit",
@@ -225,7 +228,7 @@ const permissionGroups: Array<{
   },
   {
     label: "roles.permissionGroup.system",
-    permissions: ["system.read", "system.restart"],
+    permissions: ["system.read", "system.restart", "diagnostics.read"],
   },
   {
     label: "roles.permissionGroup.configuration",
@@ -405,7 +408,7 @@ export function AdminRoleManager({
   }
 
   function saveRole() {
-    const request = () => runAction(() => fetch(
+    const request = () => runAction(() => managementFetch(
       editingRoleId ? `/api/manage/roles/${editingRoleId}` : "/api/manage/roles",
       {
         method: editingRoleId ? "PUT" : "POST",
@@ -439,7 +442,7 @@ export function AdminRoleManager({
   function saveUserRoles() {
     if (!roleEditorUser) return;
     const user = roleEditorUser;
-    const request = () => runAction(() => fetch("/api/manage/administrators", {
+    const request = () => runAction(() => managementFetch("/api/manage/administrators", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ userId: user.id, roleIds: roleEditorIds }),
@@ -465,7 +468,7 @@ export function AdminRoleManager({
   async function reauthenticate() {
     setPending(true);
     try {
-      const response = await fetch("/api/manage/session/reauth", {
+      const response = await managementFetch("/api/manage/session/reauth", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: reauthCode }),
@@ -553,7 +556,7 @@ export function AdminRoleManager({
                     onClick={() => confirmAction({
                       confirmText: t("roles.deleteConfirm"),
                       description: t("roles.deleteDescription", { role: roleName }),
-                      run: () => runAction(() => fetch(`/api/manage/roles/${role.id}`, { method: "DELETE" })),
+                      run: () => runAction(() => managementFetch(`/api/manage/roles/${role.id}`, { method: "DELETE" })),
                       title: t("roles.deleteTitle"),
                     })}
                     type="link"
@@ -612,7 +615,7 @@ export function AdminRoleManager({
                 onClick={() => confirmAction({
                   confirmText: t("roles.removeAdminConfirm"),
                   description: t("roles.removeAdminDescription", { user: user.name }),
-                  run: () => runAction(() => fetch("/api/manage/administrators", {
+                  run: () => runAction(() => managementFetch("/api/manage/administrators", {
                     method: "DELETE",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ userId: user.id }),
@@ -641,7 +644,7 @@ export function AdminRoleManager({
         }}
         onOk={() => {
           if (!selectedUser || selectedRoles.length === 0) return;
-          void runAction(() => fetch("/api/manage/administrators", {
+          void runAction(() => managementFetch("/api/manage/administrators", {
             method: "PUT",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

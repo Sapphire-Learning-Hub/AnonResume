@@ -8,6 +8,7 @@ import { configDatabaseTables } from "./config-schema";
 import { invitationDatabaseTables } from "./invitation-schema";
 import { fontDatabaseTables } from "./font-schema";
 import { socialRegistrationDatabaseTables } from "./social-registration-schema";
+import { diagnosticDatabaseTables } from "./diagnostics-schema";
 
 import {
   accountEmailChallenges,
@@ -101,6 +102,7 @@ export const db = drizzle({
     ...invitationDatabaseTables,
     ...fontDatabaseTables,
     ...socialRegistrationDatabaseTables,
+    ...diagnosticDatabaseTables,
     accountEmailChallenges,
     accountLifecycle,
     accountRestrictions,

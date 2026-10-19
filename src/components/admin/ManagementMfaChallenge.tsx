@@ -70,6 +70,10 @@ export function ManagementMfaChallenge({
         recoveryRequired?: boolean;
       };
       if (!response.ok) {
+        if (response.status === 401 && body.error === "unauthorized") {
+          window.location.replace("/sign-in");
+          return;
+        }
         toast.error(
           body.error === "mfa_locked"
             ? t("auth.mfaLocked")

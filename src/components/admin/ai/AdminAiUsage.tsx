@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -69,7 +71,7 @@ export function AdminAiUsage({
   };
 
   async function settleRun(item: UsageItem, decision: "charge_reserved" | "release") {
-    const response = await runSensitive(() => fetch("/api/manage/ai/usage", {
+    const response = await runSensitive(() => managementFetch("/api/manage/ai/usage", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ runId: item.runId, decision }),
@@ -80,7 +82,7 @@ export function AdminAiUsage({
   }
 
   async function readEvidence(item: UsageItem) {
-    const response = await runSensitive(() => fetch(`/api/manage/ai/audit/${encodeURIComponent(item.runId)}`));
+    const response = await runSensitive(() => managementFetch(`/api/manage/ai/audit/${encodeURIComponent(item.runId)}`));
     if (!response) return;
     const parsed = evidenceSchema.safeParse(await response.json());
     if (!parsed.success) {

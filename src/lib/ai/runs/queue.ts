@@ -4,6 +4,7 @@ import { aiRuns, db } from "@/db";
 import { decryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
 import type { ClaimedAiRun } from "@/lib/ai/runs/service";
 import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
+import { taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
 
 const AI_QUEUE_STATES = [
   "queued",
@@ -73,6 +74,7 @@ export async function claimQueuedAiRuns(input: {
       .where(and(inArray(aiRuns.id, ids), eq(aiRuns.status, "queued")))
       .returning({
         createdAt: aiRuns.createdAt,
+        diagnosticContext: aiRuns.diagnosticContext,
         id: aiRuns.id,
         kind: aiRuns.kind,
         encryptedExecutionPayload: aiRuns.encryptedExecutionPayload,
@@ -96,6 +98,7 @@ export async function claimQueuedAiRuns(input: {
           keyVersion: run.executionPayloadKeyVersion,
         }),
         leaseOwner: input.workerId,
+        diagnosticContext: taskDiagnosticContext(run.id, run.diagnosticContext),
         queuedAt: run.createdAt,
       };
     });

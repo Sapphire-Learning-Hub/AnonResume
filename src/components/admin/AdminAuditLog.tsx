@@ -74,6 +74,7 @@ const permissionMessageKeys: Record<string, AdminMessageKey> = {
   "ai.audit.sensitive.read": "permission.ai.audit.sensitive.read",
   "audit.read": "permission.audit.read",
   "system.read": "permission.system.read",
+  "diagnostics.read": "permission.diagnostics.read",
 };
 
 const statusMessageKeys: Record<string, AdminMessageKey> = {

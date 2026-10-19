@@ -1,10 +1,14 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Modal } from "antd";
 import { useState } from "react";
 
 import { AdminOtpInput } from "@/components/admin/AdminOtpInput";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 import { createAdminTranslator } from "@/i18n/admin-messages";
 import { useI18n } from "@/i18n/I18nProvider";
 
@@ -40,7 +44,7 @@ export function useAdminAiSensitiveAction() {
       });
     }
     if (!response.ok) {
-      toast.error(t("ai.failed"));
+      toast.error({ key: "admin-sensitive-action-error", content: <>{t("ai.failed")}<DiagnosticReference diagnosticId={readResponseDiagnostic(response)} /></> });
       return null;
     }
     return response;
@@ -50,7 +54,7 @@ export function useAdminAiSensitiveAction() {
     setPending(true);
     let response: Response;
     try {
-      response = await fetch("/api/manage/session/reauth", {
+      response = await managementFetch("/api/manage/session/reauth", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: reauthCode }),

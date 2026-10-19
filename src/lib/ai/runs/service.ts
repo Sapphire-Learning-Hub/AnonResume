@@ -41,6 +41,10 @@ import { createAiAgentToolDefinitions } from "@/lib/ai/tools/catalog";
 import { createAiProposalWorkspace } from "@/lib/ai/tools/proposal-workspace";
 import { createAiProposalProgressChanges } from "@/lib/ai/proposals/progress";
 import { encryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
+import { getDiagnosticContext, taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
+import type { DiagnosticContext } from "@/lib/observability/diagnostics/schema";
+import { withDiagnosticStream } from "@/lib/observability/tracing/span";
+import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
 import { assertAccountMergeMutationAllowed } from "@/lib/auth/account/merge/executor";
 import { finalizeOwnedAiRun } from "@/lib/ai/runs/finalize";
 import {
@@ -173,6 +177,7 @@ export interface AiRunConfiguration {
 }
 
 export interface PreparedAiRun {
+  diagnosticContext?: DiagnosticContext;
   kind?: "conversation";
   runId: string;
   userId: string;
@@ -509,6 +514,7 @@ export async function prepareAiRun(input: {
         },
       ]);
       await transaction.insert(aiRuns).values({
+        diagnosticContext: getDiagnosticContext() ?? null,
         id: runId,
         userId: input.userId,
         resumeId: row.conversation.resumeId,
@@ -604,6 +610,7 @@ export async function prepareAiRun(input: {
       )
       .returning({ id: aiRuns.id });
     if (!queuedRun) throw new Error("ai_run_preparation_cancelled");
+    handoffDiagnosticTask(runId, "ai");
     return prepared;
   } catch (error) {
     if (quotaReserved) {
@@ -1010,10 +1017,10 @@ export async function* executePreparedAiRun(
         const proposalLengthBeforeAttempt = proposalText.length;
         toolCall = undefined;
         try {
-          for await (const event of options.adapter.start(
+          for await (const event of withDiagnosticStream("app.ai.provider.round", options.adapter.start(
             providerRequest,
             controller.signal,
-          )) {
+          ))) {
             if (controller.signal.aborted) throw new Error("ai_run_stopped");
 
             if (
@@ -1618,11 +1625,14 @@ export async function getAiRunSnapshot(input: {
       progress: aiRuns.checkpointProgress,
       failureCode: aiRuns.failureCode,
       finalPoints: aiRuns.finalPoints,
+      diagnosticContext: aiRuns.diagnosticContext,
     })
     .from(aiRuns)
     .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.userId, input.userId)))
     .limit(1);
-  return run ?? null;
+  if (!run) return null;
+  const { diagnosticContext, ...result } = run;
+  return { ...result, diagnosticId: taskDiagnosticContext(run.id, diagnosticContext).diagnosticId };
 }
 
 export async function getAiRunQuota(userId: string) {

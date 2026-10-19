@@ -40,6 +40,7 @@ describe("database schema", () => {
     const columns = Object.keys(getTableColumns(pdfExportJobs));
 
     expect(columns).toEqual([
+      "diagnosticContext",
       "id",
       "resumeUserId",
       "resumeId",

@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Input, Modal } from "antd";
 import { AppRouteLink as Link } from "@/components/ui/AppRouteLoading";
 import { useState } from "react";
@@ -36,7 +38,7 @@ export function AdminResumeActions({
 
   async function unpublish() {
     setPending(true);
-    const response = await fetch(
+    const response = await managementFetch(
       `/api/manage/resumes/${encodeURIComponent(userId)}/${encodeURIComponent(resumeId)}/unpublish`,
       {
         method: "POST",
@@ -61,7 +63,7 @@ export function AdminResumeActions({
 
   async function reauthenticate() {
     setPending(true);
-    const response = await fetch("/api/manage/session/reauth", {
+    const response = await managementFetch("/api/manage/session/reauth", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code: reauthCode }),

@@ -1,4 +1,6 @@
 "use client";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
+import { getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 import { DownloadOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { Button, Input } from "antd";
@@ -213,7 +215,7 @@ export function AccountRecoveryPage({
       setCodeSent(true);
       toast.success(t("account.email.codeSent"));
     } catch (error) {
-      toast.error(accountRequestErrorMessage(error, t));
+      toast.error({ key: "account-recovery-error", content: getErrorDiagnostic(error) ? <>{accountRequestErrorMessage(error, t)}<DiagnosticReference diagnosticId={getErrorDiagnostic(error)} /></> : accountRequestErrorMessage(error, t) });
     } finally {
       setBusy(undefined);
     }
@@ -231,7 +233,7 @@ export function AccountRecoveryPage({
       router.push("/app");
       router.refresh();
     } catch (error) {
-      toast.error(accountRequestErrorMessage(error, t));
+      toast.error({ key: "account-recovery-error", content: getErrorDiagnostic(error) ? <>{accountRequestErrorMessage(error, t)}<DiagnosticReference diagnosticId={getErrorDiagnostic(error)} /></> : accountRequestErrorMessage(error, t) });
     } finally {
       setBusy(undefined);
     }

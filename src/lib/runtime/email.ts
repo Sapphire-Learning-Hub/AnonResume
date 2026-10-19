@@ -6,6 +6,7 @@ import { getRuntimeConfig } from "@/lib/config/runtime";
 import type { ManagedConfig } from "@/lib/config/registry";
 import { getBootstrapNodeEnvironment } from "@/lib/config/bootstrap";
 import type { AccountEmailChallengePurpose } from "@/lib/auth/account/types";
+import { withDiagnosticSpan } from "@/lib/observability/tracing/span";
 import {
   getLogger,
   serializeSafeError,
@@ -646,7 +647,7 @@ async function deliverEmail(
   }
 
   try {
-    await getSmtpTransporter(config).sendMail(message);
+    await withDiagnosticSpan("app.email.send", async () => { await getSmtpTransporter(config).sendMail(message); });
     emailLog.info(`${action}_sent`, {
       labels: { transport: "smtp" },
       outcome: "success",

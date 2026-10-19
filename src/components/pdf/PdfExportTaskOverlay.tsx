@@ -11,6 +11,7 @@ import { createStyles } from "antd-style";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { DiagnosticReference } from "@/components/system/DiagnosticReference";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
@@ -181,7 +182,7 @@ function getErrorText(
     case "pdf_worker_unavailable":
       return t("pdfExport.error.workerUnavailable");
     default:
-      return task.error || t("pdfExport.error.generic");
+      return t("pdfExport.error.generic");
   }
 }
 
@@ -340,7 +341,7 @@ export function PdfExportTaskOverlay() {
             {t("common.dismiss")}
           </Button>
         ),
-        description: getErrorText(task, t),
+        description: <>{getErrorText(task, t)}<DiagnosticReference diagnosticId={task.diagnosticId} /></>,
         duration: false,
         key: `pdf-export-failed-${task.id}`,
         role: "alert",

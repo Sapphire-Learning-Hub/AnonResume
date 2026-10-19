@@ -62,6 +62,15 @@ export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> =
   metricsOtlpHeaders: "configuration.field.metricsOtlpHeaders",
   metricsExportIntervalMs: "configuration.field.metricsExportIntervalMs",
   metricsExportTimeoutMs: "configuration.field.metricsExportTimeoutMs",
+  clientErrorsEnabled: "configuration.field.clientErrorsEnabled",
+  diagnosticsStoreEnabled: "configuration.field.diagnosticsStoreEnabled",
+  diagnosticsRetentionDays: "configuration.field.diagnosticsRetentionDays",
+  diagnosticsMaxRecords: "configuration.field.diagnosticsMaxRecords",
+  tracingEnabled: "configuration.field.tracingEnabled",
+  tracingOtlpEndpoint: "configuration.field.tracingOtlpEndpoint",
+  tracingOtlpHeaders: "configuration.field.tracingOtlpHeaders",
+  tracingSampleRate: "configuration.field.tracingSampleRate",
+  tracingExportTimeoutMs: "configuration.field.tracingExportTimeoutMs",
   sourceCodeUrl: "configuration.field.sourceCodeUrl",
   legalOperatorName: "configuration.field.legalOperatorName",
   legalContactEmail: "configuration.field.legalContactEmail",
@@ -91,6 +100,8 @@ export const configurationGroupMessageKeys = {
 export const configurationNumberBounds: Partial<
   Record<ConfigKey, { min: number; max?: number }>
 > = {
+  diagnosticsRetentionDays: { min: 1, max: 30 },
+  diagnosticsMaxRecords: { min: 100, max: 100_000 },
   smtpPort: { min: 1, max: 65_535 },
   emailVerificationExpiresSeconds: { min: 300 },
   adminSessionIdleSeconds: { min: 1 },
@@ -116,6 +127,8 @@ export const configurationNumberBounds: Partial<
   aiWorkerRetentionIntervalMs: { min: 1 },
   metricsExportIntervalMs: { min: 5_000, max: 300_000 },
   metricsExportTimeoutMs: { min: 1_000, max: 30_000 },
+  tracingSampleRate: { min: 0, max: 1 },
+  tracingExportTimeoutMs: { min: 1_000, max: 30_000 },
 };
 
 const configKeySchema = z.enum(CONFIG_KEYS as [ConfigKey, ...ConfigKey[]]);

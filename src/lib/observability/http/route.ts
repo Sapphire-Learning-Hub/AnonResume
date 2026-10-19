@@ -4,6 +4,10 @@ import {
   serializeSafeError,
 } from "@/lib/observability/logging";
 import { applicationMetrics } from "@/lib/observability/metrics";
+import { createDiagnosticContext, runWithDiagnosticContext } from "@/lib/observability/diagnostics/context";
+import { DIAGNOSTIC_HEADER } from "@/lib/observability/diagnostics/schema";
+import { withDiagnosticSpan } from "@/lib/observability/tracing/span";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 
 import {
   REQUEST_ID_HEADER,
@@ -34,10 +38,12 @@ function correlateResponse<TResponse extends Response>(
 function correlateResponse(response: Response, requestId: string): Response {
   try {
     response.headers.set(REQUEST_ID_HEADER, requestId);
+    response.headers.set(DIAGNOSTIC_HEADER, requestId);
     return response;
   } catch {
     const headers = new Headers(response.headers);
     headers.set(REQUEST_ID_HEADER, requestId);
+    headers.set(DIAGNOSTIC_HEADER, requestId);
     return new Response(response.body, {
       headers,
       status: response.status,
@@ -71,13 +77,15 @@ export function withRequestLogging<
       routePattern,
     });
 
-    return runWithLogContext(logContext, async () => {
+    return runWithDiagnosticContext(createDiagnosticContext(identity.requestId), () => withDiagnosticSpan("app.http.request", () => runWithLogContext(logContext, async () => {
       try {
         const response = correlateResponse(
           await handler(...arguments_),
           identity.requestId,
         );
         const failed = response.status >= 400;
+        trace.getActiveSpan()?.setAttribute("http.response.status_code", response.status);
+        if (response.status >= 500) trace.getActiveSpan()?.setStatus({ code: SpanStatusCode.ERROR });
         const durationNs = elapsedNanoseconds(startedAt);
         applicationMetrics.recordHttpRequestCompleted({
           durationSeconds: durationNs / 1_000_000_000,
@@ -135,6 +143,6 @@ export function withRequestLogging<
         );
         throw error;
       }
-    });
+    }), { "http.request.method": request.method }, true));
   };
 }

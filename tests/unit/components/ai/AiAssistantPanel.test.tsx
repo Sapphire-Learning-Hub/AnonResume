@@ -56,6 +56,7 @@ function createAssistantState() {
 
 vi.mock("@/components/ui/useAppFeedback", () => ({
   useAppFeedback: () => ({
+    failure: vi.fn(),
     notification: { error: vi.fn() },
     toast: { error: vi.fn(), success: vi.fn() },
   }),

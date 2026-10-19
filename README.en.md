@@ -80,6 +80,8 @@ The default stack starts one AI worker and one PDF worker with stable instance i
 
 Web and worker processes emit structured logs and can export runtime metrics to external platforms through OpenTelemetry. See the [observability operations guide](./docs/operations/observability.md) for contracts, local ELK and metrics stacks, and enterprise collection patterns. Ordinary deployments do not depend on these external services.
 
+Authorized administrators can query fault records, diagnostic IDs, source locations and key-stage timelines in the management console without installing an external observability platform. Browser error reporting and optional OTLP tracing are managed in the configuration center. Use `bun run build` to archive browser and server source maps privately; the operations guide also covers retention, private archive mounts and offline symbolication.
+
 ### Run Locally
 
 ```bash

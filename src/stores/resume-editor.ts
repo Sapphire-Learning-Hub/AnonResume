@@ -80,6 +80,7 @@ export interface ResumeEditorState {
   selection: ResumeEditorSelection;
   dirty: boolean;
   saveStatus: ResumeEditorSaveStatus;
+  saveDiagnosticId?: string;
   saveConflict?: {
     currentVersion: number;
   };
@@ -217,7 +218,7 @@ export interface ResumeEditorActions {
   setRecoveryDraft: (draft: LocalResumeDraft) => void;
   restoreRecoveryDraft: () => void;
   discardRecoveryDraft: () => void;
-  setSaveStatus: (status: ResumeEditorSaveStatus) => void;
+  setSaveStatus: (status: ResumeEditorSaveStatus, diagnosticId?: string) => void;
   setZoom: (zoom: number) => void;
   undo: () => void;
   redo: () => void;
@@ -805,8 +806,8 @@ export function createResumeEditorStore({
     discardRecoveryDraft: () => {
       set({ recoveryDraft: undefined });
     },
-    setSaveStatus: (saveStatus) => {
-      set({ saveStatus });
+    setSaveStatus: (saveStatus, saveDiagnosticId) => {
+      set({ saveStatus, saveDiagnosticId: saveStatus === "error" ? saveDiagnosticId : undefined });
     },
     setZoom: (zoom) => {
       set({ zoom: clampZoom(zoom) });

@@ -13,6 +13,7 @@ import { calculateAiUsagePoints } from "@/lib/ai/usage/rates";
 import { releaseAiQuota } from "@/lib/ai/usage/ledger";
 import { createEncryptedAiAuditEvidence, replaceAiAuditEvidence } from "@/lib/ai/audit/store";
 import { getLogger, serializeSafeError } from "@/lib/observability/logging";
+import { withDiagnosticSpan } from "@/lib/observability/tracing/span";
 import { createReviewBudget, type ReviewUsage } from "./budget";
 import { REVIEW_EXECUTION_POLICY as policy, ReviewExecutionError } from "./policy";
 import { reviewMessages, type ReviewExchange } from "./prompt";
@@ -96,7 +97,7 @@ export async function* executeResumeReviewRun(prepared: ClaimedReviewRun, option
         let failure: unknown;
         providerRequestId = undefined;
         try {
-          response = await collectReviewResponse({ adapter: options.adapter, request, signal: controller.signal, onRequestId: (id) => { providerRequestId = id; }, onUsage: (value) => { roundUsage = { inputTokens: value.inputTokens, cachedInputTokens: value.cachedInputTokens, outputTokens: value.outputTokens }; } });
+          response = await withDiagnosticSpan("app.ai.review.round", () => collectReviewResponse({ adapter: options.adapter, request, signal: controller.signal, onRequestId: (id) => { providerRequestId = id; }, onUsage: (value) => { roundUsage = { inputTokens: value.inputTokens, cachedInputTokens: value.cachedInputTokens, outputTokens: value.outputTokens }; } }), { "app.attempt": budget.snapshot().attempts });
         } catch (error) { failure = error; }
         finally {
           budget.recordUsage(roundUsage);

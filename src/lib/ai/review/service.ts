@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { getDiagnosticContext } from "@/lib/observability/diagnostics/context";
+import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { aiModels, aiProviderCredentials, aiResumeReviews, aiRuns, db, resumes } from "@/db";
 import { buildReviewContext } from "@/domain/resume/ai/review/context";
@@ -57,7 +59,7 @@ export async function prepareResumeReviewRun(args: { userId: string; resumeId: s
     const [current] = await transaction.select({ version: resumes.version }).from(resumes).where(and(eq(resumes.id, args.resumeId), eq(resumes.userId, args.userId))).for("share").limit(1);
     if (!current) throw new AiConversationNotFoundError();
     if (current.version !== input.resumeVersion) throw new AiRunVersionConflictError(current.version);
-    await transaction.insert(aiRuns).values({ id: runId, kind: "resume_review", userId: args.userId, resumeId: args.resumeId, modelId: input.modelId, keySource: row.provider.kind, status: "preparing", resumeVersion: input.resumeVersion, contextHash: context.contentHash, promptVersion: 2, reservedPoints, leaseExpiresAt: new Date(now.getTime() + args.configuration.runLeaseSeconds * 1000) });
+    await transaction.insert(aiRuns).values({ id: runId, diagnosticContext: getDiagnosticContext() ?? null, kind: "resume_review", userId: args.userId, resumeId: args.resumeId, modelId: input.modelId, keySource: row.provider.kind, status: "preparing", resumeVersion: input.resumeVersion, contextHash: context.contentHash, promptVersion: 2, reservedPoints, leaseExpiresAt: new Date(now.getTime() + args.configuration.runLeaseSeconds * 1000) });
     await transaction.insert(aiResumeReviews).values({ id: reviewId, runId, input, context, modelName: row.model.displayName });
   });
   let reserved = false;
@@ -67,6 +69,7 @@ export async function prepareResumeReviewRun(args: { userId: string; resumeId: s
     await storeAiAuditEvidence({ runId, evidence: createEncryptedAiAuditEvidence({ request: auditRequest, response: null, encryptionKey: args.configuration.credentialsEncryptionKey, encryptionKeyVersion: 2, retentionDays: args.configuration.auditRetentionDays }) });
     const [queued] = await db.update(aiRuns).set({ status: "queued", encryptedExecutionPayload: encryptPreparedAiRunPayload(prepared, args.configuration.credentialsEncryptionKey), executionPayloadKeyVersion: 2, leaseExpiresAt: null }).where(and(eq(aiRuns.id, runId), eq(aiRuns.status, "preparing"), isNull(aiRuns.stopRequestedAt), isNull(aiRuns.leaseOwner))).returning({ id: aiRuns.id });
     if (!queued) throw new Error("ai_run_preparation_cancelled");
+    handoffDiagnosticTask(runId, "ai");
     return prepared;
   } catch (error) {
     if (reserved) await releaseAiQuota({ userId: args.userId, runId, operationId: runId }).catch(() => undefined);

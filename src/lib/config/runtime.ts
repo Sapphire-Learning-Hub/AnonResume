@@ -24,6 +24,8 @@ import {
 } from "@/lib/config/store";
 import type { ConfigConsumer } from "@/lib/config/types";
 import { applicationMetrics } from "@/lib/observability/metrics/instruments";
+import { setClientErrorPolicy } from "@/lib/observability/browser/policy";
+import { configureDiagnosticStore } from "@/lib/observability/diagnostics/store/runtime";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
 import {
@@ -186,6 +188,8 @@ export class RuntimeConfigManager {
   }
 
   private installInitialSnapshot(resolved: ConfigSnapshot) {
+    configureDiagnosticStore(resolved.values, this.consumer);
+    if (this.consumer === "web") setClientErrorPolicy(resolved.values.clientErrorsEnabled);
     this.restartValues = resolved.values;
     this.current = freezeSnapshot({
       consumer: this.consumer,
@@ -229,6 +233,8 @@ export class RuntimeConfigManager {
           resolved.values,
           this.restartValues!,
         );
+        if (this.consumer === "web") setClientErrorPolicy(resolved.values.clientErrorsEnabled);
+        configureDiagnosticStore(resolved.values, this.consumer);
         this.current = freezeSnapshot({
           consumer: this.consumer,
           desiredRevisionId: resolved.desiredRevisionId,

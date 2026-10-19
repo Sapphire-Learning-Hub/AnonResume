@@ -4,7 +4,7 @@ import { AiClientError, fetchAiConversationIndex, streamAiRun } from "@/lib/ai/c
 import { listResumeReviews, startResumeReview, getResumeReview } from "@/lib/ai/review/client";
 
 const feedback = vi.hoisted(() => ({ error: vi.fn() }));
-vi.mock("@/components/ui/useAppFeedback", () => ({ useAppFeedback: () => ({ notification: feedback }) }));
+vi.mock("@/components/ui/useAppFeedback", () => ({ useAppFeedback: () => ({ failure: (_error: unknown, options: unknown) => feedback.error(options) }) }));
 vi.mock("@/lib/ai/client", async (original) => ({ ...await original<typeof import("@/lib/ai/client")>(), fetchAiConversationIndex: vi.fn(), streamAiRun: vi.fn() }));
 vi.mock("@/lib/ai/review/client", async (original) => ({ ...await original<typeof import("@/lib/ai/review/client")>(), listResumeReviews: vi.fn(), startResumeReview: vi.fn(), getResumeReview: vi.fn() }));
 

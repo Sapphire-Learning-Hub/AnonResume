@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 
 import {
   aiRunProgressStages,
@@ -149,6 +150,7 @@ const streamEventSchema = z.discriminatedUnion("type", [
   z.object({
     sequence: z.number().int(),
     type: z.literal("error"),
+    diagnosticId: z.uuid().optional(),
     code: z.string(),
   }),
 ]);
@@ -182,17 +184,17 @@ async function parseResponse<T>(
         currentVersion: z.number().optional(),
       })
       .safeParse(payload);
-    throw new AiClientError(
+    throw attachErrorDiagnostic(new AiClientError(
       errorPayload.success && errorPayload.data.error
         ? errorPayload.data.error
         : "ai_request_failed",
       response.status,
       errorPayload.success ? errorPayload.data.currentVersion : undefined,
-    );
+    ), readResponseDiagnostic(response));
   }
   const parsed = schema.safeParse(payload);
   if (!parsed.success) {
-    throw new AiClientError("ai_invalid_response", response.status);
+    throw attachErrorDiagnostic(new AiClientError("ai_invalid_response", response.status), readResponseDiagnostic(response));
   }
   return parsed.data;
 }
@@ -361,7 +363,7 @@ export async function streamAiRun(input: {
       }
       await parseAiNdjsonStream(streamResponse.body, (event) => {
         if (event.type === "error") {
-          throw new AiClientError(event.code, 400);
+          throw attachErrorDiagnostic(new AiClientError(event.code, 400), event.diagnosticId);
         }
         if (event.type === "complete") complete = true;
         input.onEvent(event);

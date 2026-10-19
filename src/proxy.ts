@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { DIAGNOSTIC_HEADER } from "@/lib/observability/diagnostics/schema";
 import { NextResponse } from "next/server";
 
 import { getExpectedRequestOrigin } from "@/lib/http/request-origin";
@@ -16,10 +17,12 @@ export function proxy(request: NextRequest) {
   const configuration = validateBootstrapConfiguration();
   const correlate = <T extends NextResponse>(response: T) => {
     response.headers.set(REQUEST_ID_HEADER, identity.requestId);
+    response.headers.set(DIAGNOSTIC_HEADER, identity.requestId);
     return response;
   };
   const next = () => {
     const requestHeaders = new Headers(request.headers);
+    for (const name of ["traceparent", "tracestate", "baggage", DIAGNOSTIC_HEADER]) requestHeaders.delete(name);
     requestHeaders.set("x-anonresume-pathname", request.nextUrl.pathname);
     requestHeaders.set(REQUEST_ID_HEADER, identity.requestId);
     requestHeaders.delete(UPSTREAM_REQUEST_ID_HEADER);

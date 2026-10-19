@@ -1,5 +1,7 @@
 "use client";
 
+import { managementFetch } from "@/lib/admin/client/request";
+
 import { Button, Modal } from "antd";
 import { useEffect, useState } from "react";
 
@@ -100,7 +102,7 @@ export function SystemRestartControl({
     };
     const poll = async () => {
       try {
-        const response = await fetch("/api/manage/system/restarts/current", {
+        const response = await managementFetch("/api/manage/system/restarts/current", {
           cache: "no-store",
         });
         if (!response.ok) throw new Error("restart_status_unavailable");
@@ -132,7 +134,7 @@ export function SystemRestartControl({
 
   async function createRestartOperation() {
     const response = await runSensitive(() =>
-      fetch("/api/manage/system/restarts", {
+      managementFetch("/api/manage/system/restarts", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ idempotencyKey: createIdempotencyKey() }),
