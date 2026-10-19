@@ -357,6 +357,7 @@ describe("AI run service", () => {
               leaseExpiresAt: null,
             })
             .where(eq(aiRuns.id, preparing.id));
+          if (!preparing.assistantMessageId) throw new Error("expected_conversation_run");
           await db
             .update(aiMessages)
             .set({ completionState: "failed" })

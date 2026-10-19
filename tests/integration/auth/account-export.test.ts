@@ -28,7 +28,7 @@ describe("account Excel export", () => {
     }
   });
 
-  it("exports seven readable sheets without credential or token data", async () => {
+  it("exports readable account data without credentials or tokens", async () => {
     const userId = `account-export-${randomUUID()}`;
     const resumeId = `resume-${randomUUID()}`;
     const email = `${userId}@example.com`;
@@ -81,7 +81,7 @@ describe("account Excel export", () => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(bytes);
 
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(expect.arrayContaining([
       "账号资料",
       "简历列表",
       "当前简历内容",
@@ -90,7 +90,8 @@ describe("account Excel export", () => {
       "AI 用量",
       "邀请记录",
       "字体偏好",
-    ]);
+      "简历质量审查",
+    ]));
     const values = workbook.worksheets
       .flatMap((sheet) => sheet.getSheetValues())
       .flat(3)

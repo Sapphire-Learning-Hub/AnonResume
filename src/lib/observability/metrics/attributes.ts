@@ -71,14 +71,13 @@ export function normalizeJobMetricAttributes(
 ): MetricAttributes {
   return {
     "event.outcome": normalizeMetricOutcome(input.outcome),
-    "job.type": JOB_TYPES.has(input.jobType as MetricJobType)
-      ? input.jobType
-      : "unknown",
+    ...normalizeJobTypeAttributes(input.jobType, input.aiTaskType),
   };
 }
 
-export function normalizeJobTypeAttributes(jobType: string): MetricAttributes {
+export function normalizeJobTypeAttributes(jobType: string, aiTaskType?: string): MetricAttributes {
   return {
+    ...(jobType === "ai" && aiTaskType !== undefined ? { "ai.task.type": aiTaskType === "conversation" || aiTaskType === "resume_review" ? aiTaskType : "unknown" } : {}),
     "job.type": JOB_TYPES.has(jobType as MetricJobType)
       ? jobType
       : "unknown",

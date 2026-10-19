@@ -3,6 +3,8 @@ import { asc, eq, or, sql } from "drizzle-orm";
 import {
   aiConversations,
   aiMessages,
+  aiResumeReviews,
+  aiRuns,
   aiUsageLedger,
   db,
   resumeVersions,
@@ -42,6 +44,7 @@ export async function loadAccountExportData(userId: string) {
     usageRows,
     invitationRows,
     fontPreferenceRows,
+    reviewRows,
   ] = await Promise.all([
     getAccountLifecycle(userId),
     getDatabasePool().query<{ providerId: string }>(
@@ -155,6 +158,9 @@ export async function loadAccountExportData(userId: string) {
       .from(userFontPreferences)
       .where(eq(userFontPreferences.userId, userId))
       .orderBy(asc(userFontPreferences.fontPresetId)),
+    db.select({ id: aiResumeReviews.id, resumeId: aiRuns.resumeId, modelName: aiResumeReviews.modelName, input: aiResumeReviews.input, report: aiResumeReviews.report, ignoredIssueIds: aiResumeReviews.ignoredIssueIds, createdAt: aiResumeReviews.createdAt })
+      .from(aiResumeReviews).innerJoin(aiRuns, eq(aiRuns.id, aiResumeReviews.runId))
+      .where(eq(aiRuns.userId, userId)).orderBy(asc(aiResumeReviews.createdAt), asc(aiResumeReviews.id)),
   ]);
 
   return {
@@ -167,5 +173,6 @@ export async function loadAccountExportData(userId: string) {
     usage: usageRows,
     invitations: invitationRows,
     fontPreferences: fontPreferenceRows,
+    reviews: reviewRows,
   };
 }

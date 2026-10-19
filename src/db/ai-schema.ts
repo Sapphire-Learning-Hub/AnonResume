@@ -20,6 +20,8 @@ import type {
   AiProposalProgressChange,
   AiRunProgressStage,
 } from "@/lib/ai/runs/stream-events";
+import type { AiReviewInput, ValidatedReviewReport } from "@/domain/resume/ai/review/schema";
+import type { ReviewContext } from "@/domain/resume/ai/review/context";
 
 import { getDatabaseSchemaName, resumes } from "./schema";
 
@@ -359,10 +361,11 @@ export const aiMessages =
 
 const runColumns = {
   id: uuid("id").primaryKey().defaultRandom(),
+  kind: text("kind").$type<"conversation" | "resume_review">().notNull().default("conversation"),
   userId: text("user_id").notNull(),
   resumeId: text("resume_id").notNull(),
-  conversationId: uuid("conversation_id").notNull(),
-  assistantMessageId: uuid("assistant_message_id").notNull(),
+  conversationId: uuid("conversation_id"),
+  assistantMessageId: uuid("assistant_message_id"),
   modelId: uuid("model_id").notNull(),
   keySource: text("key_source").$type<AiProviderKind>().notNull(),
   status: text("status").$type<AiRunStatus>().notNull(),
@@ -401,6 +404,9 @@ const runColumns = {
 export const aiRuns =
   schemaName === "public"
     ? pgTable("ai_runs", runColumns, (table) => [
+        foreignKey({ columns: [table.userId, table.resumeId], foreignColumns: [resumes.userId, resumes.id], name: "ai_runs_resume_fk" }).onDelete("cascade").onUpdate("cascade"),
+        uniqueIndex("ai_runs_id_kind_unique").on(table.id, table.kind),
+        check("ai_runs_kind_check", sql`(${table.kind} = 'conversation' AND ${table.conversationId} IS NOT NULL AND ${table.assistantMessageId} IS NOT NULL) OR (${table.kind} = 'resume_review' AND ${table.conversationId} IS NULL AND ${table.assistantMessageId} IS NULL)`),
         foreignKey({ columns: [table.conversationId], foreignColumns: [aiConversations.id], name: "ai_runs_conversation_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.assistantMessageId], foreignColumns: [aiMessages.id], name: "ai_runs_message_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_runs_model_fk" }),
@@ -411,6 +417,9 @@ export const aiRuns =
         index("ai_runs_status_lease_idx").on(table.status, table.leaseExpiresAt),
       ])
     : pgSchema(schemaName).table("ai_runs", runColumns, (table) => [
+        foreignKey({ columns: [table.userId, table.resumeId], foreignColumns: [resumes.userId, resumes.id], name: "ai_runs_resume_fk" }).onDelete("cascade").onUpdate("cascade"),
+        uniqueIndex("ai_runs_id_kind_unique").on(table.id, table.kind),
+        check("ai_runs_kind_check", sql`(${table.kind} = 'conversation' AND ${table.conversationId} IS NOT NULL AND ${table.assistantMessageId} IS NOT NULL) OR (${table.kind} = 'resume_review' AND ${table.conversationId} IS NULL AND ${table.assistantMessageId} IS NULL)`),
         foreignKey({ columns: [table.conversationId], foreignColumns: [aiConversations.id], name: "ai_runs_conversation_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.assistantMessageId], foreignColumns: [aiMessages.id], name: "ai_runs_message_fk" }).onDelete("cascade"),
         foreignKey({ columns: [table.modelId], foreignColumns: [aiModels.id], name: "ai_runs_model_fk" }),
@@ -420,6 +429,29 @@ export const aiRuns =
         uniqueIndex("ai_runs_active_user_resume_unique").on(table.userId, table.resumeId).where(sql`${table.status} IN ('queued', 'preparing', 'streaming')`),
         index("ai_runs_status_lease_idx").on(table.status, table.leaseExpiresAt),
       ]);
+
+const reviewColumns = {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull(),
+  runKind: text("run_kind").notNull().default("resume_review"),
+  input: jsonb("input").$type<AiReviewInput>().notNull(),
+  context: jsonb("context").$type<ReviewContext>().notNull(),
+  modelName: text("model_name").notNull(),
+  report: jsonb("report").$type<ValidatedReviewReport>(),
+  ignoredIssueIds: jsonb("ignored_issue_ids").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+};
+export const aiResumeReviews = schemaName === "public"
+  ? pgTable("ai_resume_reviews", reviewColumns, (table) => [
+      foreignKey({ columns: [table.runId, table.runKind], foreignColumns: [aiRuns.id, aiRuns.kind], name: "ai_resume_reviews_run_fk" }).onDelete("cascade"),
+      check("ai_resume_reviews_kind_check", sql`${table.runKind} = 'resume_review'`),
+      uniqueIndex("ai_resume_reviews_run_unique").on(table.runId),
+    ])
+  : pgSchema(schemaName).table("ai_resume_reviews", reviewColumns, (table) => [
+      foreignKey({ columns: [table.runId, table.runKind], foreignColumns: [aiRuns.id, aiRuns.kind], name: "ai_resume_reviews_run_fk" }).onDelete("cascade"),
+      check("ai_resume_reviews_kind_check", sql`${table.runKind} = 'resume_review'`),
+      uniqueIndex("ai_resume_reviews_run_unique").on(table.runId),
+    ]);
 
 const proposalColumns = {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -526,6 +558,7 @@ export const aiAuditPayloads =
       ]);
 
 export const aiDatabaseTables = {
+  aiResumeReviews,
   aiProviderCredentials,
   aiModels,
   aiModelRateVersions,

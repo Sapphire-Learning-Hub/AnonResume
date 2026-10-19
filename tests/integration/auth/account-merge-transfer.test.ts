@@ -15,6 +15,7 @@ import {
   aiModels,
   aiProviderCredentials,
   aiQuotaAccounts,
+  aiResumeReviews,
   aiRuns,
   aiUsageLedger,
   db,
@@ -27,6 +28,11 @@ import {
   userFontPreferences,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
+import { buildReviewContext } from "@/domain/resume/ai/review/context";
+import { validateReviewResult } from "@/domain/resume/ai/review/validation";
+import { getOwnedResumeReview } from "@/lib/ai/review/repository";
+import { loadAccountExportData } from "@/lib/auth/account/export-data";
+import { reviewOutput } from "../../support/ai-review";
 import { executeAccountMergeTransfer } from "@/lib/auth/account/merge/transfer";
 import { createMergedAccountEmail } from "@/lib/auth/account/merge/tokens";
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -194,6 +200,18 @@ async function createFixture() {
     modelId: model!.id,
     rateCardVersion: 1,
   }).returning({ id: aiUsageLedger.id });
+  const reviewContext = buildReviewContext(document);
+  const [reviewRun] = await db.insert(aiRuns).values({
+    kind: "resume_review", userId: secondary.id, resumeId: secondaryResumeId,
+    modelId: model!.id, keySource: "user", status: "complete", resumeVersion: 1,
+    contextHash: reviewContext.contentHash, promptVersion: 1, finalPoints: 0, completedAt: now,
+  }).returning({ id: aiRuns.id });
+  const [review] = await db.insert(aiResumeReviews).values({
+    runId: reviewRun!.id,
+    input: { modelId: model!.id, resumeVersion: 1, locale: "zh-CN" },
+    context: reviewContext, modelName: "Historical review model",
+    report: validateReviewResult(reviewOutput(), reviewContext, {}),
+  }).returning({ id: aiResumeReviews.id });
   await db.insert(aiQuotaAccounts).values([
     {
       userId: primary.id,
@@ -322,6 +340,7 @@ async function createFixture() {
     providerId: provider!.id,
     runId: run!.id,
     secondary,
+    reviewId: review!.id,
     secondaryResumeId,
     secondarySlug,
     versionId,
@@ -371,6 +390,7 @@ async function cleanupFixture(fixture: Fixture | undefined) {
   await db.delete(onboardingRuns).where(eq(onboardingRuns.userId, fixture.secondary.id));
   await db.delete(aiUsageLedger).where(eq(aiUsageLedger.id, fixture.ledgerId));
   await db.delete(aiRuns).where(eq(aiRuns.id, fixture.runId));
+  await db.delete(aiRuns).where(eq(aiRuns.resumeId, fixture.secondaryResumeId));
   await db.delete(aiConversations).where(eq(aiConversations.id, fixture.conversationId));
   await db.delete(aiQuotaAccounts).where(and(
     eq(aiQuotaAccounts.userId, fixture.primary.id),
@@ -425,6 +445,13 @@ describe("account merge transfer", () => {
       operationId: fixture.operationId,
       now: fixture.now,
     })).resolves.toEqual({ state: "completed" });
+
+    expect(await getOwnedResumeReview({ userId: fixture.secondary.id, reviewId: fixture.reviewId })).toBeNull();
+    expect(await getOwnedResumeReview({ userId: fixture.primary.id, reviewId: fixture.reviewId })).toMatchObject({
+      modelName: "Historical review model", report: { score: 75 },
+    });
+    const exported = await loadAccountExportData(fixture.primary.id);
+    expect(exported.reviews).toEqual(expect.arrayContaining([expect.objectContaining({ id: fixture.reviewId, report: expect.objectContaining({ score: 75 }) })]));
 
     const identity = await getDatabasePool().query<{
       id: string;

@@ -42,6 +42,7 @@ export {
   accountSocialLinkAttempts,
 } from "./account-merge-schema";
 export {
+  aiResumeReviews,
   aiAuditPayloads,
   aiConversations,
   aiMessages,

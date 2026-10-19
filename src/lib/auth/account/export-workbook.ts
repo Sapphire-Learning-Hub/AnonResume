@@ -2,7 +2,7 @@ import { PassThrough, Readable } from "node:stream";
 
 import ExcelJS from "exceljs";
 
-import type { AppLocale } from "@/i18n/messages";
+import { formatMessage, getMessages, type AppLocale } from "@/i18n/messages";
 
 import { loadAccountExportData, type AccountExportData } from "./export-data";
 
@@ -76,6 +76,34 @@ function localizedSheets(
     [zh ? "待注销时间" : "Deletion due at", data.lifecycle.deletionDueAt],
   ].map(([label, cellValue]) => ({ field: label, value: cellValue }));
 
+  const reviewSheet: ExportSheet = {
+      name: zh ? "简历质量审查" : "Resume quality reviews",
+      columns: [
+        { header: zh ? "报告 ID" : "Report ID", key: "id", width: 38 },
+        { header: zh ? "简历 ID" : "Resume ID", key: "resumeId", width: 38 },
+        { header: zh ? "模型" : "Model", key: "model", width: 26 },
+        { header: zh ? "创建时间" : "Created at", key: "createdAt", width: 22 },
+        { header: zh ? "项目" : "Field", key: "field", width: 26 },
+        { header: zh ? "内容段" : "Part", key: "part", width: 10 },
+        { header: zh ? "内容" : "Content", key: "content", width: 100 },
+      ],
+      rows: data.reviews.flatMap((review) => {
+        const report = review.report;
+        const entries: Array<[string, string]> = [
+          [zh ? "目标岗位" : "Target role", review.input.targetRole ?? ""],
+          [zh ? "职位描述" : "Job description", review.input.jobDescription ?? ""],
+          [zh ? "综合分" : "Quality score", report ? String(report.score) : ""],
+          [zh ? "总结" : "Summary", report?.summary ?? ""],
+          [zh ? "岗位匹配" : "Role match", report?.match?.summary ?? ""],
+          [zh ? "岗位内容匹配分" : "Role content match score", report?.match?.score == null ? "" : String(report.match.score)],
+          [zh ? "优势" : "Strengths", report?.strengths.join("\n") ?? ""],
+          ...(report?.dimensions.map((entry): [string, string] => [formatMessage(getMessages(locale), `aiReview.dimension.${entry.dimension}`), `${entry.grade}/4\n${entry.reason}`]) ?? []),
+          ...(report?.issues.map((issue): [string, string] => [issue.title, [issue.explanation, ...issue.evidence.map((item) => item.quote), issue.suggestion, review.ignoredIssueIds.includes(issue.id) ? (zh ? "已忽略" : "Ignored") : ""].filter(Boolean).join("\n")]) ?? []),
+          ...(report?.match?.requirements.map((entry): [string, string] => [entry.text, [formatMessage(getMessages(locale), `aiReview.${entry.status}`), entry.reason, ...entry.evidence.map((item) => item.quote)].join("\n")]) ?? []),
+        ];
+        return entries.flatMap(([field, value]) => textChunks(value).map((content, index) => ({ id: review.id, resumeId: review.resumeId, model: review.modelName, createdAt: review.createdAt, field, part: index + 1, content })));
+      }),
+    };
   return [
     {
       name: names[0]!,
@@ -229,6 +257,7 @@ function localizedSheets(
       ],
       rows: data.fontPreferences,
     },
+    reviewSheet,
   ];
 }
 

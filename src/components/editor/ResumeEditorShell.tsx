@@ -47,6 +47,7 @@ import { useStore } from "zustand";
 
 import { ResumeRenderer } from "@/components/resume/ResumeRenderer";
 import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
+import { AiReviewPanel } from "@/components/ai/review/AiReviewPanel";
 import {
   applySelectedAiChanges,
   type AiResumeProposal,
@@ -656,6 +657,10 @@ export function ResumeEditorShell({
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
   const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
+  const [aiReviewOpen, setAiReviewOpen] = useState(false);
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiMenuKeyboard, setAiMenuKeyboard] = useState(false);
+  const [aiSuggestionConversationId, setAiSuggestionConversationId] = useState<string>();
   const [aiProposalPreview, setAiProposalPreview] = useState<{
     document: ResumeDocument;
     proposal: AiResumeProposal;
@@ -2678,18 +2683,40 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
-      <Tooltip title={t("ai.title")}>
+      <Dropdown trigger={["hover"]} open={aiMenuOpen} autoFocus={aiMenuKeyboard} onOpenChange={(open) => {
+        setAiMenuOpen(open);
+        if (!open) setAiMenuKeyboard(false);
+      }} menu={{ items: [
+        { key: "assistant", label: t("ai.title"), disabled: activeEditSurfaceMode === "markdown" },
+        { key: "review", label: t("aiReview.title") },
+      ], onClick: ({ key }) => {
+        setAiMenuOpen(false);
+        setAiMenuKeyboard(false);
+        setAiProposalPreview(undefined);
+        setAiReviewOpen(key === "review");
+        setAiAssistantOpen(key === "assistant");
+        if (key === "assistant") setAiSuggestionConversationId(undefined);
+      } }}>
         <Button
           aria-label={t("ai.title")}
           className={styles.ribbonLabelButton}
-          disabled={activeEditSurfaceMode === "markdown"}
           type="text"
-          onClick={() => setAiAssistantOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setAiMenuKeyboard(true);
+              setAiMenuOpen(true);
+            }
+          }}
+          onClick={() => {
+            if (activeEditSurfaceMode === "markdown") { setAiAssistantOpen(false); setAiReviewOpen(true); }
+            else { setAiReviewOpen(false); setAiAssistantOpen(true); setAiSuggestionConversationId(undefined); }
+          }}
         >
           <AiAssistantIcon size={16} />
           <span>AI</span>
         </Button>
-      </Tooltip>
+      </Dropdown>
       <Tooltip title={t("editor.versionHistory")}>
         <Button
           aria-label={t("editor.versionHistory")}
@@ -3737,6 +3764,7 @@ export function ResumeEditorShell({
       ) : null}
       <AiAssistantPanel
         open={aiAssistantOpen}
+        initialConversationId={aiSuggestionConversationId}
         resumeId={resumeId}
         resumeVersion={version}
         sectionId={selection.sectionId}
@@ -3766,6 +3794,35 @@ export function ResumeEditorShell({
         }}
         onPreviewProposal={previewAiProposal}
       />
+      {aiReviewOpen ? <AiReviewPanel
+        key={resumeId}
+        resumeId={resumeId}
+        resumeVersion={version}
+        onClose={() => setAiReviewOpen(false)}
+        onEnsureSaved={async () => {
+          if (markdownSession.active && !(await markdownSession.flush())) return null;
+          for (let attempt = 0; attempt < 3 && store.getState().dirty; attempt += 1) await flushSave();
+          return store.getState().dirty ? null : { resumeVersion: store.getState().version };
+        }}
+        onLocate={(target) => {
+          const elements = Array.from(globalThis.document.querySelectorAll<HTMLElement>("[data-resume-section-id]"));
+          const section = elements.find((element) => element.dataset.resumeSectionId === target.sectionId);
+          const block = section && Array.from(section.querySelectorAll<HTMLElement>("[data-resume-block-path]")).find((element) => element.dataset.resumeBlockPath === target.blockPath.join("::"));
+          (block ?? section)?.scrollIntoView({ block: "center", behavior: "smooth" });
+          if ((block || (!target.blockPath.length && section)) && !markdownSession.active) store.getState().setSelection({ sectionId: target.sectionId, ...(target.blockPath.length ? { blockPath: target.blockPath } : {}) });
+        }}
+        onOpenSuggestions={async (conversationId) => {
+          if (markdownSession.active) {
+            if (!(await markdownSession.exit())) return false;
+            setEditSurfaceMode("content");
+            await flushSave();
+          }
+          setAiSuggestionConversationId(conversationId);
+          setAiReviewOpen(false);
+          setAiAssistantOpen(true);
+          return true;
+        }}
+      /> : null}
     </div>
   );
 }

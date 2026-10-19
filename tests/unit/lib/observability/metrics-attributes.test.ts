@@ -47,4 +47,9 @@ describe("metrics attributes", () => {
       "job.type": "unknown",
     });
   });
+
+  it("bounds AI task categories without exporting arbitrary values", () => {
+    expect(normalizeJobMetricAttributes({ jobType: "ai", outcome: "success", aiTaskType: "resume_review" })).toEqual({ "event.outcome": "success", "job.type": "ai", "ai.task.type": "resume_review" });
+    expect(normalizeJobMetricAttributes({ jobType: "ai", outcome: "success", aiTaskType: "private-resume-title" })).toEqual({ "event.outcome": "success", "job.type": "ai", "ai.task.type": "unknown" });
+  });
 });

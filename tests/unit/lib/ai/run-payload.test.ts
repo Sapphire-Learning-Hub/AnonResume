@@ -4,6 +4,7 @@ import {
   encryptPreparedAiRunPayload,
 } from "@/lib/ai/runs/run-payload";
 import type { PreparedAiRun } from "@/lib/ai/runs/service";
+import { buildReviewContext } from "@/domain/resume/ai/review/context";
 
 describe("AI run execution payload", () => {
   const encryptionKey = Buffer.alloc(32, 12);
@@ -85,6 +86,24 @@ describe("AI run execution payload", () => {
     expect(restored.configuration.credentialsEncryptionKey).toEqual(
       encryptionKey,
     );
+  });
+
+  it("round-trips review payloads without inventing a conversation", () => {
+    const { conversationId: _conversationId, assistantMessageId: _assistantMessageId, ...base } = preparedRun();
+    void _conversationId;
+    void _assistantMessageId;
+    const review = {
+      ...base,
+      kind: "resume_review" as const,
+      reviewId: "00000000-0000-4000-8000-000000000004",
+      reviewInput: { modelId: "00000000-0000-4000-8000-000000000005", resumeVersion: 1, locale: "en-US" as const },
+      reviewContextWindow: 64000,
+      reviewProtocolVersion: 1 as const,
+      reviewContext: buildReviewContext(base.resumeDocument),
+    };
+    const restored = decryptPreparedAiRunPayload({ encryptedPayload: encryptPreparedAiRunPayload(review, encryptionKey), encryptionKey, expectedRunId: review.runId, expectedKind: "resume_review" });
+    expect(restored).toMatchObject({ kind: "resume_review", reviewId: review.reviewId, reviewProtocolVersion: 1 });
+    expect(restored).not.toHaveProperty("conversationId");
   });
 
   it("accepts queued payloads created before timeout policies were added", () => {

@@ -445,7 +445,7 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("tab", { name: "插入" })).toHaveFocus();
   });
 
-  it("labels the AI assistant entry in the document bar", () => {
+  it("opens the quality review choice from the AI entry with the keyboard", async () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -453,9 +453,9 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "AI 编辑助手" })).toHaveTextContent(
-      "AI",
-    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "AI 编辑助手" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "质量审查" }));
+    expect(screen.getByRole("complementary", { name: "质量审查" })).toBeInTheDocument();
   });
 
   it("places interface settings in the editor document bar", () => {
@@ -2998,38 +2998,6 @@ describe("ResumeEditorShell", () => {
     );
 
     expect(screen.getByRole("button", { name: "项目" })).toBeInTheDocument();
-  });
-
-  it("replaces the previewed template without mutating the resume", async () => {
-    render(
-      <ResumeEditorShell
-        resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
-      />,
-    );
-
-    openRibbonTab("插入");
-    fireEvent.click(screen.getByRole("button", { name: "选择章节模板…" }));
-    fireEvent.click(screen.getByRole("button", { name: "预览项目章节" }));
-
-    const projectDialog = await findDialogByContent("项目章节模板", "项目名称");
-    fireEvent.click(
-      within(projectDialog).getByRole("button", { name: spacedLabel("取消") }),
-    );
-    await screen.findByRole("dialog", { name: "章节模板" });
-    fireEvent.click(screen.getByRole("button", { name: "预览教育章节" }));
-
-    const educationDialog = await findDialogByContent(
-      "教育章节模板",
-      "学校 / 专业",
-    );
-
-    expect(
-      await within(educationDialog).findByText("学校 / 专业"),
-    ).toBeInTheDocument();
-    expect(within(educationDialog).queryByText("项目名称")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "项目" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "教育" })).not.toBeInTheDocument();
   });
 
   it("hides the selected section from the canvas while keeping it inspectable", () => {

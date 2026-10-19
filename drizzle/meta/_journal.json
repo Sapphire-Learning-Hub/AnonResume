@@ -288,6 +288,13 @@
       "when": 1792046960520,
       "tag": "0040_puzzling_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792391327611,
+      "tag": "0041_harsh_naoko",
+      "breakpoints": true
     }
   ]
 }

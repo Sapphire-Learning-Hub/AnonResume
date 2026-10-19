@@ -1,3 +1,5 @@
+import { aiReviewMessages } from "./ai-review-messages";
+
 export const supportedLocales = ["zh-CN", "en-US"] as const;
 
 export type AppLocale = (typeof supportedLocales)[number];
@@ -7,6 +9,7 @@ export const localeCookieName = "anonresume-locale";
 
 const messages = {
   "zh-CN": {
+    ...aiReviewMessages["zh-CN"],
     "common.appName": "AnonResume",
     "common.signIn": "登录",
     "common.signOut": "退出登录",
@@ -1704,6 +1707,7 @@ const messages = {
     "account.recovery.restored": "账号已恢复",
   },
   "en-US": {
+    ...aiReviewMessages["en-US"],
     "common.appName": "AnonResume",
     "common.signIn": "Sign In",
     "common.signOut": "Sign Out",
