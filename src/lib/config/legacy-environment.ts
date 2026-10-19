@@ -7,6 +7,10 @@ import {
   type ManagedConfig,
 } from "@/lib/config/registry";
 import {
+  MetricsConfigurationValidationError,
+  validatePublishableManagedConfig,
+} from "@/lib/config/observability";
+import {
   ensureConfigurationState,
   getConfigurationState,
   publishConfigurationDraft,
@@ -69,6 +73,11 @@ export class LegacyEnvironmentImportConflictError extends Error {
 }
 
 function parseEnvironmentValue(key: ConfigKey, rawValue: string) {
+  if (key === "metricsEnabled") {
+    if (rawValue === "otlp") return true;
+    if (rawValue === "none") return false;
+    throw new Error("invalid_metrics_exporter");
+  }
   const defaultValue = CONFIG_REGISTRY[key].defaultValue;
   if (typeof defaultValue === "boolean") {
     if (rawValue === "true") return true;
@@ -136,6 +145,20 @@ export function resolveLegacyManagedConfig(
         (candidate) => candidate.environmentKey === environmentKey,
       );
       if (entry && entry.status === "import") entry.status = "invalid";
+    }
+  } else {
+    try {
+      validatePublishableManagedConfig(parsed.data);
+    } catch (error) {
+      if (!(error instanceof MetricsConfigurationValidationError)) throw error;
+      for (const key of error.fields) {
+        issues.push(`${key}:invalid`);
+        const environmentKey = CONFIG_REGISTRY[key as ConfigKey]?.environmentKey;
+        const entry = entries.find(
+          (candidate) => candidate.environmentKey === environmentKey,
+        );
+        if (entry && entry.status === "import") entry.status = "invalid";
+      }
     }
   }
 

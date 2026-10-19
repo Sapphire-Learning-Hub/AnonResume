@@ -13,6 +13,7 @@ import {
 } from "@/lib/observability/logging";
 
 import { ConfigurationValidationError } from "./validation";
+import { MetricsConfigurationValidationError } from "@/lib/config/observability";
 
 const configurationLog = getLogger("anonresume.configuration");
 
@@ -21,6 +22,7 @@ export function configurationApiErrorResponse(error: unknown) {
   if (authError) return authError;
   if (
     error instanceof ConfigurationValidationError ||
+    error instanceof MetricsConfigurationValidationError ||
     error instanceof ZodError ||
     error instanceof SyntaxError ||
     error instanceof RequestBodyTooLargeError

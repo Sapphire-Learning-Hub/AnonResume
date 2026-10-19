@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  AggregationTemporality,
+  InMemoryMetricExporter,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
 
 import {
   REQUEST_ID_HEADER,
@@ -6,6 +11,10 @@ import {
   withRequestLogging,
 } from "@/lib/observability/http";
 import { initializeLogging } from "@/lib/observability/logging";
+import {
+  initializeMetrics,
+  shutdownMetrics,
+} from "@/lib/observability/metrics";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,6 +47,10 @@ function createLogCapture() {
 describe("route request logging", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    await shutdownMetrics();
   });
 
   it("logs a successful response with correlation and elapsed duration", async () => {
@@ -193,5 +206,79 @@ describe("route request logging", () => {
       "event.outcome": "failure",
       "http.response.status_code": 503,
     });
+  });
+
+  it("exports completed and thrown requests without request identifiers", async () => {
+    createLogCapture();
+    const exporter = new InMemoryMetricExporter(
+      AggregationTemporality.CUMULATIVE,
+    );
+    const runtime = await initializeMetrics({
+      configuration: {
+        enabled: true,
+        endpoint: "http://otel-collector:4318/v1/metrics",
+        exportIntervalMs: 60_000,
+        exportTimeoutMs: 10_000,
+        headers: {},
+      },
+      environment: "test",
+      identity: {
+        deploymentId: "test-deployment",
+        instanceId: "web-1",
+        role: "web",
+        sessionId: "session-1",
+        stableId: "test-deployment/web/web-1",
+      },
+      readerFactory: () => new PeriodicExportingMetricReader({
+        exporter,
+        exportIntervalMillis: 60_000,
+        exportTimeoutMillis: 10_000,
+      }),
+      serviceVersion: "test",
+    });
+    const successful = withRequestLogging(
+      "/api/resumes/[id]",
+      (request: Request) => {
+        expect(request.method).toBe("GET");
+        return new Response(null, { status: 204 });
+      },
+    );
+    const failed = withRequestLogging("/api/resumes/[id]", (request: Request) => {
+      expect(request.method).toBe("GET");
+      throw new Error("private resume id resume-123");
+    });
+
+    await successful(new Request("https://example.com/api/resumes/resume-1"));
+    await expect(
+      failed(new Request("https://example.com/api/resumes/resume-2")),
+    ).rejects.toThrow("private resume id");
+    await runtime.forceFlush();
+
+    const exported = exporter.getMetrics().at(-1);
+    const requests = exported?.scopeMetrics
+      .flatMap((scope) => scope.metrics)
+      .find(
+        (metric) => metric.descriptor.name === "anonresume.http.server.requests",
+      );
+    expect(requests?.dataPoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "event.outcome": "success",
+          "http.response.status_code_class": "2xx",
+          "http.route": "/api/resumes/[id]",
+        }),
+        value: 1,
+      }),
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          "event.outcome": "failure",
+          "http.response.status_code_class": "unknown",
+          "http.route": "/api/resumes/[id]",
+        }),
+        value: 1,
+      }),
+    ]));
+    expect(JSON.stringify(exported)).not.toContain("resume-123");
+    expect(JSON.stringify(exported)).not.toContain("resume-2");
   });
 });

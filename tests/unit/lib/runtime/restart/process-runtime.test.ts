@@ -34,10 +34,16 @@ describe("managed restart process runtime", () => {
   it("delays the Web termination signal until the initiating response can finish", async () => {
     const request = restartRequest();
     const runtimeCoordinator = coordinator(request);
+    let finishShutdown!: () => void;
+    const shutdownFinished = new Promise<void>((resolve) => {
+      finishShutdown = resolve;
+    });
+    const beforeSignal = vi.fn(() => shutdownFinished);
     const signalProcess = vi.fn();
     let scheduled: (() => void) | undefined;
 
     const runtime = await startWebRestartRuntime({
+      beforeSignal,
       coordinator: runtimeCoordinator,
       responseGraceMs: 1_000,
       schedule(callback, delay) {
@@ -56,6 +62,9 @@ describe("managed restart process runtime", () => {
     expect(signalProcess).not.toHaveBeenCalled();
 
     scheduled?.();
+    await vi.waitFor(() => expect(beforeSignal).toHaveBeenCalled());
+    expect(signalProcess).not.toHaveBeenCalled();
+    finishShutdown();
     await vi.waitFor(() => {
       expect(request.markAwaitingStartup).toHaveBeenCalled();
       expect(signalProcess).toHaveBeenCalledWith("SIGTERM");

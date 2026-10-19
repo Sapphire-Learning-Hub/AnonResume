@@ -57,6 +57,11 @@ export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> =
   aiWorkerPollIntervalMs: "configuration.field.aiWorkerPollIntervalMs",
   aiWorkerRecoveryIntervalMs: "configuration.field.aiWorkerRecoveryIntervalMs",
   aiWorkerRetentionIntervalMs: "configuration.field.aiWorkerRetentionIntervalMs",
+  metricsEnabled: "configuration.field.metricsEnabled",
+  metricsOtlpEndpoint: "configuration.field.metricsOtlpEndpoint",
+  metricsOtlpHeaders: "configuration.field.metricsOtlpHeaders",
+  metricsExportIntervalMs: "configuration.field.metricsExportIntervalMs",
+  metricsExportTimeoutMs: "configuration.field.metricsExportTimeoutMs",
   sourceCodeUrl: "configuration.field.sourceCodeUrl",
   legalOperatorName: "configuration.field.legalOperatorName",
   legalContactEmail: "configuration.field.legalContactEmail",
@@ -79,6 +84,7 @@ export const configurationGroupMessageKeys = {
   pdf: "configuration.group.pdf",
   resume: "configuration.group.resume",
   ai: "configuration.group.ai",
+  observability: "configuration.group.observability",
   legal: "configuration.group.legal",
 } as const satisfies Record<string, AdminMessageKey>;
 
@@ -108,6 +114,8 @@ export const configurationNumberBounds: Partial<
   aiWorkerPollIntervalMs: { min: 1 },
   aiWorkerRecoveryIntervalMs: { min: 1 },
   aiWorkerRetentionIntervalMs: { min: 1 },
+  metricsExportIntervalMs: { min: 5_000, max: 300_000 },
+  metricsExportTimeoutMs: { min: 1_000, max: 30_000 },
 };
 
 const configKeySchema = z.enum(CONFIG_KEYS as [ConfigKey, ...ConfigKey[]]);
@@ -122,7 +130,16 @@ const configFieldSchema = z.object({
   changed: z.boolean(),
   configured: z.boolean(),
   consumers: z.array(z.enum(["web", "pdf-worker", "ai-worker"])),
-  group: z.enum(["general", "email", "security", "pdf", "resume", "ai", "legal"]),
+  group: z.enum([
+    "general",
+    "email",
+    "security",
+    "pdf",
+    "resume",
+    "ai",
+    "observability",
+    "legal",
+  ]),
   key: configKeySchema,
   public: z.boolean(),
   sensitive: z.boolean(),

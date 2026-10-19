@@ -28,6 +28,7 @@ import {
   getLogger,
   serializeSafeError,
 } from "@/lib/observability/logging";
+import { applicationMetrics } from "@/lib/observability/metrics";
 
 const PRINT_READY_FLAG = "__ANON_RESUME_PRINT_READY__";
 const IDLE_POLL_MS = 1_000;
@@ -74,6 +75,14 @@ export async function processPdfExportJob(
   },
 ) {
   const startedAt = process.hrtime.bigint();
+  let outcome: "cancelled" | "failure" | "success" = "failure";
+  applicationMetrics.recordJobStarted({
+    jobType: "pdf",
+    queueWaitSeconds: Math.max(
+      0,
+      (Date.now() - job.createdAt.getTime()) / 1_000,
+    ),
+  });
   const controller = new AbortController();
   const exportPdf = options.exportPdf ?? exportResumePdf;
   const heartbeatMs = Math.min(
@@ -124,6 +133,7 @@ export async function processPdfExportJob(
     });
 
     if (cancelRequested) {
+      outcome = "cancelled";
       await failPdfExport({
         jobId: job.id,
         workerId: options.workerId,
@@ -139,12 +149,14 @@ export async function processPdfExportJob(
       result,
       configuration: options.configuration,
     });
+    outcome = "success";
     pdfLog.info("export_completed", {
       durationNs: Number(process.hrtime.bigint() - startedAt),
       outcome: "success",
       transactionId: job.id,
     });
   } catch (error) {
+    outcome = controller.signal.aborted ? "cancelled" : "failure";
     await failPdfExport({
       jobId: job.id,
       workerId: options.workerId,
@@ -159,6 +171,12 @@ export async function processPdfExportJob(
       transactionId: job.id,
     });
   } finally {
+    applicationMetrics.recordJobCompleted({
+      durationSeconds: Number(process.hrtime.bigint() - startedAt) /
+        1_000_000_000,
+      jobType: "pdf",
+      outcome,
+    });
     clearInterval(heartbeat);
   }
 }
@@ -223,6 +241,10 @@ export async function runPdfExportWorker(options?: {
         },
         now: new Date(now),
       });
+      applicationMetrics.recordWorkerHeartbeat({
+        outcome: "success",
+        workerType: "pdf",
+      });
       if (heartbeatFailed) {
         heartbeatFailed = false;
         runtimeLog.info("worker_heartbeat_recovered", {
@@ -231,6 +253,14 @@ export async function runPdfExportWorker(options?: {
         });
       }
     } catch (error) {
+      applicationMetrics.recordWorkerHeartbeat({
+        outcome: "failure",
+        workerType: "pdf",
+      });
+      applicationMetrics.recordWorkerOperationFailure({
+        operation: "heartbeat",
+        workerType: "pdf",
+      });
       if (!heartbeatFailed) {
         heartbeatFailed = true;
         runtimeLog.error("worker_heartbeat_failed", {
@@ -246,14 +276,31 @@ export async function runPdfExportWorker(options?: {
       config.forceExpiryMs,
     );
     if (now - lastCleanupAt >= cleanupIntervalMs) {
-      await deleteExpiredPdfExportResults(config);
+      try {
+        await deleteExpiredPdfExportResults(config);
+      } catch (error) {
+        applicationMetrics.recordWorkerOperationFailure({
+          operation: "cleanup",
+          workerType: "pdf",
+        });
+        throw error;
+      }
       lastCleanupAt = now;
     }
 
-    const jobs = await claimPdfExportJobs({
-      workerId: leaseOwner,
-      configuration: config,
-    });
+    let jobs: Awaited<ReturnType<typeof claimPdfExportJobs>>;
+    try {
+      jobs = await claimPdfExportJobs({
+        workerId: leaseOwner,
+        configuration: config,
+      });
+    } catch (error) {
+      applicationMetrics.recordWorkerOperationFailure({
+        operation: "claim",
+        workerType: "pdf",
+      });
+      throw error;
+    }
 
     if (jobs.length === 0) {
       await delay(options?.idlePollMs ?? IDLE_POLL_MS, options?.signal);

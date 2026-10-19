@@ -23,6 +23,7 @@ import {
   type ConfigSnapshot,
 } from "@/lib/config/store";
 import type { ConfigConsumer } from "@/lib/config/types";
+import { applicationMetrics } from "@/lib/observability/metrics/instruments";
 import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 import { getApplicationRelease } from "@/lib/runtime/release-metadata";
 import {
@@ -304,6 +305,9 @@ export class RuntimeConfigManager {
           },
         },
       });
+    if (!metadata.stopped) {
+      applicationMetrics.recordRuntimeConfigurationHealth(state.health);
+    }
   }
 }
 

@@ -43,6 +43,36 @@ describe("legacy managed environment import", () => {
     ).toBe(false);
   });
 
+  it("maps standard OTEL metrics environment variables", () => {
+    const resolved = resolveLegacyManagedConfig({
+      OTEL_METRICS_EXPORTER: "otlp",
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:
+        "http://otel-collector:4318/v1/metrics",
+      OTEL_EXPORTER_OTLP_METRICS_HEADERS:
+        "authorization=Bearer%20token,x-scope=tenant-a",
+      OTEL_METRIC_EXPORT_INTERVAL: "15000",
+      OTEL_EXPORTER_OTLP_METRICS_TIMEOUT: "5000",
+    });
+
+    expect(resolved.valid).toBe(true);
+    expect(resolved.values).toEqual({
+      metricsEnabled: true,
+      metricsExportIntervalMs: 15_000,
+      metricsExportTimeoutMs: 5_000,
+      metricsOtlpEndpoint: "http://otel-collector:4318/v1/metrics",
+      metricsOtlpHeaders: "authorization=Bearer%20token,x-scope=tenant-a",
+    });
+  });
+
+  it("rejects enabling OTLP metrics without an endpoint", () => {
+    const resolved = resolveLegacyManagedConfig({
+      OTEL_METRICS_EXPORTER: "otlp",
+    });
+
+    expect(resolved.valid).toBe(false);
+    expect(resolved.issues).toContain("metricsOtlpEndpoint:invalid");
+  });
+
   it("formats a dry run without exposing supplied secrets", () => {
     const resolved = resolveLegacyManagedConfig({
       SMTP_HOST: "smtp.example.com",

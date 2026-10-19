@@ -1,9 +1,40 @@
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, min } from "drizzle-orm";
 
 import { aiRuns, db } from "@/db";
 import { decryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
 import type { ClaimedAiRun } from "@/lib/ai/runs/service";
 import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
+
+const AI_QUEUE_STATES = [
+  "queued",
+  "preparing",
+  "streaming",
+  "complete",
+  "stopped",
+  "failed",
+  "interrupted",
+  "settlement_pending",
+] as const;
+
+export async function readAiQueueMetricsSnapshot() {
+  const rows = await db
+    .select({
+      count: count(),
+      oldestCreatedAt: min(aiRuns.createdAt),
+      status: aiRuns.status,
+    })
+    .from(aiRuns)
+    .groupBy(aiRuns.status);
+  const counts: Record<string, number> = Object.fromEntries(
+    AI_QUEUE_STATES.map((status) => [status, 0]),
+  );
+  let oldestQueuedAt: Date | null = null;
+  for (const row of rows) {
+    counts[row.status] = row.count;
+    if (row.status === "queued") oldestQueuedAt = row.oldestCreatedAt;
+  }
+  return { counts, oldestQueuedAt };
+}
 
 export async function claimQueuedAiRuns(input: {
   workerId: string;
@@ -41,6 +72,7 @@ export async function claimQueuedAiRuns(input: {
       })
       .where(and(inArray(aiRuns.id, ids), eq(aiRuns.status, "queued")))
       .returning({
+        createdAt: aiRuns.createdAt,
         id: aiRuns.id,
         encryptedExecutionPayload: aiRuns.encryptedExecutionPayload,
         executionPayloadKeyVersion: aiRuns.executionPayloadKeyVersion,
@@ -62,6 +94,7 @@ export async function claimQueuedAiRuns(input: {
           keyVersion: run.executionPayloadKeyVersion,
         }),
         leaseOwner: input.workerId,
+        queuedAt: run.createdAt,
       };
     });
   });

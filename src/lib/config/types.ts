@@ -7,6 +7,7 @@ export type ConfigGroup =
   | "pdf"
   | "resume"
   | "ai"
+  | "observability"
   | "legal";
 
 export interface ConfigDefinition<T> {

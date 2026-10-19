@@ -8,6 +8,7 @@ import {
   parseManagedConfig,
 } from "@/lib/config/registry";
 import { initializeLogCapture } from "../../../support/observability";
+import { initializeMetricCapture } from "../../../support/observability";
 
 function createOperations(
   overrides: Partial<AiWorkerOperations> = {},
@@ -57,6 +58,7 @@ function runtimeManager(overrides: Record<string, unknown> = {}) {
 function preparedRun() {
   return {
     runId: "run-one",
+    queuedAt: new Date(0),
     configuration: {
       credentialsEncryptionKey: Buffer.alloc(32, 8),
       auditRetentionDays: 30,
@@ -201,6 +203,7 @@ describe("AI worker", () => {
   });
 
   it("claims and executes queued runs outside the request process", async () => {
+    const metricCapture = await initializeMetricCapture("ai-worker");
     const controller = new AbortController();
     const prepared = preparedRun();
     const executeRun = vi.fn().mockImplementation(async () => {
@@ -249,6 +252,17 @@ describe("AI worker", () => {
       }),
       controller.signal,
     );
+    const metricNames = (await metricCapture.metrics()).map(
+      (metric) => metric.descriptor.name,
+    );
+    expect(metricNames).toEqual(expect.arrayContaining([
+      "anonresume.jobs.started",
+      "anonresume.jobs.completed",
+      "anonresume.jobs.active",
+      "anonresume.jobs.queue_wait.duration",
+      "anonresume.worker.heartbeat",
+    ]));
+    await metricCapture.shutdown();
   });
 
   it("keeps recovery and retention on independent cadences", async () => {

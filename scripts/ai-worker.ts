@@ -3,8 +3,11 @@ import {
   initializeLogging,
   serializeSafeError,
 } from "@/lib/observability/logging";
+import type { ServiceMetricsLifecycle } from "@/lib/observability/metrics";
+import { resolveRuntimeIdentity } from "@/lib/runtime/instance-identity";
 
-initializeLogging({ role: "ai-worker" });
+const processIdentity = resolveRuntimeIdentity("ai-worker");
+initializeLogging({ identity: processIdentity, role: "ai-worker" });
 const runtimeLog = getLogger("anonresume.runtime");
 const controller = new AbortController();
 const stop = () => controller.abort();
@@ -17,16 +20,23 @@ const { getAiCredentialsEncryptionKey } = await import("@/lib/ai/config/configur
 const { runAiWorker } = await import("@/lib/ai/worker");
 const { getRuntimeConfigManager } = await import("@/lib/config/runtime");
 const { getDatabasePool } = await import("@/lib/runtime/database");
+const { startServiceMetrics } = await import("@/lib/observability/metrics");
 const { validateBootstrapConfiguration } = await import("@/lib/runtime/configuration");
 const { startWorkerRestartRuntime } = await import("@/lib/runtime/restart/process-runtime");
 const { withWorkerInstanceLock } = await import("@/lib/runtime/worker-instance-lock");
 const runtimeManager = getRuntimeConfigManager("ai-worker");
+let metricsLifecycle: ServiceMetricsLifecycle | undefined;
 
 try {
   const configuration = validateBootstrapConfiguration();
   if (!configuration.valid) throw new Error("invalid_production_configuration");
   await runtimeManager.start();
   const identity = await runtimeManager.snapshot();
+  metricsLifecycle = await startServiceMetrics({
+    configurationHealth: identity.health,
+    identity: processIdentity,
+    values: identity.values,
+  });
   await startWorkerRestartRuntime({
     abort: stop,
     consumer: "ai-worker",
@@ -45,6 +55,7 @@ try {
   });
   throw error;
 } finally {
+  await metricsLifecycle?.stop();
   await runtimeManager.stop();
   await getDatabasePool().end();
   runtimeLog.info("process_stopped", { outcome: "success" });

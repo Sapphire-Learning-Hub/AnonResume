@@ -27,6 +27,14 @@ describe("managed configuration registry", () => {
     expect(CONFIG_REGISTRY.privacyPolicyUrl.applyMode).toBe("hot");
     expect(CONFIG_REGISTRY.privacyPolicyUrl.public).toBe(true);
     expect(CONFIG_REGISTRY.legalOperatorName.public).toBe(true);
+    expect(CONFIG_REGISTRY.metricsOtlpHeaders.sensitive).toBe(true);
+    expect(CONFIG_REGISTRY.metricsEnabled.group).toBe("observability");
+    expect(CONFIG_REGISTRY.metricsEnabled.applyMode).toBe("restart");
+    expect(CONFIG_REGISTRY.metricsEnabled.consumers).toEqual([
+      "web",
+      "pdf-worker",
+      "ai-worker",
+    ]);
   });
 
   it("builds a complete safe snapshot from defaults and partial input", () => {
@@ -40,6 +48,9 @@ describe("managed configuration registry", () => {
     expect(configuration.aiDefaultMonthlyPoints).toBe(0);
     expect(configuration.pdfQueueLimit).toBe(50);
     expect(configuration.smtpPassword).toBe(defaults.smtpPassword);
+    expect(configuration.metricsEnabled).toBe(false);
+    expect(configuration.metricsExportIntervalMs).toBe(60_000);
+    expect(configuration.metricsExportTimeoutMs).toBe(10_000);
   });
 
   it("rejects incomplete external-service groups", () => {

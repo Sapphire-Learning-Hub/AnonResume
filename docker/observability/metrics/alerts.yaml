@@ -1,0 +1,78 @@
+groups:
+  - name: anonresume
+    rules:
+      - alert: AnonResumeMetricsMissing
+        expr: absent(anonresume_process_uptime_seconds)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: No AnonResume process metrics are reaching Prometheus
+
+      - alert: AnonResumeHighHttpErrorRate
+        expr: |
+          sum(rate(anonresume_http_server_requests_total{http_response_status_code_class="5xx"}[5m]))
+          /
+          clamp_min(sum(rate(anonresume_http_server_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: AnonResume HTTP 5xx rate is above 5 percent
+
+      - alert: AnonResumeQueueBacklogOldest
+        expr: max by (job_type) (anonresume_queue_oldest_queued_age_seconds) > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: An AnonResume queue has waited more than five minutes
+
+      - alert: AnonResumeWorkerHeartbeatFailures
+        expr: increase(anonresume_worker_heartbeat_total{event_outcome="failure"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker {{ $labels.service_name }} / {{ $labels.service_instance_id }} reported a heartbeat failure
+
+      - alert: AnonResumeWorkerInstanceMissing
+        expr: |
+          group by (
+            deployment_environment_name,
+            service_deployment_id,
+            service_name,
+            service_instance_id
+          ) (
+            max_over_time(
+              anonresume_process_uptime_seconds{service_name=~"anonresume-(ai|pdf)-worker"}[1h]
+            )
+          )
+          unless
+          group by (
+            deployment_environment_name,
+            service_deployment_id,
+            service_name,
+            service_instance_id
+          ) (
+            max_over_time(
+              anonresume_process_uptime_seconds{service_name=~"anonresume-(ai|pdf)-worker"}[3m]
+            )
+          )
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker {{ $labels.service_name }} / {{ $labels.service_instance_id }} stopped reporting metrics
+
+      - alert: AnonResumeConfigurationUnhealthy
+        expr: |
+          max by (service_name, service_instance_id, state) (
+            anonresume_runtime_configuration_health_ratio{state!="healthy"}
+          ) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Service {{ $labels.service_name }} / {{ $labels.service_instance_id }} has an unhealthy runtime configuration

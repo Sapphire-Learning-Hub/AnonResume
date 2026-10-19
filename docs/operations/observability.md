@@ -1,8 +1,8 @@
-# 日志与 ELK 可观测性
+# 日志与指标可观测性
 
 AnonResume 的 Web、PDF Worker、AI Worker、迁移和维护进程会向标准输出写入单行结构化日志。生产环境默认使用 ECS JSON，开发环境默认使用便于阅读的单行格式。应用不依赖 Elasticsearch、Logstash 或 Kibana；采集端不可用时，业务进程仍应继续运行。
 
-本文说明日志契约、本地 ELK 环境，以及接入企业现有日志平台时必须遵守的安全边界。指标和链路追踪不在当前阶段范围内。
+本文说明日志契约、本地 ELK 环境、OpenTelemetry 指标，以及接入企业现有可观测平台时必须遵守的安全边界。日志和指标是两条互相独立的链路：日志写入标准输出，指标通过 OTLP/HTTP 主动发送；任一外部设施不可用都不会阻止业务服务运行。链路追踪不在当前阶段范围内。
 
 ## 日志配置
 
@@ -140,6 +140,116 @@ docker compose -f docker/observability/compose.yaml down
 docker compose -f docker/observability/compose.yaml down -v
 ```
 
+## OpenTelemetry 指标
+
+AnonResume 的 Web、PDF Worker 和 AI Worker 可以将运行指标通过 OTLP/HTTP protobuf 发送到 OpenTelemetry Collector。Collector、Prometheus 和 Grafana 均属于外部设施：应用只负责产生指标，不查询 Prometheus，不在管理中台复制一套监控界面，也不保存监控历史。
+
+数据链路如下：
+
+```text
+Web / PDF Worker / AI Worker
+  -> OTLP/HTTP /v1/metrics
+  -> OpenTelemetry Collector
+  -> Prometheus
+  -> Grafana / 企业告警平台
+```
+
+Collector 故障、网络中断或 Prometheus 不可用时，应用继续处理请求和任务。指标会按导出周期尝试发送，但这不是业务数据的可靠消息队列，不承诺在长时间观测平台故障后补齐全部历史样本。
+
+### 平台配置
+
+指标默认关闭。拥有平台配置权限的管理员在“平台配置”的“可观测性”分组维护以下项目：
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| 启用 OpenTelemetry 指标 | 关闭 | 所有指标的总开关 |
+| OTLP 指标端点 | 空 | 必须是以 `/v1/metrics` 结尾的信号专用 URL |
+| OTLP 请求头 | 空 | 可选的 Collector 认证请求头，按敏感配置加密且不回显 |
+| 指标导出间隔 | 60000 毫秒 | 允许 5000 至 300000 毫秒 |
+| 指标导出超时 | 10000 毫秒 | 允许 1000 至 30000 毫秒，且不得大于导出间隔 |
+
+草稿允许暂时缺少关联值，便于分步填写；发布时由服务端执行完整联动校验。开启指标但缺少端点、端点携带用户名密码或查询参数、路径不是 `/v1/metrics`、请求头包含危险字段，或超时大于导出间隔时，发布会被拒绝，当前生效版本不会改变。
+
+这些项目均需要重启 Web、PDF Worker 和 AI Worker 才能生效。发布后使用“系统状态”中的受控重启，或按部署方式依次优雅重启三个进程。禁用指标后重启，不会创建 SDK 导出器、采样定时器或指标网络连接。
+
+标准 OpenTelemetry 环境变量只作为旧配置或自动化初始化的一次性导入来源：
+
+```bash
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://collector.example.com/v1/metrics
+export OTEL_EXPORTER_OTLP_METRICS_HEADERS='authorization=Bearer replace_me'
+export OTEL_METRIC_EXPORT_INTERVAL=60000
+export OTEL_EXPORTER_OTLP_METRICS_TIMEOUT=10000
+
+bun run config:import-env --dry-run
+bun run config:import-env --apply --replace-active
+```
+
+`--replace-active` 是对已有配置版本的显式替换确认；新实例首次导入通常不需要它。导入会生成审计配置版本，之后环境变量不再覆盖管理中心中的生效值。不要把真实认证头写入仓库文件、镜像层或共享命令记录。
+
+### 本地 Collector、Prometheus 与 Grafana
+
+仓库提供可选的本地指标栈，固定版本并只绑定 `127.0.0.1`：
+
+```bash
+bun run metrics:up
+bun run metrics:smoke -- --infrastructure-only
+```
+
+本机直接运行 AnonResume 时，将 OTLP 指标端点设置为：
+
+```text
+http://127.0.0.1:4318/v1/metrics
+```
+
+业务服务也通过 Compose 运行时，可以把本地指标文件作为同一项目的附加文件启动：
+
+```bash
+docker compose \
+  -f compose.yaml \
+  -f compose.build.yaml \
+  -f compose.metrics.yaml \
+  up -d --build --wait
+```
+
+此时应用容器中的端点应设置为：
+
+```text
+http://otel-collector:4318/v1/metrics
+```
+
+发布配置并重启三个服务后，等待至少一个导出周期，再执行：
+
+```bash
+bun run metrics:smoke
+```
+
+Prometheus 位于 <http://127.0.0.1:9090>，Grafana 位于 <http://127.0.0.1:3001>。Grafana 会自动加载 `AnonResume overview` 看板，展示实例存活、运行时配置健康状态、HTTP 吞吐与错误率、P95/P99 延迟、队列深度与最老等待时间、各 Worker 实例的任务吞吐、成功率和耗时、数据库连接池、进程资源、事件循环延迟、心跳以及 Collector 收发状态。看板支持按环境、服务角色和实例逐级筛选。示例告警规则会识别停止上报的 Worker 实例，但不会配置通知渠道。
+
+停止并保留数据：
+
+```bash
+bun run metrics:down
+```
+
+确认不再需要本地指标历史后，可以显式删除卷：
+
+```bash
+docker compose -f compose.metrics.yaml down -v
+```
+
+### 接入企业可观测平台
+
+生产环境通常将应用指向企业统一管理的 OpenTelemetry Collector 或兼容 OTLP/HTTP 的网关。建议使用 HTTPS、短生命周期认证凭据、独立租户和网络访问控制。TLS 证书、Collector 队列与重试、Prometheus 或其他时序数据库、长期保留、Grafana 权限、告警通知和灾备均由外部平台负责，不应把 Prometheus 或 Grafana 凭据交给 AnonResume。
+
+所有指标带有 `service.namespace`、`service.name`、`service.version`、`service.instance.id`、部署环境和部署 ID。业务属性只允许固定路由模式和有限枚举，不包含用户 ID、邮箱、简历 ID、任务 ID、请求 ID、完整 URL、异常文本、模型名称或简历内容。
+
+AI 和 PDF 队列是全局队列，每个副本都可能观察到相同数量。查询队列深度和最老等待时间时，应按部署与任务类型使用 `max` 聚合，不要跨副本求和。任务计数器、任务耗时、进程资源、连接池、事件循环和心跳应保留 `service.name` 与 `service.instance.id`，以便定位单个异常副本；只有查看部署总体吞吐时才跨实例求和。
+
+`service.instance.id` 来自 `ANONRESUME_INSTANCE_ID`。默认 Compose 编排已为每个服务配置稳定标识；扩容 Worker 或在同一主机运行多个相同角色的进程时，必须为每个副本提供唯一且重启后不变的值。复用实例 ID 会让指标时间序列、心跳和受控重启状态互相覆盖。
+
+删除或重命名指标、改变单位、直方图语义或属性含义属于可观测契约变化；采集平台应允许新增时间序列和标签值，但不要依赖 Grafana 面板标题或描述文案。
+
 ## 接入现有企业日志平台
 
 AnonResume 只负责将 ECS JSON 写入标准输出。企业采集组件负责缓冲与重试、TLS、Elasticsearch 凭据、索引或数据流命名、保留策略、告警和灾备。不要把 Elasticsearch 凭据传给应用进程。
@@ -193,3 +303,8 @@ processors:
 - `curl http://127.0.0.1:9200/_data_stream?pretty`：确认两个 AnonResume 数据流及 ILM 状态。
 - 业务响应的 `x-request-id` 在 Kibana 中无结果时，先检查对应服务是否使用 JSON 输出，再检查 GELF 地址和 `labels.centralize`。
 - Logstash 恢复后只接收新 UDP 事件；本地 GELF 不承诺补发停机期间日志。需要交付保证的生产环境应使用企业现有的磁盘缓冲或代理采集方案。
+- `docker compose -f compose.metrics.yaml ps`：确认 Collector、Prometheus 和 Grafana 均为 `healthy`。
+- `bun run metrics:smoke -- --infrastructure-only`：只验证指标基础设施和 Prometheus 抓取目标，不要求应用已导出指标。
+- `bun run metrics:smoke`：验证至少一个 AnonResume 服务已产生指标。没有数据时确认平台配置已发布、三个进程已重启、端点在对应网络中可访问，并等待完整导出周期。
+- Prometheus 的 `anonresume` 目标正常但无应用序列时，查看 Collector 日志中的 OTLP 接收或导出错误；不要在日志中打印 OTLP 认证请求头。
+- 多副本队列数异常偏大时，确认查询使用 `max by (job_type, queue_state)`，而不是对副本求和。
