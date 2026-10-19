@@ -292,7 +292,7 @@ class ApplicationMetrics {
   }
 
   recordJobStarted(input: JobMetricStart) {
-    const attributes = normalizeJobTypeAttributes(input.jobType);
+    const attributes = normalizeJobTypeAttributes(input.jobType, input.aiTaskType);
     this.bindings?.jobsStarted.add(1, attributes);
     this.bindings?.jobsActive.add(1, attributes);
     this.bindings?.jobsQueueWait.record(
@@ -302,7 +302,7 @@ class ApplicationMetrics {
   }
 
   recordJobCompleted(input: JobMetricCompletion) {
-    const typeAttributes = normalizeJobTypeAttributes(input.jobType);
+    const typeAttributes = normalizeJobTypeAttributes(input.jobType, input.aiTaskType);
     this.bindings?.jobsActive.add(-1, typeAttributes);
     const attributes = normalizeJobMetricAttributes(input);
     this.bindings?.jobsCompleted.add(1, attributes);

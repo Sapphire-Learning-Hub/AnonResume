@@ -7,6 +7,14 @@ export const aiRunProgressStages = [
   "repairing_changes",
   "revalidating_result",
   "saving_result",
+  "review_reading",
+  "review_matching",
+  "retrying_upstream",
+  "review_dimension_completeness",
+  "review_dimension_clarity",
+  "review_dimension_impact",
+  "review_dimension_organization",
+  "review_dimension_consistency",
 ] as const;
 
 export type AiRunProgressStage = (typeof aiRunProgressStages)[number];

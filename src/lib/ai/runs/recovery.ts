@@ -11,7 +11,7 @@ const aiLog = getLogger("anonresume.ai");
 interface ExpiredRunRow {
   id: string;
   userId: string;
-  assistantMessageId: string;
+  assistantMessageId: string | null;
   reservedPoints: string;
   startedAt: Date | null;
   providerRequestId: string | null;
@@ -133,7 +133,7 @@ export async function recoverExpiredAiRuns({
           WHERE id = $1`,
         [run.id, status, now],
       );
-      await client.query(
+      if (run.assistantMessageId) await client.query(
         `UPDATE ${table("ai_messages")}
             SET completion_state = 'failed', updated_at = $2
           WHERE id = $1`,

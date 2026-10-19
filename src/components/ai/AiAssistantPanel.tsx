@@ -1,11 +1,7 @@
 "use client";
 
 import {
-  useEffect,
-  useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -28,7 +24,6 @@ import {
 } from "@/lib/ai/client";
 import { getAiProposalStreamProgress } from "@/lib/ai/proposals/stream-progress";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
-import { CloseIcon } from "@/components/ui/InlineIcons";
 import { useI18n } from "@/i18n/I18nProvider";
 import type { AiRunProgressStage } from "@/lib/ai/runs/stream-events";
 
@@ -37,24 +32,7 @@ import { AiMarkdownMessage } from "./AiMarkdownMessage";
 import { AiPlainText } from "./AiPlainText";
 import { AiProposalCard, AiProposalProgressCard } from "./AiProposalCard";
 import { useAiConversation } from "./useAiConversation";
-
-const DEFAULT_PANEL_WIDTH = 480;
-const MIN_PANEL_WIDTH = 360;
-const MAX_PANEL_WIDTH = 720;
-const MIN_EDITOR_WIDTH = 640;
-const KEYBOARD_RESIZE_STEP = 24;
-
-function getMaximumPanelWidth() {
-  if (typeof window === "undefined") return MAX_PANEL_WIDTH;
-  return Math.max(
-    MIN_PANEL_WIDTH,
-    Math.min(MAX_PANEL_WIDTH, window.innerWidth - MIN_EDITOR_WIDTH),
-  );
-}
-
-function clampPanelWidth(width: number) {
-  return Math.min(Math.max(width, MIN_PANEL_WIDTH), getMaximumPanelWidth());
-}
+import { AiPanelFrame } from "./AiPanelFrame";
 
 export function AiAssistantPanel({
   open,
@@ -65,11 +43,13 @@ export function AiAssistantPanel({
   onApplyProposal,
   onProposalPersisted,
   onPreviewProposal,
+  initialConversationId,
 }: {
   open: boolean;
   resumeId: string;
   resumeVersion: number;
   sectionId?: string;
+  initialConversationId?: string;
   onClose: () => void;
   onApplyProposal: (input: {
     proposal: AiResumeProposal;
@@ -99,17 +79,8 @@ export function AiAssistantPanel({
   const { t } = useI18n();
   const { notification, toast } = useAppFeedback();
   const [draft, setDraft] = useState("");
-  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const resizeStateRef = useRef<
-    | {
-        pointerId: number;
-        startWidth: number;
-        startX: number;
-      }
-    | undefined
-  >(undefined);
 
   function reportError(error: unknown) {
     const code =
@@ -135,20 +106,10 @@ export function AiAssistantPanel({
     resumeId,
     resumeVersion,
     sectionId,
+    initialConversationId,
     onError: reportError,
   });
 
-  useEffect(() => {
-    if (!open) return;
-
-    const constrainPanelWidth = () => {
-      setPanelWidth((current) => clampPanelWidth(current));
-    };
-
-    constrainPanelWidth();
-    window.addEventListener("resize", constrainPanelWidth);
-    return () => window.removeEventListener("resize", constrainPanelWidth);
-  }, [open]);
 
   async function handleApply(
     storedProposal: AiStoredProposal,
@@ -239,6 +200,14 @@ export function AiAssistantPanel({
     repairing_changes: t("ai.progress.repairing"),
     revalidating_result: t("ai.progress.revalidating"),
     saving_result: t("ai.progress.saving"),
+    review_reading: t("aiReview.reading"),
+    review_matching: t("aiReview.matching"),
+    retrying_upstream: t("aiReview.retrying"),
+    review_dimension_completeness: t("aiReview.dimension.completeness"),
+    review_dimension_clarity: t("aiReview.dimension.clarity"),
+    review_dimension_impact: t("aiReview.dimension.impact"),
+    review_dimension_organization: t("aiReview.dimension.organization"),
+    review_dimension_consistency: t("aiReview.dimension.consistency"),
   };
   const currentProgressStage = progressStages.at(-1);
 
@@ -278,82 +247,9 @@ export function AiAssistantPanel({
     (conversation) => conversation.id === assistant.selectedConversationId,
   );
 
-  function handleResizeStart(event: ReactPointerEvent<HTMLDivElement>) {
-    resizeStateRef.current = {
-      pointerId: event.pointerId,
-      startWidth: panelWidth,
-      startX: event.clientX,
-    };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function handleResizeMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const resizeState = resizeStateRef.current;
-    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
-    setPanelWidth(
-      clampPanelWidth(
-        resizeState.startWidth + resizeState.startX - event.clientX,
-      ),
-    );
-  }
-
-  function handleResizeEnd(event: ReactPointerEvent<HTMLDivElement>) {
-    if (resizeStateRef.current?.pointerId !== event.pointerId) return;
-    resizeStateRef.current = undefined;
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  }
-
-  function handleResizeKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    setPanelWidth((current) =>
-      clampPanelWidth(
-        current +
-          (event.key === "ArrowLeft"
-            ? KEYBOARD_RESIZE_STEP
-            : -KEYBOARD_RESIZE_STEP),
-      ),
-    );
-  }
-
-  if (!open) return null;
 
   return (
-    <aside
-      aria-label={t("ai.title")}
-      className={styles.panel}
-      style={{ width: panelWidth }}
-    >
-      <div
-        aria-label={t("ai.resize")}
-        aria-orientation="vertical"
-        aria-valuemax={MAX_PANEL_WIDTH}
-        aria-valuemin={MIN_PANEL_WIDTH}
-        aria-valuenow={panelWidth}
-        className={styles.resizeHandle}
-        role="separator"
-        tabIndex={0}
-        onDoubleClick={() => setPanelWidth(DEFAULT_PANEL_WIDTH)}
-        onKeyDown={handleResizeKeyDown}
-        onPointerCancel={handleResizeEnd}
-        onPointerDown={handleResizeStart}
-        onPointerMove={handleResizeMove}
-        onPointerUp={handleResizeEnd}
-      />
-      <header className={styles.header}>
-        <div className={styles.title}>
-          <span className={styles.titleMark}>AI</span>
-          <strong>{t("ai.title")}</strong>
-        </div>
-        <Button
-          aria-label={t("common.dismiss")}
-          className={styles.closeButton}
-          type="text"
-          onClick={onClose}
-        >
-          <CloseIcon size={17} />
-        </Button>
-      </header>
+    <AiPanelFrame open={open} title={t("ai.title")} onClose={onClose}>
       <div className={styles.body}>
         <div className={styles.toolbar}>
           <div className={styles.toolbarRow}>
@@ -670,6 +566,6 @@ export function AiAssistantPanel({
           onChange={(event) => setRenameValue(event.target.value)}
         />
       </Modal>
-    </aside>
+    </AiPanelFrame>
   );
 }

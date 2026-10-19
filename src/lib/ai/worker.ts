@@ -123,7 +123,7 @@ export async function runAiWorker(options: {
         adapter,
         signal,
       })) {
-        void event;
+        if (event.type === "error") throw new Error("ai_run_failed");
       }
     },
   };
@@ -263,6 +263,7 @@ export async function runAiWorker(options: {
         if (prepared) {
           const executionStartedAt = process.hrtime.bigint();
           applicationMetrics.recordJobStarted({
+            aiTaskType: prepared.kind ?? "conversation",
             jobType: "ai",
             queueWaitSeconds: Math.max(
               0,
@@ -284,6 +285,7 @@ export async function runAiWorker(options: {
             .executeRun(claimed, options.signal)
             .then(() => {
               applicationMetrics.recordJobCompleted({
+                aiTaskType: prepared.kind ?? "conversation",
                 durationSeconds: Number(
                   process.hrtime.bigint() - executionStartedAt,
                 ) / 1_000_000_000,
@@ -293,6 +295,7 @@ export async function runAiWorker(options: {
             })
             .catch((error) => {
               applicationMetrics.recordJobCompleted({
+                aiTaskType: prepared.kind ?? "conversation",
                 durationSeconds: Number(
                   process.hrtime.bigint() - executionStartedAt,
                 ) / 1_000_000_000,

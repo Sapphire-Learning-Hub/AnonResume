@@ -214,6 +214,7 @@ export async function runPdfExportWorker(options?: {
   const processJob = options?.processJob ?? processPdfExportJob;
   let heartbeatFailed = false;
 
+  console.info(`[AnonResume] PDF worker started: ${workerId}`);
   runtimeLog.info("worker_started", {
     labels: { workerType: "pdf-export" },
     outcome: "success",

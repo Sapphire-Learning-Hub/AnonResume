@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, desc, eq, gt, inArray, isNull, max, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, max, or } from "drizzle-orm";
 
 import {
   aiConversations,
@@ -14,6 +14,11 @@ import {
 import { aiResumeProposalSchema } from "@/domain/resume/ai/proposal-schema";
 import { hashAiContent } from "@/domain/resume/ai/content-hash";
 import type { ResumeDocument } from "@/domain/resume/schema";
+import type { ReviewContext } from "@/domain/resume/ai/review/context";
+import type { AiReviewInput } from "@/domain/resume/ai/review/schema";
+import { executeResumeReviewRun } from "@/lib/ai/review/executor";
+import { admitAiRun } from "@/lib/ai/runs/preparation";
+import { activeRunControllers, startAiRunLeaseMonitor } from "@/lib/ai/runs/lifecycle";
 import { validateResumeDocument } from "@/domain/resume/validation";
 import {
   createEncryptedAiAuditEvidence,
@@ -60,7 +65,6 @@ const PROMPT_VERSION = 5;
 const MAX_AGENT_ROUNDS = 10;
 const MAX_PROVIDER_PROTOCOL_ATTEMPTS = 2;
 const MAX_ERROR_DETAIL_LENGTH = 4_096;
-const activeRunControllers = new Map<string, AbortController>();
 const aiLog = getLogger("anonresume.ai");
 
 function aiCredentialKeys(configuration: {
@@ -169,6 +173,7 @@ export interface AiRunConfiguration {
 }
 
 export interface PreparedAiRun {
+  kind?: "conversation";
   runId: string;
   userId: string;
   resumeId: string;
@@ -188,10 +193,17 @@ export interface PreparedAiRun {
   providerContext: unknown;
 }
 
-export interface ClaimedAiRun extends PreparedAiRun {
-  leaseOwner: string;
-  queuedAt: Date;
+export interface PreparedReviewRun extends Omit<PreparedAiRun, "kind" | "conversationId" | "assistantMessageId"> {
+  kind: "resume_review";
+  reviewId: string;
+  reviewInput: AiReviewInput;
+  reviewContextWindow: number;
+  reviewContext: ReviewContext;
+  reviewProtocolVersion?: 1;
 }
+export type PreparedQueuedAiRun = PreparedAiRun | PreparedReviewRun;
+export type ClaimedAiRun = PreparedQueuedAiRun & { leaseOwner: string; queuedAt: Date };
+export type ClaimedReviewRun = PreparedReviewRun & { leaseOwner: string; queuedAt: Date };
 
 export class AiRunRateLimitedError extends Error {
   constructor() {
@@ -460,34 +472,7 @@ export async function prepareAiRun(input: {
           rates,
         });
   try {
-    await db.transaction(async (transaction) => {
-      await transaction.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`anonresume:ai-admission:${input.userId}`}))`,
-      );
-      const [{ recentRuns }] = await transaction
-        .select({ recentRuns: count() })
-        .from(aiRuns)
-        .where(
-          and(
-            eq(aiRuns.userId, input.userId),
-            gt(aiRuns.createdAt, new Date(now.getTime() - 60_000)),
-          ),
-        );
-      if (recentRuns >= input.configuration.requestsPerMinute) {
-        throw new AiRunRateLimitedError();
-      }
-      const [{ activeRuns }] = await transaction
-        .select({ activeRuns: count() })
-        .from(aiRuns)
-        .where(
-          and(
-            eq(aiRuns.userId, input.userId),
-            inArray(aiRuns.status, ["queued", "preparing", "streaming"]),
-          ),
-        );
-      if (activeRuns >= (input.configuration.maxConcurrentRuns ?? 1)) {
-        throw new AiRunAlreadyActiveError();
-      }
+    await admitAiRun({ userId: input.userId, resumeId: row.conversation.resumeId, configuration: input.configuration, now }, async (transaction) => {
       const [locked] = await transaction
         .select({ id: aiConversations.id })
         .from(aiConversations)
@@ -858,60 +843,14 @@ function resumeCapabilities() {
   };
 }
 
-function startAiRunLeaseMonitor(input: {
-  runId: string;
-  leaseOwner: string;
-  leaseSeconds: number;
-  controller: AbortController;
-  intervalMs: number;
-  onLeaseLost: () => void;
-}) {
-  let stopped = false;
-  let polling = false;
-  const timer = setInterval(() => {
-    if (stopped || polling || input.controller.signal.aborted) return;
-    polling = true;
-    const now = new Date();
-    void db
-      .update(aiRuns)
-      .set({
-        leaseExpiresAt: runLease(now, input.leaseSeconds),
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(aiRuns.id, input.runId),
-          eq(aiRuns.status, "streaming"),
-          eq(aiRuns.leaseOwner, input.leaseOwner),
-          gt(aiRuns.leaseExpiresAt, now),
-        ),
-      )
-      .returning({ stopRequestedAt: aiRuns.stopRequestedAt })
-      .then(([run]) => {
-        if (stopped) return;
-        if (!run) {
-          input.onLeaseLost();
-          input.controller.abort(new Error("ai_run_lease_lost"));
-        } else if (run.stopRequestedAt) {
-          input.controller.abort(new Error("ai_run_stopped"));
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        polling = false;
-      });
-  }, input.intervalMs);
-
-  return () => {
-    stopped = true;
-    clearInterval(timer);
-  };
-}
-
 export async function* executePreparedAiRun(
   prepared: ClaimedAiRun,
   options: { adapter: AiProviderAdapter; signal?: AbortSignal },
 ): AsyncGenerator<AiClientStreamEvent> {
+  if (prepared.kind === "resume_review") {
+    yield* executeResumeReviewRun(prepared, options);
+    return;
+  }
   const executionStartedAt = process.hrtime.bigint();
   const controller = new AbortController();
   let callerAborted = false;
@@ -1483,7 +1422,7 @@ async function retractAiTurn(input: {
       .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.userId, input.userId)))
       .limit(1);
     if (
-      !run ||
+      !run || !run.assistantMessageId || !run.conversationId ||
       run.status === "queued" ||
       run.status === "preparing" ||
       run.status === "streaming"
@@ -1595,7 +1534,7 @@ export async function stopAiRun(input: {
       assistantMessageId: aiRuns.assistantMessageId,
     });
   if (unstartedRun) {
-    await db
+    if (unstartedRun.assistantMessageId) await db
       .update(aiMessages)
       .set({ completionState: "stopped", updatedAt: now })
       .where(eq(aiMessages.id, unstartedRun.assistantMessageId));
@@ -1653,7 +1592,7 @@ export async function stopAiRun(input: {
       });
     if (!stoppedRun) return undefined;
 
-    await transaction
+    if (stoppedRun.assistantMessageId) await transaction
       .update(aiMessages)
       .set({ completionState: "stopped", updatedAt: now })
       .where(eq(aiMessages.id, stoppedRun.assistantMessageId));

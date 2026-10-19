@@ -18,11 +18,13 @@ export interface HttpMetricCompletion extends HttpMetricInput {
 }
 
 export interface JobMetricInput {
+  aiTaskType?: string;
   jobType: string;
   outcome: string;
 }
 
 export interface JobMetricStart {
+  aiTaskType?: string;
   jobType: string;
   queueWaitSeconds: number;
 }

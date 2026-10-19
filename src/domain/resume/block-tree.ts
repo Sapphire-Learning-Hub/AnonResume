@@ -14,6 +14,21 @@ export function isContainerBlock(
   return block.type === "group" || block.type === "row";
 }
 
+export function visitResumeBlocks(
+  blocks: ResumeBlock[],
+  visit: (block: ResumeBlock, path: string[]) => void,
+  parentPath: string[] = [],
+) {
+  for (const block of blocks) {
+    const path = [...parentPath, block.id];
+    visit(block, path);
+    if (isContainerBlock(block)) visitResumeBlocks(block.children, visit, path);
+    if (block.type === "list") {
+      for (const item of block.items) visitResumeBlocks(item.children, visit, [...path, item.id]);
+    }
+  }
+}
+
 function normalizeNestedBlock(
   block: ResumeBlock,
   removeEmptyText: boolean,

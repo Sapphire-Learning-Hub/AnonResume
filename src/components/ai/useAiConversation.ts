@@ -55,15 +55,18 @@ export function useAiConversation({
   resumeId,
   resumeVersion,
   sectionId,
+  initialConversationId,
   onError,
 }: {
   open: boolean;
   resumeId: string;
   resumeVersion: number;
   sectionId?: string;
+  initialConversationId?: string;
   onError: (error: unknown) => void;
 }) {
   const [enabled, setEnabled] = useState(true);
+  const requestedConversationRef = useRef<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -127,6 +130,8 @@ export function useAiConversation({
 
   const loadIndex = useCallback(async () => {
     const result = await fetchAiConversationIndex(resumeId);
+    const preferred = initialConversationId && requestedConversationRef.current !== initialConversationId && result.conversations.some((conversation) => conversation.id === initialConversationId) ? initialConversationId : undefined;
+    if (preferred) requestedConversationRef.current = preferred;
     setEnabled(result.enabled);
     setConversations(result.conversations);
     setModels(result.models);
@@ -136,11 +141,13 @@ export function useAiConversation({
         : result.models[0]?.id,
     );
     setSelectedConversationId((current) =>
-      result.conversations.some((conversation) => conversation.id === current)
+      preferred
+        ? preferred
+        : result.conversations.some((conversation) => conversation.id === current)
         ? current
         : result.conversations[0]?.id,
     );
-  }, [resumeId]);
+  }, [initialConversationId, resumeId]);
 
   const loadDetails = useCallback(async (conversationId: string) => {
     const result = await fetchAiConversation(conversationId);

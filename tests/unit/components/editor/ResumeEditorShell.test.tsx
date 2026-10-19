@@ -445,7 +445,7 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByRole("tab", { name: "插入" })).toHaveFocus();
   });
 
-  it("labels the AI assistant entry in the document bar", () => {
+  it("opens the quality review choice from the AI entry with the keyboard", async () => {
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
@@ -453,9 +453,9 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "AI 编辑助手" })).toHaveTextContent(
-      "AI",
-    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "AI 编辑助手" }), { key: "ArrowDown" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "质量审查" }));
+    expect(screen.getByRole("complementary", { name: "质量审查" })).toBeInTheDocument();
   });
 
   it("places interface settings in the editor document bar", () => {

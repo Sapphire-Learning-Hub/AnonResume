@@ -5,7 +5,8 @@ import {
   decryptVersionedAiCredential,
   encryptAiCredential,
 } from "@/lib/ai/security/credentials";
-import type { PreparedAiRun } from "@/lib/ai/runs/service";
+import type { PreparedQueuedAiRun } from "@/lib/ai/runs/service";
+import { reviewInputSchema } from "@/domain/resume/ai/review/schema";
 import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
 
 const providerMessageSchema = z.union([
@@ -66,7 +67,8 @@ const editableTargetSchema = z.discriminatedUnion("type", [
 ]);
 
 const payloadSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
+  kind: z.literal("conversation").optional(),
   runId: z.string().uuid(),
   userId: z.string(),
   resumeId: z.string(),
@@ -121,13 +123,21 @@ const payloadSchema = z.object({
   providerContext: z.unknown(),
 }).strict();
 
+const reviewPayloadSchema = payloadSchema.omit({ conversationId: true, assistantMessageId: true }).extend({
+  version: z.literal(2), kind: z.literal("resume_review"), reviewId: z.string().uuid(),
+  reviewInput: reviewInputSchema,
+  reviewContextWindow: z.number().int().positive(),
+  reviewProtocolVersion: z.literal(1).optional(),
+  reviewContext: z.object({ contentHash: z.string(), targets: z.array(z.object({ id: z.string(), sectionId: z.string(), blockPath: z.array(z.string()), text: z.string() }).strict()) }).strict(),
+}).strict();
+
 export function encryptPreparedAiRunPayload(
-  prepared: PreparedAiRun,
+  prepared: PreparedQueuedAiRun,
   encryptionKey: Buffer,
 ) {
   return encryptAiCredential(
     JSON.stringify({
-      version: 1,
+      version: 2,
       ...prepared,
       request: {
         ...prepared.request,
@@ -155,13 +165,14 @@ export function decryptPreparedAiRunPayload(input: {
   encryptedPayload: Buffer;
   encryptionKey: Buffer;
   expectedRunId: string;
+  expectedKind?: "conversation" | "resume_review";
   keyVersion?: number;
-}): PreparedAiRun {
+}): PreparedQueuedAiRun {
   const credentialKeys = input.credentialKeys ?? {
     current: input.encryptionKey,
     legacy: input.encryptionKey,
   };
-  const parsed = payloadSchema.parse(
+  const parsed = z.union([payloadSchema, reviewPayloadSchema]).parse(
     JSON.parse(
       decryptVersionedAiCredential(
         input.encryptedPayload,
@@ -173,6 +184,7 @@ export function decryptPreparedAiRunPayload(input: {
   if (parsed.runId !== input.expectedRunId) {
     throw new Error("ai_run_payload_mismatch");
   }
+  if (input.expectedKind && (parsed.kind ?? "conversation") !== input.expectedKind) throw new Error("ai_run_payload_kind_mismatch");
 
   return {
     ...parsed,

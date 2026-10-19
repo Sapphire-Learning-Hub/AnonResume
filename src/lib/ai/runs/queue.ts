@@ -74,6 +74,7 @@ export async function claimQueuedAiRuns(input: {
       .returning({
         createdAt: aiRuns.createdAt,
         id: aiRuns.id,
+        kind: aiRuns.kind,
         encryptedExecutionPayload: aiRuns.encryptedExecutionPayload,
         executionPayloadKeyVersion: aiRuns.executionPayloadKeyVersion,
       });
@@ -91,6 +92,7 @@ export async function claimQueuedAiRuns(input: {
           encryptedPayload: run.encryptedExecutionPayload,
           encryptionKey: input.encryptionKey,
           expectedRunId: run.id,
+          expectedKind: run.kind,
           keyVersion: run.executionPayloadKeyVersion,
         }),
         leaseOwner: input.workerId,
