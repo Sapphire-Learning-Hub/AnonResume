@@ -113,7 +113,7 @@ describe("applyResumeMarkdownProjection", () => {
     });
   });
 
-  it("uses exact anchors for reorder while keeping inserted nodes fresh and deleting omitted nodes", () => {
+  it("refuses an ambiguous simultaneous reorder, insertion and deletion instead of rebuilding", () => {
     const base = documentWithSections([
       section("section-original", "经历", [
         text("alpha", "Alpha", { color: "#111827" }),
@@ -130,14 +130,13 @@ describe("applyResumeMarkdownProjection", () => {
     ]);
 
     const result = apply(base, parsed);
-    const blocks = result.document.sections[0]!.blocks;
-
-    expect(blocks).toMatchObject([
-      { id: "beta", style: { tone: "muted" } },
-      { id: "inserted" },
-      { id: "alpha", style: { color: "#111827" } },
+    expect(result.document).toEqual(base);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        code: "projection_degraded",
+      }),
     ]);
-    expect(blocks.some((block) => block.id === "removed")).toBe(false);
   });
 
   it("matches duplicate siblings by occurrence without crossing section boundaries", () => {
@@ -297,9 +296,7 @@ describe("applyResumeMarkdownProjection", () => {
       type: "group",
       direction: "vertical",
       gap: 8,
-      children: [
-        text(headingId, heading, { fontSize: 17, fontWeight: 700 }),
-      ],
+      children: [text(headingId, heading, { fontSize: 17, fontWeight: 700 })],
     });
     const base = documentWithSections([
       section("section-original", "项目", [
@@ -370,11 +367,11 @@ describe("applyResumeMarkdownProjection", () => {
       baseDocumentVersion: 7,
     });
 
-    expect(result.document).toEqual(parsed);
+    expect(result.document).toEqual(base);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        severity: "warning",
-        code: "projection_degraded",
+        severity: "error",
+        code: "projection_invalid",
       }),
     ]);
   });

@@ -102,7 +102,7 @@ export function parseResumeMarkdownFrontMatter(
 
   const diagnostics: ResumeMarkdownDiagnostic[] = [];
   const seen = new Set<string>();
-  const parsed: Partial<ResumeMarkdownFrontMatter> & { version?: 1 } = {};
+  const parsed: Partial<ResumeMarkdownFrontMatter> = {};
 
   for (let index = 1; index < closingIndex; index += 1) {
     const rawLine = lines[index]!;
@@ -113,9 +113,7 @@ export function parseResumeMarkdownFrontMatter(
     const match = /^([a-z][a-z0-9-]*):(?:\s*(.*))$/.exec(rawLine);
 
     if (!match) {
-      diagnostics.push(
-        diagnostic("frontmatter_invalid_entry", lineNumber, 1),
-      );
+      diagnostics.push(diagnostic("frontmatter_invalid_entry", lineNumber, 1));
       continue;
     }
 
@@ -155,7 +153,10 @@ export function parseResumeMarkdownFrontMatter(
 
     switch (key) {
       case "anonresume":
-        if (scalar !== String(RESUME_MARKDOWN_SOURCE_VERSION)) {
+        if (
+          scalar !== "1" &&
+          scalar !== String(RESUME_MARKDOWN_SOURCE_VERSION)
+        ) {
           diagnostics.push(
             diagnostic(
               "frontmatter_unsupported_version",
@@ -165,7 +166,7 @@ export function parseResumeMarkdownFrontMatter(
             ),
           );
         } else {
-          parsed.version = RESUME_MARKDOWN_SOURCE_VERSION;
+          parsed.version = scalar === "1" ? 1 : RESUME_MARKDOWN_SOURCE_VERSION;
         }
         break;
       case "title":
@@ -253,7 +254,7 @@ export function parseResumeMarkdownFrontMatter(
 export function serializeResumeMarkdownFrontMatter(
   frontMatter: ResumeMarkdownFrontMatter,
 ) {
-  const lines = ["---", "anonresume: 1"];
+  const lines = ["---", `anonresume: ${frontMatter.version}`];
 
   if (frontMatter.title !== undefined) {
     lines.push(`title: ${quote(frontMatter.title)}`);

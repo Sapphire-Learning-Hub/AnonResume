@@ -46,12 +46,6 @@ function pushText(output: RichTextNode[], text: string, marks: TextMark[]) {
   });
 }
 
-function decodeMarkedEdgeSpaces(value: string) {
-  return value
-    .replace(/^(?:&#32;)+/, (match) => " ".repeat(match.length / 5))
-    .replace(/(?:&#32;)+$/, (match) => " ".repeat(match.length / 5));
-}
-
 function inlineDiagnostic(
   code: string,
   line: number,
@@ -82,6 +76,16 @@ function preprocessDirectives(
 
   while (cursor < source.length) {
     const match = /:([a-z][a-z0-9-]*)\[/i.exec(source.slice(cursor));
+    const code = /(?<!\\)`+/.exec(source.slice(cursor));
+    if (code && (!match || code.index <= match.index)) {
+      const start = cursor + code.index;
+      const closing = source.indexOf(code[0], start + code[0].length);
+      const end =
+        closing < 0 ? start + code[0].length : closing + code[0].length;
+      output += source.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
     if (!match) {
       output += source.slice(cursor);
       break;
@@ -92,7 +96,9 @@ function preprocessDirectives(
     output += source.slice(cursor, start);
 
     if (!["tag", "underline", "color", "icon"].includes(name)) {
-      diagnostics.push(inlineDiagnostic("inline_unknown_directive", line, { name }));
+      diagnostics.push(
+        inlineDiagnostic("inline_unknown_directive", line, { name }),
+      );
       output += match[0];
       cursor = start + match[0].length;
       continue;
@@ -101,7 +107,9 @@ function preprocessDirectives(
     const openingIndex = start + match[0].length - 1;
     const closingIndex = findClosingBracket(source, openingIndex);
     if (closingIndex === -1) {
-      diagnostics.push(inlineDiagnostic("inline_unclosed_directive", line, { name }));
+      diagnostics.push(
+        inlineDiagnostic("inline_unclosed_directive", line, { name }),
+      );
       output += source.slice(start);
       break;
     }
@@ -201,13 +209,20 @@ function convertNodes(
     const node = nodes[index]!;
     switch (node.type) {
       case "text":
-        convertText((node as Text).value, marks, tokens, diagnostics, line, output);
+        convertText(
+          (node as Text).value,
+          marks,
+          tokens,
+          diagnostics,
+          line,
+          output,
+        );
         break;
       case "break":
         output.push({ type: "hardBreak" });
         break;
       case "inlineCode":
-        pushText(output, decodeMarkedEdgeSpaces((node as InlineCode).value), [
+        pushText(output, (node as InlineCode).value, [
           ...marks,
           { type: "code" },
         ]);
@@ -244,6 +259,12 @@ function convertNodes(
         break;
       case "link": {
         const link = node as Link;
+        // GFM's post-transform re-links decoded escapes. Only source-backed links
+        // are intentional; escaped literal email addresses and URLs stay text.
+        if (!link.position) {
+          convertNodes(link.children, marks, tokens, diagnostics, line, output);
+          break;
+        }
         const next = nodes[index + 1];
         const parsedAttributes =
           next?.type === "text"
@@ -273,7 +294,9 @@ function convertNodes(
           output,
         );
         if (parsedAttributes && next?.type === "text") {
-          (next as Text).value = (next as Text).value.slice(parsedAttributes.length);
+          (next as Text).value = (next as Text).value.slice(
+            parsedAttributes.length,
+          );
         }
         break;
       }
@@ -282,9 +305,10 @@ function convertNodes(
         pushText(output, (node as Html).value, marks);
         break;
       case "image":
-        pushText(output, node.alt || node.url, marks);
+        diagnostics.push(inlineDiagnostic("unsupported_markdown", line));
         break;
       default:
+        diagnostics.push(inlineDiagnostic("unsupported_markdown", line));
         break;
     }
   }
@@ -297,7 +321,10 @@ export function parseResumeMarkdownInline(
 ) {
   const diagnostics: ResumeMarkdownDiagnostic[] = [];
   const preprocessed = preprocessDirectives(source, line, diagnostics);
-  const root = unified().use(remarkParse).use(remarkGfm).parse(preprocessed.source) as Root;
+  const root = unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .parse(preprocessed.source) as Root;
   const paragraph = root.children.find((node) => node.type === "paragraph");
   const output: RichTextNode[] = [];
   if (paragraph?.type === "paragraph") {
@@ -319,8 +346,41 @@ export function parseResumeMarkdownInline(
   };
 }
 
-function escapeText(text: string) {
-  return text.replace(/([\\`*_[\]<>])/g, "\\$1");
+export function escapeResumeMarkdownText(text: string) {
+  return text
+    .replace(/([\\`*_[\]<>~@{}&|])/g, "\\$1")
+    .replace(/:(?=\/\/)/g, "\\:")
+    .replace(/\bwww\./gi, (match) => `${match.slice(0, -1)}\\.`)
+    .replace(
+      /^(\s*)(#{1,6}(?=\s|$)|[-+=]+(?=\s|$)|\d+[.)](?=\s)|:(?=::))/gm,
+      (_match, indent: string, marker: string) =>
+        `${indent}${marker.length > 1 && /^\d/.test(marker) ? marker.slice(0, -1) + "\\" + marker.at(-1) : "\\" + marker}`,
+    );
+}
+
+export function parseResumeMarkdownBadgeLabels(source: string, line: number) {
+  const diagnostics: ResumeMarkdownDiagnostic[] = [];
+  const parsed = preprocessDirectives(source, line, diagnostics);
+  const remainder = parsed.source.replace(/\uE000\d+\uE001/g, "");
+  if (remainder.trim() || parsed.tokens.some((token) => token.type !== "tag")) {
+    diagnostics.push(inlineDiagnostic("block_invalid_nesting", line));
+  }
+  const labels = parsed.tokens.map((token) => {
+    const inline = parseResumeMarkdownInline(token.content, line);
+    diagnostics.push(...inline.diagnostics);
+    return inline.content.content
+      .flatMap((paragraph) =>
+        paragraph.content.map((node) =>
+          node.type === "text"
+            ? node.text
+            : node.type === "hardBreak"
+              ? "\n"
+              : "",
+        ),
+      )
+      .join("");
+  });
+  return { labels, diagnostics };
 }
 
 export interface ResumeMarkdownProjectedInlineSpan {
@@ -333,12 +393,27 @@ export interface ResumeMarkdownProjectedInlineSpan {
 }
 
 function serializeMarkedText(text: string, marks: TextMark[]) {
-  const leadingSpace = text.match(/^ +/)?.[0] ?? "";
-  const trailingSpace = text.match(/ +$/)?.[0] ?? "";
-  const contentEnd = trailingSpace ? text.length - trailingSpace.length : text.length;
+  const code = marks.some((mark) => mark.type === "code");
+  const leadingSpace = code ? "" : (text.match(/^ +/)?.[0] ?? "");
+  const trailingSpace = code ? "" : (text.match(/ +$/)?.[0] ?? "");
+  const contentEnd = trailingSpace
+    ? text.length - trailingSpace.length
+    : text.length;
   const content = text.slice(leadingSpace.length, contentEnd);
-  if (!content) return escapeText(text);
-  let output = escapeText(content);
+  if (!content) return escapeResumeMarkdownText(text);
+  const codeFence = "`".repeat(
+    Math.max(
+      0,
+      ...Array.from(content.matchAll(/`+/g), (match) => match[0].length),
+    ) + 1,
+  );
+  const codePadding =
+    /^`|`$/.test(content) || (/^ .* $/.test(content) && /[^ ]/.test(content))
+      ? " "
+      : "";
+  let output = code
+    ? `${codeFence}${codePadding}${content}${codePadding}${codeFence}`
+    : escapeResumeMarkdownText(content);
   for (const mark of [...marks].reverse()) {
     switch (mark.type) {
       case "bold":
@@ -351,7 +426,6 @@ function serializeMarkedText(text: string, marks: TextMark[]) {
         output = `~~${output}~~`;
         break;
       case "code":
-        output = `\`${output.replaceAll("`", "\\`")}\``;
         break;
       case "tag":
       case "underline":
@@ -391,8 +465,7 @@ export function serializeResumeMarkdownInline(
   return content.content
     .map((paragraph, paragraphIndex) => {
       const contextFingerprint = paragraphContextFingerprint(paragraph);
-      return (
-      paragraph.content
+      return paragraph.content
         .map((node, nodeIndex) => {
           if (node.type === "hardBreak") return "  \n";
           if (node.type === "resumeIcon") return `:icon[${node.attrs.iconId}]`;
@@ -415,8 +488,7 @@ export function serializeResumeMarkdownInline(
           }
           return serializeMarkedText(node.text, node.marks ?? []);
         })
-        .join("")
-      );
+        .join("");
     })
     .join("\n\n");
 }

@@ -5,6 +5,8 @@ import {
   type ResumeMarkdownProjection,
 } from "@/domain/resume/markdown";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
+import { createResumeDocumentFromTemplate } from "@/domain/resume/templates";
+import type { ResumeDocument } from "@/domain/resume/schema";
 import type {
   LocalResumeMarkdownDraft,
   ResumeMarkdownDraftRepository,
@@ -39,8 +41,11 @@ function createRepository(
   };
 }
 
-function setup(initialDraft?: LocalResumeMarkdownDraft, commitDelayMs = 10) {
-  const document = createDefaultResumeDocument("zh-CN");
+function setup(
+  initialDraft?: LocalResumeMarkdownDraft,
+  commitDelayMs = 10,
+  document: ResumeDocument = createDefaultResumeDocument("zh-CN"),
+) {
   const store = createResumeEditorStore({
     resumeId: "resume-demo",
     document,
@@ -83,6 +88,53 @@ describe("useResumeMarkdownSession", () => {
     vi.useRealTimers();
   });
 
+  it("retains structure across an autosave acknowledgement and further typing", async () => {
+    vi.useFakeTimers();
+    const document = createResumeDocumentFromTemplate("blank", "en-US");
+    document.sections[0]!.blocks.push({
+      id: "skills",
+      type: "badges",
+      wrap: false,
+      gap: 5,
+      items: [
+        { id: "skill-a", text: "TypeScript" },
+        { id: "skill-b", text: "React" },
+      ],
+    });
+    const { result, store } = setup(undefined, 5, document);
+    await act(async () => result.current.enter());
+    const source = result.current.source.replace(
+      "Name · Target role",
+      "Taylor · Target role",
+    );
+    act(() => result.current.setSource(source));
+    await act(async () => vi.advanceTimersByTimeAsync(5));
+    act(() =>
+      store
+        .getState()
+        .markSaved({
+          version: 4,
+          updatedAt: 200,
+          document: store.getState().document,
+        }),
+    );
+
+    act(() =>
+      result.current.setSource(source.replace("Taylor ·", "Taylor Chen ·")),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(5));
+
+    expect(result.current.diagnostics).toEqual([]);
+    expect(store.getState().document.sections[0]).toMatchObject({
+      id: document.sections[0]!.id,
+      blocks: [
+        { id: document.sections[0]!.blocks[0]!.id },
+        document.sections[0]!.blocks[1]!,
+      ],
+    });
+    expect(store.getState().document.sections[1]).toEqual(document.sections[1]);
+  });
+
   it("shows a valid candidate immediately and commits it as one debounced transaction", async () => {
     vi.useFakeTimers();
     const { result, store } = setup(undefined, 5);
@@ -119,6 +171,75 @@ describe("useResumeMarkdownSession", () => {
     expect(store.getState().history.past).toHaveLength(0);
   });
 
+  it("does not cancel a pending edit when the next input only adds whitespace", async () => {
+    vi.useFakeTimers();
+    const { result, store } = setup(undefined, 5);
+    await act(async () => result.current.enter());
+    const source = result.current.source.replace("共享渲染器基础", "连续输入");
+    act(() => result.current.setSource(source));
+    act(() => result.current.setSource(`${source}\n\n`));
+    await act(async () => vi.advanceTimersByTimeAsync(5));
+    expect(JSON.stringify(store.getState().document)).toContain("连续输入");
+    expect(store.getState().history.past).toHaveLength(1);
+  });
+
+  it("does not overwrite an external restore while a Markdown commit is pending", async () => {
+    vi.useFakeTimers();
+    const { result, store, document } = setup(undefined, 5);
+    await act(async () => result.current.enter());
+    act(() =>
+      result.current.setSource(
+        result.current.source.replace("共享渲染器基础", "待写入"),
+      ),
+    );
+    const restored = {
+      ...document,
+      meta: { ...document.meta, title: "restored" },
+    };
+    act(() =>
+      store
+        .getState()
+        .replaceDocument({ document: restored, history: "record" }),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(5));
+    expect(store.getState().document).toEqual(restored);
+    expect(result.current.isPreviewStale).toBe(true);
+    await act(async () => {
+      await expect(result.current.flush()).resolves.toBe(false);
+    });
+    expect(store.getState().document).toEqual(restored);
+  });
+
+  it("recovers a pending draft against its own mapping baseline", async () => {
+    const first = setup(undefined, 60_000);
+    await act(async () => first.result.current.enter());
+    const source = first.result.current.source.replace(
+      "共享渲染器基础",
+      "恢复后连续编辑",
+    );
+    act(() => first.result.current.setSource(source));
+    const draft = first.repository.saved.at(-1)!;
+    first.unmount();
+    const second = setup(draft, 60_000);
+    await act(async () => second.result.current.enter());
+    act(() => second.result.current.recoverDraft());
+    act(() =>
+      second.result.current.setSource(
+        source.replace("恢复后连续编辑", "恢复完成"),
+      ),
+    );
+    await act(async () => {
+      await expect(second.result.current.flush()).resolves.toBe(true);
+    });
+    expect(second.result.current.diagnostics).toEqual([]);
+    expect(JSON.stringify(second.store.getState().document)).toContain(
+      "恢复完成",
+    );
+    expect(
+      second.store.getState().document.sections.map((section) => section.id),
+    ).toEqual(second.document.sections.map((section) => section.id));
+  });
+
   it("flushes a valid pending source change before the debounce expires", async () => {
     const { result, store } = setup(undefined, 60_000);
     await act(async () => result.current.enter());
@@ -143,7 +264,9 @@ describe("useResumeMarkdownSession", () => {
     await act(async () => result.current.enter());
     await waitFor(() => expect(result.current.diagnostics).toEqual([]));
     const lastValidPreview = result.current.previewDocument;
-    act(() => result.current.setSource("---\nanonresume: 1\n---\n\n:::group\nbroken"));
+    act(() =>
+      result.current.setSource("---\nanonresume: 1\n---\n\n:::group\nbroken"),
+    );
 
     await waitFor(() => expect(result.current.isPreviewStale).toBe(true));
     expect(result.current.previewDocument).toBe(lastValidPreview);
@@ -162,6 +285,28 @@ describe("useResumeMarkdownSession", () => {
     expect(result.current.recoveryIsStale).toBe(true);
     act(() => result.current.recoverDraft());
     expect(result.current.source).toBe("invalid local source");
+  });
+
+  it("does not turn an unverified legacy draft into a trusted draft after another refresh", async () => {
+    const draft = createRecoveryDraft({
+      source: serializeResumeMarkdown(
+        createDefaultResumeDocument("zh-CN"),
+      ).source.replace("共享渲染器基础", "old draft"),
+    });
+    const first = setup(draft, 60_000);
+    await act(async () => first.result.current.enter());
+    act(() => first.result.current.recoverDraft());
+    act(() => first.result.current.setSource(`${draft.source}\n`));
+    const persisted = first.repository.saved.at(-1)!;
+    first.unmount();
+    const second = setup(persisted, 60_000);
+    await act(async () => second.result.current.enter());
+    act(() => second.result.current.recoverDraft());
+    await act(async () => {
+      await expect(second.result.current.flush()).resolves.toBe(false);
+    });
+    expect(second.store.getState().document).toEqual(second.document);
+    expect(second.result.current.source).toContain("old draft");
   });
 
   it("blocks invalid exit and clears the source draft after valid exit or discard", async () => {
@@ -233,17 +378,23 @@ describe("useResumeMarkdownSession", () => {
     );
     const firstProjection = repository.saved.at(-1)
       ?.projection as ResumeMarkdownProjection;
-    expect(firstProjection.nodes.some((entry) =>
-      entry.fingerprint.includes("第一次编辑"),
-    )).toBe(true);
+    expect(
+      firstProjection.nodes.some((entry) =>
+        entry.fingerprint.includes("第一次编辑"),
+      ),
+    ).toBe(true);
 
     const secondSource = firstSource.replace("第一次编辑", "第二次编辑");
     act(() => result.current.setSource(secondSource));
     await waitFor(() =>
       expect(repository.saved.at(-1)?.source).toBe(secondSource),
     );
-    expect(repository.saved.at(-1)?.projection.nodes.some((entry) =>
-      entry.fingerprint.includes("第二次编辑"),
-    )).toBe(true);
+    expect(
+      repository.saved
+        .at(-1)
+        ?.projection.nodes.some((entry) =>
+          entry.fingerprint.includes("第二次编辑"),
+        ),
+    ).toBe(true);
   });
 });

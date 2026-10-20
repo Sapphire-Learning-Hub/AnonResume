@@ -201,7 +201,7 @@ describe("resume Markdown projection contracts", () => {
       17,
     );
 
-    expect(RESUME_MARKDOWN_SOURCE_VERSION).toBe(1);
+    expect(RESUME_MARKDOWN_SOURCE_VERSION).toBe(2);
     expect(RESUME_MARKDOWN_PROJECTION_VERSION).toBe(1);
     expect(projection).toMatchObject({
       version: 1,
@@ -216,13 +216,15 @@ describe("resume Markdown projection contracts", () => {
         },
       ],
     });
-    expect(projection.nodes.map(({ id, kind, path, parentId, ordinal }) => ({
-      id,
-      kind,
-      path,
-      parentId,
-      ordinal,
-    }))).toEqual([
+    expect(
+      projection.nodes.map(({ id, kind, path, parentId, ordinal }) => ({
+        id,
+        kind,
+        path,
+        parentId,
+        ordinal,
+      })),
+    ).toEqual([
       {
         id: "row-projects",
         kind: "row",

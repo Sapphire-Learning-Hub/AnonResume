@@ -11,6 +11,7 @@ import type { StoreApi } from "zustand";
 
 import {
   formatResumeMarkdown,
+  resumeMarkdownDocumentsEqual,
   serializeResumeMarkdown,
   type ResumeMarkdownDiagnostic,
   type ResumeMarkdownProjection,
@@ -46,7 +47,9 @@ export function useResumeMarkdownSession({
   );
   const [previewDocument, setPreviewDocument] =
     useState<ResumeDocument>(initialDocument);
-  const [diagnostics, setDiagnostics] = useState<ResumeMarkdownDiagnostic[]>([]);
+  const [diagnostics, setDiagnostics] = useState<ResumeMarkdownDiagnostic[]>(
+    [],
+  );
   const [isPreviewStale, setIsPreviewStale] = useState(false);
   const [recoveryDraft, setRecoveryDraft] =
     useState<LocalResumeMarkdownDraft>();
@@ -58,6 +61,12 @@ export function useResumeMarkdownSession({
     }).projection,
   );
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const mappingDocumentRef = useRef(initialDocument);
+  const committedDocumentRef = useRef(initialDocument);
+  const recoveryBlockedRef = useRef(false);
+  const blockedDraftRef = useRef<LocalResumeMarkdownDraft | undefined>(
     undefined,
   );
   const deferredPreviewDocument = useDeferredValue(previewDocument);
@@ -77,38 +86,88 @@ export function useResumeMarkdownSession({
     }
   };
 
-  const setSource = (nextSource: string) => {
+  const hasConflict = () =>
+    recoveryBlockedRef.current ||
+    !resumeMarkdownDocumentsEqual(
+      store.getState().document,
+      committedDocumentRef.current,
+    );
+
+  const showConflict = () => {
+    clearCommitTimer();
+    setDiagnostics([
+      {
+        severity: "error",
+        code: "projection_conflict",
+        line: 1,
+        column: 1,
+        parameters: {},
+      },
+    ]);
+    setIsPreviewStale(true);
+  };
+
+  const parseSource = (nextSource: string) => {
     const current = store.getState();
-    const formatted = formatResumeMarkdown(
+    return formatResumeMarkdown(
       nextSource,
-      current.document,
+      mappingDocumentRef.current,
       locale,
       {
         baseDocumentVersion: current.version,
-        projection: activeProjectionRef.current,
+        // Save acknowledgements change the server version, not this session's
+        // document identity. Rebase only after verifying our committed baseline.
+        projection: {
+          ...activeProjectionRef.current,
+          baseDocumentVersion: current.version,
+        },
       },
     );
+  };
+
+  const commitDocument = (document: ResumeDocument) => {
+    if (hasConflict()) {
+      showConflict();
+      return false;
+    }
+    if (!resumeMarkdownDocumentsEqual(store.getState().document, document)) {
+      store.getState().replaceDocument({ document, history: "record" });
+    }
+    committedDocumentRef.current = store.getState().document;
+    return true;
+  };
+
+  const setSource = (nextSource: string) => {
+    const current = store.getState();
     setSourceState(nextSource);
     setHasSourceChanges(true);
-    setDiagnostics(formatted.result.diagnostics);
-
-    if (formatted.result.hasErrors || !formatted.result.document) {
-      clearCommitTimer();
-      setIsPreviewStale(true);
+    if (hasConflict()) {
+      showConflict();
     } else {
-      activeProjectionRef.current = formatted.projection;
-      setIsPreviewStale(false);
-      startTransition(() => setPreviewDocument(formatted.result.document!));
-      clearCommitTimer();
-      if (formatted.semanticChanged) {
-        const candidate = formatted.result.document;
-        commitTimerRef.current = setTimeout(() => {
-          store.getState().replaceDocument({
-            document: candidate!,
-            history: "record",
-          });
-          commitTimerRef.current = undefined;
-        }, commitDelayMs);
+      const formatted = parseSource(nextSource);
+      setDiagnostics(formatted.result.diagnostics);
+
+      if (formatted.result.hasErrors || !formatted.result.document) {
+        clearCommitTimer();
+        setIsPreviewStale(true);
+      } else {
+        activeProjectionRef.current = formatted.projection;
+        mappingDocumentRef.current = formatted.result.document;
+        setIsPreviewStale(false);
+        startTransition(() => setPreviewDocument(formatted.result.document!));
+        clearCommitTimer();
+        if (
+          !resumeMarkdownDocumentsEqual(
+            current.document,
+            formatted.result.document,
+          )
+        ) {
+          const candidate = formatted.result.document;
+          commitTimerRef.current = setTimeout(() => {
+            commitDocument(candidate);
+            commitTimerRef.current = undefined;
+          }, commitDelayMs);
+        }
       }
     }
 
@@ -120,6 +179,12 @@ export function useResumeMarkdownSession({
         baseVersion: current.version,
         updatedAt: Date.now(),
         projection: activeProjectionRef.current,
+        baseDocument: blockedDraftRef.current
+          ? blockedDraftRef.current.baseDocument
+          : committedDocumentRef.current,
+        projectionDocument: blockedDraftRef.current
+          ? blockedDraftRef.current.projectionDocument
+          : mappingDocumentRef.current,
       })
       .catch(() => undefined);
   };
@@ -138,6 +203,10 @@ export function useResumeMarkdownSession({
       baseDocumentVersion: current.version,
     });
     activeProjectionRef.current = serialized.projection;
+    mappingDocumentRef.current = current.document;
+    committedDocumentRef.current = current.document;
+    recoveryBlockedRef.current = false;
+    blockedDraftRef.current = undefined;
     setSourceState(serialized.source);
     setPreviewDocument(current.document);
     setDiagnostics([]);
@@ -153,7 +222,23 @@ export function useResumeMarkdownSession({
 
   const recoverDraftSource = () => {
     if (!recoveryDraft) return;
+    recoveryBlockedRef.current =
+      !recoveryDraft.baseDocument ||
+      !recoveryDraft.projectionDocument ||
+      (!resumeMarkdownDocumentsEqual(
+        recoveryDraft.baseDocument,
+        store.getState().document,
+      ) &&
+        !resumeMarkdownDocumentsEqual(
+          recoveryDraft.projectionDocument,
+          store.getState().document,
+        ));
+    blockedDraftRef.current = recoveryBlockedRef.current
+      ? recoveryDraft
+      : undefined;
     activeProjectionRef.current = recoveryDraft.projection;
+    mappingDocumentRef.current =
+      recoveryDraft.projectionDocument ?? mappingDocumentRef.current;
     setSource(recoveryDraft.source);
     setRecoveryDraft(undefined);
   };
@@ -164,29 +249,20 @@ export function useResumeMarkdownSession({
   };
 
   const flush = async () => {
-    const current = store.getState();
-    const formatted = formatResumeMarkdown(
-      source,
-      current.document,
-      locale,
-      {
-        baseDocumentVersion: current.version,
-        projection: activeProjectionRef.current,
-      },
-    );
+    if (hasConflict()) {
+      showConflict();
+      return false;
+    }
+    const formatted = parseSource(source);
     setDiagnostics(formatted.result.diagnostics);
     if (formatted.result.hasErrors || !formatted.result.document) {
       setIsPreviewStale(true);
       return false;
     }
     activeProjectionRef.current = formatted.projection;
+    mappingDocumentRef.current = formatted.result.document;
     clearCommitTimer();
-    if (formatted.semanticChanged) {
-      store.getState().replaceDocument({
-        document: formatted.result.document,
-        history: "record",
-      });
-    }
+    if (!commitDocument(formatted.result.document)) return false;
     setPreviewDocument(formatted.result.document);
     setIsPreviewStale(false);
     return true;
@@ -194,15 +270,7 @@ export function useResumeMarkdownSession({
 
   const exit = async () => {
     if (!(await flush())) return false;
-    const formatted = formatResumeMarkdown(
-      source,
-      store.getState().document,
-      locale,
-      {
-        baseDocumentVersion: store.getState().version,
-        projection: activeProjectionRef.current,
-      },
-    );
+    const formatted = parseSource(source);
     if (!formatted.result.document) return false;
     activeProjectionRef.current = formatted.projection;
     setSourceState(formatted.source);
@@ -222,6 +290,10 @@ export function useResumeMarkdownSession({
       baseDocumentVersion: current.version,
     });
     activeProjectionRef.current = serialized.projection;
+    mappingDocumentRef.current = current.document;
+    committedDocumentRef.current = current.document;
+    recoveryBlockedRef.current = false;
+    blockedDraftRef.current = undefined;
     setSourceState(serialized.source);
     setPreviewDocument(current.document);
     setDiagnostics([]);
@@ -241,7 +313,17 @@ export function useResumeMarkdownSession({
     recoveryDraft,
     recoveryIsStale:
       recoveryDraft !== undefined &&
-      recoveryDraft.baseVersion !== store.getState().version,
+      (recoveryDraft.baseVersion !== store.getState().version ||
+        !recoveryDraft.baseDocument ||
+        !recoveryDraft.projectionDocument ||
+        (!resumeMarkdownDocumentsEqual(
+          recoveryDraft.baseDocument,
+          store.getState().document,
+        ) &&
+          !resumeMarkdownDocumentsEqual(
+            recoveryDraft.projectionDocument,
+            store.getState().document,
+          ))),
     active,
     hasSourceChanges,
     enter,

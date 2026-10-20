@@ -29,6 +29,8 @@ interface ProjectionSeed {
 interface SerializedFragment {
   source: string;
   seeds: ProjectionSeed[];
+  startsWithList?: boolean;
+  endsWithList?: boolean;
 }
 
 function fingerprint(value: unknown) {
@@ -55,12 +57,12 @@ function isSemanticHeading(block: Extract<ResumeBlock, { type: "text" }>) {
   const style = block.style;
   return Boolean(
     style &&
-      style.fontSize === 17 &&
-      style.fontWeight === 700 &&
-      style.lineHeight === undefined &&
-      style.color === undefined &&
-      style.tone === undefined &&
-      style.align === undefined,
+    style.fontSize === 17 &&
+    style.fontWeight === 700 &&
+    style.lineHeight === undefined &&
+    style.color === undefined &&
+    style.tone === undefined &&
+    style.align === undefined,
   );
 }
 
@@ -98,8 +100,51 @@ function serializeTextBlock(
 ): SerializedFragment {
   const seeds = [blockSeed(block, path, parentId, ordinal)];
   const content = serializeInlineContent({ block, path, seeds });
+  const codeNode = block.content.content[0]?.content[0];
+  if (
+    block.content.content.length === 1 &&
+    block.content.content[0]?.content.length === 1 &&
+    codeNode?.type === "text" &&
+    codeNode.marks?.length === 1 &&
+    codeNode.marks[0]?.type === "code"
+  ) {
+    const fence = "`".repeat(
+      Math.max(
+        3,
+        ...Array.from(
+          codeNode.text.matchAll(/`+/g),
+          (match) => match[0].length + 1,
+        ),
+      ),
+    );
+    return { source: `${fence}\n${codeNode.text}\n${fence}`, seeds };
+  }
   return {
-    source: isSemanticHeading(block) ? `### ${content}` : content,
+    source:
+      block.content.content.some(
+        (paragraph) =>
+          !paragraph.content.length ||
+          (paragraph.content.some(
+            (node) =>
+              node.type === "text" &&
+              node.marks?.some((mark) => mark.type === "code"),
+          ) &&
+            paragraph.content.every(
+              (node) =>
+                node.type === "text" &&
+                (!node.text.trim() ||
+                  (node.marks?.some((mark) => mark.type === "code") &&
+                    node.marks.every((mark) =>
+                      ["code", "textColor", "underline", "tag"].includes(
+                        mark.type,
+                      ),
+                    ))),
+            )),
+      ) || !content
+        ? [":::text", content, ":::"].join("\n")
+        : isSemanticHeading(block)
+          ? `### ${content}`
+          : content,
     seeds,
   };
 }
@@ -112,6 +157,19 @@ function indentSource(source: string, width: number) {
     .join("\n");
 }
 
+function isStandardList(
+  block: Extract<ResumeBlock, { type: "list" }>,
+): boolean {
+  return block.items.every((item) =>
+    item.children.every((child) =>
+      child.type === "text"
+        ? child.content.content.length === 1 &&
+          Boolean(child.content.content[0]?.content.length)
+        : child.type === "list" && isStandardList(child),
+    ),
+  );
+}
+
 function serializeListBlock(
   block: Extract<ResumeBlock, { type: "list" }>,
   path: number[],
@@ -119,6 +177,7 @@ function serializeListBlock(
   ordinal: number,
 ): SerializedFragment {
   const seeds: ProjectionSeed[] = [blockSeed(block, path, parentId, ordinal)];
+  const requiresDirective = !isStandardList(block);
   const items = block.items.map((item, itemIndex) => {
     const itemPath = [...path, itemIndex];
     seeds.push({
@@ -130,15 +189,14 @@ function serializeListBlock(
       fingerprint: `list-item:${fingerprint(item)}`,
     });
     const children = item.children.map((child, childIndex) =>
-      serializeBlock(
-        child,
-        [...itemPath, childIndex],
-        item.id,
-        childIndex,
-        { insideRow: false },
-      ),
+      serializeBlock(child, [...itemPath, childIndex], item.id, childIndex, {
+        insideRow: false,
+      }),
     );
     children.forEach((child) => seeds.push(...child.seeds));
+
+    if (requiresDirective)
+      return [":::item", joinFragments(children), ":::"].join("\n");
 
     const marker = block.ordered ? `${itemIndex + 1}.` : "-";
     const indentationWidth = marker.length + 1;
@@ -159,7 +217,22 @@ function serializeListBlock(
     }
     return lines.join("\n");
   });
-  return { source: items.join("\n"), seeds };
+  return {
+    source: requiresDirective
+      ? [
+          `:::list${serializeDirectiveAttributes([
+            ["ordered", block.ordered],
+            ["marker", block.marker],
+            ["gap", block.gap],
+          ])}`,
+          items.join("\n\n"),
+          ":::",
+        ].join("\n")
+      : items.join("\n"),
+    seeds,
+    startsWithList: !requiresDirective,
+    endsWithList: !requiresDirective,
+  };
 }
 
 function serializeBadgesBlock(
@@ -180,25 +253,32 @@ function serializeBadgesBlock(
     });
   });
   return {
-    source: block.items.map((item) => `- ${item.text}`).join("\n"),
+    source: block.items
+      .map((item) =>
+        serializeResumeMarkdownInline({
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: item.text, marks: [{ type: "code" }] },
+              ],
+            },
+          ],
+        }),
+      )
+      .join(" "),
     seeds,
   };
 }
 
 function joinFragments(fragments: SerializedFragment[]) {
   return fragments
-    .map((fragment) => fragment.source)
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function canUseHeadingBoundary(block: ResumeBlock) {
-  return (
-    block.type === "group" &&
-    block.direction === "vertical" &&
-    block.children[0]?.type === "text" &&
-    isSemanticHeading(block.children[0])
-  );
+    .map(
+      (fragment, index) =>
+        `${index ? "\n\n" : ""}${fragment.startsWithList && fragments[index - 1]?.endsWithList ? "<!-- anonresume:block -->\n\n" : ""}${fragment.source}`,
+    )
+    .join("");
 }
 
 function serializeGroupBlock(
@@ -208,28 +288,32 @@ function serializeGroupBlock(
   ordinal: number,
   options: { insideRow: boolean },
 ): SerializedFragment {
+  const requiresDirective =
+    block.direction === "horizontal" || options.insideRow;
   const children = block.children.map((child, childIndex) =>
-    serializeBlock(
-      child,
-      [...path, childIndex],
-      block.id,
-      childIndex,
-      { insideRow: false },
-    ),
+    serializeBlock(child, [...path, childIndex], block.id, childIndex, {
+      insideRow: block.direction === "horizontal",
+    }),
   );
   const source = joinFragments(children);
   const seeds = [
     blockSeed(block, path, parentId, ordinal),
     ...children.flatMap((child) => child.seeds),
   ];
-  const requiresDirective =
-    block.direction === "horizontal" ||
-    (options.insideRow && !canUseHeadingBoundary(block));
-  if (!requiresDirective) return { source, seeds };
+  if (!requiresDirective)
+    return {
+      source,
+      seeds,
+      startsWithList: children[0]?.startsWithList,
+      endsWithList: children.at(-1)?.endsWithList,
+    };
   return {
     source: [
       `:::group${serializeDirectiveAttributes([
-        ["direction", block.direction === "vertical" ? undefined : block.direction],
+        [
+          "direction",
+          block.direction === "vertical" ? undefined : block.direction,
+        ],
         ["gap", block.gap],
         ["align", block.align],
       ])}`,
@@ -247,13 +331,9 @@ function serializeRowBlock(
   ordinal: number,
 ): SerializedFragment {
   const children = block.children.map((child, childIndex) =>
-    serializeBlock(
-      child,
-      [...path, childIndex],
-      block.id,
-      childIndex,
-      { insideRow: true },
-    ),
+    serializeBlock(child, [...path, childIndex], block.id, childIndex, {
+      insideRow: true,
+    }),
   );
   return {
     source: [
@@ -280,8 +360,15 @@ function serializeBlock(
   options: { insideRow: boolean },
 ): SerializedFragment {
   switch (block.type) {
-    case "text":
-      return serializeTextBlock(block, path, parentId, ordinal);
+    case "text": {
+      const fragment = serializeTextBlock(block, path, parentId, ordinal);
+      return options.insideRow && block.content.content.length > 1
+        ? {
+            ...fragment,
+            source: [":::column", fragment.source, ":::"].join("\n"),
+          }
+        : fragment;
+    }
     case "list":
       return serializeListBlock(block, path, parentId, ordinal);
     case "badges":
@@ -312,8 +399,8 @@ export function serializeResumeMarkdown(
     ...(document.meta.locale ? { locale: document.meta.locale } : {}),
     pageMargin: document.settings.page.margin,
     fontFamily:
-      getResumeFontPresetByFamily(document.settings.typography.fontFamily)?.name ??
-      document.settings.typography.fontFamily,
+      getResumeFontPresetByFamily(document.settings.typography.fontFamily)
+        ?.name ?? document.settings.typography.fontFamily,
     fontSize: document.settings.typography.baseFontSize,
     lineHeight: document.settings.typography.lineHeight,
     accent: document.settings.theme.accent,
@@ -344,8 +431,8 @@ export function serializeResumeMarkdown(
             });
           },
         })
-      : "Section";
-    const sectionSource = `## ${title}`;
+      : "";
+    const sectionSource = title ? `## ${title}` : "##";
     lines.push(sectionSource);
     const sectionRange = rangeForLines([sectionSource], sectionLine);
     sourceMap.sections.push({
@@ -363,16 +450,32 @@ export function serializeResumeMarkdown(
       ...sectionInlineSeeds.map((seed) => ({ ...seed, ...sectionRange })),
     );
 
+    const parallel =
+      (section.layout?.columns ?? 1) > 1 ||
+      section.layout?.direction === "horizontal";
+    if (parallel)
+      lines.push(
+        "",
+        `:::layout${serializeDirectiveAttributes([
+          ["columns", section.layout?.columns],
+          ["direction", section.layout?.direction],
+          ["gap", section.layout?.gap],
+        ])}`,
+      );
+    let previousEndsWithList = false;
     for (const [blockIndex, block] of section.blocks.entries()) {
       const fragment = serializeBlock(
         block,
         [sectionIndex, blockIndex],
         section.id,
         blockIndex,
-        { insideRow: false },
+        { insideRow: parallel },
       );
       if (!fragment.source) continue;
       lines.push("");
+      if (previousEndsWithList && fragment.startsWithList)
+        lines.push("<!-- anonresume:block -->", "");
+      previousEndsWithList = fragment.endsWithList ?? false;
       const startLine = lines.length + 1;
       const fragmentLines = fragment.source.split("\n");
       lines.push(...fragmentLines);
@@ -381,6 +484,7 @@ export function serializeResumeMarkdown(
         ...fragment.seeds.map((seed) => ({ ...seed, ...range })),
       );
     }
+    if (parallel) lines.push(":::");
   }
 
   const source = `${lines.join("\n").trimEnd()}\n`;

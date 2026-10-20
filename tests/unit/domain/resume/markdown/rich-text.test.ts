@@ -14,7 +14,9 @@ function documentWithContent(content: RichTextContent): ResumeDocument {
         id: "section-rich",
         title: {
           type: "doc",
-          content: [{ type: "paragraph", content: [{ type: "text", text: "富文本" }] }],
+          content: [
+            { type: "paragraph", content: [{ type: "text", text: "富文本" }] },
+          ],
         },
         visible: true,
         blocks: [{ id: "rich", type: "text", content }],
@@ -31,10 +33,18 @@ describe("AnonResume Markdown rich text dialect", () => {
         {
           type: "paragraph",
           content: [
-            { type: "text", text: "中文 Latin", marks: [{ type: "bold" }, { type: "italic" }] },
+            {
+              type: "text",
+              text: "中文 Latin",
+              marks: [{ type: "bold" }, { type: "italic" }],
+            },
             { type: "text", text: " 删除", marks: [{ type: "strike" }] },
             { type: "text", text: " code", marks: [{ type: "code" }] },
-            { type: "text", text: " 标签", marks: [{ type: "tag" }, { type: "bold" }] },
+            {
+              type: "text",
+              text: " 标签",
+              marks: [{ type: "tag" }, { type: "bold" }],
+            },
             {
               type: "text",
               text: " 彩色下划线",
@@ -64,7 +74,9 @@ describe("AnonResume Markdown rich text dialect", () => {
             {
               type: "text",
               text: "应用",
-              marks: [{ type: "link", attrs: { href: "anonresume://resume/1" } }],
+              marks: [
+                { type: "link", attrs: { href: "anonresume://resume/1" } },
+              ],
             },
             {
               type: "text",
@@ -83,18 +95,30 @@ describe("AnonResume Markdown rich text dialect", () => {
     expect(serialized.source).not.toContain(":underline[");
     expect(serialized.source).toContain("**_中文 Latin_**");
     expect(serialized.source).toContain(" ~~删除~~");
-    expect(serialized.source).toContain(" `code`");
+    const parsed = parseResumeMarkdown({
+      source: serialized.source,
+      baseDocument,
+      locale: "zh-CN",
+      projection: serialized.projection,
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document).toEqual(baseDocument);
     expect(serialized.source).toContain(":icon[simple-icons:github]");
-    expect(serialized.source).toContain(
-      '(mailto:test@example.com "发送邮件")',
-    );
+    expect(serialized.source).toContain('(mailto:test@example.com "发送邮件")');
     expect(
-      serialized.projection.nodes.filter((entry) => entry.kind === "inline-span"),
+      serialized.projection.nodes.filter(
+        (entry) => entry.kind === "inline-span",
+      ),
     ).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ inlineSpan: expect.objectContaining({ mark: "tag" }) }),
         expect.objectContaining({
-          inlineSpan: expect.objectContaining({ mark: "textColor", color: "#1677ff" }),
+          inlineSpan: expect.objectContaining({ mark: "tag" }),
+        }),
+        expect.objectContaining({
+          inlineSpan: expect.objectContaining({
+            mark: "textColor",
+            color: "#1677ff",
+          }),
         }),
         expect.objectContaining({
           inlineSpan: expect.objectContaining({ mark: "underline" }),
@@ -111,12 +135,16 @@ describe("AnonResume Markdown rich text dialect", () => {
     const source = serializeResumeMarkdown(baseDocument).source.replace(
       /## 富文本[^\n]*\n[^]*$/,
       [
-        '## 富文本 {visible=true}',
+        "## 富文本 {visible=true}",
         "",
-        "**重点 :tag[*嵌套*]** 与 :color[:underline[蓝色]]{value=\"#1677ff\"}",
+        '**重点 :tag[*嵌套*]** 与 :color[:underline[蓝色]]{value="#1677ff"}',
       ].join("\n"),
     );
-    const parsed = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
     const block = parsed.document?.sections[0]?.blocks[0];
 
     expect(parsed.hasErrors).toBe(false);
@@ -157,12 +185,18 @@ describe("AnonResume Markdown rich text dialect", () => {
       /## 富文本[^\n]*\n[^]*$/,
       `## 富文本 {visible=true}\n\n${inline}`,
     );
-    const parsed = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
 
     expect(parsed.hasErrors).toBe(true);
     expect(parsed.document).toBeUndefined();
     expect(parsed.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code, severity: "error" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ code, severity: "error" }),
+      ]),
     );
   });
 });

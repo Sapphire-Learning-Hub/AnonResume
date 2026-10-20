@@ -14,8 +14,15 @@ function createLayoutDocument(): ResumeDocument {
     ...base,
     meta: { title: "复杂简历", locale: "zh-CN" },
     settings: {
-      page: { size: "A4", margin: { top: 18, right: 16, bottom: 20, left: 14 } },
-      typography: { ...base.settings.typography, baseFontSize: 12, lineHeight: 1.6 },
+      page: {
+        size: "A4",
+        margin: { top: 18, right: 16, bottom: 20, left: 14 },
+      },
+      typography: {
+        ...base.settings.typography,
+        baseFontSize: 12,
+        lineHeight: 1.6,
+      },
       theme: { accent: "#1677ff", textColor: "#111827", mutedColor: "#64748b" },
     },
     sections: [
@@ -56,7 +63,11 @@ function createLayoutDocument(): ResumeDocument {
               {
                 id: "list-item",
                 children: [
-                  { id: "list-text", type: "text", content: createRichTextFromPlainText("列表") },
+                  {
+                    id: "list-text",
+                    type: "text",
+                    content: createRichTextFromPlainText("列表"),
+                  },
                 ],
               },
             ],
@@ -85,8 +96,16 @@ function createLayoutDocument(): ResumeDocument {
                 align: "center",
                 justify: "between",
                 children: [
-                  { id: "left", type: "text", content: createRichTextFromPlainText("左侧") },
-                  { id: "right", type: "text", content: createRichTextFromPlainText("右侧") },
+                  {
+                    id: "left",
+                    type: "text",
+                    content: createRichTextFromPlainText("左侧"),
+                  },
+                  {
+                    id: "right",
+                    type: "text",
+                    content: createRichTextFromPlainText("右侧"),
+                  },
                 ],
               },
             ],
@@ -98,6 +117,45 @@ function createLayoutDocument(): ResumeDocument {
 }
 
 describe("AnonResume Markdown layout dialect", () => {
+  it("applies explicit layout edits without dropping other section design settings", () => {
+    const document = createLayoutDocument();
+    const serialized = serializeResumeMarkdown(document);
+    const source = serialized.source
+      .replace("## 工作经历", "## 工作经历 {visible=true}")
+      .replace(
+        ':::layout {columns=2 direction="horizontal" gap=14}',
+        ':::layout {columns=2 direction="horizontal" gap=18}',
+      )
+      .replace(
+        "`TypeScript` `React`",
+        ":::badges {wrap=true gap=11}\n:tag[TypeScript] :tag[React]\n:::",
+      )
+      .replace(
+        ':::row {gap=16 align="center" justify="between"}',
+        ':::row {gap=22 align="end" justify="start"}',
+      );
+    const result = parseResumeMarkdown({
+      source,
+      baseDocument: document,
+      locale: "zh-CN",
+      projection: serialized.projection,
+    });
+    expect(result.diagnostics).toEqual([]);
+    const section = result.document?.sections[0];
+    expect(section).toMatchObject({
+      visible: true,
+      layout: { ...document.sections[0]!.layout, gap: 18 },
+    });
+    expect(section?.blocks[2]).toMatchObject({
+      type: "badges",
+      wrap: true,
+      gap: 11,
+    });
+    expect(section?.blocks[3]).toMatchObject({
+      type: "group",
+      children: [{ type: "row", gap: 22, align: "end", justify: "start" }],
+    });
+  });
   it("keeps presentation in projection and emits only necessary layout directives", () => {
     const baseDocument = createLayoutDocument();
     const serialized = serializeResumeMarkdown(baseDocument);
@@ -105,11 +163,19 @@ describe("AnonResume Markdown layout dialect", () => {
     expect(serialized.source).toContain("## 工作经历\n");
     expect(serialized.source).not.toContain("title-color=");
     expect(serialized.source).not.toContain("keep-together=");
-    expect(serialized.source).not.toMatch(/:::(?:text|list|item|badges)\b/);
-    expect(serialized.source).not.toContain(":::group");
+    expect(serialized.source).not.toMatch(/:::(?:text|list|item)\b/);
+    expect(serialized.source.match(/^:::group/gm)).toHaveLength(1);
+    expect(serialized.source).toContain(":::layout");
     expect(serialized.source).toContain(":::row");
     expect(serialized.source).toContain("说明\n\n- 列表");
-    expect(serialized.source).toContain("- TypeScript\n- React");
+    const parsed = parseResumeMarkdown({
+      source: serialized.source,
+      baseDocument,
+      locale: "zh-CN",
+      projection: serialized.projection,
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document).toEqual(baseDocument);
     expect(serialized.projection.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "styled-text", kind: "text" }),
@@ -121,7 +187,7 @@ describe("AnonResume Markdown layout dialect", () => {
     );
   });
 
-  it("uses peer headings to delimit titled row groups without leaf directives", () => {
+  it("preserves titled row group boundaries with standard Markdown content inside", () => {
     const document = createLayoutDocument();
     document.sections[0]!.blocks = [
       {
@@ -180,10 +246,18 @@ describe("AnonResume Markdown layout dialect", () => {
       },
     ];
 
-    const source = serializeResumeMarkdown(document).source;
+    const serialized = serializeResumeMarkdown(document);
+    const source = serialized.source;
 
     expect(source.match(/:::row/g)).toHaveLength(1);
-    expect(source).not.toContain(":::group");
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument: document,
+      locale: "zh-CN",
+      projection: serialized.projection,
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.document).toEqual(document);
     expect(source).toContain("### 项目 A\n\n- 负责核心模块");
     expect(source).toContain("### 项目 B\n\n搭建发布流程");
     expect(source).not.toMatch(/:::(?:text|list|item)\b/);
@@ -191,22 +265,24 @@ describe("AnonResume Markdown layout dialect", () => {
 
   it("parses peer headings inside a row as distinct vertical groups", () => {
     const baseDocument = createLayoutDocument();
-    const source = serializeResumeMarkdown(baseDocument).source.replace(
-      /## 工作经历[^\n]*\n[^]*$/,
-      [
-        "## 工作经历",
-        "",
-        ":::row {gap=12}",
-        "### 项目 A",
-        "",
-        "- 负责核心模块",
-        "",
-        "### 项目 B",
-        "",
-        "搭建发布流程",
-        ":::",
-      ].join("\n"),
-    );
+    const source = serializeResumeMarkdown(baseDocument)
+      .source.replace("anonresume: 2", "anonresume: 1")
+      .replace(
+        /## 工作经历[^\n]*\n[^]*$/,
+        [
+          "## 工作经历",
+          "",
+          ":::row {gap=12}",
+          "### 项目 A",
+          "",
+          "- 负责核心模块",
+          "",
+          "### 项目 B",
+          "",
+          "搭建发布流程",
+          ":::",
+        ].join("\n"),
+      );
 
     const parsed = parseResumeMarkdown({
       source,
@@ -319,7 +395,11 @@ describe("AnonResume Markdown layout dialect", () => {
       "## 工作经历\n\n- 父项\n  - 子项\n",
     );
 
-    const parsed = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
     const block = parsed.document?.sections[0]?.blocks[0];
 
     expect(parsed.hasErrors).toBe(false);
@@ -334,7 +414,10 @@ describe("AnonResume Markdown layout dialect", () => {
               items: [
                 {
                   children: [
-                    { type: "text", content: createRichTextFromPlainText("子项") },
+                    {
+                      type: "text",
+                      content: createRichTextFromPlainText("子项"),
+                    },
                   ],
                 },
               ],
@@ -364,7 +447,10 @@ describe("AnonResume Markdown layout dialect", () => {
     expect(parsed.hasErrors).toBe(false);
     expect(parsed.document?.sections[0]?.blocks[0]).toMatchObject({
       type: "list",
-      items: [{ children: [{ type: "text" }] }, { children: [{ type: "text" }] }],
+      items: [
+        { children: [{ type: "text" }] },
+        { children: [{ type: "text" }] },
+      ],
     });
   });
 
@@ -373,7 +459,7 @@ describe("AnonResume Markdown layout dialect", () => {
     const source = serializeResumeMarkdown(baseDocument).source.replace(
       /## 工作经历[^\n]*\n[^]*$/,
       [
-        '## 工作经历 {visible=true}',
+        "## 工作经历 {visible=true}",
         "",
         ":::left",
         "### 工程师",
@@ -384,7 +470,11 @@ describe("AnonResume Markdown layout dialect", () => {
         ":::",
       ].join("\n"),
     );
-    const parsed = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
 
     expect(parsed.hasErrors).toBe(false);
     expect(parsed.document?.sections[0]?.blocks[0]).toMatchObject({
@@ -403,7 +493,11 @@ describe("AnonResume Markdown layout dialect", () => {
       "utf8",
     );
     const baseDocument = createLayoutDocument();
-    const first = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const first = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
 
     expect(first.hasErrors).toBe(false);
     const canonical = serializeResumeMarkdown(first.document!).source;
@@ -418,19 +512,33 @@ describe("AnonResume Markdown layout dialect", () => {
 
   it.each([
     ["unknown block", ":::unknown\nvalue\n:::", "block_unknown_directive"],
-    ["unclosed block", ":::group {direction=vertical}\nvalue", "block_unclosed_directive"],
-    ["invalid attributes", ":::row {gap=-1}\nvalue\n:::", "block_invalid_attribute"],
+    [
+      "unclosed block",
+      ":::group {direction=vertical}\nvalue",
+      "block_unclosed_directive",
+    ],
+    [
+      "invalid attributes",
+      ":::row {gap=-1}\nvalue\n:::",
+      "block_invalid_attribute",
+    ],
   ])("rejects %s", (_name, block, code) => {
     const baseDocument = createLayoutDocument();
     const source = serializeResumeMarkdown(baseDocument).source.replace(
       /## 工作经历[^\n]*\n[^]*$/,
       `## 工作经历 {visible=true}\n\n${block}`,
     );
-    const parsed = parseResumeMarkdown({ source, baseDocument, locale: "zh-CN" });
+    const parsed = parseResumeMarkdown({
+      source,
+      baseDocument,
+      locale: "zh-CN",
+    });
 
     expect(parsed.hasErrors).toBe(true);
     expect(parsed.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code, severity: "error" })]),
+      expect.arrayContaining([
+        expect.objectContaining({ code, severity: "error" }),
+      ]),
     );
   });
 });

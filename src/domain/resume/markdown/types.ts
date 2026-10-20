@@ -1,6 +1,6 @@
 import type { ResumeDocument } from "../schema";
 
-export const RESUME_MARKDOWN_SOURCE_VERSION = 1 as const;
+export const RESUME_MARKDOWN_SOURCE_VERSION = 2 as const;
 export const RESUME_MARKDOWN_PROJECTION_VERSION = 1 as const;
 
 export type ResumeMarkdownDiagnosticSeverity = "warning" | "error";
@@ -26,6 +26,7 @@ export interface ResumeMarkdownSourceMapEntry extends ResumeMarkdownSourceRange 
   ordinal?: number;
   fingerprint?: string;
   inlineSpan?: ResumeMarkdownInlineSpan;
+  explicitAttributes?: string[];
 }
 
 export interface ResumeMarkdownSourceMap {
@@ -71,8 +72,7 @@ export interface ResumeMarkdownInlineSpan {
   color?: string;
 }
 
-export interface ResumeMarkdownProjectionEntry
-  extends ResumeMarkdownSourceRange {
+export interface ResumeMarkdownProjectionEntry extends ResumeMarkdownSourceRange {
   id: string;
   kind: ResumeMarkdownProjectionNodeKind;
   path: number[];
@@ -96,7 +96,7 @@ export interface ResumeMarkdownProjectionApplyResult {
 }
 
 export interface ResumeMarkdownFrontMatter {
-  version: typeof RESUME_MARKDOWN_SOURCE_VERSION;
+  version: 1 | typeof RESUME_MARKDOWN_SOURCE_VERSION;
   title?: string;
   locale?: string;
   pageMargin?: {
