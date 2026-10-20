@@ -2,11 +2,12 @@ import { and, asc, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { isDeepStrictEqual } from "node:util";
 
 import { db } from "@/db";
-import type { ResumeTransaction } from "@/lib/resume/transaction";
+import { databaseNow, type ResumeTransaction } from "@/lib/resume/transaction";
 import { createHistorySnapshot } from "@/lib/resume/history/store";
 import type { ResumeSnapshotKind } from "@/lib/resume/history/types";
 import { ResumeTrashedError } from "@/lib/resume/trash/errors";
 import { requestResumeTaskStops } from "@/lib/resume/trash/tasks";
+import { RESUME_TRASH_RETENTION_MS } from "@/lib/resume/trash/types";
 import { resumes, resumeVersions } from "@/db/schema";
 import { normalizeResumeDocumentStructure } from "@/domain/resume/block-tree";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
@@ -111,7 +112,9 @@ function formatCatalogSummary(value: string) {
 function getFirstBlockSummary(blocks: ResumeBlock[]): string | undefined {
   for (const block of blocks) {
     if (block.type === "text") {
-      const summary = normalizeSummaryText(getPlainTextFromRichText(block.content));
+      const summary = normalizeSummaryText(
+        getPlainTextFromRichText(block.content),
+      );
 
       if (summary) {
         return summary;
@@ -157,7 +160,9 @@ function getFirstBlockSummary(blocks: ResumeBlock[]): string | undefined {
 export function buildResumeSummary(
   record: Pick<ResumeRecord, "document" | "summary">,
 ) {
-  const visibleSections = record.document.sections.filter((section) => section.visible);
+  const visibleSections = record.document.sections.filter(
+    (section) => section.visible,
+  );
 
   for (const section of visibleSections) {
     const summary = getFirstBlockSummary(section.blocks);
@@ -266,7 +271,13 @@ async function selectResumeRecordWithExecutor(
   const rows = await executor
     .select()
     .from(resumes)
-    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId), isNull(resumes.deletedAt)))
+    .where(
+      and(
+        eq(resumes.userId, userId),
+        eq(resumes.id, resumeId),
+        isNull(resumes.deletedAt),
+      ),
+    )
     .limit(1);
 
   return rows[0] ? mapResumeRow(rows[0]) : undefined;
@@ -310,15 +321,26 @@ async function requireExistingResumeRecord(userId: string, resumeId: string) {
   return existing;
 }
 
-export async function lockOwnedResume(transaction: ResumeTransaction, userId: string, resumeId: string) {
-  const [row] = await transaction.select().from(resumes)
+export async function lockOwnedResume(
+  transaction: ResumeTransaction,
+  userId: string,
+  resumeId: string,
+) {
+  const [row] = await transaction
+    .select()
+    .from(resumes)
     .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
-    .for("update").limit(1);
+    .for("update")
+    .limit(1);
   if (!row) throw new ResumeNotFoundError(resumeId);
   return row;
 }
 
-async function lockActiveResume(transaction: ResumeTransaction, userId: string, resumeId: string) {
+async function lockActiveResume(
+  transaction: ResumeTransaction,
+  userId: string,
+  resumeId: string,
+) {
   const row = await lockOwnedResume(transaction, userId, resumeId);
   if (row.deletedAt) throw new ResumeTrashedError();
   return mapResumeRow(row);
@@ -369,9 +391,9 @@ export async function paginateResumeEntries({
   )!;
   const searchFilter = searchPattern
     ? or(
-          ilike(resumes.name, searchPattern),
-          ilike(resumes.summary, searchPattern),
-          ilike(resumes.customSummary, searchPattern),
+        ilike(resumes.name, searchPattern),
+        ilike(resumes.summary, searchPattern),
+        ilike(resumes.customSummary, searchPattern),
       )
     : undefined;
   const publicationFilter =
@@ -401,16 +423,18 @@ export async function paginateResumeEntries({
     .orderBy(desc(resumes.updatedAt), asc(resumes.id))
     .limit(pageSize)
     .offset(resolved.offset);
-  const items = rows.map(({ customSummary, document, slug, updatedAt, ...row }) => ({
-    ...row,
-    summary: resolveSummary({
-      customSummary,
-      document: validateResumeDocument(document),
-      summary: row.summary,
+  const items = rows.map(
+    ({ customSummary, document, slug, updatedAt, ...row }) => ({
+      ...row,
+      summary: resolveSummary({
+        customSummary,
+        document: validateResumeDocument(document),
+        summary: row.summary,
+      }),
+      updatedAt: updatedAt.getTime(),
+      slug: slug ?? undefined,
     }),
-    updatedAt: updatedAt.getTime(),
-    slug: slug ?? undefined,
-  }));
+  );
 
   return createPageResult(items, total, request);
 }
@@ -481,7 +505,10 @@ export async function getResumeRecord(
   userId: string,
   resumeId: string,
 ): Promise<ResumeRecord | undefined>;
-export async function getResumeRecord(userIdOrResumeId: string, resumeId?: string) {
+export async function getResumeRecord(
+  userIdOrResumeId: string,
+  resumeId?: string,
+) {
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
 
@@ -495,7 +522,10 @@ export async function getOrCreateResumeRecord(
   userId: string,
   resumeId: string,
 ): Promise<ResumeRecord>;
-export async function getOrCreateResumeRecord(userIdOrResumeId: string, resumeId?: string) {
+export async function getOrCreateResumeRecord(
+  userIdOrResumeId: string,
+  resumeId?: string,
+) {
   return ensureResumeRecord(
     resumeId ? userIdOrResumeId : LEGACY_USER_ID,
     resumeId || userIdOrResumeId,
@@ -558,7 +588,11 @@ export async function createOnboardingResumeRecord(params: {
   const createId = params.createId ?? createResumeId;
   let lastConflict: ResumeIdentifierConflictError | undefined;
 
-  for (let attempt = 0; attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
     try {
       return await createStrictResumeRecord(
         params.userId,
@@ -604,17 +638,21 @@ export async function createGeneratedResumeRecord(params: {
   const hasDocument = params.document !== undefined;
 
   if (hasTemplate && hasDocument) {
-    throw new Error("Template and imported document inputs are mutually exclusive.");
+    throw new Error(
+      "Template and imported document inputs are mutually exclusive.",
+    );
   }
 
   const sourceDocument = hasDocument
-    ? normalizeResumeDocumentStructure(
-        validateResumeDocument(params.document),
-      )
+    ? normalizeResumeDocumentStructure(validateResumeDocument(params.document))
     : createResumeDocumentFromTemplate(params.templateId ?? "blank", locale);
   let lastConflict: ResumeIdentifierConflictError | undefined;
 
-  for (let attempt = 0; attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
     const resumeId = createId();
 
     try {
@@ -643,7 +681,10 @@ export async function duplicateResumeRecord(params: {
   copyId: string;
   title: string;
 }): Promise<ResumeRecord> {
-  const source = await requireExistingResumeRecord(params.userId, params.resumeId);
+  const source = await requireExistingResumeRecord(
+    params.userId,
+    params.resumeId,
+  );
   const document = structuredClone(source.document);
 
   document.meta.title = params.title;
@@ -677,7 +718,11 @@ export async function duplicateGeneratedResumeRecord(params: {
   const createId = params.createId ?? createResumeId;
   let lastConflict: ResumeIdentifierConflictError | undefined;
 
-  for (let attempt = 0; attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 0;
+    attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
     try {
       return await duplicateResumeRecord({
         userId: params.userId,
@@ -703,14 +748,19 @@ export async function deleteResumeRecord(userId: string, resumeId: string) {
     const current = await lockOwnedResume(transaction, userId, resumeId);
     if (current.kind !== "standard") throw new ResumeNotFoundError(resumeId);
     if (current.deletedAt) return current;
-    const { value } = (await transaction.execute<{ value: string }>(sql`SELECT now()::text AS value`)).rows[0]!;
-    const now = new Date(value);
+    const now = await databaseNow(transaction);
     await requestResumeTaskStops(transaction, { userId, resumeId, now });
-    const [deleted] = await transaction.update(resumes).set({
-      published: false, deletedAt: now,
-      purgeAfter: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-      version: sql`${resumes.version} + 1`, updatedAt: now,
-    }).where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId))).returning();
+    const [deleted] = await transaction
+      .update(resumes)
+      .set({
+        published: false,
+        deletedAt: now,
+        purgeAfter: new Date(now.getTime() + RESUME_TRASH_RETENTION_MS),
+        version: sql`${resumes.version} + 1`,
+        updatedAt: now,
+      })
+      .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
+      .returning();
     return deleted!;
   });
 }
@@ -722,7 +772,9 @@ export async function saveResumeRecord(params: {
   document?: unknown;
   summary?: string;
 }) {
-  return db.transaction(transaction => saveResumeRecordWithExecutor(transaction, params));
+  return db.transaction((transaction) =>
+    saveResumeRecordWithExecutor(transaction, params),
+  );
 }
 
 export async function saveResumeRecordWithExecutor(
@@ -736,11 +788,7 @@ export async function saveResumeRecordWithExecutor(
   },
 ) {
   const userId = params.userId || LEGACY_USER_ID;
-  const current = await lockActiveResume(
-    executor,
-    userId,
-    params.resumeId,
-  );
+  const current = await lockActiveResume(executor, userId, params.resumeId);
 
   if (!current) {
     throw new ResumeNotFoundError(params.resumeId);
@@ -802,39 +850,49 @@ export async function saveResumeRecordWithExecutor(
   return mapResumeRow(rows[0]);
 }
 
-export async function publishResumeRecord(resumeId: string): Promise<ResumeRecord>;
+export async function publishResumeRecord(
+  resumeId: string,
+): Promise<ResumeRecord>;
 export async function publishResumeRecord(
   userId: string,
   resumeId: string,
 ): Promise<ResumeRecord>;
-export async function publishResumeRecord(userIdOrResumeId: string, resumeId?: string) {
+export async function publishResumeRecord(
+  userIdOrResumeId: string,
+  resumeId?: string,
+) {
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
-  return db.transaction(async transaction => {
-  const current = await lockActiveResume(transaction, userId, scopedResumeId);
+  return db.transaction(async (transaction) => {
+    const current = await lockActiveResume(transaction, userId, scopedResumeId);
 
-  if (current.kind === "onboarding") {
-    throw new ResumePublicationForbiddenError(scopedResumeId);
-  }
+    if (current.kind === "onboarding") {
+      throw new ResumePublicationForbiddenError(scopedResumeId);
+    }
 
-  await createHistorySnapshot(transaction, current, "retained", await retainedHistoryLimit());
-  const rows = await transaction
-    .update(resumes)
-    .set({
-      published: true,
-      slug: current.slug ?? current.id,
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)),
-    )
-    .returning();
+    await createHistorySnapshot(
+      transaction,
+      current,
+      "retained",
+      await retainedHistoryLimit(),
+    );
+    const rows = await transaction
+      .update(resumes)
+      .set({
+        published: true,
+        slug: current.slug ?? current.id,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)))
+      .returning();
 
-  return mapResumeRow(rows[0]!);
+    return mapResumeRow(rows[0]!);
   });
 }
 
-export async function unpublishResumeRecord(resumeId: string): Promise<ResumeRecord>;
+export async function unpublishResumeRecord(
+  resumeId: string,
+): Promise<ResumeRecord>;
 export async function unpublishResumeRecord(
   userId: string,
   resumeId: string,
@@ -845,18 +903,18 @@ export async function unpublishResumeRecord(
 ) {
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
-  return db.transaction(async transaction => {
-  await lockActiveResume(transaction, userId, scopedResumeId);
-  const rows = await transaction
-    .update(resumes)
-    .set({
-      published: false,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)))
-    .returning();
+  return db.transaction(async (transaction) => {
+    await lockActiveResume(transaction, userId, scopedResumeId);
+    const rows = await transaction
+      .update(resumes)
+      .set({
+        published: false,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(resumes.userId, userId), eq(resumes.id, scopedResumeId)))
+      .returning();
 
-  return mapResumeRow(rows[0]!);
+    return mapResumeRow(rows[0]!);
   });
 }
 
@@ -880,10 +938,38 @@ export async function getPublishedResumeBySlug(slug: string) {
 export async function snapshotResumeVersion(
   userId: string,
   resumeId: string,
+  sourceSnapshotId?: string,
 ): Promise<ResumeVersionSnapshot> {
-  return db.transaction(async transaction => {
-    const record = await lockActiveResume(transaction, userId, resumeId);
-    return mapResumeVersionRow(await createHistorySnapshot(transaction, record, "retained", await retainedHistoryLimit()));
+  return db.transaction(async (transaction) => {
+    let record = await lockActiveResume(transaction, userId, resumeId);
+    if (sourceSnapshotId) {
+      const [source] = await transaction
+        .select()
+        .from(resumeVersions)
+        .where(
+          and(
+            eq(resumeVersions.id, sourceSnapshotId),
+            eq(resumeVersions.userId, userId),
+            eq(resumeVersions.resumeId, resumeId),
+          ),
+        )
+        .limit(1);
+      if (!source)
+        throw new ResumeVersionSnapshotNotFoundError(sourceSnapshotId);
+      record = {
+        ...record,
+        version: source.version,
+        document: validateResumeDocument(source.document),
+      };
+    }
+    return mapResumeVersionRow(
+      await createHistorySnapshot(
+        transaction,
+        record,
+        "retained",
+        await retainedHistoryLimit(),
+      ),
+    );
   });
 }
 
@@ -893,46 +979,63 @@ export async function restoreResumeVersion(params: {
   snapshotId: string;
   version: number;
 }): Promise<ResumeRecord> {
-  return db.transaction(async transaction => {
-  const current = await lockActiveResume(transaction, params.userId, params.resumeId);
+  return db.transaction(async (transaction) => {
+    const current = await lockActiveResume(
+      transaction,
+      params.userId,
+      params.resumeId,
+    );
 
-  if (current.version !== params.version) {
-    throw new ResumeVersionConflictError(current.version);
-  }
+    if (current.version !== params.version) {
+      throw new ResumeVersionConflictError(current.version);
+    }
 
-  const rows = await transaction
-    .select()
-    .from(resumeVersions)
-    .where(
-      and(
-        eq(resumeVersions.id, params.snapshotId),
-        eq(resumeVersions.userId, params.userId),
-        eq(resumeVersions.resumeId, params.resumeId),
-      ),
-    )
-    .limit(1);
-  const snapshot = rows[0];
+    const rows = await transaction
+      .select()
+      .from(resumeVersions)
+      .where(
+        and(
+          eq(resumeVersions.id, params.snapshotId),
+          eq(resumeVersions.userId, params.userId),
+          eq(resumeVersions.resumeId, params.resumeId),
+        ),
+      )
+      .limit(1);
+    const snapshot = rows[0];
 
-  if (!snapshot) {
-    throw new ResumeVersionSnapshotNotFoundError(params.snapshotId);
-  }
+    if (!snapshot) {
+      throw new ResumeVersionSnapshotNotFoundError(params.snapshotId);
+    }
 
-  // A restore is reversible: persist the current document before replacing it.
-  await createHistorySnapshot(transaction, current, "retained", await retainedHistoryLimit());
+    // A restore is reversible: persist the current document before replacing it.
+    await createHistorySnapshot(
+      transaction,
+      current,
+      "retained",
+      await retainedHistoryLimit(),
+    );
 
-  return saveResumeRecordWithExecutor(transaction, {
-    userId: params.userId,
-    resumeId: params.resumeId,
-    version: params.version,
-    document: snapshot.document,
-  });
+    return saveResumeRecordWithExecutor(transaction, {
+      userId: params.userId,
+      resumeId: params.resumeId,
+      version: params.version,
+      document: snapshot.document,
+    });
   });
 }
 
 export async function getAutosaveSnapshot(userId: string, resumeId: string) {
   await requireExistingResumeRecord(userId, resumeId);
-  const [row] = await db.select().from(resumeVersions).where(and(
-    eq(resumeVersions.userId, userId), eq(resumeVersions.resumeId, resumeId), eq(resumeVersions.kind, "autosave"),
-  )).limit(1);
+  const [row] = await db
+    .select()
+    .from(resumeVersions)
+    .where(
+      and(
+        eq(resumeVersions.userId, userId),
+        eq(resumeVersions.resumeId, resumeId),
+        eq(resumeVersions.kind, "autosave"),
+      ),
+    )
+    .limit(1);
   return row ? mapResumeVersionRow(row) : null;
 }

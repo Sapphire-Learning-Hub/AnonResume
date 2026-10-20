@@ -11,6 +11,7 @@ export interface ResumeVersionSnapshotSummary {
 export interface ResumeVersionSnapshotDetail extends ResumeVersionSnapshotSummary {
   document: ResumeDocument;
 }
-export type ResumeVersionHistoryPage = PageResult<ResumeVersionSnapshotSummary> & {
-  autosave: ResumeVersionSnapshotSummary | null;
-};
+export type ResumeVersionHistoryPage =
+  PageResult<ResumeVersionSnapshotSummary> & {
+    autosave: ResumeVersionSnapshotSummary | null;
+  };

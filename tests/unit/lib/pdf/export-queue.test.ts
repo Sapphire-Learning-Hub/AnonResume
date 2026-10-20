@@ -23,6 +23,7 @@ import {
 } from "@/lib/pdf/export-queue";
 import {
   createGeneratedResumeRecord,
+  deleteResumeRecord,
   resetResumeRepository,
 } from "@/lib/resume/repository";
 
@@ -87,6 +88,15 @@ describe("PDF export queue", () => {
       position: 2,
       queuedCount: 2,
     });
+  });
+
+  it("rejects new work and old job access after the resume enters trash", async () => {
+    const queued = await enqueue();
+    await deleteResumeRecord("user-demo", "resume-demo");
+    await expect(enqueue(2)).rejects.toBeInstanceOf(PdfExportNotFoundError);
+    await expect(getPdfExportStatus({ jobId: queued.jobId, requesterUserId: "user-demo" }, configuration()))
+      .rejects.toBeInstanceOf(PdfExportNotFoundError);
+    expect(await claimPdfExportJobs({ workerId: "trash-worker", configuration: configuration() })).toEqual([]);
   });
 
   it("persists root diagnostics through queue claiming but exposes only the id to an authorized requester", async () => {

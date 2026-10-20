@@ -5,6 +5,7 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
+  saveResumeDocument,
 } from "@/lib/resume/client";
 import type { LocalResumeDraft } from "@/lib/resume/drafts";
 import { createResumeEditorStore } from "@/stores/resume-editor";
@@ -23,6 +24,27 @@ function createDeferredPromise<T>() {
 describe("useResumePersistence", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("stops cloud autosave after a trash response without discarding subsequent local edits", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "resume_trashed" }), { status: 409 })));
+    const saveDocument = vi.fn(saveResumeDocument);
+    const store = createResumeEditorStore({ resumeId: "trashed", document: createDefaultResumeDocument(), version: 1, updatedAt: 0 });
+    renderHook(() => useResumePersistence({ store, saveDocument, initialUpdatedAt: 0, debounceMs: 800,
+      draftRepository: { getDraft: async () => undefined, saveDraft: async () => {}, deleteDraft: async () => {} } }));
+    await act(async () => {
+      store.getState().updateTextBlock({ sectionId: "section-profile", blockPath: ["block-profile-summary"], text: "Unsaved content" });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(store.getState()).toMatchObject({ saveBlockedReason: "trashed", dirty: true });
+    await act(async () => {
+      store.getState().updateTextBlock({ sectionId: "section-profile", blockPath: ["block-profile-summary"], text: "More local content" });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    expect(store.getState().dirty).toBe(true);
   });
 
   it.each(["read", "write", "delete"] as const)(

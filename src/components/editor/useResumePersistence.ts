@@ -7,6 +7,7 @@ import type { StoreApi } from "zustand/vanilla";
 import {
   ResumeValidationClientError,
   ResumeVersionConflictClientError,
+  ResumeTrashedClientError,
 } from "@/lib/resume/client";
 import type { ResumeDraftRepository } from "@/lib/resume/drafts";
 import type { ResumeEditorStoreState } from "@/stores/resume-editor";
@@ -59,7 +60,7 @@ export function useResumePersistence({
     let timeoutId: number | undefined;
 
     const unsubscribe = store.subscribe((state, previousState) => {
-      if (!state.dirty) return;
+      if (!state.dirty || state.saveBlockedReason) return;
       if (
         state.document === previousState.document &&
         state.version === previousState.version
@@ -74,7 +75,7 @@ export function useResumePersistence({
       timeoutId = window.setTimeout(async () => {
         const snapshot = store.getState();
 
-        if (!snapshot.dirty) return;
+        if (!snapshot.dirty || snapshot.saveBlockedReason) return;
 
         const localDraft = {
           resumeId: snapshot.resumeId,
@@ -127,6 +128,10 @@ export function useResumePersistence({
               .catch(() => reportDraftStorageStatus(true));
           }
         } catch (error) {
+          if (error instanceof ResumeTrashedClientError) {
+            store.getState().setResumeTrashed();
+            return;
+          }
           if (error instanceof ResumeVersionConflictClientError) {
             store.getState().setSaveConflict({
               currentVersion: error.currentVersion,

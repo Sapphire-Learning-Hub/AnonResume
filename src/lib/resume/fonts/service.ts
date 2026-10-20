@@ -7,10 +7,7 @@ import {
 import { validateResumeDocument } from "@/domain/resume/validation";
 import { ResumeTrashedError } from "@/lib/resume/trash/errors";
 
-import {
-  InvalidFontPresetError,
-  recordUserFontApplied,
-} from "./preferences";
+import { InvalidFontPresetError, recordUserFontApplied } from "./preferences";
 
 export async function applyResumeFontPreset(input: {
   userId: string;
@@ -26,7 +23,11 @@ export async function applyResumeFontPreset(input: {
   }
 
   return db.transaction(async (transaction) => {
-    const resume = await lockOwnedResume(transaction, input.userId, input.resumeId);
+    const resume = await lockOwnedResume(
+      transaction,
+      input.userId,
+      input.resumeId,
+    );
     if (resume.deletedAt) throw new ResumeTrashedError();
     const document = structuredClone(validateResumeDocument(resume.document));
     document.settings.typography.fontFamily = preset.fontFamily;

@@ -1,5 +1,6 @@
 import { initializePendingInstanceSetup } from "@/lib/admin/setup/startup";
 import { startAccountMaintenanceLoop } from "@/lib/auth/account/maintenance-runtime";
+import { startResumeTrashMaintenanceLoop, stopResumeTrashMaintenanceLoop } from "@/lib/resume/trash/runtime";
 import { startAccountMergeRuntime } from "@/lib/auth/account/merge/runtime";
 import { readBootstrapConfig } from "@/lib/config/bootstrap";
 import { getRuntimeConfigManager } from "@/lib/config/runtime";
@@ -26,6 +27,7 @@ runtimeLog.info("process_started", { outcome: "success" });
 let metricsLifecycle: ServiceMetricsLifecycle | undefined;
 let tracingLifecycle: ServiceTracingLifecycle | undefined;
 const stopMetrics = () => {
+  stopResumeTrashMaintenanceLoop();
   void stopDiagnosticStore();
   void metricsLifecycle?.stop();
   void tracingLifecycle?.stop();
@@ -57,13 +59,18 @@ try {
   process.once("SIGTERM", stopMetrics);
 
   startAccountMaintenanceLoop();
+  startResumeTrashMaintenanceLoop();
   startAccountMergeRuntime();
   await startWebRestartRuntime({
-    beforeSignal: async () => { await Promise.all([metricsLifecycle?.stop(), tracingLifecycle?.stop(), stopDiagnosticStore()]); },
+    beforeSignal: async () => {
+      stopResumeTrashMaintenanceLoop();
+      await Promise.all([metricsLifecycle?.stop(), tracingLifecycle?.stop(), stopDiagnosticStore()]);
+    },
     identity,
     runtimeManager,
   });
 } catch (error) {
+  stopResumeTrashMaintenanceLoop();
   process.off("SIGINT", stopMetrics);
   process.off("SIGTERM", stopMetrics);
   await metricsLifecycle?.stop();

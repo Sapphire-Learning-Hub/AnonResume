@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { alias } from "drizzle-orm/pg-core";
 import { aiResumeReviews, aiRuns, db, resumes } from "@/db";
@@ -18,7 +18,7 @@ async function ownedRecord(userId: string, reviewId: string) {
   const [row] = await db.select({ review: aiResumeReviews, run: aiRuns, document: resumes.document, version: resumes.version })
     .from(aiResumeReviews).innerJoin(aiRuns, eq(aiRuns.id, aiResumeReviews.runId))
     .innerJoin(resumes, and(eq(resumes.id, aiRuns.resumeId), eq(resumes.userId, aiRuns.userId)))
-    .where(and(eq(aiResumeReviews.id, reviewId), eq(aiRuns.userId, userId))).limit(1);
+    .where(and(eq(aiResumeReviews.id, reviewId), eq(aiRuns.userId, userId), isNull(resumes.deletedAt))).limit(1);
   return row ?? null;
 }
 
@@ -44,7 +44,7 @@ export async function listOwnedResumeReviews(input: { userId: string; resumeId: 
   const rows = await db.select({ id: aiResumeReviews.id, runId: aiRuns.id, input: aiResumeReviews.input, modelName: aiResumeReviews.modelName, createdAt: aiResumeReviews.createdAt, status: aiRuns.status, report: aiResumeReviews.report })
     .from(aiResumeReviews).innerJoin(aiRuns, eq(aiRuns.id, aiResumeReviews.runId))
     .innerJoin(resumes, and(eq(resumes.id, aiRuns.resumeId), eq(resumes.userId, aiRuns.userId)))
-    .where(and(eq(aiRuns.userId, input.userId), eq(aiRuns.resumeId, input.resumeId), input.cursor ? or(lt(aiResumeReviews.createdAt, new Date(input.cursor.createdAt)), and(eq(aiResumeReviews.createdAt, new Date(input.cursor.createdAt)), lt(aiResumeReviews.id, input.cursor.id))) : undefined))
+    .where(and(eq(aiRuns.userId, input.userId), eq(aiRuns.resumeId, input.resumeId), isNull(resumes.deletedAt), input.cursor ? or(lt(aiResumeReviews.createdAt, new Date(input.cursor.createdAt)), and(eq(aiResumeReviews.createdAt, new Date(input.cursor.createdAt)), lt(aiResumeReviews.id, input.cursor.id))) : undefined))
     .orderBy(desc(aiResumeReviews.createdAt), desc(aiResumeReviews.id)).limit(limit + 1);
   const page = rows.slice(0, limit);
   const last = page.at(-1);

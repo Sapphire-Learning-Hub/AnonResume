@@ -1,4 +1,5 @@
 import { withRequestLogging } from "@/lib/observability/http";
+import { withResumeLifecycleErrors } from "@/lib/resume/trash/http";
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -198,5 +199,5 @@ async function patchHandler(
 }
 
 export const GET = withRequestLogging("/api/resumes/[id]", getHandler);
-export const PUT = withRequestLogging("/api/resumes/[id]", putHandler);
-export const PATCH = withRequestLogging("/api/resumes/[id]", patchHandler);
+export const PUT = withRequestLogging("/api/resumes/[id]", withResumeLifecycleErrors(putHandler));
+export const PATCH = withRequestLogging("/api/resumes/[id]", withResumeLifecycleErrors(patchHandler));

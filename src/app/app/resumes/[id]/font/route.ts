@@ -10,8 +10,9 @@ import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-orig
 import { InvalidFontPresetError } from "@/lib/resume/fonts/preferences";
 import { applyResumeFontPreset } from "@/lib/resume/fonts/service";
 import { ResumeVersionConflictError } from "@/lib/resume/repository";
+import { withResumeLifecycleErrors } from "@/lib/resume/trash/http";
 
-export async function POST(
+async function post(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -91,3 +92,4 @@ export async function POST(
     status: 303,
   });
 }
+export const POST = withResumeLifecycleErrors(post);

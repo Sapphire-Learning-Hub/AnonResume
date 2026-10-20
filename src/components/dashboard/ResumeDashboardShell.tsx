@@ -6,6 +6,7 @@ import { createStyles } from "antd-style";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { NumberedPagination } from "@/components/common/NumberedPagination";
+import { AppRouteLink } from "@/components/ui/AppRouteLoading";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useEditorViewportAccess } from "@/components/editor/EditorViewportGuard";
 import { SearchIcon } from "@/components/ui/InlineIcons";
@@ -871,6 +872,7 @@ export function ResumeDashboardShell({
                   value={activeSearchQuery}
                 />
               </form>
+              <AppRouteLink href="/app/trash">{t("trash.navigation")}</AppRouteLink>
             </div>
             <span aria-live="polite" className={styles.catalogCount}>
               {t("dashboard.resumeCount", {

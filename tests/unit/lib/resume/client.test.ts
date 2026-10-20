@@ -294,8 +294,9 @@ describe("resume version client", () => {
         new Response(
           JSON.stringify({
             items: [
-              { id: "snapshot-1", version: 3, createdAt: 800 },
+              { id: "snapshot-1", version: 3, createdAt: 800, kind: "retained" },
             ],
+            autosave: null,
             page: 2,
             pageSize: 20,
             total: 21,
@@ -309,7 +310,8 @@ describe("resume version client", () => {
     await expect(
       fetchResumeVersionSnapshots("resume-demo", { page: 2, pageSize: 20 }),
     ).resolves.toEqual({
-      items: [{ id: "snapshot-1", version: 3, createdAt: 800 }],
+      items: [{ id: "snapshot-1", version: 3, createdAt: 800, kind: "retained" }],
+      autosave: null,
       page: 2,
       pageSize: 20,
       total: 21,

@@ -25,7 +25,7 @@ export async function prepareResumeReviewRun(args: { userId: string; resumeId: s
   const input = reviewInputSchema.parse(args.input);
   const now = new Date();
   await assertAccountMergeMutationAllowed(args.userId);
-  const [resume] = await db.select().from(resumes).where(and(eq(resumes.id, args.resumeId), eq(resumes.userId, args.userId))).limit(1);
+  const [resume] = await db.select().from(resumes).where(and(eq(resumes.id, args.resumeId), eq(resumes.userId, args.userId), isNull(resumes.deletedAt))).limit(1);
   if (!resume) throw new AiConversationNotFoundError();
   if (resume.version !== input.resumeVersion) throw new AiRunVersionConflictError(resume.version);
   const [row] = await db.select({ model: aiModels, provider: aiProviderCredentials }).from(aiModels).innerJoin(aiProviderCredentials, eq(aiProviderCredentials.id, aiModels.providerId)).where(and(
@@ -56,7 +56,7 @@ export async function prepareResumeReviewRun(args: { userId: string; resumeId: s
   const auditRequest = { model: request.model, messages, tools: request.tools, promptVersion: 2, reviewProtocolVersion: policy.version };
   const prepared: PreparedReviewRun = { kind: "resume_review", reviewProtocolVersion: policy.version, reviewId, reviewInput: input, reviewContextWindow: row.model.contextWindow, reviewContext: context, runId, userId: args.userId, resumeId: args.resumeId, resumeVersion: input.resumeVersion, request, auditRequest, configuration: args.configuration, keySource: row.provider.kind, rates, rateCardVersion: row.model.rateCardVersion, reservationOperationId: runId, reservedPoints, proposalTargets: [], resumeDocument: document, providerContext: context };
   await admitAiRun({ userId: args.userId, resumeId: args.resumeId, configuration: args.configuration, now }, async (transaction) => {
-    const [current] = await transaction.select({ version: resumes.version }).from(resumes).where(and(eq(resumes.id, args.resumeId), eq(resumes.userId, args.userId))).for("share").limit(1);
+    const [current] = await transaction.select({ version: resumes.version }).from(resumes).where(and(eq(resumes.id, args.resumeId), eq(resumes.userId, args.userId), isNull(resumes.deletedAt))).for("share").limit(1);
     if (!current) throw new AiConversationNotFoundError();
     if (current.version !== input.resumeVersion) throw new AiRunVersionConflictError(current.version);
     await transaction.insert(aiRuns).values({ id: runId, diagnosticContext: getDiagnosticContext() ?? null, kind: "resume_review", userId: args.userId, resumeId: args.resumeId, modelId: input.modelId, keySource: row.provider.kind, status: "preparing", resumeVersion: input.resumeVersion, contextHash: context.contentHash, promptVersion: 2, reservedPoints, leaseExpiresAt: new Date(now.getTime() + args.configuration.runLeaseSeconds * 1000) });

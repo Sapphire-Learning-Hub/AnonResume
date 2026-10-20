@@ -18,6 +18,8 @@ describe("database schema", () => {
       "schemaVersion",
       "version",
       "published",
+      "deletedAt",
+      "purgeAfter",
       "createdAt",
       "updatedAt",
     ]);
@@ -31,6 +33,7 @@ describe("database schema", () => {
       "userId",
       "resumeId",
       "version",
+      "kind",
       "document",
       "createdAt",
     ]);

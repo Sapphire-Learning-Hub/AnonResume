@@ -40,7 +40,7 @@ async function assertOwnedResume(userId: string, resumeId: string) {
   const [resume] = await db
     .select({ id: resumes.id })
     .from(resumes)
-    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
+    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId), isNull(resumes.deletedAt)))
     .limit(1);
   if (!resume) throw new AiConversationNotFoundError();
 }
@@ -139,7 +139,12 @@ export async function createAiConversation(input: {
     ),
   ]);
 
-  const [conversation] = await db
+  return db.transaction(async transaction => {
+  const [resume] = await transaction.select({ id: resumes.id }).from(resumes)
+    .where(and(eq(resumes.userId, input.userId), eq(resumes.id, input.resumeId), isNull(resumes.deletedAt)))
+    .for("share").limit(1);
+  if (!resume) throw new AiConversationNotFoundError();
+  const [conversation] = await transaction
     .insert(aiConversations)
     .values({
       userId: input.userId,
@@ -151,6 +156,7 @@ export async function createAiConversation(input: {
     })
     .returning();
   return conversation!;
+  });
 }
 
 export async function listAiConversations(input: {
@@ -158,6 +164,7 @@ export async function listAiConversations(input: {
   resumeId: string;
   includeArchived?: boolean;
 }) {
+  await assertOwnedResume(input.userId, input.resumeId);
   return db
     .select()
     .from(aiConversations)
@@ -189,6 +196,7 @@ export async function getAiConversation(input: {
     )
     .limit(1);
   if (!conversation) throw new AiConversationNotFoundError();
+  await assertOwnedResume(input.userId, conversation.resumeId);
   return conversation;
 }
 
