@@ -25,6 +25,105 @@ describe("useResumePersistence", () => {
     vi.useRealTimers();
   });
 
+  it.each(["read", "write", "delete"] as const)(
+    "keeps cloud autosave working when local draft %s fails",
+    async (operation) => {
+      vi.useFakeTimers();
+      const failure = new DOMException(
+        "Storage unavailable",
+        "QuotaExceededError",
+      );
+      const draftRepository = {
+        getDraft: async () => {
+          if (operation === "read") throw failure;
+          return undefined;
+        },
+        saveDraft: async () => {
+          if (operation === "write") throw failure;
+        },
+        deleteDraft: async () => {
+          if (operation === "delete") throw failure;
+        },
+      };
+      const onDraftStorageStatusChange = vi.fn();
+      const store = createResumeEditorStore({
+        resumeId: "storage-failure",
+        document: createDefaultResumeDocument(),
+        version: 1,
+        updatedAt: 0,
+      });
+      let savedDocument: LocalResumeDraft["document"] | undefined;
+      renderHook(() =>
+        useResumePersistence({
+          store,
+          draftRepository,
+          onDraftStorageStatusChange,
+          debounceMs: 800,
+          initialUpdatedAt: 0,
+          saveDocument: async ({ document }) => {
+            savedDocument = document;
+            return { version: 2, updatedAt: 1000 };
+          },
+        }),
+      );
+      await act(async () => {
+        store.getState().updateTextBlock({
+          sectionId: "section-profile",
+          blockPath: ["block-profile-summary"],
+          text: "Cloud copy survives",
+        });
+        await vi.advanceTimersByTimeAsync(800);
+      });
+      expect(savedDocument).toEqual(store.getState().document);
+      expect(store.getState()).toMatchObject({
+        dirty: false,
+        version: 2,
+        saveStatus: "saved",
+      });
+      expect(onDraftStorageStatusChange).toHaveBeenCalledWith(true);
+    },
+  );
+
+  it("still reports cloud failure and retains edits when local backup also fails", async () => {
+    vi.useFakeTimers();
+    const store = createResumeEditorStore({
+      resumeId: "both-fail",
+      document: createDefaultResumeDocument(),
+      version: 1,
+      updatedAt: 0,
+    });
+    renderHook(() =>
+      useResumePersistence({
+        store,
+        debounceMs: 800,
+        initialUpdatedAt: 0,
+        draftRepository: {
+          getDraft: async () => undefined,
+          saveDraft: async () => {
+            throw new Error("storage failed");
+          },
+          deleteDraft: async () => undefined,
+        },
+        saveDocument: async () => {
+          throw new Error("network failed");
+        },
+      }),
+    );
+    await act(async () => {
+      store.getState().updateTextBlock({
+        sectionId: "section-profile",
+        blockPath: ["block-profile-summary"],
+        text: "Keep this edit",
+      });
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(store.getState()).toMatchObject({
+      dirty: true,
+      version: 1,
+      saveStatus: "error",
+    });
+  });
+
   it("debounces autosave, writes a local draft, and marks the store as saved", async () => {
     vi.useFakeTimers();
 

@@ -613,6 +613,38 @@ describe("ResumeEditorShell", () => {
     expect(screen.getByText("已保存")).toBeInTheDocument();
   });
 
+  it("keeps a successful manual cloud save successful when local draft cleanup fails", async () => {
+    render(
+      <ResumeEditorShell
+        resumeId="resume-demo"
+        initialDocument={createDefaultResumeDocument()}
+        autosaveDelayMs={10_000}
+        saveDocument={async () => ({ version: 2, updatedAt: 1000 })}
+        draftRepository={{
+          getDraft: async () => undefined,
+          saveDraft: async () => undefined,
+          deleteDraft: async () => {
+            throw new DOMException("Storage unavailable", "SecurityError");
+          },
+        }}
+      />,
+    );
+    openRibbonTab("插入");
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("空白章节") }));
+    fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    await waitFor(() => expect(feedbackMocks.notificationWarning).toHaveBeenCalled());
+    expect(screen.getByText("已保存")).toBeInTheDocument();
+    expect(feedbackMocks.notificationError).not.toHaveBeenCalled();
+    const warning = feedbackMocks.notificationWarning.mock.calls.at(-1)?.[0];
+    const actions = render(warning.actions);
+    expect(
+      within(actions.container).getByRole("button", { name: "保存到云端" }),
+    ).toBeEnabled();
+    expect(
+      window.dispatchEvent(new Event("beforeunload", { cancelable: true })),
+    ).toBe(true);
+  });
+
   it("saves pending content before editing the shared resume summary", async () => {
     const saveDocument = vi
       .fn()

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createResumeDocumentFromTemplate } from "@/domain/resume/templates";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
+import { serializeResumeMarkdown } from "@/domain/resume/markdown";
 import { requireSession } from "@/lib/auth/session";
 import {
   getResumeRecord,
@@ -119,6 +120,45 @@ describe("create resume route", () => {
       );
     },
   );
+
+  it("persists platform Markdown using its versioned layout and badge semantics", async () => {
+    const document = createResumeDocumentFromTemplate("modular", "zh-CN");
+    const { source } = serializeResumeMarkdown(document);
+    const response = await POST(createMarkdownRequest({ markdown: source }));
+    expect(response.status).toBe(303);
+    const id = response.headers.get("location")!.split("/").at(-1)!;
+    const created = await getResumeRecord("user-demo", id);
+    expect(created?.document.meta.import?.dialect).toBe("anonresume");
+    expect(
+      created?.document.sections.filter(
+        (section) => section.layout?.columns === 2,
+      ),
+    ).toHaveLength(4);
+    expect(created?.document.sections[1]?.blocks[1]).toMatchObject({
+      type: "badges",
+      items: [
+        { text: "活动策划" },
+        { text: "用户沟通" },
+        { text: "数据整理" },
+        { text: "项目协作" },
+      ],
+    });
+    expect(created?.published).toBe(false);
+    expect(await listResumeEntries("user-other")).toEqual([]);
+  });
+
+  it("does not create a resume from an unsupported platform Markdown version", async () => {
+    const response = await POST(
+      createMarkdownRequest({
+        markdown: "---\nanonresume: 999\n---\n## Skills\n\n`React`",
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "frontmatter_unsupported_version",
+    });
+    expect(await listResumeEntries("user-demo")).toEqual([]);
+  });
 
   it("uses the blank template when the field is missing", async () => {
     const response = await POST(createRequest());

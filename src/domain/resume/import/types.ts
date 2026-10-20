@@ -2,7 +2,8 @@ import type { AppLocale } from "@/i18n/messages";
 
 import type { ResumeDocument } from "../schema";
 
-export type ResumeMarkdownDialect = "auto" | "mujicv" | "standard";
+export type ResumeMarkdownDialect =
+  "auto" | "mujicv" | "standard" | "anonresume";
 export type DetectedResumeMarkdownDialect = Exclude<
   ResumeMarkdownDialect,
   "auto"
@@ -46,6 +47,7 @@ export const resumeMarkdownDialects: ResumeMarkdownDialect[] = [
   "auto",
   "mujicv",
   "standard",
+  "anonresume",
 ];
 
 export function isResumeMarkdownDialect(

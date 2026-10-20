@@ -309,7 +309,7 @@ export const resumeDocumentSchema: z.ZodType<ResumeDocument> = z.object({
     import: z
       .object({
         format: z.literal("markdown"),
-        dialect: z.enum(["mujicv", "standard"]),
+        dialect: z.enum(["mujicv", "standard", "anonresume"]),
         importedAt: z.string().datetime(),
         originalSource: z.string().min(1),
         diagnostics: z.array(

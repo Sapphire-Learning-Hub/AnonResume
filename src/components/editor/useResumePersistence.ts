@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 import type { StoreApi } from "zustand/vanilla";
 
@@ -18,6 +18,7 @@ export function useResumePersistence({
   flushSave,
   debounceMs,
   initialUpdatedAt,
+  onDraftStorageStatusChange,
 }: {
   store: StoreApi<ResumeEditorStoreState>;
   draftRepository: ResumeDraftRepository;
@@ -29,16 +30,25 @@ export function useResumePersistence({
   flushSave?: () => Promise<void>;
   debounceMs: number;
   initialUpdatedAt: number;
+  onDraftStorageStatusChange?: (unavailable: boolean) => void;
 }) {
+  const reportDraftStorageStatus = useEffectEvent((unavailable: boolean) =>
+    onDraftStorageStatusChange?.(unavailable),
+  );
   useEffect(() => {
     let cancelled = false;
 
-    void draftRepository.getDraft(store.getState().resumeId).then((draft) => {
-      if (!draft || cancelled) return;
-      if (draft.updatedAt <= initialUpdatedAt) return;
+    void draftRepository
+      .getDraft(store.getState().resumeId)
+      .then((draft) => {
+        if (!draft || cancelled) return;
+        if (draft.updatedAt <= initialUpdatedAt) return;
 
-      store.getState().setRecoveryDraft(draft);
-    });
+        store.getState().setRecoveryDraft(draft);
+      })
+      .catch(() => {
+        if (!cancelled) reportDraftStorageStatus(true);
+      });
 
     return () => {
       cancelled = true;
@@ -73,14 +83,22 @@ export function useResumePersistence({
           updatedAt: Date.now(),
         };
 
-        await draftRepository.saveDraft(localDraft);
+        try {
+          await draftRepository.saveDraft(localDraft);
+          reportDraftStorageStatus(false);
+        } catch {
+          // Local recovery is best-effort; it must not gate cloud persistence.
+          reportDraftStorageStatus(true);
+        }
 
         if (flushSave) {
           try {
             await flushSave();
 
             if (!store.getState().dirty) {
-              await draftRepository.deleteDraft(snapshot.resumeId);
+              await draftRepository
+                .deleteDraft(snapshot.resumeId)
+                .catch(() => reportDraftStorageStatus(true));
             }
           } catch {
             // flushSave is responsible for storing the failure state on the editor store.
@@ -104,7 +122,9 @@ export function useResumePersistence({
           });
 
           if (!store.getState().dirty) {
-            await draftRepository.deleteDraft(snapshot.resumeId);
+            await draftRepository
+              .deleteDraft(snapshot.resumeId)
+              .catch(() => reportDraftStorageStatus(true));
           }
         } catch (error) {
           if (error instanceof ResumeVersionConflictClientError) {

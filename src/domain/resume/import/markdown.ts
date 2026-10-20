@@ -27,6 +27,10 @@ import { validateResumeDocument } from "../validation";
 import { MAX_RESUME_MARKDOWN_BYTES } from "../markdown/frontmatter";
 import { createRichTextFromMdast } from "./markdown-rich-text";
 import {
+  hasAnonResumeMarkdownHeader,
+  importAnonResumeMarkdown,
+} from "./anonresume";
+import {
   containsMujicvSyntax,
   isMujicvContainerNode,
   normalizeMujicvBlocks,
@@ -86,6 +90,7 @@ function createFallbackResult(
 }
 
 function getDetectedDialect(input: ResumeMarkdownImportInput) {
+  if (hasAnonResumeMarkdownHeader(input.markdown)) return "anonresume";
   if (input.dialect !== "auto") {
     return input.dialect;
   }
@@ -498,6 +503,8 @@ export function importResumeMarkdown(
   }
 
   try {
+    if (detectedDialect === "anonresume")
+      return importAnonResumeMarkdown(input);
     const root = unified()
       .use(remarkParse)
       .use(remarkGfm)

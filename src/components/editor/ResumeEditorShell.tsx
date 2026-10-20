@@ -72,7 +72,7 @@ import { ResumeOnboardingController } from "@/components/editor/onboarding/Resum
 import { EditorWorkspaceSidebar } from "@/components/editor/navigation/EditorWorkspaceSidebar";
 import { EditorWorkspaceResizeHandle } from "@/components/editor/navigation/EditorWorkspaceResizeHandle";
 import { MarkdownEditingWorkspace } from "@/components/editor/markdown/MarkdownEditingWorkspace";
-import { getResumeMarkdownDiagnosticMessage } from "@/components/editor/markdown/MarkdownDiagnostics";
+import { getResumeMarkdownDiagnosticMessage } from "@/i18n/resume-markdown-diagnostics";
 import { useResumeMarkdownSession } from "@/components/editor/markdown/useResumeMarkdownSession";
 import { ResumeIconPicker } from "@/components/editor/ResumeIconPicker";
 import { SectionPresetCommands } from "@/components/editor/section-presets/SectionPresetCommands";
@@ -465,7 +465,18 @@ export function ResumeEditorShell({
     draftRepository: markdownDraftRepository,
   });
   const [resumeSummary, setResumeSummary] = useState(initialSummary);
+  const [localDraftUnavailable, setLocalDraftUnavailable] = useState(false);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const deleteLocalDraft = useCallback(
+    async (id: string) => {
+      try {
+        await resolvedDraftRepository.deleteDraft(id);
+      } catch {
+        setLocalDraftUnavailable(true);
+      }
+    },
+    [resolvedDraftRepository],
+  );
 
   const flushSave = useCallback(async () => {
     if (saveInFlightRef.current) {
@@ -500,7 +511,7 @@ export function ResumeEditorShell({
         });
 
         if (!store.getState().dirty) {
-          await resolvedDraftRepository.deleteDraft(snapshot.resumeId);
+          await deleteLocalDraft(snapshot.resumeId);
         }
       } catch (error) {
         if (error instanceof ResumeVersionConflictClientError) {
@@ -528,7 +539,7 @@ export function ResumeEditorShell({
         saveInFlightRef.current = null;
       }
     }
-  }, [resolvedDraftRepository, resolvedSaveDocument, store]);
+  }, [deleteLocalDraft, resolvedSaveDocument, store]);
 
   const handleManualSave = useCallback(() => {
     void (async () => {
@@ -538,6 +549,10 @@ export function ResumeEditorShell({
       // The persistence layer exposes failures through the existing editor state.
     });
   }, [flushSave, markdownSession]);
+  const manualSaveRef = useRef(handleManualSave);
+  useEffect(() => {
+    manualSaveRef.current = handleManualSave;
+  }, [handleManualSave]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -589,6 +604,7 @@ export function ResumeEditorShell({
     flushSave,
     debounceMs: autosaveDelayMs,
     initialUpdatedAt,
+    onDraftStorageStatusChange: setLocalDraftUnavailable,
   });
 
   useEffect(() => {
@@ -876,6 +892,23 @@ export function ResumeEditorShell({
     showSaveValidationNotification();
     return () => notification.destroy("editor-save-validation");
   }, [notification, saveValidation]);
+
+  useEffect(() => {
+    if (!localDraftUnavailable) return;
+    const key = "editor-local-draft-unavailable";
+    notification.warning({
+      key,
+      duration: false,
+      title: t("editor.localDraftUnavailable"),
+      description: t("editor.localDraftUnavailableDescription"),
+      actions: (
+        <Button size="small" onClick={() => manualSaveRef.current()}>
+          {t("editor.saveToCloud")}
+        </Button>
+      ),
+    });
+    return () => notification.destroy(key);
+  }, [localDraftUnavailable, notification, t]);
 
   useEffect(() => {
     const key = "editor-autosave-error";
@@ -1536,7 +1569,7 @@ export function ResumeEditorShell({
       });
 
       store.getState().restoreServerVersion(restored);
-      await resolvedDraftRepository.deleteDraft(resumeId);
+      await deleteLocalDraft(resumeId);
       setVersionHistoryOpen(false);
     } catch (error) {
       if (error instanceof ResumeVersionConflictClientError) {
@@ -3450,7 +3483,7 @@ export function ResumeEditorShell({
               localDocument={recoveryDraft.document}
               onUseCloud={async () => {
                 store.getState().discardRecoveryDraft();
-                await resolvedDraftRepository.deleteDraft(resumeId);
+                await deleteLocalDraft(resumeId);
               }}
               onUseLocal={() => store.getState().restoreRecoveryDraft()}
             />
@@ -3469,7 +3502,7 @@ export function ResumeEditorShell({
               onUseCloud={async () => {
                 if (!conflictCloudResume) return;
                 store.getState().restoreServerVersion(conflictCloudResume);
-                await resolvedDraftRepository.deleteDraft(resumeId);
+                await deleteLocalDraft(resumeId);
               }}
               onUseLocal={() => {
                 if (!conflictCloudResume) return;
