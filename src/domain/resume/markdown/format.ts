@@ -2,12 +2,10 @@ import type { AppLocale } from "@/i18n/messages";
 
 import type { ResumeDocument } from "../schema";
 import { parseResumeMarkdown } from "./parse";
+import { resumeMarkdownDocumentsEqual } from "./document-equality";
 import { serializeResumeMarkdown } from "./serialize";
 import type { ResumeMarkdownProjection } from "./types";
-
-function fenceMarker(line: string) {
-  return /^ {0,3}((?:`{3,})|(?:~{3,}))/.exec(line)?.[1];
-}
+import { resumeMarkdownFenceMarker } from "./directives";
 
 export function normalizeResumeMarkdownSource(source: string) {
   const lines = source
@@ -18,6 +16,7 @@ export function normalizeResumeMarkdownSource(source: string) {
   let frontMatter = lines[0] === "---";
   let activeFence: { character: string; length: number } | undefined;
   let activeComment = false;
+  let activeText = false;
   let pendingBlank = false;
 
   const flushBlank = () => {
@@ -33,14 +32,26 @@ export function normalizeResumeMarkdownSource(source: string) {
       if (index > 0 && line === "---") frontMatter = false;
       continue;
     }
+    if (activeText) {
+      output.push(line);
+      if (/^\s*:::\s*$/.test(line)) activeText = false;
+      continue;
+    }
+    if (/^\s*:::text(?:\s+\{.*\})?\s*$/.test(line)) {
+      flushBlank();
+      output.push(line);
+      activeText = true;
+      continue;
+    }
 
     if (activeFence) {
       output.push(line);
-      const closing = fenceMarker(line);
+      const closing = resumeMarkdownFenceMarker(line);
       if (
         closing &&
         closing[0] === activeFence.character &&
-        closing.length >= activeFence.length
+        closing.length >= activeFence.length &&
+        line.trim() === closing
       ) {
         activeFence = undefined;
       }
@@ -53,7 +64,7 @@ export function normalizeResumeMarkdownSource(source: string) {
       continue;
     }
 
-    const opening = fenceMarker(line);
+    const opening = resumeMarkdownFenceMarker(line);
     if (opening) {
       flushBlank();
       output.push(line);
@@ -62,10 +73,7 @@ export function normalizeResumeMarkdownSource(source: string) {
     }
 
     const commentStart = line.indexOf("<!--");
-    if (
-      commentStart >= 0 &&
-      !line.slice(commentStart + 4).includes("-->")
-    ) {
+    if (commentStart >= 0 && !line.slice(commentStart + 4).includes("-->")) {
       flushBlank();
       output.push(line);
       activeComment = true;
@@ -82,10 +90,6 @@ export function normalizeResumeMarkdownSource(source: string) {
 
   while (output.at(-1) === "") output.pop();
   return `${output.join("\n")}\n`;
-}
-
-function documentsEqual(left: ResumeDocument, right: ResumeDocument) {
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export function formatResumeMarkdown(
@@ -127,6 +131,9 @@ export function formatResumeMarkdown(
     result: parsed,
     projection,
     changed: normalizedSource !== source,
-    semanticChanged: !documentsEqual(baseDocument, parsed.document),
+    semanticChanged: !resumeMarkdownDocumentsEqual(
+      baseDocument,
+      parsed.document,
+    ),
   };
 }

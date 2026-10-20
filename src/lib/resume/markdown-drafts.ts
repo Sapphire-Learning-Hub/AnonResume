@@ -4,6 +4,10 @@ import {
   decodeResumeMarkdownProjection,
   type ResumeMarkdownProjection,
 } from "@/domain/resume/markdown";
+import {
+  resumeDocumentSchema,
+  type ResumeDocument,
+} from "@/domain/resume/schema";
 
 export const LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION = 1 as const;
 const LOCAL_RESUME_MARKDOWN_DATABASE_VERSION = 2;
@@ -15,6 +19,8 @@ export interface LocalResumeMarkdownDraft {
   baseVersion: number;
   updatedAt: number;
   projection: ResumeMarkdownProjection;
+  baseDocument?: ResumeDocument;
+  projectionDocument?: ResumeDocument;
 }
 
 interface ResumeMarkdownDraftDatabase extends DBSchema {
@@ -25,9 +31,7 @@ interface ResumeMarkdownDraftDatabase extends DBSchema {
 }
 
 export interface ResumeMarkdownDraftRepository {
-  getDraft: (
-    resumeId: string,
-  ) => Promise<LocalResumeMarkdownDraft | undefined>;
+  getDraft: (resumeId: string) => Promise<LocalResumeMarkdownDraft | undefined>;
   saveDraft: (draft: LocalResumeMarkdownDraft) => Promise<void>;
   deleteDraft: (resumeId: string) => Promise<void>;
 }
@@ -43,6 +47,10 @@ export function decodeLocalResumeMarkdownDraft(
   switch (value.schemaVersion) {
     case LOCAL_RESUME_MARKDOWN_DRAFT_SCHEMA_VERSION: {
       const projection = decodeResumeMarkdownProjection(value.projection);
+      const baseDocument = resumeDocumentSchema.safeParse(value.baseDocument);
+      const projectionDocument = resumeDocumentSchema.safeParse(
+        value.projectionDocument,
+      );
       if (
         typeof value.resumeId !== "string" ||
         !value.resumeId ||
@@ -63,6 +71,10 @@ export function decodeLocalResumeMarkdownDraft(
         baseVersion: value.baseVersion,
         updatedAt: value.updatedAt,
         projection,
+        ...(baseDocument.success ? { baseDocument: baseDocument.data } : {}),
+        ...(projectionDocument.success
+          ? { projectionDocument: projectionDocument.data }
+          : {}),
       };
     }
     default:
@@ -94,8 +106,7 @@ export function createResumeMarkdownDraftRepository({
   databaseName?: string;
 } = {}): ResumeMarkdownDraftRepository {
   let databasePromise:
-    | Promise<IDBPDatabase<ResumeMarkdownDraftDatabase>>
-    | undefined;
+    Promise<IDBPDatabase<ResumeMarkdownDraftDatabase>> | undefined;
 
   const getDatabase = () => {
     databasePromise ??= createDatabase(databaseName);

@@ -108,7 +108,7 @@ describe("AnonResume Markdown front matter", () => {
   it("rejects malformed values with field-specific diagnostics", () => {
     const source = [
       "---",
-      "anonresume: 2",
+      "anonresume: 999",
       "page-margin: 1 2 3",
       "font-size: many",
       "line-height: -1",

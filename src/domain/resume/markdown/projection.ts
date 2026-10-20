@@ -10,6 +10,7 @@ import type {
   RichTextContent,
 } from "../schema";
 import { serializeResumeMarkdownInline } from "./inline";
+import { restoreResumeMarkdownInlinePresentation } from "./inline-projection";
 import {
   RESUME_MARKDOWN_PROJECTION_VERSION,
   type ResumeMarkdownDiagnostic,
@@ -52,9 +53,9 @@ function isProjectionEntry(
 ): entry is ResumeMarkdownProjectionEntry {
   return Boolean(
     entry.kind &&
-      entry.path &&
-      entry.ordinal !== undefined &&
-      entry.fingerprint !== undefined,
+    entry.path &&
+    entry.ordinal !== undefined &&
+    entry.fingerprint !== undefined,
   );
 }
 
@@ -73,9 +74,7 @@ function collectBlockEntryKeys({
       return;
     case "badges":
       block.items.forEach((item, itemIndex) => {
-        output.push(
-          `badge:${item.id}:${[...path, itemIndex].join(".")}`,
-        );
+        output.push(`badge:${item.id}:${[...path, itemIndex].join(".")}`);
       });
       return;
     case "list":
@@ -143,9 +142,9 @@ export function createResumeMarkdownProjection(
       `section:${section.id}:${sectionPath.join(".")}`,
     );
     if (sectionEntry) sections.push(cloneEntry(sectionEntry));
-    for (const inlineEntry of [...(inlineEntriesByParent.get(section.id) ?? [])].sort(
-      (left, right) => left.ordinal - right.ordinal,
-    )) {
+    for (const inlineEntry of [
+      ...(inlineEntriesByParent.get(section.id) ?? []),
+    ].sort((left, right) => left.ordinal - right.ordinal)) {
       orderedNodeKeys.push(entryKey(inlineEntry));
     }
     section.blocks.forEach((block, blockIndex) => {
@@ -162,9 +161,9 @@ export function createResumeMarkdownProjection(
     const entry = nodeEntries.get(key);
     if (!entry) continue;
     nodes.push(cloneEntry(entry));
-    for (const inlineEntry of [...(inlineEntriesByParent.get(entry.id) ?? [])].sort(
-      (left, right) => left.ordinal - right.ordinal,
-    )) {
+    for (const inlineEntry of [
+      ...(inlineEntriesByParent.get(entry.id) ?? []),
+    ].sort((left, right) => left.ordinal - right.ordinal)) {
       nodes.push(cloneEntry(inlineEntry));
     }
   }
@@ -209,7 +208,9 @@ const NODE_KINDS = new Set<ResumeMarkdownProjectionNodeKind>([
   "inline-span",
 ]);
 
-function decodeInlineSpan(value: unknown): ResumeMarkdownInlineSpan | undefined {
+function decodeInlineSpan(
+  value: unknown,
+): ResumeMarkdownInlineSpan | undefined {
   if (!isRecord(value)) return undefined;
   const { richTextPath, start, end, contextFingerprint, mark, color } = value;
   if (
@@ -240,7 +241,9 @@ function decodeInlineSpan(value: unknown): ResumeMarkdownInlineSpan | undefined 
   };
 }
 
-function decodeEntry(value: unknown): ResumeMarkdownProjectionEntry | undefined {
+function decodeEntry(
+  value: unknown,
+): ResumeMarkdownProjectionEntry | undefined {
   if (!isRecord(value)) return undefined;
   const {
     id,
@@ -326,20 +329,21 @@ export function decodeResumeMarkdownProjection(
   };
 }
 
-type RichTextNode =
-  RichTextContent["content"][number]["content"][number];
+type RichTextNode = RichTextContent["content"][number]["content"][number];
 type TextNode = Extract<RichTextNode, { type: "text" }>;
 type TextMark = NonNullable<TextNode["marks"]>[number];
 
 interface FlattenedBlock {
   block: ResumeBlock;
-  wrappers: GroupBlock[];
+  wrappers: Array<GroupBlock | Extract<ResumeBlock, { type: "text" }>>;
 }
 
 interface SiblingMatches {
   baseIndexes: Array<number | undefined>;
   degraded: boolean;
 }
+
+type ExplicitAttributes = Map<string, Set<string>>;
 
 function semanticRichText(content: RichTextContent | undefined) {
   if (!content) return null;
@@ -416,7 +420,6 @@ function blockSemanticKey(block: ResumeBlock): string {
 function sectionSemanticKey(section: ResumeSection) {
   return JSON.stringify({
     title: semanticRichText(section.title),
-    semantic: section.semantic ?? null,
   });
 }
 
@@ -442,7 +445,9 @@ function matchSiblings<T>({
   semanticKey: (item: T) => string;
   compatible: (base: T, parsed: T) => boolean;
 }): SiblingMatches {
-  const baseIndexes: Array<number | undefined> = parsedItems.map(() => undefined);
+  const baseIndexes: Array<number | undefined> = parsedItems.map(
+    () => undefined,
+  );
   const usedBase = new Set<number>();
   const buckets = new Map<string, number[]>();
   baseItems.forEach((item, index) => {
@@ -463,9 +468,9 @@ function matchSiblings<T>({
       compatible(baseItems[positionalIndex]!, parsed)
         ? positionalIndex
         : bucket.find(
-      (candidateIndex) =>
-        !usedBase.has(candidateIndex) &&
-        compatible(baseItems[candidateIndex]!, parsed),
+            (candidateIndex) =>
+              !usedBase.has(candidateIndex) &&
+              compatible(baseItems[candidateIndex]!, parsed),
           );
     if (baseIndex === undefined) continue;
     baseIndexes[parsedIndex] = baseIndex;
@@ -487,7 +492,11 @@ function matchSiblings<T>({
       ...anchors,
       { baseIndex: baseItems.length, parsedIndex: parsedItems.length },
     ];
-    for (let boundaryIndex = 0; boundaryIndex < boundaries.length - 1; boundaryIndex += 1) {
+    for (
+      let boundaryIndex = 0;
+      boundaryIndex < boundaries.length - 1;
+      boundaryIndex += 1
+    ) {
       const left = boundaries[boundaryIndex]!;
       const right = boundaries[boundaryIndex + 1]!;
       const baseGap = Array.from(
@@ -544,7 +553,25 @@ function flattenTransparentGroups(
   );
 }
 
-function sameWrapperChain(left: GroupBlock[], right: GroupBlock[]) {
+function expandTextParagraphs(items: FlattenedBlock[]): FlattenedBlock[] {
+  return items.flatMap((item) => {
+    const block = item.block;
+    return block.type === "text" && block.content.content.length > 1
+      ? block.content.content.map((paragraph) => ({
+          block: {
+            ...block,
+            content: { type: "doc" as const, content: [paragraph] },
+          },
+          wrappers: [...item.wrappers, block],
+        }))
+      : [item];
+  });
+}
+
+function sameWrapperChain(
+  left: FlattenedBlock["wrappers"],
+  right: FlattenedBlock["wrappers"],
+) {
   return (
     left.length === right.length &&
     left.every((wrapper, index) => wrapper.id === right[index]?.id)
@@ -559,6 +586,8 @@ function inferInsertedWrapperChains(items: FlattenedBlock[]) {
     return previous &&
       next &&
       previous.wrappers.length > 0 &&
+      (item.block.type === "text" ||
+        !previous.wrappers.some((wrapper) => wrapper.type === "text")) &&
       sameWrapperChain(previous.wrappers, next.wrappers)
       ? { ...item, wrappers: previous.wrappers }
       : item;
@@ -585,141 +614,41 @@ function rebuildTransparentGroups(
     ) {
       end += 1;
     }
-    output.push({
-      ...wrapper,
-      children: rebuildTransparentGroups(items.slice(index, end), depth + 1),
-    });
+    const children = rebuildTransparentGroups(
+      items.slice(index, end),
+      depth + 1,
+    );
+    if (wrapper.type === "text") {
+      const first = children[0];
+      output.push({
+        ...wrapper,
+        ...(first?.type === "text" ? first : {}),
+        id: wrapper.id,
+        content: {
+          type: "doc",
+          content: children.flatMap((child) =>
+            child.type === "text" ? child.content.content : [],
+          ),
+        },
+      });
+    } else output.push({ ...wrapper, children });
     index = end;
   }
   return output;
 }
 
-function paragraphFingerprint(
-  paragraph: RichTextContent["content"][number] | undefined,
-) {
-  if (!paragraph) return undefined;
-  return paragraph.content
-    .map((node) => {
-      if (node.type === "text") return node.text;
-      if (node.type === "hardBreak") return "\n";
-      return `:${node.attrs.iconId}:`;
-    })
-    .join("");
-}
-
-function standardMarks(node: TextNode) {
-  return (node.marks ?? []).filter(
-    (mark) =>
-      mark.type !== "tag" &&
-      mark.type !== "underline" &&
-      mark.type !== "textColor",
-  );
-}
-
-function hasMatchingInlineStructure(
-  base: RichTextContent,
-  parsed: RichTextContent,
-) {
-  return (
-    base.content.length === parsed.content.length &&
-    base.content.every((baseParagraph, paragraphIndex) => {
-      const parsedParagraph = parsed.content[paragraphIndex];
-      return (
-        parsedParagraph !== undefined &&
-        baseParagraph.content.length === parsedParagraph.content.length &&
-        baseParagraph.content.every((baseNode, nodeIndex) => {
-          const parsedNode = parsedParagraph.content[nodeIndex];
-          if (!parsedNode || baseNode.type !== parsedNode.type) return false;
-          if (baseNode.type === "resumeIcon") {
-            return (
-              parsedNode.type === "resumeIcon" &&
-              baseNode.attrs.iconId === parsedNode.attrs.iconId
-            );
-          }
-          if (baseNode.type !== "text" || parsedNode.type !== "text") {
-            return true;
-          }
-          return (
-            JSON.stringify(standardMarks(baseNode)) ===
-            JSON.stringify(standardMarks(parsedNode))
-          );
-        })
-      );
-    })
-  );
-}
-
-function projectedMark(
-  span: ResumeMarkdownInlineSpan,
-): NonNullable<TextNode["marks"]>[number] {
-  if (span.mark === "textColor") {
-    return { type: "textColor", attrs: { color: span.color ?? "#000000" } };
-  }
-  return { type: span.mark };
-}
-
-function restoreProjectedInlineMarks({
-  baseId,
-  base,
-  parsed,
-  projection,
-}: {
-  baseId: string;
-  base: RichTextContent;
-  parsed: RichTextContent;
-  projection: ResumeMarkdownProjection;
-}) {
-  const content = structuredClone(parsed);
-  const matchingStructure = hasMatchingInlineStructure(base, parsed);
-  let degraded = false;
-  for (const entry of projection.nodes) {
-    if (
-      entry.kind !== "inline-span" ||
-      entry.parentId !== baseId ||
-      !entry.inlineSpan
-    ) {
-      continue;
-    }
-    const span = entry.inlineSpan;
-    const [paragraphIndex, nodeIndex] = span.richTextPath;
-    const paragraph = content.content[paragraphIndex];
-    const node = paragraph?.content[nodeIndex];
-    const exactContext =
-      paragraphFingerprint(paragraph) === span.contextFingerprint &&
-      node?.type === "text" &&
-      span.end === node.text.length;
-    if (
-      node?.type !== "text" ||
-      span.start !== 0 ||
-      (!exactContext && !matchingStructure)
-    ) {
-      degraded = true;
-      continue;
-    }
-    const mark = projectedMark(span);
-    if (
-      !(node.marks ?? []).some(
-        (candidate) => JSON.stringify(candidate) === JSON.stringify(mark),
-      )
-    ) {
-      node.marks = [...(node.marks ?? []), mark];
-    }
-  }
-  return { content, degraded };
-}
-
-function reconcileBadgeItems(base: BadgeBlock, texts: string[]) {
+function reconcileBadgeItems(base: BadgeBlock, items: BadgeBlock["items"]) {
   const matches = matchSiblings({
     baseItems: base.items,
-    parsedItems: texts.map((text) => ({ id: "", text })),
+    parsedItems: items,
     semanticKey: (item) => item.text,
     compatible: () => true,
   });
-  return texts.map((text, index) => {
+  return items.map((item, index) => {
     const baseIndex = matches.baseIndexes[index];
     return {
-      id: baseIndex === undefined ? `badge-markdown-${index + 1}` : base.items[baseIndex]!.id,
-      text,
+      id: baseIndex === undefined ? item.id : base.items[baseIndex]!.id,
+      text: item.text,
     };
   });
 }
@@ -728,10 +657,12 @@ function reconcileListItems({
   base,
   parsed,
   projection,
+  attributes,
 }: {
   base: ListBlock;
   parsed: ListBlock;
   projection: ResumeMarkdownProjection;
+  attributes: ExplicitAttributes;
 }) {
   const matches = matchSiblings({
     baseItems: base.items,
@@ -750,6 +681,7 @@ function reconcileListItems({
       parsedBlocks: item.children,
       projection,
       flattenGroups: true,
+      attributes,
     });
     degraded ||= children.degraded;
     return { ...item, id: baseItem.id, children: children.blocks };
@@ -761,17 +693,22 @@ function reconcileBlock({
   base,
   parsed,
   projection,
+  attributes,
 }: {
   base: ResumeBlock;
   parsed: ResumeBlock;
   projection: ResumeMarkdownProjection;
+  attributes: ExplicitAttributes;
 }): { block: ResumeBlock; degraded: boolean } {
   if (base.type === "badges" && isSimpleList(parsed)) {
     const texts = simpleListTexts(parsed) ?? [];
     return {
       block: {
         ...base,
-        items: reconcileBadgeItems(base, texts),
+        items: reconcileBadgeItems(
+          base,
+          texts.map((text, index) => ({ id: parsed.items[index]!.id, text })),
+        ),
       },
       degraded: false,
     };
@@ -782,12 +719,10 @@ function reconcileBlock({
   switch (parsed.type) {
     case "text": {
       const baseText = base as Extract<ResumeBlock, { type: "text" }>;
-      const restored = restoreProjectedInlineMarks({
-        baseId: baseText.id,
-        base: baseText.content,
-        parsed: parsed.content,
-        projection,
-      });
+      const restored = restoreResumeMarkdownInlinePresentation(
+        baseText.content,
+        parsed.content,
+      );
       return {
         block: {
           ...baseText,
@@ -802,30 +737,29 @@ function reconcileBlock({
         degraded: restored.degraded,
       };
     }
-    case "badges":
-      {
+    case "badges": {
       const baseBadges = base as BadgeBlock;
       return {
         block: {
           ...baseBadges,
           ...parsed,
           id: baseBadges.id,
-          wrap: baseBadges.wrap,
-          gap: baseBadges.gap,
-          items: reconcileBadgeItems(
-            baseBadges,
-            parsed.items.map((item) => item.text),
-          ),
+          wrap: attributes.get(parsed.id)?.has("wrap")
+            ? parsed.wrap
+            : baseBadges.wrap,
+          gap: parsed.gap ?? baseBadges.gap,
+          items: reconcileBadgeItems(baseBadges, parsed.items),
         },
         degraded: false,
       };
-      }
+    }
     case "list": {
       const baseList = base as ListBlock;
       const reconciled = reconcileListItems({
         base: baseList,
         parsed,
         projection,
+        attributes,
       });
       return {
         block: {
@@ -839,8 +773,10 @@ function reconcileBlock({
               : undefined,
           marker: parsed.ordered
             ? parsed.marker
-            : (baseList.marker ?? parsed.marker),
-          gap: baseList.gap ?? parsed.gap,
+            : attributes.get(parsed.id)?.has("marker")
+              ? parsed.marker
+              : baseList.marker,
+          gap: parsed.gap ?? baseList.gap,
           items: reconciled.items,
         },
         degraded: reconciled.degraded,
@@ -856,7 +792,10 @@ function reconcileBlock({
         baseBlocks: baseContainer.children,
         parsedBlocks: parsed.children,
         projection,
-        flattenGroups: false,
+        flattenGroups:
+          baseContainer.type === "group" &&
+          baseContainer.direction === "vertical",
+        attributes,
       });
       if (parsed.type === "group" && baseContainer.type === "group") {
         return {
@@ -864,8 +803,8 @@ function reconcileBlock({
             ...baseContainer,
             ...parsed,
             id: baseContainer.id,
-            gap: baseContainer.gap ?? parsed.gap,
-            align: baseContainer.align ?? parsed.align,
+            gap: parsed.gap ?? baseContainer.gap,
+            align: parsed.align ?? baseContainer.align,
             children: children.blocks,
           },
           degraded: children.degraded,
@@ -877,9 +816,9 @@ function reconcileBlock({
             ...baseContainer,
             ...parsed,
             id: baseContainer.id,
-            gap: baseContainer.gap ?? parsed.gap,
-            align: baseContainer.align ?? parsed.align,
-            justify: baseContainer.justify ?? parsed.justify,
+            gap: parsed.gap ?? baseContainer.gap,
+            align: parsed.align ?? baseContainer.align,
+            justify: parsed.justify ?? baseContainer.justify,
             children: children.blocks,
           },
           degraded: children.degraded,
@@ -895,46 +834,48 @@ function reconcileBlocks({
   parsedBlocks,
   projection,
   flattenGroups,
+  attributes,
 }: {
   baseBlocks: ResumeBlock[];
   parsedBlocks: ResumeBlock[];
   projection: ResumeMarkdownProjection;
   flattenGroups: boolean;
+  attributes: ExplicitAttributes;
 }) {
-  const flattenedBase = flattenGroups
+  const groupedBase = flattenGroups
     ? flattenTransparentGroups(baseBlocks)
     : baseBlocks.map((block) => ({ block, wrappers: [] }));
+  const flattenedBase = expandTextParagraphs(groupedBase);
   const expandedParsedBlocks = splitMergedProjectedLists(
-    flattenedBase,
+    groupedBase,
     parsedBlocks,
+  );
+  const parsedItems = expandTextParagraphs(
+    expandedParsedBlocks.map((block) => ({ block, wrappers: [] })),
   );
   const matches = matchSiblings({
     baseItems: flattenedBase,
-    parsedItems: expandedParsedBlocks.map((block) => ({
-      block,
-      wrappers: [],
-    })),
+    parsedItems,
     semanticKey: (item) => blockSemanticKey(item.block),
-    compatible: (base, parsed) =>
-      compatibleBlocks(base.block, parsed.block),
+    compatible: (base, parsed) => compatibleBlocks(base.block, parsed.block),
   });
   let degraded = matches.degraded;
-  const reconciled = expandedParsedBlocks.map<FlattenedBlock>((parsed, index) => {
+  const reconciled = parsedItems.map<FlattenedBlock>((parsedItem, index) => {
+    const parsed = parsedItem.block;
     const baseIndex = matches.baseIndexes[index];
-    if (baseIndex === undefined) return { block: parsed, wrappers: [] };
+    if (baseIndex === undefined) return parsedItem;
     const matched = flattenedBase[baseIndex]!;
     const result = reconcileBlock({
       base: matched.block,
       parsed,
       projection,
+      attributes,
     });
     degraded ||= result.degraded;
     return { block: result.block, wrappers: matched.wrappers };
   });
   return {
-    blocks: flattenGroups
-      ? rebuildTransparentGroups(inferInsertedWrapperChains(reconciled))
-      : reconciled.map((item) => item.block),
+    blocks: rebuildTransparentGroups(inferInsertedWrapperChains(reconciled)),
     degraded,
   };
 }
@@ -948,18 +889,18 @@ function splitMergedProjectedLists(
   let baseCursor = 0;
   for (const parsed of parsedBlocks) {
     const base = baseItems[baseCursor]?.block;
-    if (parsed.type !== "list" || !base || simpleListTexts(base) === undefined) {
+    if (
+      parsed.type !== "list" ||
+      !base ||
+      simpleListTexts(base) === undefined
+    ) {
       output.push(parsed);
       baseCursor += 1;
       continue;
     }
     const collectionRun: ResumeBlock[] = [];
     let expectedItemCount = 0;
-    for (
-      let index = baseCursor;
-      index < baseItems.length;
-      index += 1
-    ) {
+    for (let index = baseCursor; index < baseItems.length; index += 1) {
       const candidate = baseItems[index]!.block;
       const texts = simpleListTexts(candidate);
       if (!texts) break;
@@ -967,10 +908,7 @@ function splitMergedProjectedLists(
       expectedItemCount += texts.length;
       if (expectedItemCount >= parsed.items.length) break;
     }
-    if (
-      collectionRun.length < 2 ||
-      expectedItemCount !== parsed.items.length
-    ) {
+    if (collectionRun.length < 2 || expectedItemCount !== parsed.items.length) {
       output.push(parsed);
       baseCursor += 1;
       continue;
@@ -1109,18 +1047,14 @@ function createRebasedProjection(
       visit(block, [sectionIndex, blockIndex], section.id, blockIndex),
     );
   });
-  return createResumeMarkdownProjection(
-    document,
-    map,
-    baseDocumentVersion,
-  );
+  return createResumeMarkdownProjection(document, map, baseDocumentVersion);
 }
 
 function degradationDiagnostic(
   sourceMap: ResumeMarkdownSourceMap,
 ): ResumeMarkdownDiagnostic {
   return {
-    severity: "warning",
+    severity: "error",
     code: "projection_degraded",
     parameters: {},
     line: sourceMap.document.start.line,
@@ -1142,18 +1076,19 @@ export function applyResumeMarkdownProjection({
   baseDocumentVersion: number;
 }): ResumeMarkdownProjectionApplyResult {
   const projection = decodeResumeMarkdownProjection(projectionInput);
-  if (
-    !projection ||
-    projection.baseDocumentVersion !== baseDocumentVersion
-  ) {
+  if (!projection || projection.baseDocumentVersion !== baseDocumentVersion) {
     return {
-      document: parsedDocument,
-      projection: createRebasedProjection(
-        parsedDocument,
-        sourceMap,
-        baseDocumentVersion,
-      ),
-      diagnostics: [degradationDiagnostic(sourceMap)],
+      document: baseDocument,
+      projection:
+        projection ??
+        createRebasedProjection(baseDocument, sourceMap, baseDocumentVersion),
+      diagnostics: [
+        {
+          ...degradationDiagnostic(sourceMap),
+          severity: "error",
+          code: "projection_invalid",
+        },
+      ],
     };
   }
 
@@ -1164,6 +1099,12 @@ export function applyResumeMarkdownProjection({
     compatible: () => true,
   });
   let degraded = sectionMatches.degraded;
+  const attributes = new Map(
+    [...sourceMap.sections, ...sourceMap.blocks].map((entry) => [
+      entry.id,
+      new Set(entry.explicitAttributes ?? []),
+    ]),
+  );
   const sections = parsedDocument.sections.map((parsedSection, index) => {
     const baseIndex = sectionMatches.baseIndexes[index];
     if (baseIndex === undefined) return parsedSection;
@@ -1172,26 +1113,34 @@ export function applyResumeMarkdownProjection({
       baseBlocks: baseSection.blocks,
       parsedBlocks: parsedSection.blocks,
       projection,
-      flattenGroups: true,
+      flattenGroups: !attributes.get(parsedSection.id)?.has("layout"),
+      attributes,
     });
     degraded ||= blocks.degraded;
     const restoredTitle = parsedSection.title
-      ? restoreProjectedInlineMarks({
-          baseId: baseSection.id,
-          base: baseSection.title ?? parsedSection.title!,
-          parsed: parsedSection.title,
-          projection,
-        })
+      ? restoreResumeMarkdownInlinePresentation(
+          baseSection.title ?? parsedSection.title,
+          parsedSection.title,
+        )
       : undefined;
     degraded ||= restoredTitle?.degraded ?? false;
     return {
       ...baseSection,
       ...parsedSection,
       id: baseSection.id,
-      ...(restoredTitle ? { title: restoredTitle.content } : {}),
-      titleStyle: parsedSection.titleStyle ?? baseSection.titleStyle,
-      layout: parsedSection.layout ?? baseSection.layout,
-      pagination: parsedSection.pagination ?? baseSection.pagination,
+      visible: attributes.get(parsedSection.id)?.has("visible")
+        ? parsedSection.visible
+        : baseSection.visible,
+      title: restoredTitle?.content,
+      titleStyle: parsedSection.titleStyle
+        ? { ...baseSection.titleStyle, ...parsedSection.titleStyle }
+        : baseSection.titleStyle,
+      layout: parsedSection.layout
+        ? { ...baseSection.layout, ...parsedSection.layout }
+        : baseSection.layout,
+      pagination: parsedSection.pagination
+        ? { ...baseSection.pagination, ...parsedSection.pagination }
+        : baseSection.pagination,
       blocks: blocks.blocks,
     };
   });
@@ -1206,12 +1155,10 @@ export function applyResumeMarkdownProjection({
     sections,
   });
   return {
-    document,
-    projection: createRebasedProjection(
-      document,
-      sourceMap,
-      baseDocumentVersion,
-    ),
+    document: degraded ? baseDocument : document,
+    projection: degraded
+      ? projection
+      : createRebasedProjection(document, sourceMap, baseDocumentVersion),
     diagnostics: degraded ? [degradationDiagnostic(sourceMap)] : [],
   };
 }

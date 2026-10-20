@@ -952,7 +952,6 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("Markdown 编辑") }));
     const dialog = await screen.findByRole("dialog", { name: "恢复 Markdown 源码？" });
-    expect(within(dialog).getByText(/基于较早的简历版本/)).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Markdown 源码" })).not.toHaveValue(
       "local Markdown source",
     );

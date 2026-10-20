@@ -42,8 +42,11 @@ const DIAGNOSTIC_MESSAGE_KEYS: Record<string, MessageKey> = {
   inline_invalid_color: "editor.markdown.diagnostic.invalidColor",
   inline_invalid_icon: "editor.markdown.diagnostic.invalidIcon",
   raw_html_not_allowed: "editor.markdown.diagnostic.rawHtml",
+  unsupported_markdown: "editor.markdown.diagnostic.unsupportedMarkdown",
   document_validation_failed: "editor.markdown.diagnostic.documentInvalid",
   projection_degraded: "editor.markdown.diagnostic.projectionDegraded",
+  projection_invalid: "editor.markdown.diagnostic.projectionInvalid",
+  projection_conflict: "editor.markdown.diagnostic.projectionConflict",
 };
 
 export function getResumeMarkdownDiagnosticMessage(

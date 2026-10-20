@@ -1242,7 +1242,7 @@ const messages = {
     "editor.markdown.recoveryDescription":
       "检测到本机保存的 Markdown 源码。你可以恢复它，或从当前简历重新开始。",
     "editor.markdown.recoveryStaleDescription":
-      "本机 Markdown 源码基于较早的简历版本。恢复后请先检查预览，再继续保存。",
+      "本机源码可能基于不同的简历内容。仍可查看源码，但基准无法核实时不会覆盖当前简历。",
     "editor.markdown.recoveryUse": "恢复本地源码",
     "editor.markdown.recoveryDiscard": "从当前简历开始",
     "editor.markdown.diagnostic.sourceTooLarge": "源码超过 512 KiB 限制。",
@@ -1262,9 +1262,14 @@ const messages = {
     "editor.markdown.diagnostic.invalidColor": "颜色必须使用有效的十六进制值。",
     "editor.markdown.diagnostic.invalidIcon": "图标名称无效或不受支持。",
     "editor.markdown.diagnostic.rawHtml": "Markdown 编辑不支持原始 HTML。",
+    "editor.markdown.diagnostic.unsupportedMarkdown": "此 Markdown 结构暂不支持，已停止应用以避免丢失内容。",
     "editor.markdown.diagnostic.documentInvalid": "修改后的简历结构无法通过校验。",
     "editor.markdown.diagnostic.projectionDegraded":
-      "此处原有布局或样式无法唯一对应，已仅对受影响内容使用默认设置重建。",
+      "无法可靠对应原有结构或样式，已暂停应用修改。请缩小本次修改范围；最后有效预览和本地源码仍保留。",
+    "editor.markdown.diagnostic.projectionInvalid":
+      "源码映射已失效，已停止写入以保护简历。请保留源码，从当前简历重新进入 Markdown 模式。",
+    "editor.markdown.diagnostic.projectionConflict":
+      "当前简历与源码基准不一致，已停止写入以避免覆盖。请保留源码，从当前简历重新进入 Markdown 模式。",
     "editor.markdown.diagnostic.generic": "无法解析此处内容，请检查写法。",
     "editor.layoutDirection": "布局方向",
     "editor.contentGap": "内容间距",
@@ -3048,7 +3053,7 @@ const messages = {
     "editor.markdown.recoveryDescription":
       "Markdown source saved in this browser was found. Recover it, or start again from the current resume.",
     "editor.markdown.recoveryStaleDescription":
-      "The local Markdown source is based on an older resume version. Review the preview before saving it.",
+      "The local source may be based on different resume content. You can inspect it, but it cannot overwrite the resume unless its baseline is verified.",
     "editor.markdown.recoveryUse": "Recover local source",
     "editor.markdown.recoveryDiscard": "Start from current resume",
     "editor.markdown.diagnostic.sourceTooLarge": "Source exceeds the 512 KiB limit.",
@@ -3072,7 +3077,12 @@ const messages = {
     "editor.markdown.diagnostic.rawHtml": "Raw HTML is not supported in Markdown editing.",
     "editor.markdown.diagnostic.documentInvalid": "The edited resume structure is invalid.",
     "editor.markdown.diagnostic.projectionDegraded":
-      "The original layout or styling could not be matched uniquely, so only the affected content was rebuilt with defaults.",
+      "Changes were paused because the original structure or styling could not be matched reliably. Try a smaller edit; the last valid preview and local source are retained.",
+    "editor.markdown.diagnostic.projectionInvalid":
+      "The source mapping is no longer valid. Writing has stopped to protect your resume. Keep the source and reopen Markdown mode from the current resume.",
+    "editor.markdown.diagnostic.unsupportedMarkdown": "This Markdown structure is not supported. Changes were stopped to avoid losing content.",
+    "editor.markdown.diagnostic.projectionConflict":
+      "The resume no longer matches the source baseline. Writing has stopped to avoid overwriting it. Keep the source and reopen Markdown mode from the current resume.",
     "editor.markdown.diagnostic.generic": "This content could not be parsed. Check its syntax.",
     "editor.layoutDirection": "Layout Direction",
     "editor.contentGap": "Content gap",

@@ -73,6 +73,7 @@ describe("normalizeResumeMarkdownSource", () => {
 describe("formatResumeMarkdown", () => {
   it("returns minimally normalized source instead of canonical reserialization", () => {
     const baseDocument = createDefaultResumeDocument("zh-CN");
+    baseDocument.sections = [];
     const source = [
       "<!-- keep this note -->",
       "## 经历",

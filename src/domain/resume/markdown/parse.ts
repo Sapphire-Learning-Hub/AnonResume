@@ -6,6 +6,7 @@ import { unified } from "unified";
 import type { AppLocale } from "@/i18n/messages";
 
 import { listResumeFontPresets } from "../font-presets";
+import { visitResumeBlocks } from "../block-tree";
 import { createRichTextFromPlainText } from "../operations";
 import type {
   ResumeBlock,
@@ -22,7 +23,10 @@ import {
   type ResumeMarkdownSyntaxNode,
 } from "./directives";
 import { parseResumeMarkdownFrontMatter } from "./frontmatter";
-import { parseResumeMarkdownInline } from "./inline";
+import {
+  parseResumeMarkdownInline,
+  parseResumeMarkdownBadgeLabels,
+} from "./inline";
 import { applyResumeMarkdownProjection } from "./projection";
 import { serializeResumeMarkdown } from "./serialize";
 import type {
@@ -32,10 +36,12 @@ import type {
 } from "./types";
 
 interface ParseContext {
+  sourceVersion: 1 | 2;
   baseDocument: ResumeDocument;
   diagnostics: ResumeMarkdownDiagnostic[];
   sourceMap: ResumeMarkdownSourceMap;
   nextGeneratedId: number;
+  reservedIds: Set<string>;
 }
 
 const COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -68,14 +74,21 @@ function emptySourceMap(source: string): ResumeMarkdownSourceMap {
 }
 
 function generatedId(context: ParseContext, prefix: string) {
-  context.nextGeneratedId += 1;
-  return `${prefix}-markdown-${context.nextGeneratedId}`;
+  let id: string;
+  do {
+    context.nextGeneratedId += 1;
+    id = `${prefix}-markdown-${context.nextGeneratedId}`;
+  } while (context.reservedIds.has(id));
+  context.reservedIds.add(id);
+  return id;
 }
 
 function rawNodeSource(source: string, node: RootContent) {
   const start = node.position?.start.offset;
   const end = node.position?.end.offset;
-  return start === undefined || end === undefined ? "" : source.slice(start, end);
+  return start === undefined || end === undefined
+    ? ""
+    : source.slice(start, end);
 }
 
 function parseInline(
@@ -100,7 +113,12 @@ function createTextBlock(
     start: { line, column: 1 },
     end: { line, column: 1 },
   });
-  return { id, type: "text", content, ...(style ? { style } : {}) };
+  return {
+    id,
+    type: "text",
+    content,
+    ...(style && Object.keys(style).length ? { style } : {}),
+  };
 }
 
 function blocksFromListItem(
@@ -153,7 +171,34 @@ function blocksFromMdastNode(
   const line = blockLine(node, chunkLine);
 
   switch (node.type) {
-    case "paragraph":
+    case "paragraph": {
+      if (
+        context.sourceVersion >= 2 &&
+        node.children.some((child) => child.type === "inlineCode") &&
+        node.children.every(
+          (child) =>
+            child.type === "inlineCode" ||
+            (child.type === "text" && !child.value.trim()),
+        )
+      ) {
+        context.sourceMap.blocks.push({
+          id,
+          start: { line, column: 1 },
+          end: { line, column: 1 },
+        });
+        return [
+          {
+            id,
+            type: "badges",
+            wrap: true,
+            items: node.children.flatMap((child) =>
+              child.type === "inlineCode"
+                ? [{ id: generatedId(context, "badge"), text: child.value }]
+                : [],
+            ),
+          },
+        ];
+      }
       return [
         createTextBlock(
           context,
@@ -162,19 +207,14 @@ function blocksFromMdastNode(
           line,
         ),
       ];
+    }
     case "heading": {
       const raw = rawNodeSource(chunkSource, node).replace(/^#{1,6}\s+/, "");
       return [
-        createTextBlock(
-          context,
-          id,
-          parseInline(raw, line, context),
-          line,
-          {
-            fontSize: node.depth === 3 ? 17 : 16,
-            fontWeight: 700,
-          },
-        ),
+        createTextBlock(context, id, parseInline(raw, line, context), line, {
+          fontSize: node.depth === 3 ? 17 : 16,
+          fontWeight: 700,
+        }),
       ];
     }
     case "list": {
@@ -224,7 +264,13 @@ function blocksFromMdastNode(
               {
                 type: "paragraph",
                 content: node.value
-                  ? [{ type: "text", text: node.value, marks: [{ type: "code" }] }]
+                  ? [
+                      {
+                        type: "text",
+                        text: node.value,
+                        marks: [{ type: "code" }],
+                      },
+                    ]
                   : [],
               },
             ],
@@ -232,6 +278,13 @@ function blocksFromMdastNode(
           line,
         ),
       ];
+    case "table":
+    case "image":
+    case "definition":
+    case "footnoteDefinition":
+    case "thematicBreak":
+      diagnostic(context, "unsupported_markdown", line);
+      return [];
     case "html":
       if (/^<!--[\s\S]*-->$/.test(node.value.trim())) return [];
       diagnostic(context, "raw_html_not_allowed", line);
@@ -311,40 +364,99 @@ function markdownBlocks(
   baseBlocks: ResumeBlock[],
 ) {
   const root = unified().use(remarkParse).use(remarkGfm).parse(source) as Root;
-  return root.children.flatMap((node, index) =>
-    blocksFromMdastNode(
+  return root.children.flatMap((node, index) => {
+    if (node.type === "heading" && node.depth === 2) {
+      diagnostic(context, "block_invalid_nesting", blockLine(node, line));
+      return [];
+    }
+    return blocksFromMdastNode(
       node,
       source,
       line,
       context,
       baseBlocks[index],
       index,
-    ),
-  );
+    );
+  });
 }
 
 function richTextFromDirective(
   node: ResumeMarkdownDirectiveSyntaxNode,
   context: ParseContext,
 ) {
+  if (
+    node.contentSource !== undefined &&
+    node.children.every((child) => child.kind === "markdown")
+  ) {
+    return {
+      type: "doc" as const,
+      content: node.contentSource
+        .split(/\n[ \t]*\n/)
+        .flatMap((source, index) => {
+          if (!source.trim())
+            return [{ type: "paragraph" as const, content: [] }];
+          const root = unified()
+            .use(remarkParse)
+            .use(remarkGfm)
+            .parse(source) as Root;
+          if (
+            root.children.length !== 1 ||
+            (root.children[0]?.type !== "paragraph" &&
+              root.children[0]?.type !== "heading")
+          ) {
+            diagnostic(
+              context,
+              "block_invalid_nesting",
+              node.line + index + 1,
+              { parent: node.name },
+            );
+            return [];
+          }
+          return parseInline(
+            source.replace(/^#{1,6}\s+/, ""),
+            node.line + index + 1,
+            context,
+          ).content;
+        }),
+    };
+  }
   const paragraphs: RichTextContent["content"] = [];
   for (const child of node.children) {
     if (child.kind !== "markdown") {
-      diagnostic(context, "block_invalid_nesting", child.line, { parent: node.name });
+      diagnostic(context, "block_invalid_nesting", child.line, {
+        parent: node.name,
+      });
       continue;
     }
-    const root = unified().use(remarkParse).use(remarkGfm).parse(child.source) as Root;
+    const root = unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .parse(child.source) as Root;
     for (const mdastNode of root.children) {
       if (mdastNode.type !== "paragraph" && mdastNode.type !== "heading") {
-        diagnostic(context, "block_invalid_nesting", child.line, { parent: node.name });
+        diagnostic(context, "block_invalid_nesting", child.line, {
+          parent: node.name,
+        });
         continue;
       }
-      const raw = rawNodeSource(child.source, mdastNode).replace(/^#{1,6}\s+/, "");
-      const parsed = parseInline(raw, blockLine(mdastNode, child.line), context);
+      const raw = rawNodeSource(child.source, mdastNode).replace(
+        /^#{1,6}\s+/,
+        "",
+      );
+      const parsed = parseInline(
+        raw,
+        blockLine(mdastNode, child.line),
+        context,
+      );
       paragraphs.push(...parsed.content);
     }
   }
-  return { type: "doc" as const, content: paragraphs.length ? paragraphs : [{ type: "paragraph" as const, content: [] }] };
+  return {
+    type: "doc" as const,
+    content: paragraphs.length
+      ? paragraphs
+      : [{ type: "paragraph" as const, content: [] }],
+  };
 }
 
 function childBlocks(
@@ -356,7 +468,14 @@ function childBlocks(
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index]!;
     if (node.kind === "markdown") {
-      output.push(...markdownBlocks(node.source, node.line, context, baseBlocks.slice(output.length)));
+      output.push(
+        ...markdownBlocks(
+          node.source,
+          node.line,
+          context,
+          baseBlocks.slice(output.length),
+        ),
+      );
       continue;
     }
     const nextNode = nodes[index + 1];
@@ -408,8 +527,42 @@ function blocksFromDirective(
   baseBlock: ResumeBlock | undefined,
 ): ResumeBlock[] {
   const id = baseBlock?.id ?? generatedId(context, node.name);
+  context.sourceMap.blocks.push({
+    id,
+    start: { line: node.line, column: 1 },
+    end: { line: node.line, column: 1 },
+    explicitAttributes: Object.keys(node.attributes),
+  });
 
   switch (node.name) {
+    case "column": {
+      checkAllowedAttributes(node, [], context);
+      const children = childBlocks(node.children, context);
+      if (!children.length || children.some((child) => child.type !== "text")) {
+        diagnostic(context, "block_invalid_nesting", node.line, {
+          parent: node.name,
+        });
+        return [];
+      }
+      return [
+        createTextBlock(
+          context,
+          id,
+          {
+            type: "doc",
+            content: children.flatMap((child) =>
+              child.type === "text" ? child.content.content : [],
+            ),
+          },
+          node.line,
+        ),
+      ];
+    }
+    case "layout":
+      diagnostic(context, "block_invalid_nesting", node.line, {
+        parent: node.name,
+      });
+      return [];
     case "text": {
       checkAllowedAttributes(
         node,
@@ -418,27 +571,83 @@ function blocksFromDirective(
       );
       const color = node.attributes.color;
       if (color && !COLOR_PATTERN.test(color)) {
-        diagnostic(context, "block_invalid_attribute", node.line, { name: "color" });
+        diagnostic(context, "block_invalid_attribute", node.line, {
+          name: "color",
+        });
       }
       return [
-        createTextBlock(context, id, richTextFromDirective(node, context), node.line, {
-          ...(numberAttribute(node, "font-size", context, { min: 1, max: 72 }) === undefined
-            ? {}
-            : { fontSize: numberAttribute(node, "font-size", context, { min: 1, max: 72 }) }),
-          ...(numberAttribute(node, "font-weight", context, { min: 1, max: 1000 }) === undefined
-            ? {}
-            : { fontWeight: numberAttribute(node, "font-weight", context, { min: 1, max: 1000 }) }),
-          ...(numberAttribute(node, "line-height", context, { min: 0.1, max: 3 }) === undefined
-            ? {}
-            : { lineHeight: numberAttribute(node, "line-height", context, { min: 0.1, max: 3 }) }),
-          ...(color && COLOR_PATTERN.test(color) ? { color } : {}),
-          ...(enumAttribute(node, "tone", ["default", "muted", "accent"] as const, context) === undefined
-            ? {}
-            : { tone: enumAttribute(node, "tone", ["default", "muted", "accent"] as const, context) }),
-          ...(enumAttribute(node, "align", ["left", "center", "right"] as const, context) === undefined
-            ? {}
-            : { align: enumAttribute(node, "align", ["left", "center", "right"] as const, context) }),
-        }),
+        createTextBlock(
+          context,
+          id,
+          richTextFromDirective(node, context),
+          node.line,
+          {
+            ...(numberAttribute(node, "font-size", context, {
+              min: 1,
+              max: 72,
+            }) === undefined
+              ? {}
+              : {
+                  fontSize: numberAttribute(node, "font-size", context, {
+                    min: 1,
+                    max: 72,
+                  }),
+                }),
+            ...(numberAttribute(node, "font-weight", context, {
+              min: 1,
+              max: 1000,
+            }) === undefined
+              ? {}
+              : {
+                  fontWeight: numberAttribute(node, "font-weight", context, {
+                    min: 1,
+                    max: 1000,
+                  }),
+                }),
+            ...(numberAttribute(node, "line-height", context, {
+              min: 0.1,
+              max: 3,
+            }) === undefined
+              ? {}
+              : {
+                  lineHeight: numberAttribute(node, "line-height", context, {
+                    min: 0.1,
+                    max: 3,
+                  }),
+                }),
+            ...(color && COLOR_PATTERN.test(color) ? { color } : {}),
+            ...(enumAttribute(
+              node,
+              "tone",
+              ["default", "muted", "accent"] as const,
+              context,
+            ) === undefined
+              ? {}
+              : {
+                  tone: enumAttribute(
+                    node,
+                    "tone",
+                    ["default", "muted", "accent"] as const,
+                    context,
+                  ),
+                }),
+            ...(enumAttribute(
+              node,
+              "align",
+              ["left", "center", "right"] as const,
+              context,
+            ) === undefined
+              ? {}
+              : {
+                  align: enumAttribute(
+                    node,
+                    "align",
+                    ["left", "center", "right"] as const,
+                    context,
+                  ),
+                }),
+          },
+        ),
       ];
     }
     case "badges": {
@@ -447,16 +656,33 @@ function blocksFromDirective(
         .filter((child) => child.kind === "markdown")
         .map((child) => child.source)
         .join("\n");
-      const items = text
+      const legacyItems = text
         .split("\n")
         .map((line) => /^\s*[-*+]\s+(.+)$/.exec(line)?.[1]?.trim())
         .filter((item): item is string => Boolean(item));
-      if (!items.length) diagnostic(context, "block_invalid_nesting", node.line);
+      const parsedTags = legacyItems.length
+        ? undefined
+        : parseResumeMarkdownBadgeLabels(text, node.line);
+      if (parsedTags) context.diagnostics.push(...parsedTags.diagnostics);
+      if (
+        node.children.some((child) => child.kind !== "markdown") ||
+        (legacyItems.length &&
+          text
+            .split("\n")
+            .some((line) => line.trim() && !/^\s*[-*+]\s+.+$/.test(line)))
+      ) {
+        diagnostic(context, "block_invalid_nesting", node.line);
+      }
+      const items = parsedTags?.labels ?? legacyItems;
+      if (!items.length)
+        diagnostic(context, "block_invalid_nesting", node.line);
       return [
         {
           id,
           type: "badges",
-          wrap: booleanAttribute(node.attributes, "wrap", node.line, context) ?? true,
+          wrap:
+            booleanAttribute(node.attributes, "wrap", node.line, context) ??
+            true,
           ...(numberAttribute(node, "gap", context) === undefined
             ? {}
             : { gap: numberAttribute(node, "gap", context) }),
@@ -472,8 +698,15 @@ function blocksFromDirective(
     }
     case "list": {
       checkAllowedAttributes(node, ["ordered", "marker", "gap"], context);
-      const ordered = booleanAttribute(node.attributes, "ordered", node.line, context) ?? false;
-      const marker = enumAttribute(node, "marker", ["disc", "square", "dash", "none"] as const, context);
+      const ordered =
+        booleanAttribute(node.attributes, "ordered", node.line, context) ??
+        false;
+      const marker = enumAttribute(
+        node,
+        "marker",
+        ["disc", "square", "dash", "none"] as const,
+        context,
+      );
       const itemNodes = node.children.filter(
         (child): child is ResumeMarkdownDirectiveSyntaxNode =>
           child.kind === "directive" && child.name === "item",
@@ -481,9 +714,14 @@ function blocksFromDirective(
       const baseList = baseBlock?.type === "list" ? baseBlock : undefined;
       const items = itemNodes.map((item, index) => ({
         id: baseList?.items[index]?.id ?? generatedId(context, "item"),
-        children: childBlocks(item.children, context, baseList?.items[index]?.children),
+        children: childBlocks(
+          item.children,
+          context,
+          baseList?.items[index]?.children,
+        ),
       }));
-      if (!items.length) diagnostic(context, "block_invalid_nesting", node.line);
+      if (!items.length)
+        diagnostic(context, "block_invalid_nesting", node.line);
       return [
         {
           id,
@@ -521,7 +759,12 @@ function blocksFromDirective(
           id,
           type: "group",
           direction:
-            enumAttribute(node, "direction", ["vertical", "horizontal"] as const, context) ?? "vertical",
+            enumAttribute(
+              node,
+              "direction",
+              ["vertical", "horizontal"] as const,
+              context,
+            ) ?? "vertical",
           ...(numberAttribute(node, "gap", context) === undefined
             ? {}
             : { gap: numberAttribute(node, "gap", context) }),
@@ -530,8 +773,17 @@ function blocksFromDirective(
               ? "end"
               : node.name === "left"
                 ? "start"
-                : enumAttribute(node, "align", ["start", "center", "end", "stretch"] as const, context),
-          children: childBlocks(node.children, context, baseContainer?.children),
+                : enumAttribute(
+                    node,
+                    "align",
+                    ["start", "center", "end", "stretch"] as const,
+                    context,
+                  ),
+          children: childBlocks(
+            node.children,
+            context,
+            baseContainer?.children,
+          ),
         },
       ];
     }
@@ -551,7 +803,9 @@ function blocksFromDirective(
         parsedChildren[0].style?.fontWeight === 700 &&
         parsedChildren[0].style?.fontSize === 17;
       const children =
-        !hasExplicitContainer && startsWithHeading
+        context.sourceVersion === 1 &&
+        !hasExplicitContainer &&
+        startsWithHeading
           ? parsedChildren.reduce<ResumeBlock[]>((groups, child) => {
               const isHeading =
                 child.type === "text" &&
@@ -570,7 +824,8 @@ function blocksFromDirective(
                   ...(baseGroup?.type === "group" && baseGroup.gap !== undefined
                     ? { gap: baseGroup.gap }
                     : {}),
-                  ...(baseGroup?.type === "group" && baseGroup.align !== undefined
+                  ...(baseGroup?.type === "group" &&
+                  baseGroup.align !== undefined
                     ? { align: baseGroup.align }
                     : {}),
                   children: [child],
@@ -589,8 +844,18 @@ function blocksFromDirective(
           ...(numberAttribute(node, "gap", context) === undefined
             ? {}
             : { gap: numberAttribute(node, "gap", context) }),
-          align: enumAttribute(node, "align", ["start", "center", "end"] as const, context),
-          justify: enumAttribute(node, "justify", ["start", "between", "end"] as const, context),
+          align: enumAttribute(
+            node,
+            "align",
+            ["start", "center", "end"] as const,
+            context,
+          ),
+          justify: enumAttribute(
+            node,
+            "justify",
+            ["start", "between", "end"] as const,
+            context,
+          ),
           children,
         },
       ];
@@ -610,7 +875,7 @@ function parseSectionHeading(
   sectionIndex: number,
 ) {
   const line = blockLine(node, chunkLine);
-  const raw = rawNodeSource(chunkSource, node).replace(/^##\s+/, "");
+  const raw = rawNodeSource(chunkSource, node).replace(/^##(?:\s+|$)/, "");
   const attributeMatch = /\s+\{([^{}]*)\}\s*$/.exec(raw);
   const attributeDiagnostics: ResumeMarkdownDiagnostic[] = [];
   const attributes = attributeMatch
@@ -618,50 +883,117 @@ function parseSectionHeading(
     : {};
   context.diagnostics.push(...attributeDiagnostics);
   const titleSource = attributeMatch ? raw.slice(0, attributeMatch.index) : raw;
-  const id = baseSection?.id ?? generatedId(context, `section-${sectionIndex + 1}`);
-  const visible = booleanAttribute(attributes, "visible", line, context) ?? baseSection?.visible ?? true;
+  const id =
+    baseSection?.id ?? generatedId(context, `section-${sectionIndex + 1}`);
+  const visible =
+    booleanAttribute(attributes, "visible", line, context) ??
+    baseSection?.visible ??
+    true;
   const titleColor = attributes["title-color"];
   if (titleColor && !COLOR_PATTERN.test(titleColor)) {
-    diagnostic(context, "block_invalid_attribute", line, { name: "title-color" });
+    diagnostic(context, "block_invalid_attribute", line, {
+      name: "title-color",
+    });
   }
-  const numberFromSection = (name: string, options: { integer?: boolean; min?: number; max?: number } = {}) =>
-    numberAttribute({ kind: "directive", name: "group", attributes, children: [], line }, name, context, options);
+  const numberFromSection = (
+    name: string,
+    options: { integer?: boolean; min?: number; max?: number } = {},
+  ) =>
+    numberAttribute(
+      { kind: "directive", name: "group", attributes, children: [], line },
+      name,
+      context,
+      options,
+    );
   const padding = attributes.padding?.split(/\s+/).map(Number);
-  if (padding && (padding.length !== 4 || padding.some((value) => !Number.isFinite(value) || value < 0 || value > 96))) {
+  if (
+    padding &&
+    (padding.length !== 4 ||
+      padding.some(
+        (value) => !Number.isFinite(value) || value < 0 || value > 96,
+      ))
+  ) {
     diagnostic(context, "block_invalid_attribute", line, { name: "padding" });
   }
-  const known = ["semantic", "visible", "title-color", "title-size", "columns", "direction", "gap", "padding", "keep-together"];
+  const known = [
+    "semantic",
+    "visible",
+    "title-color",
+    "title-size",
+    "columns",
+    "direction",
+    "gap",
+    "padding",
+    "keep-together",
+  ];
   for (const name of Object.keys(attributes)) {
-    if (!known.includes(name)) diagnostic(context, "block_invalid_attribute", line, { name });
+    if (!known.includes(name))
+      diagnostic(context, "block_invalid_attribute", line, { name });
   }
   const section: ResumeSection = {
     ...(baseSection ? structuredClone(baseSection) : {}),
     id,
-    title: parseInline(titleSource, line, context),
-    ...(attributes.semantic ? { semantic: attributes.semantic } : baseSection?.semantic ? { semantic: baseSection.semantic } : {}),
+    ...(titleSource.trim()
+      ? { title: parseInline(titleSource, line, context) }
+      : {}),
+    ...(attributes.semantic
+      ? { semantic: attributes.semantic }
+      : baseSection?.semantic
+        ? { semantic: baseSection.semantic }
+        : {}),
     visible,
     titleStyle: {
-      ...(titleColor && COLOR_PATTERN.test(titleColor) ? { color: titleColor } : {}),
+      ...(titleColor && COLOR_PATTERN.test(titleColor)
+        ? { color: titleColor }
+        : {}),
       ...(numberFromSection("title-size", { min: 1, max: 72 }) === undefined
         ? {}
         : { fontSize: numberFromSection("title-size", { min: 1, max: 72 }) }),
     },
     layout: {
-      ...(numberFromSection("columns", { integer: true, min: 1, max: 12 }) === undefined
+      ...(numberFromSection("columns", { integer: true, min: 1, max: 12 }) ===
+      undefined
         ? {}
-        : { columns: numberFromSection("columns", { integer: true, min: 1, max: 12 }) }),
-      ...(attributes.direction === "vertical" || attributes.direction === "horizontal"
+        : {
+            columns: numberFromSection("columns", {
+              integer: true,
+              min: 1,
+              max: 12,
+            }),
+          }),
+      ...(attributes.direction === "vertical" ||
+      attributes.direction === "horizontal"
         ? { direction: attributes.direction }
         : {}),
-      ...(numberFromSection("gap") === undefined ? {} : { gap: numberFromSection("gap") }),
-      ...(padding?.length === 4 && padding.every((value) => Number.isFinite(value) && value >= 0 && value <= 96)
-        ? { padding: { top: padding[0]!, right: padding[1]!, bottom: padding[2]!, left: padding[3]! } }
+      ...(numberFromSection("gap") === undefined
+        ? {}
+        : { gap: numberFromSection("gap") }),
+      ...(padding?.length === 4 &&
+      padding.every(
+        (value) => Number.isFinite(value) && value >= 0 && value <= 96,
+      )
+        ? {
+            padding: {
+              top: padding[0]!,
+              right: padding[1]!,
+              bottom: padding[2]!,
+              left: padding[3]!,
+            },
+          }
         : {}),
     },
     pagination: {
-      ...(booleanAttribute(attributes, "keep-together", line, context) === undefined
+      ...(booleanAttribute(attributes, "keep-together", line, context) ===
+      undefined
         ? {}
-        : { keepTogether: booleanAttribute(attributes, "keep-together", line, context) }),
+        : {
+            keepTogether: booleanAttribute(
+              attributes,
+              "keep-together",
+              line,
+              context,
+            ),
+          }),
     },
     blocks: [],
   };
@@ -670,15 +1002,20 @@ function parseSectionHeading(
   if (!Object.keys(section.pagination ?? {}).length) delete section.pagination;
   context.sourceMap.sections.push({
     id,
+    explicitAttributes: Object.keys(attributes),
     start: { line, column: 1 },
     end: { line, column: 1 },
   });
   return section;
 }
 
-function buildSections(nodes: ResumeMarkdownSyntaxNode[], context: ParseContext) {
+function buildSections(
+  nodes: ResumeMarkdownSyntaxNode[],
+  context: ParseContext,
+) {
   const sections: ResumeSection[] = [];
   let currentSection: ResumeSection | undefined;
+  const layoutSections = new Set<string>();
 
   const ensureSection = () => {
     if (currentSection) return currentSection;
@@ -697,6 +1034,50 @@ function buildSections(nodes: ResumeMarkdownSyntaxNode[], context: ParseContext)
     const syntax = nodes[syntaxIndex]!;
     if (syntax.kind === "directive") {
       const section = ensureSection();
+      if (syntax.name === "layout") {
+        checkAllowedAttributes(
+          syntax,
+          ["columns", "direction", "gap"],
+          context,
+        );
+        if (layoutSections.has(section.id) || section.blocks.length)
+          diagnostic(context, "block_invalid_nesting", syntax.line, {
+            parent: "layout",
+          });
+        layoutSections.add(section.id);
+        const entry = context.sourceMap.sections.find(
+          (entry) => entry.id === section.id,
+        );
+        if (entry)
+          entry.explicitAttributes = [
+            ...(entry.explicitAttributes ?? []),
+            "layout",
+          ];
+        const columns = numberAttribute(syntax, "columns", context, {
+          integer: true,
+          min: 1,
+          max: 12,
+        });
+        const direction = enumAttribute(
+          syntax,
+          "direction",
+          ["vertical", "horizontal"] as const,
+          context,
+        );
+        const gap = numberAttribute(syntax, "gap", context);
+        section.layout = {
+          ...section.layout,
+          ...(columns === undefined ? {} : { columns }),
+          ...(direction === undefined ? {} : { direction }),
+          ...(gap === undefined ? {} : { gap }),
+        };
+        section.blocks.push(...childBlocks(syntax.children, context));
+        continue;
+      }
+      if (layoutSections.has(section.id))
+        diagnostic(context, "block_invalid_nesting", syntax.line, {
+          parent: "layout",
+        });
       const nextNode = nodes[syntaxIndex + 1];
       if (
         syntax.name === "left" &&
@@ -704,15 +1085,30 @@ function buildSections(nodes: ResumeMarkdownSyntaxNode[], context: ParseContext)
         nextNode.name === "right"
       ) {
         const right = nextNode;
-        section.blocks.push(...childBlocks([syntax, right], context, section.blocks.slice(section.blocks.length)));
+        section.blocks.push(
+          ...childBlocks(
+            [syntax, right],
+            context,
+            section.blocks.slice(section.blocks.length),
+          ),
+        );
         syntaxIndex += 1;
       } else {
-        section.blocks.push(...blocksFromDirective(syntax, context, section.blocks[section.blocks.length]));
+        section.blocks.push(
+          ...blocksFromDirective(
+            syntax,
+            context,
+            section.blocks[section.blocks.length],
+          ),
+        );
       }
       continue;
     }
 
-    const root = unified().use(remarkParse).use(remarkGfm).parse(syntax.source) as Root;
+    const root = unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .parse(syntax.source) as Root;
     for (const mdastNode of root.children) {
       if (mdastNode.type === "heading" && mdastNode.depth === 2) {
         currentSection = parseSectionHeading(
@@ -727,13 +1123,22 @@ function buildSections(nodes: ResumeMarkdownSyntaxNode[], context: ParseContext)
         continue;
       }
       const section = ensureSection();
+      if (layoutSections.has(section.id))
+        diagnostic(
+          context,
+          "block_invalid_nesting",
+          blockLine(mdastNode, syntax.line),
+          { parent: "layout" },
+        );
       section.blocks.push(
         ...blocksFromMdastNode(
           mdastNode,
           syntax.source,
           syntax.line,
           context,
-          context.baseDocument.sections[sections.length - 1]?.blocks[section.blocks.length],
+          context.baseDocument.sections[sections.length - 1]?.blocks[
+            section.blocks.length
+          ],
           section.blocks.length,
         ),
       );
@@ -773,7 +1178,17 @@ export function parseResumeMarkdown({
     return { diagnostics, sourceMap, hasErrors: true };
   }
 
+  const reservedIds = new Set<string>();
+  for (const section of baseDocument.sections) {
+    reservedIds.add(section.id);
+    visitResumeBlocks(section.blocks, (block) => {
+      reservedIds.add(block.id);
+      if (block.type === "list" || block.type === "badges")
+        block.items.forEach((item) => reservedIds.add(item.id));
+    });
+  }
   const context: ParseContext = {
+    sourceVersion: frontMatterResult.frontMatter?.version ?? 2,
     baseDocument:
       projection === undefined
         ? baseDocument
@@ -781,6 +1196,7 @@ export function parseResumeMarkdown({
     diagnostics,
     sourceMap,
     nextGeneratedId: 0,
+    reservedIds,
   };
 
   try {
@@ -811,16 +1227,22 @@ export function parseResumeMarkdown({
           margin: frontMatter?.pageMargin ?? baseDocument.settings.page.margin,
         },
         typography: {
-          fontFamily: matchedFont?.fontFamily ?? baseDocument.settings.typography.fontFamily,
+          fontFamily:
+            matchedFont?.fontFamily ??
+            baseDocument.settings.typography.fontFamily,
           baseFontSize:
-            frontMatter?.fontSize ?? baseDocument.settings.typography.baseFontSize,
+            frontMatter?.fontSize ??
+            baseDocument.settings.typography.baseFontSize,
           lineHeight:
-            frontMatter?.lineHeight ?? baseDocument.settings.typography.lineHeight,
+            frontMatter?.lineHeight ??
+            baseDocument.settings.typography.lineHeight,
         },
         theme: {
           accent: frontMatter?.accent ?? baseDocument.settings.theme.accent,
-          textColor: frontMatter?.textColor ?? baseDocument.settings.theme.textColor,
-          mutedColor: frontMatter?.mutedColor ?? baseDocument.settings.theme.mutedColor,
+          textColor:
+            frontMatter?.textColor ?? baseDocument.settings.theme.textColor,
+          mutedColor:
+            frontMatter?.mutedColor ?? baseDocument.settings.theme.mutedColor,
         },
       },
       sections,
@@ -834,8 +1256,11 @@ export function parseResumeMarkdown({
         baseDocumentVersion,
       });
       diagnostics.push(...applied.diagnostics);
+      if (diagnostics.some((item) => item.severity === "error")) {
+        return { diagnostics, sourceMap, hasErrors: true };
+      }
       return {
-        document: applied.document,
+        document: validateResumeDocument(applied.document),
         diagnostics,
         sourceMap,
         projection: applied.projection,

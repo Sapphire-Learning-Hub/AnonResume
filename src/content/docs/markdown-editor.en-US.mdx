@@ -1,13 +1,13 @@
 <h2 id="start-editing">Enter Markdown editing</h2>
 
-Open a resume and choose **Markdown editing** under **Start**. The source is on the left and a read-only preview is on the right. You can scroll, zoom, and inspect the preview, but you cannot edit the right-hand canvas directly. All content changes come from the source while this mode is active.
+Open a resume and choose **Markdown editing** in the left sidebar. The source is on the left and a read-only preview is on the right. You can scroll, zoom, and inspect the preview, but you cannot edit the right-hand canvas directly. All content changes come from the source while this mode is active.
 
 Paragraphs, level-three headings, bold, italic, strike-through, inline code, links, ordered lists, and unordered lists use familiar Markdown syntax.
 
 ```markdown
 ### Senior backend engineer
 
-Built **core services** and improved *engineering efficiency*.
+Built **core services** and improved _engineering efficiency_.
 
 - Delivered user authentication
 - Improved observability and recovery
@@ -15,11 +15,11 @@ Built **core services** and improved *engineering efficiency*.
 
 <h2 id="page-theme">Set up the page and theme</h2>
 
-The settings block is optional. When you enter Markdown editing, the editor generates one from the current page and theme settings. If you write Markdown without this block, the resume keeps its current settings. `anonresume: 1` identifies the settings syntax version. The four page-margin numbers are top, right, bottom, and left.
+The settings block is optional. When you enter Markdown editing, the editor generates one from the current page and theme settings. If you write Markdown without this block, the resume keeps its current settings. `anonresume: 2` identifies the current syntax version; existing `anonresume: 1` source remains readable. The four page-margin numbers are top, right, bottom, and left.
 
 ```markdown
 ---
-anonresume: 1
+anonresume: 2
 title: "Backend engineer resume"
 locale: en-US
 page-margin: 18 16 18 16
@@ -49,28 +49,61 @@ Built core services and improved engineering efficiency.
 - Improved observability and recovery
 ```
 
-Use block directives only for layouts that standard Markdown cannot express. A directive starts with `:::name` and ends with `:::` on its own line. A horizontal `row` can use level-three headings as column boundaries:
+Use block directives only for structures that standard Markdown cannot express. A directive starts with `:::name` and ends with `:::` on its own line. Use `row` for horizontal layout and `group` to retain each compound column's boundary, with ordinary Markdown inside:
 
 ```markdown
 :::row {gap=16 align="center" justify="between"}
+:::group
+
 ### Senior engineer
 
 Example Company
+:::
+
+:::group
 
 ### Dates
 
 2024.01 - Present
 :::
-```
-
-Use the smallest necessary `group` directive when content has no stable heading boundary or requires horizontal grouping. Badges can remain a standard unordered list during a local editing session. Use `badges` when copied source must identify the collection explicitly:
-
-```markdown
-:::badges {wrap=true gap=8}
-- TypeScript
-- PostgreSQL
 :::
 ```
+
+Use `layout` for a section's equal-width columns. Keep one `group` boundary around a column containing several blocks. Use `column` when a single text block with multiple paragraphs forms a column, and write ordinary paragraphs inside. Ordinary vertical groups inside a column do not need repeated wrappers:
+
+```markdown
+## Experience
+
+:::layout {columns=2 gap=22}
+:::group
+
+### Community Manager
+
+2024 — Present
+
+Created member events and editorial programs.
+:::
+
+:::group
+
+### Marketing Associate
+
+2022 — 2024
+
+Supported live events and post-program reviews.
+:::
+:::
+```
+
+Badge collections and bullet lists have different meanings. An independent paragraph consisting entirely of backtick items represents badges, without an extra directive:
+
+```markdown
+`TypeScript` `PostgreSQL`
+```
+
+A single standalone backtick item also represents a badge. Backticks mixed into prose remain inline code. Use fenced code for standalone code. Backticks in version-one source retain their previous inline-code meaning.
+
+Ordinary multi-paragraph text uses paragraphs and blank lines directly. Use `:::text` only when empty paragraphs must be preserved or a code-only paragraph must be distinguished from badges. Lists containing compound content such as tags or layouts use `:::list` and `:::item`; ordinary lists and nested lists keep standard syntax. Adjacent independent lists may be separated by an `<!-- anonresume:block -->` comment to prevent them from merging. Keep that comment in place.
 
 Links, bold, italic, strike-through, and inline code use standard Markdown. Icons and the few styles that must be explicit in source can use inline extensions:
 
@@ -87,15 +120,15 @@ For a line break within one paragraph, leave two spaces at the end of the line b
 
 When the source has a problem, the left pane shows its line number and an explanation. Select an issue to move to that location. If an issue prevents parsing, the right pane keeps showing the last valid preview and the invalid changes are not saved to the resume.
 
-When you leave Markdown editing, the editor only normalizes line endings, removes redundant runs of blank lines, and adds the final newline. Comments, list markers, emphasis spelling, and fenced code contents remain intact. If the current source still has a blocking error, you can continue editing or explicitly discard the invalid changes.
+When you leave Markdown editing, the editor only normalizes line endings, removes redundant blank lines between blocks, and adds the final newline. Empty paragraphs inside `text`, comments, list markers, emphasis spelling, and fenced code contents remain intact. If the current source still has a blocking error, you can continue editing or explicitly discard the invalid changes.
 
-Some layout and styling details exist only in the visual editor instead of being repeated in Markdown. They remain available during the current local editing session. If edited content can no longer be matched safely, the issue list explains that only the affected content was rebuilt with defaults; other content is left unchanged.
+Some layout and styling details exist only in the visual editor instead of being repeated in Markdown. They remain available during the current local editing session. If edited content can no longer be matched reliably, changes are paused and the last valid preview and local source are retained, rather than automatically rebuilding the resume. Try splitting a large change into smaller edits.
 
-After an unexpected browser refresh, the page may find unfinished Markdown source saved on this device. You can choose to recover it or restart from the current resume.
+After an unexpected browser refresh, the page may find unfinished Markdown source saved on this device. You can choose to recover it or restart from the current resume. Source whose original baseline cannot be verified remains available for inspection, but cannot overwrite the current resume.
 
 <h2 id="compatibility">Compatibility and portability</h2>
 
-The editor recognizes ordinary Markdown, supported legacy AnonResume directives, and the Mujicv `:::left`, `:::right`, and `icon:name` forms. Prefer standard Markdown for new content and use `row`, `group`, or `badges` only when the layout requires them.
+The editor recognizes ordinary Markdown, supported legacy AnonResume directives (including `badges`), and the Mujicv `:::left`, `:::right`, and `icon:name` forms. Prefer standard Markdown for new content and use `layout`, `row`, `group`, or `column` only when the layout requires them.
 
 Copying the Markdown source carries visible content, explicit block directives, and public settings from the settings block. It does not carry design details retained only on the current device. Markdown source is therefore useful for editing and moving public semantics, but it is not a complete backup and should not replace the platform's normal save and export flows. Keep the relevant sparse directive in source when a special layout must survive across devices.
 

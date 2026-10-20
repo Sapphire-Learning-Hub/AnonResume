@@ -8,15 +8,32 @@ export interface ResumeMarkdownTextSyntaxNode {
 
 export interface ResumeMarkdownDirectiveSyntaxNode {
   kind: "directive";
-  name: "text" | "list" | "item" | "badges" | "group" | "row" | "left" | "right";
+  name:
+    | "text"
+    | "list"
+    | "item"
+    | "badges"
+    | "group"
+    | "row"
+    | "left"
+    | "right"
+    | "layout"
+    | "column";
   attributes: Record<string, string>;
   children: ResumeMarkdownSyntaxNode[];
+  contentSource?: string;
   line: number;
 }
 
 export type ResumeMarkdownSyntaxNode =
-  | ResumeMarkdownTextSyntaxNode
-  | ResumeMarkdownDirectiveSyntaxNode;
+  ResumeMarkdownTextSyntaxNode | ResumeMarkdownDirectiveSyntaxNode;
+
+export function resumeMarkdownFenceMarker(line: string) {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  if (!match || (match[1]![0] === "`" && match[2]!.includes("`")))
+    return undefined;
+  return match[1];
+}
 
 const KNOWN_DIRECTIVES = new Set([
   "text",
@@ -27,6 +44,8 @@ const KNOWN_DIRECTIVES = new Set([
   "row",
   "left",
   "right",
+  "layout",
+  "column",
 ]);
 
 function diagnostic(
@@ -60,17 +79,25 @@ export function parseDirectiveAttributes(
   return attributes;
 }
 
-export function parseResumeMarkdownDirectives(source: string, startLine: number) {
+export function parseResumeMarkdownDirectives(
+  source: string,
+  startLine: number,
+) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const diagnostics: ResumeMarkdownDiagnostic[] = [];
 
-  function parseSequence(index: number, depth: number): {
+  function parseSequence(
+    index: number,
+    depth: number,
+  ): {
     nodes: ResumeMarkdownSyntaxNode[];
     nextIndex: number;
     closed: boolean;
   } {
     const nodes: ResumeMarkdownSyntaxNode[] = [];
     let markdownStart = index;
+    let fence: string | undefined;
+    let comment = false;
 
     const flushMarkdown = (end: number) => {
       const chunk = lines.slice(markdownStart, end).join("\n");
@@ -85,7 +112,40 @@ export function parseResumeMarkdownDirectives(source: string, startLine: number)
 
     while (index < lines.length) {
       const line = lines[index]!;
+      const marker = resumeMarkdownFenceMarker(line);
+      if (fence) {
+        if (
+          marker &&
+          marker[0] === fence[0] &&
+          marker.length >= fence.length &&
+          line.trim() === marker
+        )
+          fence = undefined;
+        index++;
+        continue;
+      }
+      if (comment) {
+        if (line.includes("-->")) comment = false;
+        index++;
+        continue;
+      }
+      if (marker) {
+        fence = marker;
+        index++;
+        continue;
+      }
+      if (line.includes("<!--")) {
+        comment = !line.slice(line.indexOf("<!--") + 4).includes("-->");
+        index++;
+        continue;
+      }
       if (/^\s*:::\s*$/.test(line)) {
+        if (depth === 0)
+          diagnostics.push(
+            diagnostic("block_invalid_nesting", startLine + index, {
+              parent: "document",
+            }),
+          );
         flushMarkdown(index);
         return { nodes, nextIndex: index + 1, closed: true };
       }
@@ -100,10 +160,13 @@ export function parseResumeMarkdownDirectives(source: string, startLine: number)
       const name = opening[1]!.toLowerCase();
       const lineNumber = startLine + index;
       if (!KNOWN_DIRECTIVES.has(name)) {
-        diagnostics.push(diagnostic("block_unknown_directive", lineNumber, { name }));
+        diagnostics.push(
+          diagnostic("block_unknown_directive", lineNumber, { name }),
+        );
       }
       if (depth >= 8) {
         diagnostics.push(diagnostic("block_nesting_too_deep", lineNumber));
+        return { nodes, nextIndex: lines.length, closed: false };
       }
       const attributes = parseDirectiveAttributes(
         opening[2] ?? "",
@@ -122,6 +185,12 @@ export function parseResumeMarkdownDirectives(source: string, startLine: number)
           name: name as ResumeMarkdownDirectiveSyntaxNode["name"],
           attributes,
           children: nested.nodes,
+          contentSource: lines
+            .slice(
+              index + 1,
+              nested.closed ? nested.nextIndex - 1 : nested.nextIndex,
+            )
+            .join("\n"),
           line: lineNumber,
         });
       }
