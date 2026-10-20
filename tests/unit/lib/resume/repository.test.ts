@@ -568,7 +568,7 @@ describe("resume repository persistence", () => {
     expect(last.items[0]?.id).not.toBe(first.items[0]?.id);
   });
 
-  it("deletes only the selected user's resume and its version history", async () => {
+  it("hides only the selected user's trashed resume and its history", async () => {
     await createGeneratedResumeRecord({
       userId: "user-demo",
       templateId: "centered",
@@ -583,7 +583,7 @@ describe("resume repository persistence", () => {
     await expect(getResumeRecord("user-demo", "resume-foundation")).resolves.toBeUndefined();
     await expect(
       listResumeVersionSnapshots("user-demo", "resume-foundation"),
-    ).resolves.toEqual([]);
+    ).rejects.toMatchObject({ name: "ResumeNotFoundError" });
     await expect(getResumeRecord("user-other", "resume-other-foundation")).resolves.toMatchObject({
       id: "resume-other-foundation",
       userId: "user-other",

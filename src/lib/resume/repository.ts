@@ -1,7 +1,12 @@
-import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { and, asc, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { isDeepStrictEqual } from "node:util";
 
 import { db } from "@/db";
+import type { ResumeTransaction } from "@/lib/resume/transaction";
+import { createHistorySnapshot } from "@/lib/resume/history/store";
+import type { ResumeSnapshotKind } from "@/lib/resume/history/types";
+import { ResumeTrashedError } from "@/lib/resume/trash/errors";
+import { requestResumeTaskStops } from "@/lib/resume/trash/tasks";
 import { resumes, resumeVersions } from "@/db/schema";
 import { normalizeResumeDocumentStructure } from "@/domain/resume/block-tree";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
@@ -45,6 +50,7 @@ export interface ResumeVersionSnapshot {
   version: number;
   document: ResumeRecord["document"];
   createdAt: number;
+  kind: ResumeSnapshotKind;
 }
 
 export class ResumeVersionConflictError extends Error {
@@ -218,6 +224,7 @@ function mapResumeVersionRow(row: ResumeVersionRow): ResumeVersionSnapshot {
       validateResumeDocument(row.document),
     ),
     createdAt: row.createdAt.getTime(),
+    kind: row.kind,
   };
 }
 
@@ -259,7 +266,7 @@ async function selectResumeRecordWithExecutor(
   const rows = await executor
     .select()
     .from(resumes)
-    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
+    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId), isNull(resumes.deletedAt)))
     .limit(1);
 
   return rows[0] ? mapResumeRow(rows[0]) : undefined;
@@ -303,6 +310,20 @@ async function requireExistingResumeRecord(userId: string, resumeId: string) {
   return existing;
 }
 
+export async function lockOwnedResume(transaction: ResumeTransaction, userId: string, resumeId: string) {
+  const [row] = await transaction.select().from(resumes)
+    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
+    .for("update").limit(1);
+  if (!row) throw new ResumeNotFoundError(resumeId);
+  return row;
+}
+
+async function lockActiveResume(transaction: ResumeTransaction, userId: string, resumeId: string) {
+  const row = await lockOwnedResume(transaction, userId, resumeId);
+  if (row.deletedAt) throw new ResumeTrashedError();
+  return mapResumeRow(row);
+}
+
 export function getResumeVersionHistoryLimit(
   configuration: Pick<ManagedConfig, "resumeVersionHistoryLimit">,
 ) {
@@ -312,45 +333,9 @@ export function getResumeVersionHistoryLimit(
     : DEFAULT_RESUME_VERSION_HISTORY_LIMIT;
 }
 
-async function createResumeVersionSnapshotFromRecord(record: ResumeRecord) {
-  const snapshotId = randomUUID();
+async function retainedHistoryLimit() {
   const runtime = await getRuntimeConfig("web");
-  const historyLimit = getResumeVersionHistoryLimit(runtime.values);
-
-  return db.transaction(async (transaction) => {
-    await transaction.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`anonresume:resume-version:${record.userId}:${record.id}`}))`,
-    );
-    const [created] = await transaction
-      .insert(resumeVersions)
-      .values({
-        id: snapshotId,
-        userId: record.userId,
-        resumeId: record.id,
-        version: record.version,
-        document: record.document,
-      })
-      .returning();
-    const stale = await transaction
-      .select({ id: resumeVersions.id })
-      .from(resumeVersions)
-      .where(
-        and(
-          eq(resumeVersions.userId, record.userId),
-          eq(resumeVersions.resumeId, record.id),
-        ),
-      )
-      .orderBy(desc(resumeVersions.createdAt), desc(resumeVersions.id))
-      .offset(historyLimit);
-
-    if (stale.length > 0) {
-      await transaction
-        .delete(resumeVersions)
-        .where(inArray(resumeVersions.id, stale.map(({ id }) => id)));
-    }
-
-    return mapResumeVersionRow(created!);
-  });
+  return getResumeVersionHistoryLimit(runtime.values);
 }
 
 export async function resetResumeRepository(options?: {
@@ -380,6 +365,7 @@ export async function paginateResumeEntries({
   const ownershipFilter = and(
     eq(resumes.userId, userId),
     eq(resumes.kind, "standard"),
+    isNull(resumes.deletedAt),
   )!;
   const searchFilter = searchPattern
     ? or(
@@ -438,9 +424,11 @@ export async function paginateResumeVersionSnapshots({
   userId: string;
   resumeId: string;
 }): Promise<PageResult<ResumeVersionSnapshot>> {
+  await requireExistingResumeRecord(userId, resumeId);
   const filter = and(
     eq(resumeVersions.userId, userId),
     eq(resumeVersions.resumeId, resumeId),
+    eq(resumeVersions.kind, "retained"),
   );
   const [totalRow] = await db
     .select({ value: count() })
@@ -465,6 +453,7 @@ export async function getResumeVersionSnapshot(
   resumeId: string,
   snapshotId: string,
 ): Promise<ResumeVersionSnapshot> {
+  await requireExistingResumeRecord(userId, resumeId);
   const rows = await db
     .select()
     .from(resumeVersions)
@@ -710,24 +699,19 @@ export async function duplicateGeneratedResumeRecord(params: {
 }
 
 export async function deleteResumeRecord(userId: string, resumeId: string) {
-  await db.transaction(async (transaction) => {
-    const deleted = await transaction
-      .delete(resumes)
-      .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId)))
-      .returning({ id: resumes.id });
-
-    if (!deleted[0]) {
-      throw new ResumeNotFoundError(resumeId);
-    }
-
-    await transaction
-      .delete(resumeVersions)
-      .where(
-        and(
-          eq(resumeVersions.userId, userId),
-          eq(resumeVersions.resumeId, resumeId),
-        ),
-      );
+  return db.transaction(async (transaction) => {
+    const current = await lockOwnedResume(transaction, userId, resumeId);
+    if (current.kind !== "standard") throw new ResumeNotFoundError(resumeId);
+    if (current.deletedAt) return current;
+    const { value } = (await transaction.execute<{ value: string }>(sql`SELECT now()::text AS value`)).rows[0]!;
+    const now = new Date(value);
+    await requestResumeTaskStops(transaction, { userId, resumeId, now });
+    const [deleted] = await transaction.update(resumes).set({
+      published: false, deletedAt: now,
+      purgeAfter: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      version: sql`${resumes.version} + 1`, updatedAt: now,
+    }).where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId))).returning();
+    return deleted!;
   });
 }
 
@@ -738,11 +722,11 @@ export async function saveResumeRecord(params: {
   document?: unknown;
   summary?: string;
 }) {
-  return saveResumeRecordWithExecutor(db, params);
+  return db.transaction(transaction => saveResumeRecordWithExecutor(transaction, params));
 }
 
 export async function saveResumeRecordWithExecutor(
-  executor: ResumeRecordExecutor,
+  executor: ResumeTransaction,
   params: {
     userId?: string;
     resumeId: string;
@@ -752,7 +736,7 @@ export async function saveResumeRecordWithExecutor(
   },
 ) {
   const userId = params.userId || LEGACY_USER_ID;
-  const current = await selectResumeRecordWithExecutor(
+  const current = await lockActiveResume(
     executor,
     userId,
     params.resumeId,
@@ -780,6 +764,10 @@ export async function saveResumeRecordWithExecutor(
     params.summary === undefined
       ? current.customSummary
       : formatCatalogSummary(params.summary);
+
+  if (!isDeepStrictEqual(document, current.document)) {
+    await createHistorySnapshot(executor, current, "autosave", 1);
+  }
 
   const rows = await executor
     .update(resumes)
@@ -822,14 +810,15 @@ export async function publishResumeRecord(
 export async function publishResumeRecord(userIdOrResumeId: string, resumeId?: string) {
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
-  const current = await requireExistingResumeRecord(userId, scopedResumeId);
+  return db.transaction(async transaction => {
+  const current = await lockActiveResume(transaction, userId, scopedResumeId);
 
   if (current.kind === "onboarding") {
     throw new ResumePublicationForbiddenError(scopedResumeId);
   }
 
-  await createResumeVersionSnapshotFromRecord(current);
-  const rows = await db
+  await createHistorySnapshot(transaction, current, "retained", await retainedHistoryLimit());
+  const rows = await transaction
     .update(resumes)
     .set({
       published: true,
@@ -842,6 +831,7 @@ export async function publishResumeRecord(userIdOrResumeId: string, resumeId?: s
     .returning();
 
   return mapResumeRow(rows[0]!);
+  });
 }
 
 export async function unpublishResumeRecord(resumeId: string): Promise<ResumeRecord>;
@@ -855,10 +845,9 @@ export async function unpublishResumeRecord(
 ) {
   const userId = resumeId ? userIdOrResumeId : LEGACY_USER_ID;
   const scopedResumeId = resumeId || userIdOrResumeId;
-
-  await requireExistingResumeRecord(userId, scopedResumeId);
-
-  const rows = await db
+  return db.transaction(async transaction => {
+  await lockActiveResume(transaction, userId, scopedResumeId);
+  const rows = await transaction
     .update(resumes)
     .set({
       published: false,
@@ -868,6 +857,7 @@ export async function unpublishResumeRecord(
     .returning();
 
   return mapResumeRow(rows[0]!);
+  });
 }
 
 export async function getPublishedResumeBySlug(slug: string) {
@@ -879,6 +869,7 @@ export async function getPublishedResumeBySlug(slug: string) {
         eq(resumes.slug, slug),
         eq(resumes.published, true),
         eq(resumes.kind, "standard"),
+        isNull(resumes.deletedAt),
       ),
     )
     .limit(1);
@@ -890,9 +881,10 @@ export async function snapshotResumeVersion(
   userId: string,
   resumeId: string,
 ): Promise<ResumeVersionSnapshot> {
-  const record = await requireExistingResumeRecord(userId, resumeId);
-
-  return createResumeVersionSnapshotFromRecord(record);
+  return db.transaction(async transaction => {
+    const record = await lockActiveResume(transaction, userId, resumeId);
+    return mapResumeVersionRow(await createHistorySnapshot(transaction, record, "retained", await retainedHistoryLimit()));
+  });
 }
 
 export async function restoreResumeVersion(params: {
@@ -901,13 +893,14 @@ export async function restoreResumeVersion(params: {
   snapshotId: string;
   version: number;
 }): Promise<ResumeRecord> {
-  const current = await requireExistingResumeRecord(params.userId, params.resumeId);
+  return db.transaction(async transaction => {
+  const current = await lockActiveResume(transaction, params.userId, params.resumeId);
 
   if (current.version !== params.version) {
     throw new ResumeVersionConflictError(current.version);
   }
 
-  const rows = await db
+  const rows = await transaction
     .select()
     .from(resumeVersions)
     .where(
@@ -925,12 +918,21 @@ export async function restoreResumeVersion(params: {
   }
 
   // A restore is reversible: persist the current document before replacing it.
-  await createResumeVersionSnapshotFromRecord(current);
+  await createHistorySnapshot(transaction, current, "retained", await retainedHistoryLimit());
 
-  return saveResumeRecord({
+  return saveResumeRecordWithExecutor(transaction, {
     userId: params.userId,
     resumeId: params.resumeId,
     version: params.version,
     document: snapshot.document,
   });
+  });
+}
+
+export async function getAutosaveSnapshot(userId: string, resumeId: string) {
+  await requireExistingResumeRecord(userId, resumeId);
+  const [row] = await db.select().from(resumeVersions).where(and(
+    eq(resumeVersions.userId, userId), eq(resumeVersions.resumeId, resumeId), eq(resumeVersions.kind, "autosave"),
+  )).limit(1);
+  return row ? mapResumeVersionRow(row) : null;
 }

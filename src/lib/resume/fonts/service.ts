@@ -1,10 +1,11 @@
 import { db } from "@/db";
 import { getResumeFontPreset } from "@/domain/resume/font-presets";
 import {
-  getResumeRecord,
-  ResumeNotFoundError,
+  lockOwnedResume,
   saveResumeRecordWithExecutor,
 } from "@/lib/resume/repository";
+import { validateResumeDocument } from "@/domain/resume/validation";
+import { ResumeTrashedError } from "@/lib/resume/trash/errors";
 
 import {
   InvalidFontPresetError,
@@ -25,13 +26,9 @@ export async function applyResumeFontPreset(input: {
   }
 
   return db.transaction(async (transaction) => {
-    const resume = await getResumeRecord(input.userId, input.resumeId);
-
-    if (!resume) {
-      throw new ResumeNotFoundError(input.resumeId);
-    }
-
-    const document = structuredClone(resume.document);
+    const resume = await lockOwnedResume(transaction, input.userId, input.resumeId);
+    if (resume.deletedAt) throw new ResumeTrashedError();
+    const document = structuredClone(validateResumeDocument(resume.document));
     document.settings.typography.fontFamily = preset.fontFamily;
 
     const updated = await saveResumeRecordWithExecutor(transaction, {
