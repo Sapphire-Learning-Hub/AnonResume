@@ -5,6 +5,7 @@ import {
   CheckSquareOutlined,
   CloudServerOutlined,
   DashboardOutlined,
+  DeleteOutlined,
   FileTextOutlined,
   FontSizeOutlined,
   LockOutlined,
@@ -358,6 +359,7 @@ const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
   roles: <SafetyCertificateOutlined />,
   security: <LockOutlined />,
   system: <CloudServerOutlined />,
+  trash: <DeleteOutlined />,
   users: <TeamOutlined />,
 };
 

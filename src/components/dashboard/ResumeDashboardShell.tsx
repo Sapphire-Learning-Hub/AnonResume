@@ -872,7 +872,6 @@ export function ResumeDashboardShell({
                   value={activeSearchQuery}
                 />
               </form>
-              <AppRouteLink href="/app/trash">{t("trash.navigation")}</AppRouteLink>
             </div>
             <span aria-live="polite" className={styles.catalogCount}>
               {t("dashboard.resumeCount", {

@@ -55,11 +55,15 @@ describe("AppShell", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders route children inside persistent workbench chrome", () => {
+  it.each([
+    ["/app/fonts", "字体市场"],
+    ["/app/trash", "回收站"],
+  ])("renders route children and identifies the active %s navigation entry", (pathname, label) => {
+    navigationState.pathname = pathname;
     renderShell();
 
     expect(screen.getByTestId("route-child")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "字体市场" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: label })).toHaveAttribute(
       "aria-current",
       "page",
     );

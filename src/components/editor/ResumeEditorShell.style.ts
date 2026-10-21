@@ -232,15 +232,17 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     display: grid;
     min-width: 0;
     gap: 3px;
-
-    strong {
-      color: ${token.colorText};
-    }
-
-    span {
-      color: ${token.colorTextSecondary};
-      font-size: 12px;
-    }
+  `,
+  versionHistoryHeading: css`
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    color: ${token.colorText};
+  `,
+  versionHistoryTimestamp: css`
+    color: ${token.colorTextSecondary};
+    font-size: 12px;
   `,
   versionHistoryActions: css`
     display: flex;

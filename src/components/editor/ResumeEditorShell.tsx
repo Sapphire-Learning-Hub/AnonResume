@@ -3402,9 +3402,15 @@ export function ResumeEditorShell({
             {[...(autosaveSnapshot ? [autosaveSnapshot] : []), ...versionSnapshots].map((snapshot) => (
               <div className={styles.versionHistoryItem} key={snapshot.id}>
                 <div className={styles.versionHistoryMeta}>
-                  {snapshot.id === autosaveSnapshot?.id ? <strong>{t("editor.autosaveSnapshot")}</strong> : null}
-                  <strong>{t("editor.versionLabel", { version: snapshot.version })}</strong>
-                  <span>{formatVersionTimestamp(snapshot.createdAt, locale)}</span>
+                  <div className={styles.versionHistoryHeading}>
+                    <strong>{t("editor.versionLabel", { version: snapshot.version })}</strong>
+                    {snapshot.id === autosaveSnapshot?.id ? (
+                      <Tag>{t("editor.autosaveSnapshot")}</Tag>
+                    ) : null}
+                  </div>
+                  <span className={styles.versionHistoryTimestamp}>
+                    {formatVersionTimestamp(snapshot.createdAt, locale)}
+                  </span>
                 </div>
                 <div className={styles.versionHistoryActions}>
                   <Button

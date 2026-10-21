@@ -19,6 +19,7 @@ export type AppNavigationIcon =
   | "roles"
   | "security"
   | "system"
+  | "trash"
   | "users";
 
 export interface AppNavigationItem {
@@ -165,6 +166,12 @@ export function buildAppNavigation(
           icon: "resumes",
           id: "resumes",
           label: translate("dashboard.resumeList"),
+        },
+        {
+          href: "/app/trash",
+          icon: "trash",
+          id: "trash",
+          label: translate("trash.navigation"),
         },
         {
           href: "/app/fonts",
