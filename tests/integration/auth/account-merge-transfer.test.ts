@@ -431,6 +431,10 @@ describe("account merge transfer", () => {
 
   it("moves durable ownership while retaining only the primary identity and settings", async () => {
     fixture = await createFixture();
+    const deletedAt = new Date(fixture.now.getTime() - 86_400_000);
+    const purgeAfter = new Date(deletedAt.getTime() + 30 * 86_400_000);
+    await db.update(resumes).set({ deletedAt, purgeAfter, published: false }).where(eq(resumes.id, fixture.secondaryResumeId));
+    await db.update(resumeVersions).set({ kind: "autosave" }).where(eq(resumeVersions.id, fixture.versionId));
     const originalCiphertext = Buffer.from("secondary-secret");
     const initialGitHubOwner = await getDatabasePool().query<{
       userId: string;
@@ -447,9 +451,7 @@ describe("account merge transfer", () => {
     })).resolves.toEqual({ state: "completed" });
 
     expect(await getOwnedResumeReview({ userId: fixture.secondary.id, reviewId: fixture.reviewId })).toBeNull();
-    expect(await getOwnedResumeReview({ userId: fixture.primary.id, reviewId: fixture.reviewId })).toMatchObject({
-      modelName: "Historical review model", report: { score: 75 },
-    });
+    expect(await getOwnedResumeReview({ userId: fixture.primary.id, reviewId: fixture.reviewId })).toBeNull();
     const exported = await loadAccountExportData(fixture.primary.id);
     expect(exported.reviews).toEqual(expect.arrayContaining([expect.objectContaining({ id: fixture.reviewId, report: expect.objectContaining({ score: 75 }) })]));
 
@@ -503,20 +505,24 @@ describe("account merge transfer", () => {
       id: resumes.id,
       userId: resumes.userId,
       slug: resumes.slug,
+      deletedAt: resumes.deletedAt,
+      purgeAfter: resumes.purgeAfter,
     }).from(resumes).where(eq(resumes.id, fixture.secondaryResumeId)))
       .resolves.toEqual([{
         id: fixture.secondaryResumeId,
         userId: fixture.primary.id,
         slug: fixture.secondarySlug,
+        deletedAt,
+        purgeAfter,
       }]);
     await expect(db.select().from(resumes).where(eq(
       resumes.id,
       fixture.onboardingResumeId,
     ))).resolves.toHaveLength(0);
-    await expect(db.select({ userId: resumeVersions.userId }).from(
+    await expect(db.select({ userId: resumeVersions.userId, kind: resumeVersions.kind }).from(
       resumeVersions,
     ).where(eq(resumeVersions.id, fixture.versionId))).resolves.toEqual([
-      { userId: fixture.primary.id },
+      { userId: fixture.primary.id, kind: "autosave" },
     ]);
     await expect(db.select({
       resumeUserId: pdfExportJobs.resumeUserId,

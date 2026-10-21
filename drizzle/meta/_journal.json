@@ -309,6 +309,13 @@
       "when": 1792426219766,
       "tag": "0043_hard_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792502940428,
+      "tag": "0044_lush_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

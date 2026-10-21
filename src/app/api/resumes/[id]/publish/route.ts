@@ -1,4 +1,5 @@
 import { withRequestLogging } from "@/lib/observability/http";
+import { withResumeLifecycleErrors } from "@/lib/resume/trash/http";
 
 import { NextResponse } from "next/server";
 
@@ -47,4 +48,4 @@ async function postHandler(
   }
 }
 
-export const POST = withRequestLogging("/api/resumes/[id]/publish", postHandler);
+export const POST = withRequestLogging("/api/resumes/[id]/publish", withResumeLifecycleErrors(postHandler));

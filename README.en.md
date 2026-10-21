@@ -143,6 +143,8 @@ Database structures are changed only through Better Auth and Drizzle migrations.
 
 ## Production Deployment
 
+Releases that introduce resume Trash and automatic restore points require database migrations before switching Web and all Workers together. Existing records keep their state. New standard-resume deletions are retained for 30 days and cleaned in batches by the Web maintenance loop; unfinished tasks or unsettled usage defer physical cleanup. Once Trash contains data, do not directly roll back to an older application that lacks lifecycle filtering, as it may expose trashed content. Stop service and assess compatibility before rollback; do not remove lifecycle fields to bypass this restriction.
+
 Docker Compose is the recommended quick-start path for new installations. The source deployment below remains supported when operators need direct process control, systemd Credentials, or integration with an existing host operations model.
 
 Install locked dependencies and create the production build:

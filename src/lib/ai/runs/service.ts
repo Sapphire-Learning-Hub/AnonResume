@@ -362,6 +362,7 @@ export async function prepareAiRun(input: {
       and(
         eq(resumes.userId, aiConversations.userId),
         eq(resumes.id, aiConversations.resumeId),
+        isNull(resumes.deletedAt),
       ),
     )
     .innerJoin(aiModels, eq(aiModels.id, aiConversations.modelId))
@@ -1628,7 +1629,8 @@ export async function getAiRunSnapshot(input: {
       diagnosticContext: aiRuns.diagnosticContext,
     })
     .from(aiRuns)
-    .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.userId, input.userId)))
+    .innerJoin(resumes, and(eq(resumes.id, aiRuns.resumeId), eq(resumes.userId, aiRuns.userId)))
+    .where(and(eq(aiRuns.id, input.runId), eq(aiRuns.userId, input.userId), isNull(resumes.deletedAt)))
     .limit(1);
   if (!run) return null;
   const { diagnosticContext, ...result } = run;

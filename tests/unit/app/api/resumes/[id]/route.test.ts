@@ -5,6 +5,7 @@ import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import {
   createGeneratedResumeRecord,
   createResumeRecord,
+  deleteResumeRecord,
   getResumeRecord,
   resetResumeRepository,
   saveResumeRecord,
@@ -55,6 +56,17 @@ describe("resume route", () => {
     const body = await response.json();
 
     expect(body.error).toBe("unauthorized");
+  });
+
+  it("rejects stale editor saves with an actionable trash error", async () => {
+    const resume = await getResumeRecord("user-demo", "resume-foundation");
+    await deleteResumeRecord("user-demo", "resume-foundation");
+    const response = await PUT(new Request("http://localhost/api/resumes/resume-foundation", {
+      method: "PUT", headers: { origin: "http://localhost", "content-type": "application/json" },
+      body: JSON.stringify({ version: resume!.version, document: resume!.document }),
+    }), { params: Promise.resolve({ id: "resume-foundation" }) });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "resume_trashed" });
   });
 
   it("returns a stored resume record", async () => {

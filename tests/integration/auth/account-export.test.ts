@@ -62,6 +62,15 @@ describe("account Excel export", () => {
       version: 1,
       document,
     });
+    const retainedTrash = structuredClone(document);
+    retainedTrash.meta.title = "RECOVERABLE-TRASH";
+    const expiredTrash = structuredClone(document);
+    expiredTrash.meta.title = "EXPIRED-PRIVATE-CONTENT";
+    await db.insert(resumes).values([
+      { id: `${resumeId}-trash`, userId, name: retainedTrash.meta.title, summary: "", document: retainedTrash, deletedAt: new Date(), purgeAfter: new Date(Date.now() + 86_400_000) },
+      { id: `${resumeId}-expired`, userId, name: expiredTrash.meta.title, summary: "", document: expiredTrash, deletedAt: new Date("2020-01-01Z"), purgeAfter: new Date("2020-01-31Z") },
+    ]);
+    await db.insert(resumeVersions).values({ id: randomUUID(), userId, resumeId: `${resumeId}-expired`, version: 1, document: expiredTrash });
     await db.insert(userInvitations).values({
       inviterUserId: userId,
       invitedEmail: "friend@example.com",
@@ -102,6 +111,9 @@ describe("account Excel export", () => {
       .join("\n");
     expect(values).toContain("Export User");
     expect(values).toContain("导出测试简历");
+    expect(values).toContain("RECOVERABLE-TRASH");
+    expect(values).toContain("回收站");
+    expect(values).not.toContain("EXPIRED-PRIVATE-CONTENT");
     expect(values).toContain("friend@example.com");
     expect(values).toContain("noto-serif-sc");
     expect(values).not.toContain(credentialSecret);

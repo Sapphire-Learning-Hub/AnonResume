@@ -5,9 +5,10 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-import { and, asc, count, eq, gte, inArray, lt, min, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull, lt, min, or, sql } from "drizzle-orm";
 
-import { db, pdfExportJobs } from "@/db";
+import { db, pdfExportJobs, resumes } from "@/db";
+import type { ResumeTransaction } from "@/lib/resume/transaction";
 import { getDiagnosticContext, taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { withTaskDiagnostics } from "@/lib/observability/diagnostics/tasks";
 import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
@@ -23,6 +24,14 @@ import {
 import { getLogger } from "@/lib/observability/logging";
 
 const PDF_QUEUE_LOCK = "anonresume:pdf-export-capacity";
+const activePdfResume = () => sql`EXISTS (SELECT 1 FROM ${resumes} WHERE ${resumes.userId} = ${pdfExportJobs.resumeUserId} AND ${resumes.id} = ${pdfExportJobs.resumeId} AND ${resumes.deletedAt} IS NULL)`;
+
+async function lockPdfResume(transaction: ResumeTransaction, userId: string, resumeId: string) {
+  const [row] = await transaction.select({ id: resumes.id }).from(resumes)
+    .where(and(eq(resumes.userId, userId), eq(resumes.id, resumeId), isNull(resumes.deletedAt)))
+    .for("share").limit(1);
+  if (!row) throw new PdfExportNotFoundError(resumeId);
+}
 const pdfLog = getLogger("anonresume.pdf");
 const PDF_QUEUE_STATES = [
   "queued",
@@ -158,7 +167,7 @@ async function requireAccessibleJob(
   const rows = await db
     .select()
     .from(pdfExportJobs)
-    .where(eq(pdfExportJobs.id, access.jobId))
+    .where(and(eq(pdfExportJobs.id, access.jobId), activePdfResume()))
     .limit(1);
   const row = rows[0];
 
@@ -197,6 +206,7 @@ export async function enqueuePdfExport(
   const accessToken = randomBytes(32).toString("base64url");
 
   const [job] = await db.transaction(async (transaction) => {
+    await lockPdfResume(transaction, params.resumeUserId, params.resumeId);
     await transaction.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${PDF_QUEUE_LOCK}))`,
     );
@@ -389,6 +399,10 @@ export async function adminRetryPdfExport(
   configuration: Readonly<PdfExportConfiguration>,
 ) {
   return db.transaction(async (transaction) => {
+    const [target] = await transaction.select({ userId: pdfExportJobs.resumeUserId, resumeId: pdfExportJobs.resumeId })
+      .from(pdfExportJobs).where(eq(pdfExportJobs.id, jobId)).limit(1);
+    if (!target) throw new PdfExportNotFoundError(jobId);
+    await lockPdfResume(transaction, target.userId, target.resumeId);
     await transaction.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${PDF_QUEUE_LOCK}))`,
     );
@@ -510,7 +524,7 @@ export async function claimPdfExportJobs(params: {
     const candidates = await transaction
       .select({ id: pdfExportJobs.id })
       .from(pdfExportJobs)
-      .where(eq(pdfExportJobs.status, "queued"))
+      .where(and(eq(pdfExportJobs.status, "queued"), eq(pdfExportJobs.cancelRequested, false), activePdfResume()))
       .orderBy(asc(pdfExportJobs.createdAt), asc(pdfExportJobs.id))
       .limit(available)
       .for("update", { skipLocked: true });
@@ -664,7 +678,7 @@ export async function getPdfExportDocumentForWorker(
       createdAt: pdfExportJobs.createdAt,
     })
     .from(pdfExportJobs)
-    .where(eq(pdfExportJobs.id, params.jobId))
+    .where(and(eq(pdfExportJobs.id, params.jobId), eq(pdfExportJobs.cancelRequested, false), activePdfResume()))
     .limit(1);
   const row = rows[0];
 

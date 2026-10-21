@@ -86,7 +86,7 @@ import { ResumeVersionDiffPrompt } from "@/components/editor/ResumeVersionDiffPr
 import { DraftInput } from "@/components/editor/inspector/DraftInput";
 import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
-import { AppRouteLoadingHold } from "@/components/ui/AppRouteLoading";
+import { AppRouteLink, AppRouteLoadingHold } from "@/components/ui/AppRouteLoading";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
@@ -149,6 +149,8 @@ import type { ResumeMarkdownDraftRepository } from "@/lib/resume/markdown-drafts
 import {
   exportResumePdfDocument,
   createResumeVersionSnapshot,
+  ResumeTrashedClientError,
+  ResumeSnapshotUnavailableClientError,
   fetchCurrentResumeDocument,
   fetchResumeVersionSnapshot,
   fetchResumeVersionSnapshots,
@@ -385,12 +387,12 @@ export function ResumeEditorShell({
   loadVersionSnapshots?: (
     resumeId: string,
     request: { page: number; pageSize: number },
-  ) => Promise<PageResult<ResumeVersionSnapshotSummary>>;
+  ) => Promise<PageResult<ResumeVersionSnapshotSummary> & { autosave?: ResumeVersionSnapshotSummary | null }>;
   loadVersionSnapshot?: (params: {
     resumeId: string;
     snapshotId: string;
   }) => Promise<ResumeVersionSnapshotDetail>;
-  createVersionSnapshot?: (resumeId: string) => Promise<ResumeVersionSnapshotSummary>;
+  createVersionSnapshot?: (resumeId: string, sourceSnapshotId?: string) => Promise<ResumeVersionSnapshotSummary>;
   restoreVersion?: (params: {
     resumeId: string;
     snapshotId: string;
@@ -479,6 +481,7 @@ export function ResumeEditorShell({
   );
 
   const flushSave = useCallback(async () => {
+    if (store.getState().saveBlockedReason) throw new ResumeTrashedClientError();
     if (saveInFlightRef.current) {
       await saveInFlightRef.current;
 
@@ -514,7 +517,9 @@ export function ResumeEditorShell({
           await deleteLocalDraft(snapshot.resumeId);
         }
       } catch (error) {
-        if (error instanceof ResumeVersionConflictClientError) {
+        if (error instanceof ResumeTrashedClientError) {
+          store.getState().setResumeTrashed();
+        } else if (error instanceof ResumeVersionConflictClientError) {
           store.getState().setSaveConflict({
             currentVersion: error.currentVersion,
           });
@@ -628,6 +633,7 @@ export function ResumeEditorShell({
   const saveValidation = useStore(store, (state) => state.saveValidation);
   const selection = useStore(store, (state) => state.selection);
   const saveStatus = useStore(store, (state) => state.saveStatus);
+  const saveBlockedReason = useStore(store, (state) => state.saveBlockedReason);
   const saveDiagnosticId = useStore(store, (state) => state.saveDiagnosticId);
   const version = useStore(store, (state) => state.version);
   const history = useStore(store, (state) => state.history);
@@ -695,6 +701,7 @@ export function ResumeEditorShell({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [versionSnapshots, setVersionSnapshots] = useState<ResumeVersionSnapshotSummary[]>([]);
+  const [autosaveSnapshot, setAutosaveSnapshot] = useState<ResumeVersionSnapshotSummary | null>(null);
   const [versionHistoryPage, setVersionHistoryPage] = useState({
     page: 1,
     pageSize: 20,
@@ -911,8 +918,17 @@ export function ResumeEditorShell({
   }, [localDraftUnavailable, notification, t]);
 
   useEffect(() => {
+    if (!saveBlockedReason) return;
+    const key = "editor-resume-trashed";
+    notification.warning({ key, duration: false, title: t("editor.resumeTrashed"),
+      description: t("editor.resumeTrashedDescription"),
+      actions: <AppRouteLink href="/app">{t("common.back")}</AppRouteLink> });
+    return () => notification.destroy(key);
+  }, [notification, saveBlockedReason, t]);
+
+  useEffect(() => {
     const key = "editor-autosave-error";
-    if (saveStatus !== "error") {
+    if (saveStatus !== "error" || saveBlockedReason) {
       notification.destroy(key);
       return;
     }
@@ -930,7 +946,7 @@ export function ResumeEditorShell({
       description: <DiagnosticReference diagnosticId={saveDiagnosticId} />,
     });
     return () => notification.destroy(key);
-  }, [handleManualSave, notification, saveDiagnosticId, saveStatus, t]);
+  }, [handleManualSave, notification, saveBlockedReason, saveDiagnosticId, saveStatus, t]);
 
   useEffect(() => {
     function syncFullscreenState() {
@@ -1358,6 +1374,7 @@ export function ResumeEditorShell({
         : t("editor.contentEditing");
 
   async function handlePublish() {
+    if (saveBlockedReason) return;
     setPublicationBusy(true);
 
     try {
@@ -1369,7 +1386,11 @@ export function ResumeEditorShell({
       const result = await resolvedPublishDocument({ resumeId });
 
       setPublishedSlug(result.slug);
-    } catch {
+    } catch (error) {
+      if (error instanceof ResumeTrashedClientError) {
+        store.getState().setResumeTrashed();
+        return;
+      }
       toast.error({
         content: t("editor.publishError"),
         key: "editor-publish-error",
@@ -1413,17 +1434,22 @@ export function ResumeEditorShell({
   }
 
   async function handleUnpublish() {
+    if (saveBlockedReason) return;
     setPublicationBusy(true);
 
     try {
       await resolvedUnpublishDocument({ resumeId });
       setPublishedSlug(undefined);
+    } catch (error) {
+      if (error instanceof ResumeTrashedClientError) store.getState().setResumeTrashed();
+      else toast.error({ key: "editor-unpublish-error", content: t("editor.unpublishError") });
     } finally {
       setPublicationBusy(false);
     }
   }
 
   async function handleExportPdf() {
+    if (saveBlockedReason) return;
     setPdfBusy(true);
 
     try {
@@ -1433,6 +1459,9 @@ export function ResumeEditorShell({
       }
 
       await resolvedExportPdfDocument({ resumeId });
+    } catch (error) {
+      if (error instanceof ResumeTrashedClientError) store.getState().setResumeTrashed();
+      else toast.error({ key: "editor-pdf-error", content: t("editor.pdfError") });
     } finally {
       setPdfBusy(false);
     }
@@ -1464,6 +1493,7 @@ export function ResumeEditorShell({
     });
 
     setVersionSnapshots(result.items);
+    setAutosaveSnapshot(result.autosave ?? null);
     setVersionHistoryPage({
       page: result.page,
       pageSize: result.pageSize,
@@ -1492,6 +1522,7 @@ export function ResumeEditorShell({
   }
 
   async function handleCreateVersionSnapshot() {
+    if (saveBlockedReason) return;
     setVersionHistoryBusy(true);
     setVersionHistoryError(false);
 
@@ -1542,10 +1573,13 @@ export function ResumeEditorShell({
       });
 
       setVersionDiffSnapshot(snapshot);
-    } catch {
+    } catch (error) {
       setVersionDiffOpen(false);
+      if (error instanceof ResumeSnapshotUnavailableClientError) {
+        await loadVersionHistory(versionHistoryPage.page).catch(() => setVersionHistoryError(true));
+      }
       toast.error({
-        content: t("editor.diff.historyLoadError"),
+        content: t(error instanceof ResumeSnapshotUnavailableClientError ? "editor.snapshotExpired" : "editor.diff.historyLoadError"),
         key: "editor-version-diff-error",
       });
     } finally {
@@ -1554,17 +1588,22 @@ export function ResumeEditorShell({
   }
 
   async function handleRestoreVersion(snapshotId: string) {
+    if (saveBlockedReason) return;
     setVersionHistoryBusy(true);
     setVersionHistoryError(false);
 
     try {
+      let targetId = snapshotId;
+      if (autosaveSnapshot?.id === snapshotId && store.getState().dirty) {
+        targetId = (await resolvedCreateVersionSnapshot(resumeId, snapshotId)).id;
+      }
       if (store.getState().dirty) {
         await flushSave();
       }
 
       const restored = await resolvedRestoreVersion({
         resumeId,
-        snapshotId,
+        snapshotId: targetId,
         version: store.getState().version,
       });
 
@@ -1572,6 +1611,11 @@ export function ResumeEditorShell({
       await deleteLocalDraft(resumeId);
       setVersionHistoryOpen(false);
     } catch (error) {
+      if (error instanceof ResumeTrashedClientError) store.getState().setResumeTrashed();
+      if (error instanceof ResumeSnapshotUnavailableClientError) {
+        setVersionDiffOpen(false);
+        await loadVersionHistory(1).catch(() => setVersionHistoryError(true));
+      }
       if (error instanceof ResumeVersionConflictClientError) {
         store.getState().setSaveConflict({
           currentVersion: error.currentVersion,
@@ -1580,7 +1624,7 @@ export function ResumeEditorShell({
 
       setVersionHistoryError(true);
       toast.error({
-        content: t("editor.versionHistoryError"),
+        content: t(error instanceof ResumeSnapshotUnavailableClientError ? "editor.snapshotExpired" : "editor.versionHistoryError"),
         key: "editor-version-history-error",
       });
     } finally {
@@ -2870,7 +2914,7 @@ export function ResumeEditorShell({
             >
               <Button
                 aria-label={t("editor.publicActionsMore")}
-                disabled={publicationBusy}
+                disabled={publicationBusy || Boolean(saveBlockedReason)}
                 icon={<DownOutlined />}
               />
             </Dropdown>
@@ -2878,7 +2922,7 @@ export function ResumeEditorShell({
         ) : (
           <Button
             data-testid="resume-publish-action"
-            disabled={publicationBusy}
+            disabled={publicationBusy || Boolean(saveBlockedReason)}
             type="primary"
             onClick={() => void handlePublish()}
           >
@@ -2899,7 +2943,7 @@ export function ResumeEditorShell({
         </Tooltip>
         <Space.Compact>
           <Button
-            disabled={pdfBusy}
+            disabled={pdfBusy || Boolean(saveBlockedReason)}
             loading={pdfBusy}
             type="primary"
             onClick={() => void handleExportPdf()}
@@ -2919,7 +2963,7 @@ export function ResumeEditorShell({
           >
             <Button
               aria-label={t("editor.exportFormats")}
-              disabled={pdfBusy}
+              disabled={pdfBusy || Boolean(saveBlockedReason)}
               icon={<DownOutlined />}
               type="primary"
             />
@@ -3347,7 +3391,7 @@ export function ResumeEditorShell({
           </p>
           <Button
             block
-            disabled={versionHistoryBusy}
+            disabled={versionHistoryBusy || Boolean(saveBlockedReason)}
             loading={versionHistoryBusy}
             type="primary"
             onClick={() => void handleCreateVersionSnapshot()}
@@ -3355,11 +3399,18 @@ export function ResumeEditorShell({
             {t("editor.createVersionSnapshot")}
           </Button>
           <div className={styles.versionHistoryList}>
-            {versionSnapshots.map((snapshot) => (
+            {[...(autosaveSnapshot ? [autosaveSnapshot] : []), ...versionSnapshots].map((snapshot) => (
               <div className={styles.versionHistoryItem} key={snapshot.id}>
                 <div className={styles.versionHistoryMeta}>
-                  <strong>{t("editor.versionLabel", { version: snapshot.version })}</strong>
-                  <span>{formatVersionTimestamp(snapshot.createdAt, locale)}</span>
+                  <div className={styles.versionHistoryHeading}>
+                    <strong>{t("editor.versionLabel", { version: snapshot.version })}</strong>
+                    {snapshot.id === autosaveSnapshot?.id ? (
+                      <Tag>{t("editor.autosaveSnapshot")}</Tag>
+                    ) : null}
+                  </div>
+                  <span className={styles.versionHistoryTimestamp}>
+                    {formatVersionTimestamp(snapshot.createdAt, locale)}
+                  </span>
                 </div>
                 <div className={styles.versionHistoryActions}>
                   <Button
@@ -3375,7 +3426,7 @@ export function ResumeEditorShell({
                     title={t("editor.restoreVersionTitle")}
                     onConfirm={() => handleRestoreVersion(snapshot.id)}
                   >
-                    <Button disabled={versionHistoryBusy}>
+                    <Button disabled={versionHistoryBusy || Boolean(saveBlockedReason)}>
                       {t("editor.restoreVersion")}
                     </Button>
                   </Popconfirm>
@@ -3393,7 +3444,7 @@ export function ResumeEditorShell({
               onChange={(page) => void handleVersionHistoryPageChange(page)}
             />
           ) : null}
-          {!versionHistoryBusy && !versionHistoryError && versionSnapshots.length === 0 ? (
+          {!versionHistoryBusy && !versionHistoryError && !autosaveSnapshot && versionSnapshots.length === 0 ? (
             <p className={styles.versionHistoryDescription}>
               {t("editor.versionHistoryEmpty")}
             </p>

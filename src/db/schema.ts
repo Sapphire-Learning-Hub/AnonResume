@@ -64,6 +64,8 @@ const resumeColumns = {
   schemaVersion: integer("schema_version").notNull().default(1),
   version: integer("version").notNull().default(1),
   published: boolean("published").notNull().default(false),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  purgeAfter: timestamp("purge_after", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -76,6 +78,9 @@ export const resumes =
         }),
         uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        check("resumes_trash_lifecycle_check", sql`(${table.deletedAt} IS NULL AND ${table.purgeAfter} IS NULL) OR (${table.deletedAt} IS NOT NULL AND ${table.purgeAfter} IS NOT NULL AND ${table.purgeAfter} > ${table.deletedAt} AND ${table.published} = false AND ${table.kind} = 'standard')`),
+        index("resumes_trash_owner_idx").on(table.userId, table.deletedAt.desc(), table.id).where(sql`${table.deletedAt} IS NOT NULL`),
+        index("resumes_trash_due_idx").on(table.purgeAfter, table.id).where(sql`${table.deletedAt} IS NOT NULL`),
         check(
           "resumes_kind_check",
           sql`${table.kind} IN ('standard', 'onboarding')`,
@@ -92,6 +97,9 @@ export const resumes =
         }),
         uniqueIndex("resumes_id_unique").on(table.id),
         uniqueIndex("resumes_slug_unique").on(table.slug),
+        check("resumes_trash_lifecycle_check", sql`(${table.deletedAt} IS NULL AND ${table.purgeAfter} IS NULL) OR (${table.deletedAt} IS NOT NULL AND ${table.purgeAfter} IS NOT NULL AND ${table.purgeAfter} > ${table.deletedAt} AND ${table.published} = false AND ${table.kind} = 'standard')`),
+        index("resumes_trash_owner_idx").on(table.userId, table.deletedAt.desc(), table.id).where(sql`${table.deletedAt} IS NOT NULL`),
+        index("resumes_trash_due_idx").on(table.purgeAfter, table.id).where(sql`${table.deletedAt} IS NOT NULL`),
         check(
           "resumes_kind_check",
           sql`${table.kind} IN ('standard', 'onboarding')`,
@@ -184,6 +192,7 @@ const resumeVersionColumns = {
   userId: text("user_id").notNull(),
   resumeId: text("resume_id").notNull(),
   version: integer("version").notNull(),
+  kind: text("kind").$type<"retained" | "autosave">().notNull().default("retained"),
   document: jsonb("document").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 };
@@ -191,6 +200,8 @@ const resumeVersionColumns = {
 export const resumeVersions =
   schemaName === "public"
     ? pgTable("resume_versions", resumeVersionColumns, (table) => [
+        check("resume_versions_kind_check", sql`${table.kind} IN ('retained', 'autosave')`),
+        uniqueIndex("resume_versions_autosave_unique").on(table.userId, table.resumeId).where(sql`${table.kind} = 'autosave'`),
         primaryKey({
           columns: [table.id],
         }),
@@ -207,6 +218,8 @@ export const resumeVersions =
         ),
       ])
     : pgSchema(schemaName).table("resume_versions", resumeVersionColumns, (table) => [
+        check("resume_versions_kind_check", sql`${table.kind} IN ('retained', 'autosave')`),
+        uniqueIndex("resume_versions_autosave_unique").on(table.userId, table.resumeId).where(sql`${table.kind} = 'autosave'`),
         primaryKey({
           columns: [table.id],
         }),

@@ -436,7 +436,7 @@ export async function getAdminOverview() {
     failed: string;
   }>(`SELECT
       (SELECT count(*) FROM "user")::text AS users,
-      (SELECT count(*) FROM ${schema}.resumes)::text AS resumes,
+      (SELECT count(*) FROM ${schema}.resumes WHERE deleted_at IS NULL)::text AS resumes,
       (SELECT count(*) FROM ${schema}.resumes WHERE published)::text AS published,
       (SELECT count(*) FROM ${schema}.pdf_export_jobs WHERE status IN ('queued', 'running'))::text AS queued,
       (SELECT count(*) FROM ${schema}.pdf_export_jobs WHERE status = 'failed')::text AS failed`);
@@ -487,7 +487,7 @@ export async function listAdminUsers(request: AdminListRequest) {
        )
        AND principal.kind = 'delegated_admin') AS "invitationPending",
       (SELECT count(*)::int FROM ${schema}.resumes AS resume
-        WHERE resume.user_id = identity.id) AS resumes,
+        WHERE resume.user_id = identity.id AND resume.deleted_at IS NULL) AS resumes,
       principal.kind AS "principalKind",
       coalesce(assigned_roles.roles, '[]'::jsonb) AS roles,
       coalesce(lifecycle.status, 'active') AS "lifecycleStatus",
@@ -601,6 +601,7 @@ export async function listAdminResumeMetadata(request: AdminListRequest) {
     ["resume.name", "resume.summary", "resume.custom_summary", "identity.email"],
     normalizeSearchQuery(request.query),
   );
+  const activeClause = search.clause ? `${search.clause} AND resume.deleted_at IS NULL` : "WHERE resume.deleted_at IS NULL";
 
   return runPagedQuery<{
     id: string;
@@ -616,14 +617,14 @@ export async function listAdminResumeMetadata(request: AdminListRequest) {
     `SELECT count(*)::text AS total
        FROM ${schema}.resumes AS resume
        JOIN "user" AS identity ON identity.id = resume.user_id
-       ${search.clause}`,
+       ${activeClause}`,
     `SELECT resume.id, resume.user_id AS "userId", resume.name,
       coalesce(resume.custom_summary, resume.summary) AS summary,
       resume.published, resume.slug, resume.updated_at AS "updatedAt",
       identity.email AS "ownerEmail"
     FROM ${schema}.resumes AS resume
     JOIN "user" AS identity ON identity.id = resume.user_id
-    ${search.clause}
+    ${activeClause}
     ORDER BY resume.updated_at DESC, resume.user_id ASC, resume.id ASC
     LIMIT $${search.values.length + 1} OFFSET $${search.values.length + 2}`,
     search.values,

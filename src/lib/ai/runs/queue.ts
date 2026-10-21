@@ -1,6 +1,6 @@
-import { and, asc, count, eq, inArray, isNotNull, min } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNotNull, isNull, min, sql } from "drizzle-orm";
 
-import { aiRuns, db } from "@/db";
+import { aiRuns, db, resumes } from "@/db";
 import { decryptPreparedAiRunPayload } from "@/lib/ai/runs/run-payload";
 import type { ClaimedAiRun } from "@/lib/ai/runs/service";
 import type { VersionedSecretKeys } from "@/lib/config/secret-keyring";
@@ -51,6 +51,8 @@ export async function claimQueuedAiRuns(input: {
       .where(
         and(
           eq(aiRuns.status, "queued"),
+          isNull(aiRuns.stopRequestedAt),
+          sql`EXISTS (SELECT 1 FROM ${resumes} WHERE ${resumes.userId} = ${aiRuns.userId} AND ${resumes.id} = ${aiRuns.resumeId} AND ${resumes.deletedAt} IS NULL)`,
           isNotNull(aiRuns.encryptedExecutionPayload),
         ),
       )
@@ -71,7 +73,7 @@ export async function claimQueuedAiRuns(input: {
         ),
         updatedAt: now,
       })
-      .where(and(inArray(aiRuns.id, ids), eq(aiRuns.status, "queued")))
+      .where(and(inArray(aiRuns.id, ids), eq(aiRuns.status, "queued"), isNull(aiRuns.stopRequestedAt)))
       .returning({
         createdAt: aiRuns.createdAt,
         diagnosticContext: aiRuns.diagnosticContext,

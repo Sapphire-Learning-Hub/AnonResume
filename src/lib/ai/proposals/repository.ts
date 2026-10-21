@@ -1,13 +1,14 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { aiProposals, aiRuns, db, resumes } from "@/db";
+import { aiProposals, aiRuns, db } from "@/db";
 import { applySelectedAiChanges } from "@/domain/resume/ai/proposal-apply";
 import { aiResumeProposalSchema } from "@/domain/resume/ai/proposal-schema";
 import { validateResumeDocument } from "@/domain/resume/validation";
 import {
-  buildResumeSummary,
-  RESUME_SCHEMA_VERSION,
+  lockOwnedResume,
+  saveResumeRecordWithExecutor,
 } from "@/lib/resume/repository";
+import { ResumeTrashedError } from "@/lib/resume/trash/errors";
 
 export class AiProposalNotFoundError extends Error {
   constructor() {
@@ -29,6 +30,24 @@ export async function markAiProposalApplied(input: {
   selectedChangeIds: string[];
 }) {
   return db.transaction(async (transaction) => {
+    const [target] = await transaction
+      .select({ resumeId: aiRuns.resumeId })
+      .from(aiProposals)
+      .innerJoin(aiRuns, eq(aiRuns.id, aiProposals.runId))
+      .where(
+        and(
+          eq(aiProposals.id, input.proposalId),
+          eq(aiRuns.userId, input.userId),
+        ),
+      )
+      .limit(1);
+    if (!target) throw new AiProposalNotFoundError();
+    const resume = await lockOwnedResume(
+      transaction,
+      input.userId,
+      target.resumeId,
+    );
+    if (resume.deletedAt) throw new ResumeTrashedError();
     const [row] = await transaction
       .select({
         proposal: aiProposals.proposal,
@@ -54,25 +73,6 @@ export async function markAiProposalApplied(input: {
     if (input.selectedChangeIds.some((id) => !availableIds.has(id))) {
       throw new AiProposalNotFoundError();
     }
-    const [resume] = await transaction
-      .select({
-        customSummary: resumes.customSummary,
-        document: resumes.document,
-        summary: resumes.summary,
-        updatedAt: resumes.updatedAt,
-        version: resumes.version,
-      })
-      .from(resumes)
-      .where(
-        and(
-          eq(resumes.userId, input.userId),
-          eq(resumes.id, row.resumeId),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    if (!resume) throw new AiProposalNotFoundError();
-
     const pendingChangeIds = input.selectedChangeIds.filter(
       (id) => !row.appliedChangeIds.includes(id),
     );
@@ -105,35 +105,12 @@ export async function markAiProposalApplied(input: {
     if (!applyResult.ok) {
       throw new AiProposalConflictError(resume.version);
     }
-    const [updatedResume] = await transaction
-      .update(resumes)
-      .set({
-        name: applyResult.document.meta.title,
-        summary: buildResumeSummary({
-          document: applyResult.document,
-          summary: resume.summary,
-        }),
-        customSummary: resume.customSummary,
-        document: applyResult.document,
-        schemaVersion: RESUME_SCHEMA_VERSION,
-        version: sql`${resumes.version} + 1`,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(resumes.userId, input.userId),
-          eq(resumes.id, row.resumeId),
-          eq(resumes.version, resume.version),
-        ),
-      )
-      .returning({
-        document: resumes.document,
-        version: resumes.version,
-        updatedAt: resumes.updatedAt,
-      });
-    if (!updatedResume) {
-      throw new AiProposalConflictError(resume.version);
-    }
+    const updatedResume = await saveResumeRecordWithExecutor(transaction, {
+      userId: input.userId,
+      resumeId: row.resumeId,
+      version: resume.version,
+      document: applyResult.document,
+    });
     const appliedChangeIds = [
       ...new Set([...row.appliedChangeIds, ...pendingChangeIds]),
     ];
@@ -151,7 +128,7 @@ export async function markAiProposalApplied(input: {
       resume: {
         document: validateResumeDocument(updatedResume.document),
         version: updatedResume.version,
-        updatedAt: updatedResume.updatedAt.getTime(),
+        updatedAt: updatedResume.updatedAt,
       },
     };
   });

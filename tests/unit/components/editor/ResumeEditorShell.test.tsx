@@ -1152,9 +1152,6 @@ describe("ResumeEditorShell", () => {
       pageSize: 20,
     });
     expect(await screen.findByText("版本 3")).toBeInTheDocument();
-    expect(
-      screen.getByText("最多保留 7 个恢复点；超出后会自动移除最早的记录。"),
-    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("创建恢复点") }));
 
@@ -1162,6 +1159,25 @@ describe("ResumeEditorShell", () => {
       expect(createVersionSnapshot).toHaveBeenCalledWith("resume-demo"),
     );
     await waitFor(() => expect(loadVersionSnapshots).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps the rolling recovery point visible independently of retained history pagination", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => false,
+    })));
+    const loadVersionSnapshots = vi.fn(async (_id: string, request: { page: number; pageSize: number }) => ({
+      items: [{ id: `retained-${request.page}`, version: request.page + 1, createdAt: 800 }],
+      autosave: { id: "rolling", version: 1, createdAt: 900 }, page: request.page, pageSize: 20, total: 21, totalPages: 2,
+    }));
+    render(<ResumeEditorShell resumeId="history" initialDocument={createDefaultResumeDocument()} loadVersionSnapshots={loadVersionSnapshots}
+      draftRepository={{ getDraft: async () => undefined, saveDraft: async () => {}, deleteDraft: async () => {} }} />);
+    fireEvent.click(screen.getByRole("button", { name: "历史记录" }));
+    expect(await screen.findByText("上次保存前")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "历史记录" });
+    fireEvent.click(within(dialog).getByTitle("2"));
+    await waitFor(() => expect(loadVersionSnapshots).toHaveBeenCalledWith("history", { page: 2, pageSize: 20 }));
+    expect(screen.getByText("上次保存前")).toBeInTheDocument();
+    expect(screen.getByText("版本 1")).toBeInTheDocument();
   });
 
   it("compares a selected history snapshot with the current editor document", async () => {

@@ -10,12 +10,15 @@ import {
   aiRuns,
   db,
   resumes,
+  resumeVersions,
 } from "@/db";
 import { hashAiContent } from "@/domain/resume/ai/content-hash";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
-import { createAiConversation } from "@/lib/ai/conversations/repository";
+import { createAiConversation, getAiConversation } from "@/lib/ai/conversations/repository";
+import { getAiRunSnapshot } from "@/lib/ai/runs/service";
 import { markAiProposalApplied } from "@/lib/ai/proposals/repository";
 import { encryptAiCredential } from "@/lib/ai/security/credentials";
+import { deleteResumeRecord } from "@/lib/resume/repository";
 
 describe("AI proposal repository", () => {
   it("updates the resume and proposal atomically and retries idempotently", async () => {
@@ -123,6 +126,9 @@ describe("AI proposal repository", () => {
       expect(first.resume).toMatchObject({ version: 2 });
       expect(first.resume.document.sections[0]!.title).toEqual(nextTitle);
       expect(first.proposal.appliedChangeIds).toEqual(["change-title"]);
+      const points = await db.select().from(resumeVersions).where(eq(resumeVersions.resumeId, resumeId));
+      expect(points).toHaveLength(1);
+      expect(points[0]).toMatchObject({ kind: "autosave", document });
 
       const retry = await markAiProposalApplied({
         userId,
@@ -142,6 +148,11 @@ describe("AI proposal repository", () => {
         .where(eq(aiProposals.id, proposalId));
       expect(persistedResume?.version).toBe(2);
       expect(persistedProposal?.appliedChangeIds).toEqual(["change-title"]);
+      await deleteResumeRecord(userId, resumeId);
+      expect(await getAiRunSnapshot({ userId, runId })).toBeNull();
+      await expect(getAiConversation({ userId, conversationId: conversation.id })).rejects.toMatchObject({ name: "AiConversationNotFoundError" });
+      await expect(markAiProposalApplied({ userId, proposalId, selectedChangeIds: ["change-title"] }))
+        .rejects.toMatchObject({ message: "resume_trashed" });
     } finally {
       await db.delete(resumes).where(eq(resumes.id, resumeId));
       await db

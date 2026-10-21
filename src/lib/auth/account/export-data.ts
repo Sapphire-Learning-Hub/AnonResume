@@ -1,4 +1,4 @@
-import { asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
   aiConversations,
@@ -34,6 +34,9 @@ export async function loadAccountExportData(userId: string) {
   );
   const identity = identityResult.rows[0];
   if (!identity) throw new Error("account_not_found");
+  const exportable = db.select({ id: resumes.id }).from(resumes).where(and(
+    eq(resumes.userId, userId), or(isNull(resumes.deletedAt), sql`${resumes.purgeAfter} > now()`),
+  ));
 
   const [
     lifecycle,
@@ -66,9 +69,11 @@ export async function loadAccountExportData(userId: string) {
         document: resumes.document,
         createdAt: resumes.createdAt,
         updatedAt: resumes.updatedAt,
+        deletedAt: resumes.deletedAt,
+        purgeAfter: resumes.purgeAfter,
       })
       .from(resumes)
-      .where(eq(resumes.userId, userId))
+      .where(inArray(resumes.id, exportable))
       .orderBy(asc(resumes.createdAt), asc(resumes.id)),
     db
       .select({
@@ -79,7 +84,7 @@ export async function loadAccountExportData(userId: string) {
         createdAt: resumeVersions.createdAt,
       })
       .from(resumeVersions)
-      .where(eq(resumeVersions.userId, userId))
+      .where(and(eq(resumeVersions.userId, userId), inArray(resumeVersions.resumeId, exportable)))
       .orderBy(
         asc(resumeVersions.resumeId),
         asc(resumeVersions.version),
@@ -106,7 +111,7 @@ export async function loadAccountExportData(userId: string) {
         aiMessages,
         eq(aiMessages.conversationId, aiConversations.id),
       )
-      .where(eq(aiConversations.userId, userId))
+      .where(and(eq(aiConversations.userId, userId), inArray(aiConversations.resumeId, exportable)))
       .orderBy(asc(aiConversations.createdAt), asc(aiMessages.sequence)),
     db
       .select({
@@ -160,7 +165,7 @@ export async function loadAccountExportData(userId: string) {
       .orderBy(asc(userFontPreferences.fontPresetId)),
     db.select({ id: aiResumeReviews.id, resumeId: aiRuns.resumeId, modelName: aiResumeReviews.modelName, input: aiResumeReviews.input, report: aiResumeReviews.report, ignoredIssueIds: aiResumeReviews.ignoredIssueIds, createdAt: aiResumeReviews.createdAt })
       .from(aiResumeReviews).innerJoin(aiRuns, eq(aiRuns.id, aiResumeReviews.runId))
-      .where(eq(aiRuns.userId, userId)).orderBy(asc(aiResumeReviews.createdAt), asc(aiResumeReviews.id)),
+      .where(and(eq(aiRuns.userId, userId), inArray(aiRuns.resumeId, exportable))).orderBy(asc(aiResumeReviews.createdAt), asc(aiResumeReviews.id)),
   ]);
 
   return {

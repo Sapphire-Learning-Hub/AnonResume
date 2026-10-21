@@ -1,8 +1,26 @@
 import type { ResumeDocument } from "@/domain/resume/schema";
-import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
+import {
+  attachErrorDiagnostic,
+  readResponseDiagnostic,
+} from "@/lib/observability/diagnostics/schema";
 import type { ResumeValidationIssue } from "@/domain/resume/validation";
 import type { PageResult } from "@/lib/shared/pagination";
 import type { ResumeCatalogEntry } from "@/lib/resume/catalog";
+import { z } from "zod";
+import type { ResumeVersionHistoryPage } from "@/lib/resume/history/types";
+
+export class ResumeTrashedClientError extends Error {
+  constructor() {
+    super("resume_trashed");
+    this.name = "ResumeTrashedClientError";
+  }
+}
+export class ResumeSnapshotUnavailableClientError extends Error {
+  constructor() {
+    super("snapshot_unavailable");
+    this.name = "ResumeSnapshotUnavailableClientError";
+  }
+}
 
 export class ResumeVersionConflictClientError extends Error {
   currentVersion: number;
@@ -30,8 +48,7 @@ export interface ResumeVersionSnapshotSummary {
   createdAt: number;
 }
 
-export interface ResumeVersionSnapshotDetail
-  extends ResumeVersionSnapshotSummary {
+export interface ResumeVersionSnapshotDetail extends ResumeVersionSnapshotSummary {
   document: ResumeDocument;
 }
 
@@ -55,12 +72,12 @@ export async function fetchResumeEntriesPage({
   if (publication) searchParams.set("publication", publication);
   const response = await fetch(`/api/resumes?${searchParams.toString()}`);
 
-  return (await parseJson(response)) as unknown as PageResult<ResumeCatalogEntry>;
+  return (await parseJson(
+    response,
+  )) as unknown as PageResult<ResumeCatalogEntry>;
 }
 
-export async function fetchCurrentResumeDocument(
-  resumeId: string,
-): Promise<{
+export async function fetchCurrentResumeDocument(resumeId: string): Promise<{
   document: ResumeDocument;
   version: number;
   updatedAt: number;
@@ -94,6 +111,8 @@ async function parseJson(response: Response) {
   }
 
   if (!response.ok) {
+    if (payload?.error === "resume_trashed")
+      throw new ResumeTrashedClientError();
     if (
       payload?.error === "version_conflict" &&
       typeof payload.currentVersion === "number"
@@ -110,13 +129,19 @@ async function parseJson(response: Response) {
       );
     }
 
-    throw attachErrorDiagnostic(new Error(
-      typeof payload?.error === "string" ? payload.error : "request_failed",
-    ), readResponseDiagnostic(response));
+    throw attachErrorDiagnostic(
+      new Error(
+        typeof payload?.error === "string" ? payload.error : "request_failed",
+      ),
+      readResponseDiagnostic(response),
+    );
   }
 
   if (!payload) {
-    throw attachErrorDiagnostic(new Error("invalid_response"), readResponseDiagnostic(response));
+    throw attachErrorDiagnostic(
+      new Error("invalid_response"),
+      readResponseDiagnostic(response),
+    );
   }
 
   return payload;
@@ -178,7 +203,7 @@ export async function updateResumeSummary(params: {
 export async function fetchResumeVersionSnapshots(
   resumeId: string,
   request: { page: number; pageSize: number } = { page: 1, pageSize: 20 },
-): Promise<PageResult<ResumeVersionSnapshotSummary>> {
+): Promise<ResumeVersionHistoryPage> {
   const searchParams = new URLSearchParams({
     page: String(request.page),
     pageSize: String(request.pageSize),
@@ -188,7 +213,22 @@ export async function fetchResumeVersionSnapshots(
   );
   const payload = await parseJson(response);
 
-  return payload as unknown as PageResult<ResumeVersionSnapshotSummary>;
+  const summary = z.object({
+    id: z.string(),
+    version: z.number().int(),
+    createdAt: z.number(),
+    kind: z.enum(["retained", "autosave"]),
+  });
+  return z
+    .object({
+      items: z.array(summary),
+      page: z.number().int(),
+      pageSize: z.number().int(),
+      total: z.number().int(),
+      totalPages: z.number().int(),
+      autosave: summary.nullable(),
+    })
+    .parse(payload);
 }
 
 export async function fetchResumeVersionSnapshot(params: {
@@ -198,6 +238,7 @@ export async function fetchResumeVersionSnapshot(params: {
   const response = await fetch(
     `/api/resumes/${params.resumeId}/versions/${params.snapshotId}`,
   );
+  if (response.status === 404) throw new ResumeSnapshotUnavailableClientError();
   const payload = await parseJson(response);
 
   return payload.version as ResumeVersionSnapshotDetail;
@@ -205,9 +246,12 @@ export async function fetchResumeVersionSnapshot(params: {
 
 export async function createResumeVersionSnapshot(
   resumeId: string,
+  sourceSnapshotId?: string,
 ): Promise<ResumeVersionSnapshotSummary> {
   const response = await fetch(`/api/resumes/${resumeId}/versions`, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sourceSnapshotId }),
   });
   const payload = await parseJson(response);
 
@@ -233,6 +277,7 @@ export async function restoreResumeVersion(params: {
       body: JSON.stringify({ version: params.version }),
     },
   );
+  if (response.status === 404) throw new ResumeSnapshotUnavailableClientError();
   const payload = await parseJson(response);
   const resume = payload.resume as {
     document: ResumeDocument;

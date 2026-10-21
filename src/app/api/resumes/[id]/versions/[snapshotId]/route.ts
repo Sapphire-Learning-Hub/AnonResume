@@ -1,4 +1,5 @@
 import { withRequestLogging } from "@/lib/observability/http";
+import { withResumeLifecycleErrors } from "@/lib/resume/trash/http";
 
 import { NextResponse } from "next/server";
 
@@ -37,4 +38,4 @@ async function getHandler(
   }
 }
 
-export const GET = withRequestLogging("/api/resumes/[id]/versions/[snapshotId]", getHandler);
+export const GET = withRequestLogging("/api/resumes/[id]/versions/[snapshotId]", withResumeLifecycleErrors(getHandler));
