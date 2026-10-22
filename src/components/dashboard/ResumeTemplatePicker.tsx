@@ -1,7 +1,8 @@
 "use client";
 
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Input, Modal } from "antd";
+import { Button, Input, Modal, Segmented } from "antd";
+import { PersonalTemplateLibrary } from "@/components/dashboard/templates/PersonalTemplateLibrary";
 import { createStyles } from "antd-style";
 import { useDeferredValue, useState } from "react";
 
@@ -95,6 +96,11 @@ const useStyles = createStyles(({ token, css }) => ({
     height: 100%;
     min-height: 0;
     grid-template-columns: 190px minmax(0, 1fr);
+
+    &[data-personal="true"] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+    }
 
     @media (max-width: 720px) {
       grid-template-columns: minmax(0, 1fr);
@@ -377,6 +383,7 @@ export function ResumeTemplatePicker({
   const [activeCollection, setActiveCollection] =
     useState<ResumeTemplateCollectionId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [source, setSource] = useState<"builtIn" | "personal">("builtIn");
   const [previewTemplateId, setPreviewTemplateId] = useState<string>();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const templates = listResumeTemplates(locale);
@@ -405,6 +412,7 @@ export function ResumeTemplatePicker({
   const activeCollectionName = t(collectionNameKeys[activeCollection]);
 
   function resetMarket() {
+    setSource("builtIn");
     setActiveCollection("all");
     setSearchQuery("");
     setPreviewTemplateId(undefined);
@@ -445,13 +453,13 @@ export function ResumeTemplatePicker({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
-            <span aria-hidden="true" />
+            <Segmented<"builtIn" | "personal"> value={source} options={[{ value: "builtIn", label: t("personalTemplates.builtIn") }, { value: "personal", label: t("personalTemplates.mine") }]} onChange={(value) => { setSource(value); setSearchQuery(""); setActiveCollection("all"); }} />
           </div>
         }
         width={1400}
       >
-        <div className={styles.marketLayout}>
-          <nav
+        <div className={styles.marketLayout} data-personal={source === "personal"}>
+          {source === "builtIn" ? <nav
             aria-label={t("dashboard.templatePicker.navigation")}
             className={styles.sidebar}
           >
@@ -472,10 +480,10 @@ export function ResumeTemplatePicker({
                 </Button>
               ))}
             </div>
-          </nav>
+          </nav> : null}
 
           <section aria-live="polite" className={styles.content}>
-            <header className={styles.resultHeader}>
+            {source === "personal" ? <PersonalTemplateLibrary query={deferredSearchQuery} /> : <><header className={styles.resultHeader}>
               <h2 className={styles.resultTitle}>
                 {t("dashboard.templatePicker.resultHeading", {
                   collection: activeCollectionName,
@@ -559,7 +567,7 @@ export function ResumeTemplatePicker({
               <div className={styles.emptyState}>
                 {t("dashboard.templatePicker.noResults")}
               </div>
-            )}
+            )}</>}
           </section>
         </div>
       </Modal>
