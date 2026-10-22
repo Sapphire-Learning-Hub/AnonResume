@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SavePersonalTemplateDialog } from "@/components/dashboard/templates/SavePersonalTemplateDialog";
 import {
   savePersonalTemplateRequest,
+  fetchPersonalTemplatePage,
   TemplateRequestError,
 } from "@/lib/resume/templates/client";
 
@@ -19,6 +20,7 @@ vi.mock("@/components/ui/useAppFeedback", () => ({
 vi.mock("@/lib/resume/templates/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/resume/templates/client")>()),
   savePersonalTemplateRequest: vi.fn(),
+  fetchPersonalTemplatePage: vi.fn(),
 }));
 beforeEach(() => vi.clearAllMocks());
 
@@ -60,4 +62,25 @@ it("keeps one operation identity when retrying an uncertain save, then closes on
   await waitFor(() => expect(close).toHaveBeenCalled());
   const [first, second] = vi.mocked(savePersonalTemplateRequest).mock.calls;
   expect(first[0].operationId).toBe(second[0].operationId);
+});
+
+it("prompts for reauthentication when loading replacement choices loses the session", async () => {
+  vi.mocked(fetchPersonalTemplatePage).mockRejectedValue(
+    new TemplateRequestError("unauthorized"),
+  );
+  render(
+    <SavePersonalTemplateDialog
+      open
+      initialName="A"
+      prepareSource={async () => null}
+      onClose={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByLabelText("更新已有模板"));
+  await waitFor(() =>
+    expect(feedback.notification).toHaveBeenCalledWith(
+      expect.objectContaining({ duration: false, actions: expect.anything() }),
+    ),
+  );
+  expect(savePersonalTemplateRequest).not.toHaveBeenCalled();
 });

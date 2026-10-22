@@ -1,10 +1,11 @@
 "use client";
 import { Button, Input, Modal, Radio, Select } from "antd";
-import { useId, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useI18n } from "@/i18n/I18nProvider";
 import {
   replacePersonalTemplateRequest,
   savePersonalTemplateRequest,
+  TemplateRequestError,
 } from "@/lib/resume/templates/client";
 import type {
   ReplaceTemplateInput,
@@ -40,6 +41,16 @@ export function SavePersonalTemplateDialog({
   const [invalid, setInvalid] = useState(false);
   const [previousOpen, setPreviousOpen] = useState(open);
   const library = usePersonalTemplates(search, open && mode === "replace");
+  const selectionError = library.error;
+  const reportSelectionError = useEffectEvent(report);
+  useEffect(() => {
+    if (
+      selectionError instanceof TemplateRequestError &&
+      selectionError.code === "unauthorized"
+    ) {
+      reportSelectionError(selectionError);
+    }
+  }, [selectionError]);
   const requestIdentity = useRef<{ fingerprint: string; key: string } | null>(
     null,
   );
