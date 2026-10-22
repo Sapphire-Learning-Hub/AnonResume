@@ -26,6 +26,8 @@ import {
   resumeVersions,
   userInvitations,
   userFontPreferences,
+  resumeTemplates,
+  resumeTemplateOperations,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { buildReviewContext } from "@/domain/resume/ai/review/context";
@@ -431,6 +433,10 @@ describe("account merge transfer", () => {
 
   it("moves durable ownership while retaining only the primary identity and settings", async () => {
     fixture = await createFixture();
+    const templateDocument = createEditorOnboardingDocument("zh-CN");
+    const templateIds = [randomUUID(), randomUUID()];
+    await db.insert(resumeTemplates).values([{ id: templateIds[0], userId: fixture.primary.id, name: "Same name", document: templateDocument }, { id: templateIds[1], userId: fixture.secondary.id, name: "Same name", document: templateDocument }]);
+    await db.insert(resumeTemplateOperations).values({ userId: fixture.secondary.id, operationId: randomUUID(), kind: "save", requestHash: "hash", resultId: templateIds[1], resultVersion: 1 });
     const deletedAt = new Date(fixture.now.getTime() - 86_400_000);
     const purgeAfter = new Date(deletedAt.getTime() + 30 * 86_400_000);
     await db.update(resumes).set({ deletedAt, purgeAfter, published: false }).where(eq(resumes.id, fixture.secondaryResumeId));
@@ -449,6 +455,10 @@ describe("account merge transfer", () => {
       operationId: fixture.operationId,
       now: fixture.now,
     })).resolves.toEqual({ state: "completed" });
+
+    expect(await db.select({ id: resumeTemplates.id }).from(resumeTemplates).where(eq(resumeTemplates.userId, fixture.primary.id))).toEqual(expect.arrayContaining(templateIds.map((id) => ({ id }))));
+    expect(await db.select().from(resumeTemplateOperations).where(eq(resumeTemplateOperations.userId, fixture.secondary.id))).toHaveLength(0);
+    await db.delete(resumeTemplates).where(eq(resumeTemplates.userId, fixture.primary.id));
 
     expect(await getOwnedResumeReview({ userId: fixture.secondary.id, reviewId: fixture.reviewId })).toBeNull();
     expect(await getOwnedResumeReview({ userId: fixture.primary.id, reviewId: fixture.reviewId })).toBeNull();

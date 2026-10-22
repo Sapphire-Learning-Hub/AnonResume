@@ -107,6 +107,8 @@ async function deleteProjectOwnedData(
   await client.query(`DELETE FROM ${table("account_restrictions")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("onboarding_runs")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("resumes")} WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM ${table("resume_templates")} WHERE user_id = $1`, [userId]);
+  await client.query(`DELETE FROM ${table("resume_template_operations")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("user_font_preferences")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("ai_provider_credentials")} WHERE owner_user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("ai_quota_accounts")} WHERE user_id = $1`, [userId]);
