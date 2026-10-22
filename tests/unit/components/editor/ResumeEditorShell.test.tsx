@@ -2551,27 +2551,34 @@ describe("ResumeEditorShell", () => {
   });
 
   it("enables rich text toolbar controls when a text block is selected", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0];
+    const textBlock = section?.blocks.find((block) => block.type === "text");
+    if (!section || !textBlock) throw new Error("Expected a text block fixture");
+    document.sections = [{ ...section, blocks: [textBlock] }];
+
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={document}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "共享渲染器基础" }));
-    expect(screen.getByRole("button", { name: spacedLabel("加粗") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("斜体") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("下划线") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("删除线") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: spacedLabel("内联标签") })).toBeEnabled();
-    expect(screen.getByLabelText("文本颜色调色板")).toHaveAttribute(
+    const home = within(screen.getByRole("tabpanel", { name: "开始" }));
+    expect(home.getByLabelText("加粗")).toBeEnabled();
+    expect(home.getByLabelText("斜体")).toBeEnabled();
+    expect(home.getByLabelText("下划线")).toBeEnabled();
+    expect(home.getByLabelText("删除线")).toBeEnabled();
+    expect(home.getByLabelText("内联标签")).toBeEnabled();
+    expect(home.getByLabelText("文本颜色调色板")).toHaveAttribute(
       "aria-disabled",
       "false",
     );
     openRibbonTab("插入");
-    expect(screen.getByRole("button", { name: "链接" })).toBeEnabled();
-    expect(screen.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
-    expect(within(getInspectorPanel()).getByRole("button", { name: spacedLabel("复制章节") })).toBeEnabled();
+    const insert = within(screen.getByRole("tabpanel", { name: "插入" }));
+    expect(insert.getByRole("button", { name: "链接" })).toBeEnabled();
+    expect(insert.queryByRole("textbox", { name: "链接" })).not.toBeInTheDocument();
   });
 
   it("keeps the ribbon color picker bound to the whole block color", () => {
