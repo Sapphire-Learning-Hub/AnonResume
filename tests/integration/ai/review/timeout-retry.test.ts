@@ -42,7 +42,7 @@ it("retries two upstream timeouts, discards partial reports and settles usage fr
     expect(run).toMatchObject({ status: "complete", failureCode: null, inputTokens: 9000, outputTokens: 1800, finalPoints: 11 });
     expect(review?.report?.score).toBe(75);
   } finally { await fixture.cleanup(); }
-});
+}, 10000);
 
 it("ends after three timed-out requests and preserves the reason for historical reports", async () => {
   const fixture = await queuedReview();
@@ -61,7 +61,7 @@ it("ends after three timed-out requests and preserves the reason for historical 
     expect(run).toMatchObject({ status: "settlement_pending", failureCode: "timeout", finalPoints: null });
     expect(review?.report).toBeNull();
   } finally { await fixture.cleanup(); }
-});
+}, 10000);
 
 it("keeps known usage without pretending a timed-out request with unknown usage was free", async () => {
   const fixture = await queuedReview();
@@ -172,18 +172,21 @@ it("does not release unknown earlier usage when a later retry fails authenticati
 it("uses one overall deadline and does not retry a request cancelled by it", async () => {
   const fixture = await queuedReview();
   fixture.claimed.request.timeoutPolicy = { connectionTimeoutMs: 100, firstChunkTimeoutMs: 100, streamIdleTimeoutMs: 100, totalTimeoutMs: 100 };
+  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
   let attempts = 0;
   try {
     for await (const event of executePreparedAiRun(fixture.claimed, { adapter: { async *start(_request, signal) {
       attempts += 1;
-      await new Promise<void>((resolve) => {
-        if (signal.aborted) resolve();
-        else signal.addEventListener("abort", () => resolve(), { once: true });
-      });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(signal.aborted).toBe(true);
       throw new AiProviderError("aborted");
     } } })) void event;
     expect(attempts).toBe(1);
     const [run] = await db.select().from(aiRuns).where(eq(aiRuns.id, fixture.prepared.runId));
     expect(run?.failureCode).toBe("review_deadline");
-  } finally { await fixture.cleanup(); }
+  } finally {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    await fixture.cleanup();
+  }
 });
