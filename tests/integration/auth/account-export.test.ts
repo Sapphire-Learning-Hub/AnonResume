@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import ExcelJS from "exceljs";
 import { eq } from "drizzle-orm";
 
-import { db, resumeVersions, resumes, userFontPreferences, userInvitations } from "@/db";
+import { db, resumeVersions, resumes, resumeTemplates, userFontPreferences, userInvitations } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { streamAccountExport } from "@/lib/auth/account/export-workbook";
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -17,6 +17,7 @@ describe("account Excel export", () => {
         .delete(userInvitations)
         .where(eq(userInvitations.inviterUserId, userId));
       await db.delete(resumes).where(eq(resumes.userId, userId));
+      await db.delete(resumeTemplates).where(eq(resumeTemplates.userId, userId));
       await db.delete(userFontPreferences).where(eq(userFontPreferences.userId, userId));
       await getDatabasePool().query(
         `DELETE FROM "account" WHERE "userId" = $1`,
@@ -85,6 +86,7 @@ describe("account Excel export", () => {
       lastAppliedAt: new Date("2026-10-15T01:00:00.000Z"),
     });
 
+    await db.insert(resumeTemplates).values({ id: randomUUID(), userId, name: "=PRIVATE-TEMPLATE", document });
     const stream = await streamAccountExport(userId, "zh-CN");
     const bytes = await new Response(stream).arrayBuffer();
     const workbook = new ExcelJS.Workbook();
@@ -110,6 +112,8 @@ describe("account Excel export", () => {
       )
       .join("\n");
     expect(values).toContain("Export User");
+    expect(values).toContain("=PRIVATE-TEMPLATE");
+    expect(workbook.getWorksheet("个人模板")?.getRow(2).getCell("B").type).toBe(ExcelJS.ValueType.String);
     expect(values).toContain("导出测试简历");
     expect(values).toContain("RECOVERABLE-TRASH");
     expect(values).toContain("回收站");

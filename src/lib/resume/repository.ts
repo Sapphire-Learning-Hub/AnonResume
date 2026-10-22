@@ -233,8 +233,11 @@ function mapResumeVersionRow(row: ResumeVersionRow): ResumeVersionSnapshot {
   };
 }
 
-async function insertResumeRecord(record: ResumeRecord) {
-  const inserted = await db
+async function insertResumeRecord(
+  record: ResumeRecord,
+  executor: Pick<typeof db, "insert"> = db,
+) {
+  const inserted = await executor
     .insert(resumes)
     .values({
       id: record.id,
@@ -555,8 +558,9 @@ async function createStrictResumeRecord(
   locale: AppLocale = defaultLocale,
   document?: ResumeDocument,
   kind: ResumeKind = "standard",
+  executor: typeof db | ResumeTransaction = db,
 ) {
-  if (await selectResumeRecord(userId, resumeId)) {
+  if (await selectResumeRecordWithExecutor(executor, userId, resumeId)) {
     throw new ResumeIdentifierConflictError(resumeId);
   }
 
@@ -570,13 +574,42 @@ async function createStrictResumeRecord(
     record.document = document;
   }
 
-  const created = await insertResumeRecord(record);
+  const created = await insertResumeRecord(record, executor);
 
   if (!created) {
     throw new ResumeIdentifierConflictError(resumeId);
   }
 
-  return (await selectResumeRecord(userId, resumeId))!;
+  return (await selectResumeRecordWithExecutor(executor, userId, resumeId))!;
+}
+
+export async function createGeneratedResumeRecordInTransaction(
+  transaction: ResumeTransaction,
+  input: {
+    userId: string;
+    locale?: AppLocale;
+    document: ResumeDocument;
+    createId?: () => string;
+  },
+): Promise<ResumeRecord> {
+  const document = normalizeResumeDocumentStructure(validateResumeDocument(input.document));
+  for (let attempt = 0; attempt < GENERATED_RESUME_ID_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await createStrictResumeRecord(
+        input.userId,
+        (input.createId ?? createResumeId)(),
+        input.locale,
+        document,
+        "standard",
+        transaction,
+      );
+    } catch (error) {
+      if (!(error instanceof ResumeIdentifierConflictError) || attempt === GENERATED_RESUME_ID_MAX_ATTEMPTS - 1) {
+        throw error;
+      }
+    }
+  }
+  throw new Error("resume_creation_failed");
 }
 
 export async function createOnboardingResumeRecord(params: {

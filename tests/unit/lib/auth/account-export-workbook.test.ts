@@ -42,6 +42,7 @@ vi.mock("@/lib/auth/account/export-data", () => ({
     invitations: [],
     fontPreferences: [],
     reviews: [],
+    templates: [],
   })),
 }));
 

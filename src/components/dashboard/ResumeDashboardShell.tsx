@@ -32,6 +32,7 @@ import {
   type EditorOnboardingPromptValue,
 } from "./EditorOnboardingPrompt";
 import { ResumeTemplatePicker } from "./ResumeTemplatePicker";
+import { SavePersonalTemplateDialog } from "@/components/dashboard/templates/SavePersonalTemplateDialog";
 
 const useStyles = createStyles(({ token, css }) => ({
   pageHeader: css`
@@ -521,6 +522,7 @@ function ResumeRowActions({
   const [open, setOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
   const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [publicationBusy, setPublicationBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -651,6 +653,12 @@ function ResumeRowActions({
                 {t("dashboard.copyResume")}
               </Button>
             </form>
+            <Button type="text" onClick={() => {
+              setOpen(false);
+              setTemplateSaveOpen(true);
+            }}>
+              {t("personalTemplates.save")}
+            </Button>
             {resume.published && resume.slug ? (
               <ResumePublicActions slug={resume.slug} />
             ) : null}
@@ -676,6 +684,12 @@ function ResumeRowActions({
           type="text"
         />
       </Dropdown>
+      <SavePersonalTemplateDialog
+        open={templateSaveOpen}
+        initialName={resume.title}
+        prepareSource={async () => ({ resumeId: resume.id, sourceVersion: resume.version })}
+        onClose={() => setTemplateSaveOpen(false)}
+      />
       <ResumeSummaryEditor
         initialSummary={resume.summary}
         open={summaryOpen}

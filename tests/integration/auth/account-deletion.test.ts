@@ -13,6 +13,8 @@ import {
   resumes,
   userInvitations,
   userFontPreferences,
+  resumeTemplates,
+  resumeTemplateOperations,
 } from "@/db";
 import { createEditorOnboardingDocument } from "@/domain/onboarding/editor-basics-document";
 import { issueAccountEmailChallenge } from "@/lib/auth/account/challenges";
@@ -361,6 +363,9 @@ describe("account deletion lifecycle", () => {
       notify: async () => undefined,
     });
 
+    const templateId = randomUUID();
+    await db.insert(resumeTemplates).values({ id: templateId, userId: user.userId, name: "Delete template", document: createEditorOnboardingDocument("zh-CN") });
+    await db.insert(resumeTemplateOperations).values({ userId: user.userId, operationId: randomUUID(), kind: "save", requestHash: "hash", resultId: templateId, resultVersion: 1 });
     const first = await runAccountMaintenance({
       now: new Date("2026-10-14T00:00:00.000Z"),
       limit: 10,
@@ -374,6 +379,8 @@ describe("account deletion lifecycle", () => {
 
     expect(first).toMatchObject({ processed: 1, deleted: 1, failed: 0 });
     expect(second).toMatchObject({ processed: 0, deleted: 0, failed: 0 });
+    expect(await db.select().from(resumeTemplates).where(eq(resumeTemplates.userId, user.userId))).toHaveLength(0);
+    expect(await db.select().from(resumeTemplateOperations).where(eq(resumeTemplateOperations.userId, user.userId))).toHaveLength(0);
     await expect(getAccountLifecycle(user.userId)).resolves.toMatchObject({
       status: "deleted",
       deletedAt: new Date("2026-10-14T00:00:00.000Z"),

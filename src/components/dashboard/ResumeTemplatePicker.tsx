@@ -2,6 +2,7 @@
 
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Input, Modal } from "antd";
+import { PersonalTemplateLibrary } from "@/components/dashboard/templates/PersonalTemplateLibrary";
 import { createStyles } from "antd-style";
 import { useDeferredValue, useState } from "react";
 
@@ -17,6 +18,12 @@ import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 const CARD_PREVIEW_SCALE = 0.245;
+
+const navigationIds = [
+  "all",
+  "personal",
+  ...resumeTemplateCollectionIds.filter((id) => id !== "all"),
+] as const;
 
 const collectionNameKeys = {
   all: "dashboard.templatePicker.collection.all",
@@ -377,6 +384,7 @@ export function ResumeTemplatePicker({
   const [activeCollection, setActiveCollection] =
     useState<ResumeTemplateCollectionId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [source, setSource] = useState<"builtIn" | "personal">("builtIn");
   const [previewTemplateId, setPreviewTemplateId] = useState<string>();
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const templates = listResumeTemplates(locale);
@@ -405,6 +413,7 @@ export function ResumeTemplatePicker({
   const activeCollectionName = t(collectionNameKeys[activeCollection]);
 
   function resetMarket() {
+    setSource("builtIn");
     setActiveCollection("all");
     setSearchQuery("");
     setPreviewTemplateId(undefined);
@@ -459,23 +468,40 @@ export function ResumeTemplatePicker({
               {t("dashboard.templatePicker.browse")}
             </h2>
             <div className={styles.categoryList}>
-              {resumeTemplateCollectionIds.map((collectionId) => (
-                <Button
-                  aria-pressed={activeCollection === collectionId}
-                  className={styles.categoryButton}
-                  data-active={activeCollection === collectionId}
-                  key={collectionId}
-                  type="text"
-                  onClick={() => setActiveCollection(collectionId)}
-                >
-                  {t(collectionNameKeys[collectionId])}
-                </Button>
-              ))}
+              {navigationIds.map((collectionId) => {
+                const nextSource =
+                  collectionId === "personal" ? "personal" : "builtIn";
+                const active =
+                  source === nextSource &&
+                  (collectionId === "personal" || activeCollection === collectionId);
+
+                return (
+                  <Button
+                    aria-pressed={active}
+                    className={styles.categoryButton}
+                    data-active={active}
+                    key={collectionId}
+                    type="text"
+                    onClick={() => {
+                      if (source !== nextSource) setSearchQuery("");
+                      setSource(nextSource);
+                      if (collectionId !== "personal")
+                        setActiveCollection(collectionId);
+                    }}
+                  >
+                    {t(
+                      collectionId === "personal"
+                        ? "personalTemplates.mine"
+                        : collectionNameKeys[collectionId],
+                    )}
+                  </Button>
+                );
+              })}
             </div>
           </nav>
 
           <section aria-live="polite" className={styles.content}>
-            <header className={styles.resultHeader}>
+            {source === "personal" ? <PersonalTemplateLibrary query={deferredSearchQuery} /> : <><header className={styles.resultHeader}>
               <h2 className={styles.resultTitle}>
                 {t("dashboard.templatePicker.resultHeading", {
                   collection: activeCollectionName,
@@ -559,7 +585,7 @@ export function ResumeTemplatePicker({
               <div className={styles.emptyState}>
                 {t("dashboard.templatePicker.noResults")}
               </div>
-            )}
+            )}</>}
           </section>
         </div>
       </Modal>

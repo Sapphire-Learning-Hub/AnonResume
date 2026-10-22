@@ -50,6 +50,7 @@ export default defineConfig({
     "./src/db/font-schema.ts",
     "./src/db/social-registration-schema.ts",
     "./src/db/diagnostics-schema.ts",
+    "./src/db/resume-template-schema.ts",
   ],
   out: "./drizzle",
   dialect: "postgresql",

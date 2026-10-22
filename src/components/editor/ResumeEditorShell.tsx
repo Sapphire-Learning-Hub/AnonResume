@@ -88,6 +88,8 @@ import { PaletteColorPicker } from "@/components/ui/PaletteColorPicker";
 import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal";
 import { AppRouteLink, AppRouteLoadingHold } from "@/components/ui/AppRouteLoading";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
+import { SavePersonalTemplateDialog } from "@/components/dashboard/templates/SavePersonalTemplateDialog";
+import { prepareTemplateSource } from "@/components/editor/templates/prepare-template-source";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
   AiAssistantIcon,
@@ -418,6 +420,7 @@ export function ResumeEditorShell({
   const { styles } = useResumeEditorShellStyles();
   const { locale, t } = useI18n();
   const { notification, toast } = useAppFeedback();
+  const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
   const router = useRouter();
   const [resolvedDraftRepository] = useState(
     () => draftRepository ?? createResumeDraftRepository(),
@@ -2838,6 +2841,9 @@ export function ResumeEditorShell({
         </Button>
       </Tooltip>
       <LocaleSwitcher />
+      <Button onClick={() => setTemplateSaveOpen(true)}>
+        {t("personalTemplates.save")}
+      </Button>
       <ResumeSummaryEditor
         initialSummary={resumeSummary}
         resumeId={resumeId}
@@ -3367,6 +3373,21 @@ export function ResumeEditorShell({
         />
       ) : null}
 
+      <SavePersonalTemplateDialog
+        open={templateSaveOpen}
+        initialName={store.getState().document.meta.title}
+        onClose={() => setTemplateSaveOpen(false)}
+        prepareSource={() => prepareTemplateSource({
+          store,
+          commitActiveEditor: () => {
+            if (window.document.activeElement instanceof HTMLElement) {
+              window.document.activeElement.blur();
+            }
+          },
+          flushMarkdown: async () => !markdownSession.active || await markdownSession.flush(),
+          flushSave,
+        })}
+      />
       <EditorShortcutPanel
         open={shortcutPanelOpen}
         onCancel={() => setShortcutPanelOpen(false)}

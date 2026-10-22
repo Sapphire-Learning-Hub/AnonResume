@@ -1,4 +1,5 @@
 import { aiReviewMessages } from "./ai-review-messages";
+import { personalTemplateMessages } from "./personal-template-messages";
 
 export const supportedLocales = ["zh-CN", "en-US"] as const;
 
@@ -10,6 +11,7 @@ export const localeCookieName = "anonresume-locale";
 const messages = {
   "zh-CN": {
     ...aiReviewMessages["zh-CN"],
+    ...personalTemplateMessages["zh-CN"],
     "common.appName": "AnonResume",
     "diagnostics.reference": "诊断编号",
     "diagnostics.localReference": "本地事件编号",
@@ -1747,6 +1749,7 @@ const messages = {
   },
   "en-US": {
     ...aiReviewMessages["en-US"],
+    ...personalTemplateMessages["en-US"],
     "common.appName": "AnonResume",
     "common.signIn": "Sign In",
     "diagnostics.reference": "Diagnostic ID",

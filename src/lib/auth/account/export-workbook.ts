@@ -264,6 +264,19 @@ function localizedSheets(
       rows: data.fontPreferences,
     },
     reviewSheet,
+    {
+      name: zh ? "个人模板" : "Personal templates",
+      columns: [
+        { header: "ID", key: "id", width: 38 },
+        { header: zh ? "名称" : "Name", key: "name", width: 30 },
+        { header: zh ? "版本" : "Version", key: "version", width: 12 },
+        { header: zh ? "创建时间" : "Created at", key: "createdAt", width: 22 },
+        { header: zh ? "更新时间" : "Updated at", key: "updatedAt", width: 22 },
+        { header: zh ? "内容段" : "Part", key: "part", width: 10 },
+        { header: zh ? "内容" : "Content", key: "content", width: 100 },
+      ],
+      rows: data.templates.flatMap((entry) => jsonChunks(entry.document).map((content, index) => ({ id: entry.id, name: entry.name, version: entry.version, createdAt: entry.createdAt, updatedAt: entry.updatedAt, part: index + 1, content }))),
+    },
   ];
 }
 

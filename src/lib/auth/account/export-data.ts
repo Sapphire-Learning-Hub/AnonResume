@@ -11,6 +11,7 @@ import {
   resumes,
   userInvitations,
   userFontPreferences,
+  resumeTemplates,
 } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
 
@@ -168,6 +169,7 @@ export async function loadAccountExportData(userId: string) {
       .where(and(eq(aiRuns.userId, userId), inArray(aiRuns.resumeId, exportable))).orderBy(asc(aiResumeReviews.createdAt), asc(aiResumeReviews.id)),
   ]);
 
+  const templates = await db.select({ id: resumeTemplates.id, name: resumeTemplates.name, version: resumeTemplates.version, document: resumeTemplates.document, createdAt: resumeTemplates.createdAt, updatedAt: resumeTemplates.updatedAt }).from(resumeTemplates).where(eq(resumeTemplates.userId, userId)).orderBy(asc(resumeTemplates.createdAt), asc(resumeTemplates.id));
   return {
     identity,
     lifecycle,
@@ -179,5 +181,6 @@ export async function loadAccountExportData(userId: string) {
     invitations: invitationRows,
     fontPreferences: fontPreferenceRows,
     reviews: reviewRows,
+    templates,
   };
 }
