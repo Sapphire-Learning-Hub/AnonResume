@@ -3,6 +3,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ResumeTemplatePicker } from "@/components/dashboard/ResumeTemplatePicker";
 
 describe("ResumeTemplatePicker", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
   function installEditorViewport(matches: boolean) {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -30,23 +32,28 @@ describe("ResumeTemplatePicker", () => {
 
     const dialog = screen.getByRole("dialog", { name: /^模板中心/ });
 
-    expect(within(dialog).getByRole("searchbox", { name: "搜索模板" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("navigation", { name: "模板分类" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "全部模板" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      within(dialog).getByRole("searchbox", { name: "搜索模板" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("navigation", { name: "模板分类" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "全部模板" }),
+    ).toHaveAttribute("aria-pressed", "true");
 
-    const modularCard = within(dialog)
-      .getByRole("article", { name: "等宽模块" });
+    const modularCard = within(dialog).getByRole("article", {
+      name: "等宽模块",
+    });
     const form = modularCard.querySelector("form");
 
     expect(form).toHaveAttribute("action", "/app/create-resume");
-    expect(form?.querySelector('input[name="templateId"]')).toHaveValue("modular");
-    expect(within(modularCard).getByRole("button", { name: /^使\s*用$/ })).toHaveAttribute(
-      "type",
-      "submit",
+    expect(form?.querySelector('input[name="templateId"]')).toHaveValue(
+      "modular",
     );
+    expect(
+      within(modularCard).getByRole("button", { name: /^使\s*用$/ }),
+    ).toHaveAttribute("type", "submit");
   });
 
   it("filters templates by collection and localized search terms", () => {
@@ -66,12 +73,70 @@ describe("ResumeTemplatePicker", () => {
     expect(within(dialog).queryByText("经典留白")).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "全部模板" }));
-    fireEvent.change(within(dialog).getByRole("searchbox", { name: "搜索模板" }), {
-      target: { value: "技术" },
-    });
+    fireEvent.change(
+      within(dialog).getByRole("searchbox", { name: "搜索模板" }),
+      {
+        target: { value: "技术" },
+      },
+    );
 
     expect(within(dialog).getByText("等宽模块")).toBeInTheDocument();
     expect(within(dialog).queryByText("紧凑单页")).not.toBeInTheDocument();
+  });
+
+  it("switches between personal templates and built-in categories through the same navigation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ items: [], nextCursor: null })),
+    );
+    render(
+      <ResumeTemplatePicker
+        createAction="/app/create-resume"
+        onClose={vi.fn()}
+        open
+      />,
+    );
+    const dialog = screen.getByRole("dialog", { name: /^模板中心/ });
+    const navigation = within(dialog).getByRole("navigation", {
+      name: "模板分类",
+    });
+    const search = within(dialog).getByRole("searchbox", { name: "搜索模板" });
+
+    fireEvent.change(search, { target: { value: "技术" } });
+    fireEvent.click(
+      within(navigation).getByRole("button", { name: "我的模板" }),
+    );
+
+    expect(
+      await within(dialog).findByText("还没有个人模板"),
+    ).toBeInTheDocument();
+    expect(search).toHaveValue("");
+    expect(
+      within(navigation).getByRole("button", { name: "我的模板" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(navigation).getByRole("button", { name: "全部模板" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      within(dialog).queryByRole("article", { name: "等宽模块" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "个人" } });
+    fireEvent.click(within(navigation).getByRole("button", { name: "紧凑" }));
+
+    expect(search).toHaveValue("");
+    expect(
+      within(navigation).getByRole("button", { name: "我的模板" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      within(navigation).getByRole("button", { name: "紧凑" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(dialog).getByRole("article", { name: "紧凑单页" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText("还没有个人模板"),
+    ).not.toBeInTheDocument();
   });
 
   it("opens a full template preview without leaving the market", () => {
@@ -84,9 +149,13 @@ describe("ResumeTemplatePicker", () => {
     );
 
     const market = screen.getByRole("dialog", { name: /^模板中心/ });
-    const classicCard = within(market).getByRole("article", { name: "经典留白" });
+    const classicCard = within(market).getByRole("article", {
+      name: "经典留白",
+    });
 
-    fireEvent.click(within(classicCard).getByRole("button", { name: /^预\s*览$/ }));
+    fireEvent.click(
+      within(classicCard).getByRole("button", { name: /^预\s*览$/ }),
+    );
 
     const preview = screen
       .getByRole("button", { name: "返回模板中心" })
@@ -98,10 +167,9 @@ describe("ResumeTemplatePicker", () => {
     }
 
     expect(preview).toBeInTheDocument();
-    expect(within(preview).getByRole("button", { name: "使用此模板" })).toHaveAttribute(
-      "type",
-      "submit",
-    );
+    expect(
+      within(preview).getByRole("button", { name: "使用此模板" }),
+    ).toHaveAttribute("type", "submit");
     expect(market).toBeInTheDocument();
   });
 
@@ -130,8 +198,12 @@ describe("ResumeTemplatePicker", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: /^模板中心/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "导入 Markdown" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: /^模板中心/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "导入 Markdown" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps card focus and actions inside edge cards", () => {

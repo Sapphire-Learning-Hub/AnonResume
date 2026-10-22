@@ -1,7 +1,7 @@
 "use client";
 
 import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Input, Modal, Segmented } from "antd";
+import { Button, Input, Modal } from "antd";
 import { PersonalTemplateLibrary } from "@/components/dashboard/templates/PersonalTemplateLibrary";
 import { createStyles } from "antd-style";
 import { useDeferredValue, useState } from "react";
@@ -18,6 +18,12 @@ import { useI18n } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 
 const CARD_PREVIEW_SCALE = 0.245;
+
+const navigationIds = [
+  "all",
+  "personal",
+  ...resumeTemplateCollectionIds.filter((id) => id !== "all"),
+] as const;
 
 const collectionNameKeys = {
   all: "dashboard.templatePicker.collection.all",
@@ -96,11 +102,6 @@ const useStyles = createStyles(({ token, css }) => ({
     height: 100%;
     min-height: 0;
     grid-template-columns: 190px minmax(0, 1fr);
-
-    &[data-personal="true"] {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 1fr);
-    }
 
     @media (max-width: 720px) {
       grid-template-columns: minmax(0, 1fr);
@@ -453,13 +454,13 @@ export function ResumeTemplatePicker({
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
-            <Segmented<"builtIn" | "personal"> value={source} options={[{ value: "builtIn", label: t("personalTemplates.builtIn") }, { value: "personal", label: t("personalTemplates.mine") }]} onChange={(value) => { setSource(value); setSearchQuery(""); setActiveCollection("all"); }} />
+            <span aria-hidden="true" />
           </div>
         }
         width={1400}
       >
-        <div className={styles.marketLayout} data-personal={source === "personal"}>
-          {source === "builtIn" ? <nav
+        <div className={styles.marketLayout}>
+          <nav
             aria-label={t("dashboard.templatePicker.navigation")}
             className={styles.sidebar}
           >
@@ -467,20 +468,37 @@ export function ResumeTemplatePicker({
               {t("dashboard.templatePicker.browse")}
             </h2>
             <div className={styles.categoryList}>
-              {resumeTemplateCollectionIds.map((collectionId) => (
-                <Button
-                  aria-pressed={activeCollection === collectionId}
-                  className={styles.categoryButton}
-                  data-active={activeCollection === collectionId}
-                  key={collectionId}
-                  type="text"
-                  onClick={() => setActiveCollection(collectionId)}
-                >
-                  {t(collectionNameKeys[collectionId])}
-                </Button>
-              ))}
+              {navigationIds.map((collectionId) => {
+                const nextSource =
+                  collectionId === "personal" ? "personal" : "builtIn";
+                const active =
+                  source === nextSource &&
+                  (collectionId === "personal" || activeCollection === collectionId);
+
+                return (
+                  <Button
+                    aria-pressed={active}
+                    className={styles.categoryButton}
+                    data-active={active}
+                    key={collectionId}
+                    type="text"
+                    onClick={() => {
+                      if (source !== nextSource) setSearchQuery("");
+                      setSource(nextSource);
+                      if (collectionId !== "personal")
+                        setActiveCollection(collectionId);
+                    }}
+                  >
+                    {t(
+                      collectionId === "personal"
+                        ? "personalTemplates.mine"
+                        : collectionNameKeys[collectionId],
+                    )}
+                  </Button>
+                );
+              })}
             </div>
-          </nav> : null}
+          </nav>
 
           <section aria-live="polite" className={styles.content}>
             {source === "personal" ? <PersonalTemplateLibrary query={deferredSearchQuery} /> : <><header className={styles.resultHeader}>
