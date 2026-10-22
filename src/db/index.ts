@@ -9,6 +9,9 @@ import { invitationDatabaseTables } from "./invitation-schema";
 import { fontDatabaseTables } from "./font-schema";
 import { socialRegistrationDatabaseTables } from "./social-registration-schema";
 import { diagnosticDatabaseTables } from "./diagnostics-schema";
+import { resumeTemplateDatabaseTables } from "./resume-template-schema";
+
+export { resumeTemplates, resumeTemplateOperations } from "./resume-template-schema";
 
 import {
   accountEmailChallenges,
@@ -103,6 +106,7 @@ export const db = drizzle({
     ...fontDatabaseTables,
     ...socialRegistrationDatabaseTables,
     ...diagnosticDatabaseTables,
+    ...resumeTemplateDatabaseTables,
     accountEmailChallenges,
     accountLifecycle,
     accountRestrictions,
