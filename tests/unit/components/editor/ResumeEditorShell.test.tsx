@@ -283,7 +283,7 @@ describe("ResumeEditorShell", () => {
       screen.getByRole("button", { name: "选择导出格式" }),
     ).toBeEnabled();
     expect(
-      screen.queryByRole("button", { name: spacedLabel("保存") }),
+      screen.queryByRole("button", { name: /^保\s*存$/ }),
     ).not.toBeInTheDocument();
     expect(within(screen.getByRole("article")).getByText("个人简介")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: spacedLabel("内容编辑") })).toHaveAttribute(
@@ -608,7 +608,7 @@ describe("ResumeEditorShell", () => {
 
     expect(saveDocument).toHaveBeenCalledTimes(1);
     expect(
-      screen.queryByRole("button", { name: spacedLabel("保存") }),
+      screen.queryByRole("button", { name: /^保\s*存$/ }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("已保存")).toBeInTheDocument();
   });
