@@ -36,6 +36,11 @@ The editor, preview, public page, and PDF output share the same rendering founda
 
 ## Highlights
 
+The personal template library preserves your resume content and design. Preview
+and reuse it under **My templates** when creating a resume. Templates, source
+resumes, and new copies are independent; see the
+[template guide](./src/content/docs/section-templates.en-US.mdx).
+
 |  |  |
 | --- | --- |
 | **See the final result as you write**<br />Edit on an A4 canvas with live preview and immediate pagination feedback. | **Start with a genuinely different layout**<br />Choose from templates with distinct structures, then try another look without rewriting your content. |
