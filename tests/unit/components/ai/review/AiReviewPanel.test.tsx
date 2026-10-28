@@ -59,8 +59,11 @@ it("preserves review input after a failed save and submits the successfully save
   let resolveSave!: (value: { resumeVersion: number }) => void;
   ensureSaved.mockImplementationOnce(() => new Promise((resolve) => { resolveSave = resolve; }));
   vi.mocked(startResumeReview).mockRejectedValueOnce(new Error("external boundary failure"));
-  fireEvent.click(start);
-  fireEvent.click(start);
+  const form = start.closest("form");
+  if (!form) throw new Error("Review submission form is missing");
+  // Exercise the submission guard without depending on the button's loading animation.
+  fireEvent.submit(form);
+  fireEvent.submit(form);
   await waitFor(() => expect(ensureSaved).toHaveBeenCalledTimes(2));
   await act(async () => resolveSave({ resumeVersion: 7 }));
   await waitFor(() => expect(startResumeReview).toHaveBeenCalledTimes(1));
