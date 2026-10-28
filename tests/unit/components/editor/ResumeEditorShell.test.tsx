@@ -164,8 +164,9 @@ function exactSpacedLabel(text: string) {
 }
 
 function getInspectorPanel() {
-  const propertiesTab = screen.queryByRole("tab", { name: /格式$/ })
-    ?? screen.getByRole("tab", { name: "设计" });
+  const ribbon = within(screen.getByRole("tablist", { name: "编辑器功能区" }));
+  const propertiesTab = ribbon.queryByRole("tab", { name: /格式$/ })
+    ?? ribbon.getByRole("tab", { name: "设计" });
 
   if (propertiesTab.getAttribute("aria-selected") !== "true") {
     fireEvent.click(propertiesTab);
@@ -2995,10 +2996,13 @@ describe("ResumeEditorShell", () => {
   });
 
   it("adds a projects preset section from the Insert ribbon", () => {
+    const document = createDefaultResumeDocument();
+    document.sections = document.sections.slice(0, 1);
+    document.sections[0]!.blocks = document.sections[0]!.blocks.slice(0, 1);
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={document}
       />,
     );
 
@@ -3036,10 +3040,13 @@ describe("ResumeEditorShell", () => {
   });
 
   it("adds a section preset from its preview", async () => {
+    const document = createDefaultResumeDocument();
+    document.sections = document.sections.slice(0, 1);
+    document.sections[0]!.blocks = document.sections[0]!.blocks.slice(0, 1);
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={document}
       />,
     );
 
@@ -3104,22 +3111,25 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
+    const undoButton = screen.getByRole("button", { name: exactSpacedLabel("撤销") });
+    const redoButton = screen.getByRole("button", { name: exactSpacedLabel("重做") });
+
     openRibbonTab("插入");
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("空白章节") }));
 
-    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
-    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeDisabled();
+    expect(undoButton).toBeEnabled();
+    expect(redoButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("撤销") }));
+    fireEvent.click(undoButton);
 
     expect(screen.queryByRole("button", { name: "新章节" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: exactSpacedLabel("重做") })).toBeEnabled();
+    expect(redoButton).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: exactSpacedLabel("重做") }));
+    fireEvent.click(redoButton);
 
     expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: exactSpacedLabel("撤销") })).toBeEnabled();
+    expect(undoButton).toBeEnabled();
   });
 
   it("reorders sections from outline controls and keeps outline and canvas in sync", () => {

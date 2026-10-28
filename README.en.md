@@ -200,6 +200,8 @@ Production deployments should use a dedicated least-privileged database role and
 
 ## Administration and Security
 
+When upgrading to Better Auth 1.7.7, run `bun run auth:migrate -- --yes` before `bun run db:migrate`. Before initializing the new library, authentication migration relaxes the required `account.issuer` column left by versions 1.7.0–1.7.2, preserves its existing data, and enforces uniqueness by provider and account ID. Duplicate account keys stop migration for manual inspection; accounts are never merged automatically. Upgrade instances sharing authentication storage together and restart pending OAuth sign-ins. Rolling back the application also requires restoring compatible authentication database constraints.
+
 - New instances use the one-time Web startup code at `/setup` to create the single super-admin and bind MFA. Detecting multiple super-admins blocks recovery and provides a CLI repair path.
 - The super-admin cannot use regular resume features. Regular users may hold multiple management roles and complete an additional MFA challenge before entering management mode.
 - Virtual MFA devices, one-time recovery codes, multiple devices, reauthentication, and approval-based MFA resets for regular administrators are supported.

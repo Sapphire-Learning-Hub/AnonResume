@@ -171,7 +171,7 @@ export async function completeInstanceSetup(input: {
       `INSERT INTO "account"
         (id, "accountId", "providerId", "userId", password, "createdAt", "updatedAt", issuer)
        VALUES ($1, $2, 'credential', $2, $3, $4, $4, 'local:credential')
-       ON CONFLICT (issuer, "accountId") DO UPDATE
+       ON CONFLICT ("providerId", "accountId") DO UPDATE
          SET password = EXCLUDED.password, "updatedAt" = EXCLUDED."updatedAt"`,
       [randomUUID(), state.targetUserId, passwordHash, now],
     );
