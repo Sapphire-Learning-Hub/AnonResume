@@ -35,6 +35,7 @@ import {
 } from "react";
 
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
+import { getBlockSubtreeDepth, isContainerBlock } from "@/domain/resume/block-tree";
 import { ONBOARDING_EDIT_BLOCK_ID } from "@/domain/onboarding/editor-basics-document";
 import {
   findBlockByPath,
@@ -92,6 +93,8 @@ import {
   useResumeDiffAnnotations,
 } from "./ResumeDiffAnnotation";
 import { ResumeInlineIcon } from "./ResumeInlineIcon";
+import { ResumeImage } from "./images/ResumeImage";
+import { getImageRightColumnGeometry } from "@/domain/resume/composition/column-layout";
 import { ResumePrintReadyFlag } from "./ResumePrintReadyFlag";
 import {
   ResumeFontAssets,
@@ -108,6 +111,7 @@ import {
   ResumeSectionPageBreak,
   ResumeStructuralPageBreaks,
   useResumePageBreaks,
+  useResumeColumnFragment,
 } from "./pagination/page-break-context";
 import { useResumeEditPagination } from "./pagination/useResumeEditPagination";
 import type {
@@ -125,7 +129,7 @@ interface ResumeRendererSharedProps {
   zoom?: number;
   diffPresentation?: ResumeRendererDiffPresentation;
   selection?: ResumeEditorSelection;
-  onSelectBlock?: (selection: ResumeEditorSelection) => void;
+  onSelectBlock?: (selection: ResumeEditorSelection, options?: { extend: boolean }) => void;
   onChangeSectionTitle?: (params: {
     sectionId: string;
     content: RichTextContent;
@@ -1612,6 +1616,7 @@ function getRowBlockStyle(block: RowBlock): CSSProperties {
     gap: getResumeStructuralBlockGap(block),
     alignItems: mapAlign(block.align),
     justifyContent: mapJustify(block.justify),
+    ...getImageRightColumnGeometry(block),
   };
 }
 
@@ -1645,6 +1650,8 @@ function getSortableItemStyle(params: {
 
 function getBlockDragLabel(block: ResumeBlock, t: Translator) {
   switch (block.type) {
+    case "image":
+      return block.alt || t("renderer.imageBlock");
     case "text":
       return getPlainTextFromRichText(block.content) || t("renderer.textBlock");
     case "list":
@@ -1680,6 +1687,7 @@ function SortableBlockItem({
   onMoveBlock,
   textEditorRef,
   onTextEditorFormattingStateChange,
+  columnItemStyle,
 }: {
   block: ResumeBlock;
   sectionId: string;
@@ -1694,6 +1702,7 @@ function SortableBlockItem({
   onMoveBlock?: ResumeRendererProps["onMoveBlock"];
   textEditorRef?: ResumeRendererProps["textEditorRef"];
   onTextEditorFormattingStateChange?: ResumeRendererProps["onTextEditorFormattingStateChange"];
+  columnItemStyle?: CSSProperties;
 }) {
   const { t } = useI18n();
   const {
@@ -1721,13 +1730,14 @@ function SortableBlockItem({
       <div
         ref={setNodeRef}
         className={styles.sortableBlockItem}
-        style={getSortableItemStyle({ transform, transition })}
+        style={{ ...getSortableItemStyle({ transform, transition }), ...columnItemStyle }}
         data-resume-dragging={isDragging}
         data-testid={`resume-block-item-${blockPath.join("-")}`}
         data-resume-block-path={serializeBlockPath(blockPath)}
         data-resume-drag-mode={draggable ? "handle" : "none"}
         data-resume-edit-surface-mode={editSurfaceMode}
         data-resume-over={over}
+        data-resume-block-selected={selection?.sectionId === sectionId && (selection.blockRange ? selection.blockPath?.slice(0, -1).join("/") === blockPath.slice(0, -1).join("/") && selection.blockRange.includes(block.id) : selection.blockPath?.join("/") === blockPath.join("/"))}
         data-onboarding-anchor={
           mode === "edit" && block.id === ONBOARDING_EDIT_BLOCK_ID
             ? "onboarding-edit-target"
@@ -1754,10 +1764,16 @@ function SortableBlockItem({
               label: dragLabel,
             })}
             className={styles.blockDragHandle}
+            style={isContainerBlock(block) ? { right: -18 - 32 * (getBlockSubtreeDepth(block) - 1) } : undefined}
+            title={editSurfaceMode === "layout" ? t("composition.hint") : undefined}
             data-resume-handle-placement={handlePlacement}
             {...(draggable ? attributes : {})}
             {...(draggable ? listeners : {})}
-            onClick={() => onSelectBlock?.({ sectionId, blockPath })}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (event.shiftKey) onSelectBlock?.({ sectionId, blockPath }, { extend: true });
+              else onSelectBlock?.({ sectionId, blockPath });
+            }}
           >
             ⋮⋮
           </button>
@@ -1800,6 +1816,7 @@ function SortableBlockChildren({
   dataResumeBlockStack,
   dataTestId,
   allowSelectionHandle = true,
+  columnBlock,
 }: {
   blocks: ResumeBlock[];
   sectionId: string;
@@ -1820,7 +1837,9 @@ function SortableBlockChildren({
   dataResumeBlockStack?: string;
   dataTestId?: string;
   allowSelectionHandle?: boolean;
+  columnBlock?: RowBlock;
 }) {
+  const columnFragment = useResumeColumnFragment(sectionId, parentPath);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -1837,13 +1856,17 @@ function SortableBlockChildren({
     mode === "edit" &&
     editSurfaceMode === "layout" &&
     Boolean(onMoveBlock) &&
+    !columnBlock?.columnLayout &&
+    !(selection?.blockRange && selection.blockRange.length > 1) &&
     blocks.length > 1;
   const layoutHandleEnabled =
     mode === "edit" &&
     editSurfaceMode === "layout" &&
     ((allowSelectionHandle && Boolean(onSelectBlock)) || sortableEnabled);
-  const content = blocks.map((block) => {
+  const content = blocks.map((block, columnIndex) => {
     const blockPath = [...parentPath, block.id];
+    const offset = columnBlock?.columnLayout && columnFragment && !(columnIndex === 0 && columnFragment.continues) && columnBlock.align !== "start" ? Math.max(0, columnFragment.firstHeight - (columnIndex === 0 ? columnFragment.leftHeight : columnFragment.rightHeight)) * (columnBlock.align === "center" ? 0.5 : columnBlock.align === "end" ? 1 : 0) : 0;
+    const columnItemStyle: CSSProperties | undefined = columnBlock?.columnLayout ? { minWidth: 0, gridColumn: columnIndex + 1, ...(offset ? { transform: `translateY(${offset}px)` } : {}) } : undefined;
 
     if (!layoutHandleEnabled) {
       return (
@@ -1854,6 +1877,7 @@ function SortableBlockChildren({
           fields={["node", "text", "style", "layout", "order"]}
         >
           <div
+            style={columnItemStyle}
             data-testid={`resume-block-item-${blockPath.join("-")}`}
             data-resume-block-path={serializeBlockPath(blockPath)}
             data-resume-drag-mode="none"
@@ -1892,6 +1916,7 @@ function SortableBlockChildren({
         sectionId={sectionId}
         blockPath={blockPath}
         draggable={sortableEnabled}
+        columnItemStyle={columnItemStyle}
         mode={mode}
         editSurfaceMode={editSurfaceMode}
         selection={selection}
@@ -2028,6 +2053,7 @@ function renderRowBlock(
       axis="horizontal"
       className={styles.row}
       style={getRowBlockStyle(block)}
+      columnBlock={block}
       mode={context.mode}
       editSurfaceMode={context.editSurfaceMode}
       selection={context.selection}
@@ -2057,6 +2083,8 @@ function renderBlock(
   },
 ): ReactNode {
   switch (block.type) {
+    case "image":
+      return <ResumeImage block={block} selected={context.mode === "edit" && isSelectedBlock(context.selection, context.sectionId, context.blockPath)} onSelect={context.mode === "edit" && context.onSelectBlock ? () => context.onSelectBlock?.({ sectionId: context.sectionId, blockPath: context.blockPath }) : undefined} />;
     case "text":
       return renderTextBlock(block, {
         t: context.t,
@@ -2210,9 +2238,9 @@ function renderBlockFragment(
         fields={["node", "text", "style", "layout", "order"]}
       >
         <div data-resume-block-path={key}>
-          <div className={styles.row} style={getRowBlockStyle(block)}>
+          <div className={styles.row} style={{ ...getRowBlockStyle(block), ...(block.columnLayout ? { alignItems: mapAlign(block.align) } : {}) }}>
             {fragment.children.map((childFragment) =>
-              renderBlockFragment(section, childFragment, styles, context),
+              block.columnLayout ? <div key={serializeBlockPath(childFragment.path)} style={{ minWidth: 0, gridColumn: block.children.findIndex((child) => child.id === childFragment.path.at(-1)) + 1, ...(fragment.continues && block.children[0]?.id === childFragment.path.at(-1) ? { alignSelf: "start" } : {}) }}>{renderBlockFragment(section, childFragment, styles, context)}</div> : renderBlockFragment(section, childFragment, styles, context),
             )}
           </div>
         </div>

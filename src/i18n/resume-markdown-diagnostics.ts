@@ -28,6 +28,7 @@ const DIAGNOSTIC_MESSAGE_KEYS: Record<string, MessageKey> = {
   inline_invalid_icon: "editor.markdown.diagnostic.invalidIcon",
   raw_html_not_allowed: "editor.markdown.diagnostic.rawHtml",
   unsupported_markdown: "editor.markdown.diagnostic.unsupportedMarkdown",
+  image_asset_required: "editor.markdown.diagnostic.imageAssetRequired",
   document_validation_failed: "editor.markdown.diagnostic.documentInvalid",
   projection_degraded: "editor.markdown.diagnostic.projectionDegraded",
   projection_invalid: "editor.markdown.diagnostic.projectionInvalid",

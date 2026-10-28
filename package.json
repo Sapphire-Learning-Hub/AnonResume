@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.13.1",
@@ -83,6 +84,7 @@
     "@opentelemetry/sdk-metrics": "2.12.0",
     "@opentelemetry/sdk-trace-node": "2.12.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
+    "@smithy/node-http-handler": "^4.12.1",
     "@tiptap/core": "^3.30.5",
     "@tiptap/extension-link": "^3.30.5",
     "@tiptap/react": "^3.30.5",
@@ -108,6 +110,7 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "sharp": "^0.35.5",
     "undici": "7.16.0",
     "unified": "^11.0.5",
     "zod": "^4.5.4",

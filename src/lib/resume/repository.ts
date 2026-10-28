@@ -10,6 +10,7 @@ import { requestResumeTaskStops } from "@/lib/resume/trash/tasks";
 import { RESUME_TRASH_RETENTION_MS } from "@/lib/resume/trash/types";
 import { resumes, resumeVersions } from "@/db/schema";
 import { normalizeResumeDocumentStructure } from "@/domain/resume/block-tree";
+import { assertOwnedDocumentAssets } from "@/lib/resume/assets/references";
 import { getPlainTextFromRichText } from "@/domain/resume/operations";
 import type { ResumeBlock, ResumeDocument } from "@/domain/resume/schema";
 import {
@@ -147,6 +148,7 @@ function getFirstBlockSummary(blocks: ResumeBlock[]): string | undefined {
       continue;
     }
 
+    if (block.type === "image") continue;
     const summary = getFirstBlockSummary(block.children);
 
     if (summary) {
@@ -235,8 +237,10 @@ function mapResumeVersionRow(row: ResumeVersionRow): ResumeVersionSnapshot {
 
 async function insertResumeRecord(
   record: ResumeRecord,
-  executor: Pick<typeof db, "insert"> = db,
-) {
+  executor: typeof db | ResumeTransaction = db,
+): Promise<boolean> {
+  if (executor === db) return db.transaction(tx => insertResumeRecord(record, tx));
+  const document = await assertOwnedDocumentAssets(executor, record.userId, record.document);
   const inserted = await executor
     .insert(resumes)
     .values({
@@ -247,8 +251,8 @@ async function insertResumeRecord(
       summary: record.summary,
       customSummary: record.customSummary ?? null,
       slug: record.slug ?? null,
-      document: record.document,
-      schemaVersion: RESUME_SCHEMA_VERSION,
+      document,
+      schemaVersion: document.schemaVersion,
       version: record.version,
       published: record.published,
       createdAt: new Date(record.updatedAt),
@@ -831,7 +835,7 @@ export async function saveResumeRecordWithExecutor(
     throw new ResumeVersionConflictError(current.version);
   }
 
-  const document =
+  let document =
     params.document === undefined
       ? current.document
       : normalizeResumeDocumentStructure(
@@ -846,6 +850,7 @@ export async function saveResumeRecordWithExecutor(
       ? current.customSummary
       : formatCatalogSummary(params.summary);
 
+  document = await assertOwnedDocumentAssets(executor, userId, document);
   if (!isDeepStrictEqual(document, current.document)) {
     await createHistorySnapshot(executor, current, "autosave", 1);
   }
@@ -857,7 +862,7 @@ export async function saveResumeRecordWithExecutor(
       summary,
       customSummary,
       document,
-      schemaVersion: RESUME_SCHEMA_VERSION,
+      schemaVersion: document.schemaVersion,
       version: sql`${resumes.version} + 1`,
       updatedAt: sql`now()`,
     })

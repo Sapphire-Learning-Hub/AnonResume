@@ -147,6 +147,22 @@ const badgeBlockSchema = z.object({
     .min(1),
 });
 
+export const imageBlockSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal("image"),
+  assetId: z.string().uuid(),
+  alt: z.string().max(500),
+  intrinsicWidth: z.number().int().positive().max(16384),
+  intrinsicHeight: z.number().int().positive().max(16384),
+  width: z.number().positive().max(4096),
+  height: z.number().positive().max(4096),
+  fit: z.enum(["contain", "cover"]).default("cover"),
+  positionX: z.number().min(0).max(100).default(50),
+  positionY: z.number().min(0).max(100).default(50),
+  radius: z.number().min(0).max(2048).default(0),
+  align: z.enum(["left", "center", "right"]).default("left"),
+});
+
 const groupBlockSchema: z.ZodType<{
   id: string;
   type: "group";
@@ -166,6 +182,7 @@ const groupBlockSchema: z.ZodType<{
         textBlockSchema,
         listBlockSchema,
         badgeBlockSchema,
+        imageBlockSchema,
         groupBlockSchema,
         rowBlockSchema,
       ]),
@@ -176,6 +193,7 @@ const groupBlockSchema: z.ZodType<{
 const rowBlockSchema: z.ZodType<{
   id: string;
   type: "row";
+  columnLayout?: "image-right";
   gap?: number;
   align?: "start" | "center" | "end";
   justify?: "start" | "between" | "end";
@@ -183,6 +201,7 @@ const rowBlockSchema: z.ZodType<{
 }> = z.object({
   id: z.string().min(1),
   type: z.literal("row"),
+  columnLayout: z.literal("image-right").optional(),
   gap: z.number().nonnegative().optional(),
   align: z.enum(["start", "center", "end"]).optional(),
   justify: z.enum(["start", "between", "end"]).optional(),
@@ -192,11 +211,15 @@ const rowBlockSchema: z.ZodType<{
         textBlockSchema,
         listBlockSchema,
         badgeBlockSchema,
+        imageBlockSchema,
         groupBlockSchema,
         rowBlockSchema,
       ]),
     ),
   ),
+}).refine((block) => !block.columnLayout || (block.children.length === 2 && block.children[1]?.type === "image" && block.children[0]?.type !== "image"), {
+  message: "Image-right columns require content followed by one image",
+  path: ["children"],
 });
 
 const resumeBlockSchema: z.ZodType<ResumeBlock> = z.lazy(() =>
@@ -204,6 +227,7 @@ const resumeBlockSchema: z.ZodType<ResumeBlock> = z.lazy(() =>
     textBlockSchema,
     listBlockSchema,
     badgeBlockSchema,
+    imageBlockSchema,
     groupBlockSchema,
     rowBlockSchema,
   ]),
@@ -214,6 +238,7 @@ export type RichTextContent = z.infer<typeof richTextContentSchema>;
 export type TextBlock = z.infer<typeof textBlockSchema>;
 export type ListBlock = z.infer<typeof listBlockSchema>;
 export type BadgeBlock = z.infer<typeof badgeBlockSchema>;
+export type ImageBlock = z.infer<typeof imageBlockSchema>;
 export type GroupBlock = z.infer<typeof groupBlockSchema>;
 export type RowBlock = z.infer<typeof rowBlockSchema>;
 
@@ -221,6 +246,7 @@ export type ResumeBlock =
   | TextBlock
   | ListBlock
   | BadgeBlock
+  | ImageBlock
   | GroupBlock
   | RowBlock;
 
@@ -302,7 +328,7 @@ const resumeSectionSchema: z.ZodType<ResumeSection> = z.object({
 });
 
 export const resumeDocumentSchema: z.ZodType<ResumeDocument> = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   meta: z.object({
     title: z.string().min(1),
     locale: z.string().min(1).optional(),

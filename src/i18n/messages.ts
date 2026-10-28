@@ -1,5 +1,7 @@
 import { aiReviewMessages } from "./ai-review-messages";
 import { personalTemplateMessages } from "./personal-template-messages";
+import { imageMessages } from "./image-messages";
+import { compositionMessages } from "./composition-messages";
 
 export const supportedLocales = ["zh-CN", "en-US"] as const;
 
@@ -12,6 +14,8 @@ const messages = {
   "zh-CN": {
     ...aiReviewMessages["zh-CN"],
     ...personalTemplateMessages["zh-CN"],
+    ...imageMessages["zh-CN"],
+    ...compositionMessages["zh-CN"],
     "common.appName": "AnonResume",
     "diagnostics.reference": "诊断编号",
     "diagnostics.localReference": "本地事件编号",
@@ -1075,6 +1079,9 @@ const messages = {
     "editor.ribbon.tab.context.badges": "标签格式",
     "editor.ribbon.tab.context.group": "内容组格式",
     "editor.ribbon.tab.context.row": "双列格式",
+    "editor.ribbon.tab.context.image": "图片格式",
+    "renderer.imageBlock": "图片",
+    "editor.markdown.diagnostic.imageAssetRequired": "请使用“我的图片”中的图片，外部图片地址或无效图片参数不受支持。",
     "editor.ribbon.group.mode": "编辑模式",
     "editor.ribbon.group.text": "文本格式",
     "editor.ribbon.group.link": "链接",
@@ -1750,6 +1757,8 @@ const messages = {
   "en-US": {
     ...aiReviewMessages["en-US"],
     ...personalTemplateMessages["en-US"],
+    ...imageMessages["en-US"],
+    ...compositionMessages["en-US"],
     "common.appName": "AnonResume",
     "common.signIn": "Sign In",
     "diagnostics.reference": "Diagnostic ID",
@@ -2908,6 +2917,9 @@ const messages = {
     "editor.ribbon.tab.context.badges": "Badges Format",
     "editor.ribbon.tab.context.group": "Group Format",
     "editor.ribbon.tab.context.row": "Row Format",
+    "editor.ribbon.tab.context.image": "Image Format",
+    "renderer.imageBlock": "Image",
+    "editor.markdown.diagnostic.imageAssetRequired": "Use an image from My Images. External image URLs and invalid image settings are not supported.",
     "editor.ribbon.group.mode": "Editing mode",
     "editor.ribbon.group.text": "Text formatting",
     "editor.ribbon.group.link": "Links",

@@ -198,6 +198,7 @@ function decodePoint(value: unknown) {
 
 const NODE_KINDS = new Set<ResumeMarkdownProjectionNodeKind>([
   "section",
+  "image",
   "text",
   "list",
   "list-item",
@@ -399,6 +400,8 @@ function blockSemanticKey(block: ResumeBlock): string {
   const simpleTexts = simpleListTexts(block);
   if (simpleTexts) return `collection:${JSON.stringify(simpleTexts)}`;
   switch (block.type) {
+    case "image":
+      return `image:${block.assetId}:${block.alt}`;
     case "text":
       return `text:${JSON.stringify(semanticRichText(block.content))}`;
     case "badges":
@@ -717,6 +720,8 @@ function reconcileBlock({
     return { block: parsed, degraded: true };
   }
   switch (parsed.type) {
+    case "image":
+      return { block: { ...parsed, id: base.id, ...(base.type === "image" && base.assetId === parsed.assetId ? { intrinsicWidth: base.intrinsicWidth, intrinsicHeight: base.intrinsicHeight } : {}) }, degraded: false };
     case "text": {
       const baseText = base as Extract<ResumeBlock, { type: "text" }>;
       const restored = restoreResumeMarkdownInlinePresentation(
@@ -819,6 +824,7 @@ function reconcileBlock({
             gap: parsed.gap ?? baseContainer.gap,
             align: parsed.align ?? baseContainer.align,
             justify: parsed.justify ?? baseContainer.justify,
+            columnLayout: parsed.columnLayout,
             children: children.blocks,
           },
           degraded: children.degraded,
@@ -1012,6 +1018,7 @@ function createRebasedProjection(
       });
       return;
     }
+    if (block.type === "image") return;
     block.children.forEach((child, childIndex) =>
       visit(child, [...path, childIndex], block.id, childIndex),
     );

@@ -1,4 +1,5 @@
 import { getResumeFontPresetByFamily } from "../font-presets";
+import { serializeImageMarkdown } from "../images/markdown";
 import type { ResumeBlock, ResumeDocument } from "../schema";
 import { serializeDirectiveAttributes } from "./directives";
 import { serializeResumeMarkdownFrontMatter } from "./frontmatter";
@@ -338,6 +339,7 @@ function serializeRowBlock(
   return {
     source: [
       `:::row${serializeDirectiveAttributes([
+        ["columns", block.columnLayout],
         ["gap", block.gap],
         ["align", block.align],
         ["justify", block.justify],
@@ -360,6 +362,8 @@ function serializeBlock(
   options: { insideRow: boolean },
 ): SerializedFragment {
   switch (block.type) {
+    case "image":
+      return { source: serializeImageMarkdown(block), seeds: [blockSeed(block, path, parentId, ordinal)] };
     case "text": {
       const fragment = serializeTextBlock(block, path, parentId, ordinal);
       return options.insideRow && block.content.content.length > 1

@@ -14,6 +14,61 @@ export function isContainerBlock(
   return block.type === "group" || block.type === "row";
 }
 
+/** Resolve only an exact container/list-item path, never a descendant guess. */
+export function getBlockChildrenAtPath(blocks: ResumeBlock[], path: string[]): ResumeBlock[] | undefined {
+  if (!path.length) return blocks;
+  const [id, ...rest] = path;
+  const block = blocks.find((item) => item.id === id);
+  if (!block) return undefined;
+  if (isContainerBlock(block)) return getBlockChildrenAtPath(block.children, rest);
+  if (block.type === "list") {
+    const [itemId, ...nested] = rest;
+    const item = block.items.find((item) => item.id === itemId);
+    return item ? getBlockChildrenAtPath(item.children, nested) : undefined;
+  }
+  return undefined;
+}
+
+export function getBlockSubtreeDepth(block: ResumeBlock): number {
+  const children = isContainerBlock(block) ? block.children : block.type === "list" ? block.items.flatMap((item) => item.children) : [];
+  return 1 + Math.max(0, ...children.map(getBlockSubtreeDepth));
+}
+
+/** New siblings of a fixed column belong after the whole row. */
+export function getBlockInsertionAnchor(blocks: ResumeBlock[], path: string[]): string[] {
+  const parentPath = path.slice(0, -1);
+  const parent = findBlockByPath(blocks, parentPath);
+  return parent?.type === "row" && parent.columnLayout ? parentPath : path;
+}
+
+export function updateBlockChildrenAtPath(blocks: ResumeBlock[], path: string[], update: (children: ResumeBlock[]) => ResumeBlock[]): ResumeBlock[] {
+  if (!path.length) return update(blocks);
+  const [id, ...rest] = path;
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (block.id !== id) return block;
+    if (isContainerBlock(block)) {
+      const children = updateBlockChildrenAtPath(block.children, rest, update);
+      if (children === block.children) return block;
+      changed = true;
+      return { ...block, children };
+    }
+    if (block.type === "list") {
+      const [itemId, ...nested] = rest;
+      const items = block.items.map((item) => {
+        if (item.id !== itemId) return item;
+        const children = updateBlockChildrenAtPath(item.children, nested, update);
+        if (children === item.children) return item;
+        changed = true;
+        return { ...item, children };
+      });
+      return changed ? { ...block, items } : block;
+    }
+    return block;
+  });
+  return changed ? next : blocks;
+}
+
 export function visitResumeBlocks(
   blocks: ResumeBlock[],
   visit: (block: ResumeBlock, path: string[]) => void,
@@ -39,7 +94,7 @@ function normalizeNestedBlock(
       : block;
   }
 
-  if (block.type === "badges") {
+  if (block.type === "badges" || block.type === "image") {
     return block;
   }
 
@@ -99,6 +154,11 @@ function normalizeNestedBlock(
     return undefined;
   }
 
+  if (block.type === "row" && block.columnLayout && (children.length !== 2 || children[1]?.type !== "image" || children[0]?.type === "image")) {
+    const { columnLayout: _layout, ...ordinaryRow } = block;
+    void _layout;
+    return { ...ordinaryRow, children };
+  }
   return changed ? { ...block, children } : block;
 }
 
@@ -131,7 +191,16 @@ export function normalizeResumeDocumentStructure(
     return { ...section, blocks };
   });
 
-  return documentChanged ? { ...document, sections } : document;
+  let hasImages = false;
+  for (const section of sections) {
+    visitResumeBlocks(section.blocks, (block) => {
+      if (block.type === "image" || (block.type === "row" && block.columnLayout)) hasImages = true;
+    });
+  }
+  const schemaVersion = hasImages ? 2 : document.schemaVersion;
+  return documentChanged || schemaVersion !== document.schemaVersion
+    ? { ...document, sections, schemaVersion }
+    : document;
 }
 
 export function createFreshResumeNodeId(prefix: string) {
@@ -201,6 +270,8 @@ export function updateListItemChildren(
 
 export function cloneBlockWithFreshIds(block: ResumeBlock): ResumeBlock {
   switch (block.type) {
+    case "image":
+      return { ...block, id: createFreshResumeNodeId("image") };
     case "text":
       return {
         ...block,

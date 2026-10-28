@@ -11,6 +11,7 @@ import {
   ResumeNotFoundError,
 } from "@/lib/resume/repository";
 import { databaseNow, type ResumeTransaction } from "@/lib/resume/transaction";
+import { assertOwnedDocumentAssets } from "@/lib/resume/assets/references";
 import { TemplateError } from "./errors";
 import { lockTemplateAccount, templateOperation } from "./operations";
 import { ownedTemplate, templateSummary } from "./repository";
@@ -39,7 +40,7 @@ export async function getPersonalTemplate(
   templateId: string,
 ): Promise<TemplateDetail> {
   const row = await ownedTemplate(db, userId, templateId);
-  if (row.schemaVersion !== 1)
+  if (row.schemaVersion !== 1 && row.schemaVersion !== 2)
     throw new TemplateError("template_document_unavailable");
   return { ...templateSummary(row), document: documentSnapshot(row.document) };
 }
@@ -64,7 +65,8 @@ async function sourceDocument(
     throw new TemplateError("template_not_found");
   if (row.version !== version)
     throw new TemplateError("template_source_conflict");
-  return documentSnapshot(row.document);
+  const document = documentSnapshot(row.document);
+  return assertOwnedDocumentAssets(tx, userId, document);
 }
 async function mutate<T>(
   userId: string,
@@ -103,6 +105,7 @@ export async function savePersonalTemplate(
             userId,
             name: parsed.name,
             document,
+            schemaVersion: document.schemaVersion,
             updatedAt: now,
             createdAt: now,
           });
@@ -141,7 +144,7 @@ export async function replacePersonalTemplate(
           .update(resumeTemplates)
           .set({
             document,
-            schemaVersion: 1,
+            schemaVersion: document.schemaVersion,
             version: current.version + 1,
             updatedAt: await databaseNow(tx),
           })
@@ -237,7 +240,7 @@ export async function instantiatePersonalTemplate(
       async () => {
         const current = await ownedTemplate(tx, userId, input.templateId, true);
         checkVersion(current.version, parsed.templateVersion);
-        if (current.schemaVersion !== 1)
+        if (current.schemaVersion !== 1 && current.schemaVersion !== 2)
           throw new TemplateError("template_document_unavailable");
         const document = instantiatePersonalTemplateDocument(
           documentSnapshot(current.document),

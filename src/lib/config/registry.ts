@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ConfigDefinition } from "@/lib/config/types";
+import { imageConfigFields, validateImageConfig } from "@/lib/config/images";
 
 const positiveInteger = z.number().int().positive();
 const nonNegativeInteger = z.number().int().nonnegative();
@@ -36,6 +37,7 @@ const hostname = z
 
 export const managedConfigSchema = z
   .object({
+    ...imageConfigFields,
     smtpHost: optionalText,
     smtpPort: z.number().int().min(1).max(65_535),
     smtpSecure: z.boolean(),
@@ -95,6 +97,7 @@ export const managedConfigSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    validateImageConfig(value, context);
     const hasSmtp = Boolean(
       value.smtpHost ||
         value.smtpUser ||
@@ -192,6 +195,16 @@ type ConfigRegistry = {
 };
 
 export const CONFIG_REGISTRY = {
+  imagesEnabled: definition("resume", "hot", ["web"], true, "IMAGES_ENABLED"),
+  imageStorage: definition("resume", "hot", ["web"], "local", "IMAGE_STORAGE"),
+  imageUploadLimitMiB: definition("resume", "hot", ["web"], 10, "IMAGE_UPLOAD_LIMIT_MIB"),
+  imageAccountQuotaMiB: definition("resume", "hot", ["web"], 200, "IMAGE_ACCOUNT_QUOTA_MIB"),
+  imageS3Endpoint: definition("resume", "hot", ["web"], "", "IMAGE_S3_ENDPOINT"),
+  imageS3Region: definition("resume", "hot", ["web"], "", "IMAGE_S3_REGION"),
+  imageS3Bucket: definition("resume", "hot", ["web"], "", "IMAGE_S3_BUCKET"),
+  imageS3Prefix: definition("resume", "hot", ["web"], "anonresume-images", "IMAGE_S3_PREFIX"),
+  imageS3AccessKeyId: definition("resume", "hot", ["web"], "", "IMAGE_S3_ACCESS_KEY_ID", true),
+  imageS3SecretAccessKey: definition("resume", "hot", ["web"], "", "IMAGE_S3_SECRET_ACCESS_KEY", true),
   smtpHost: definition("email", "restart", ["web"], "", "SMTP_HOST"),
   smtpPort: definition("email", "restart", ["web"], 587, "SMTP_PORT"),
   smtpSecure: definition("email", "restart", ["web"], false, "SMTP_SECURE"),

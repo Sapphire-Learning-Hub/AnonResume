@@ -12,6 +12,7 @@ import {
   userInvitations,
   userFontPreferences,
   resumeTemplates,
+  resumeAssets,
 } from "@/db";
 import { getDatabasePool } from "@/lib/runtime/database";
 
@@ -182,5 +183,6 @@ export async function loadAccountExportData(userId: string) {
     fontPreferences: fontPreferenceRows,
     reviews: reviewRows,
     templates,
+    images: await db.select({ id: resumeAssets.id, name: resumeAssets.name, width: resumeAssets.width, height: resumeAssets.height, bytes: resumeAssets.bytes, removedAt: resumeAssets.removedAt, createdAt: resumeAssets.createdAt }).from(resumeAssets).where(and(eq(resumeAssets.userId, userId), eq(resumeAssets.state, "ready"))).orderBy(asc(resumeAssets.createdAt), asc(resumeAssets.id)),
   };
 }

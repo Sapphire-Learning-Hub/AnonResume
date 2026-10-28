@@ -81,6 +81,7 @@ export default async function PublicResumePage({
 
   return (
     <ResumeViewShell
+      publicSlug={slug}
       title={resume.title}
       appearance={appearance}
       downloadHref={

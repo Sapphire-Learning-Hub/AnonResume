@@ -53,6 +53,7 @@ export interface ResumeMarkdownSerializeResult {
 export type ResumeMarkdownProjectionNodeKind =
   | "section"
   | "text"
+  | "image"
   | "list"
   | "list-item"
   | "badges"

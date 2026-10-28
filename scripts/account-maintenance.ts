@@ -9,6 +9,7 @@ const accountLog = getLogger("anonresume.account");
 const { runAccountMaintenance } = await import("@/lib/auth/account/maintenance");
 const { deliverAccountMergeNotices, runAccountMergeExecutor } = await import("@/lib/auth/account/merge/executor");
 const { getDatabasePool } = await import("@/lib/runtime/database");
+const { cleanupImages } = await import("@/lib/resume/assets/maintenance");
 const { sendAccountSecurityNotice } = await import("@/lib/runtime/email");
 
 try {
@@ -23,11 +24,13 @@ try {
   });
   const mergeResult = await runAccountMergeExecutor({ limit: 100 });
   const noticeResult = await deliverAccountMergeNotices({ limit: 100 });
-  const failed = result.failed + mergeResult.failed + noticeResult.failed;
+  const imageResult = await cleanupImages({ limit: 100 });
+  const failed = result.failed + mergeResult.failed + noticeResult.failed + imageResult.failed;
   accountLog[failed > 0 ? "error" : "info"]("maintenance_completed", {
     labels: {
       completedMerges: mergeResult.completed,
       deletedAccounts: result.deleted,
+      removedImages: imageResult.removed,
       failed,
       processedAccounts: result.processed,
       processedMerges: mergeResult.processed,

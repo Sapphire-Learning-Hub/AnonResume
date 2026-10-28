@@ -2405,7 +2405,7 @@ describe("ResumeEditorShell", () => {
     const document = createDefaultResumeDocument();
 
     for (const block of document.sections[0]!.blocks) {
-      if (block.type !== "text") {
+      if (block.type !== "text" && block.type !== "image") {
         block.gap = undefined;
       }
     }

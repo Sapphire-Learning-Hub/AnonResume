@@ -11,7 +11,7 @@ export const RESUME_DEFAULT_SECTION_PADDING_PX = 0;
 export const RESUME_DEFAULT_TEXT_FONT_WEIGHT = 400;
 
 export function getResumeStructuralBlockGap(
-  block: Exclude<ResumeBlock, { type: "text" }>,
+  block: Exclude<ResumeBlock, { type: "text" | "image" }>,
 ) {
   if (block.gap !== undefined) {
     return block.gap;

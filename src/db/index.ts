@@ -10,6 +10,8 @@ import { fontDatabaseTables } from "./font-schema";
 import { socialRegistrationDatabaseTables } from "./social-registration-schema";
 import { diagnosticDatabaseTables } from "./diagnostics-schema";
 import { resumeTemplateDatabaseTables } from "./resume-template-schema";
+import { resumeAssetDatabaseTables } from "./resume-asset-schema";
+export { resumeAssets } from "./resume-asset-schema";
 
 export { resumeTemplates, resumeTemplateOperations } from "./resume-template-schema";
 
@@ -107,6 +109,7 @@ export const db = drizzle({
     ...socialRegistrationDatabaseTables,
     ...diagnosticDatabaseTables,
     ...resumeTemplateDatabaseTables,
+    ...resumeAssetDatabaseTables,
     accountEmailChallenges,
     accountLifecycle,
     accountRestrictions,

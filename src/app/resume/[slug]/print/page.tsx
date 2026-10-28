@@ -27,6 +27,7 @@ export default async function PublicResumePrintPage({
 
   return (
     <ResumePrintShell
+      imageAccess={{ slug }}
       eyebrow={messages["print.eyebrow"]}
       title={resume.title}
       document={resume.document}

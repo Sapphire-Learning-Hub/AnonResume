@@ -265,6 +265,19 @@ function localizedSheets(
     },
     reviewSheet,
     {
+      name: zh ? "图片素材" : "Images",
+      columns: [
+        { header: "ID", key: "id", width: 38 },
+        { header: zh ? "名称" : "Name", key: "name", width: 30 },
+        { header: zh ? "宽度" : "Width", key: "width", width: 12 },
+        { header: zh ? "高度" : "Height", key: "height", width: 12 },
+        { header: zh ? "字节数" : "Bytes", key: "bytes", width: 18 },
+        { header: zh ? "移出时间" : "Removed at", key: "removedAt", width: 22 },
+        { header: zh ? "创建时间" : "Created at", key: "createdAt", width: 22 },
+      ],
+      rows: data.images,
+    },
+    {
       name: zh ? "个人模板" : "Personal templates",
       columns: [
         { header: "ID", key: "id", width: 38 },

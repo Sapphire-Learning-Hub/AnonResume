@@ -44,6 +44,7 @@ export default async function PdfExportPrintPage({
 
   return (
     <ResumePrintShell
+      imageAccess={{ jobId: id }}
       eyebrow="AnonResume"
       title={job.filename.replace(/\.pdf$/i, "")}
       document={job.document}

@@ -4,6 +4,7 @@ import {
   cloneBlockWithFreshIds,
   createFreshResumeNodeId,
   findBlockByPath,
+  getBlockInsertionAnchor,
   getBlockSiblingPosition as getBlockSiblingPositionInBlocks,
   isContainerBlock,
   moveTreeItem,
@@ -13,6 +14,7 @@ import {
 import type {
   BadgeBlock,
   GroupBlock,
+  ImageBlock,
   ListBlock,
   ResumeListItem,
   ResumeBlock,
@@ -172,7 +174,7 @@ export function insertBlockAfterDocument({
 
       const nextBlocks = insertBlockAfterPathInBlocks(
         section.blocks,
-        blockPath,
+        getBlockInsertionAnchor(section.blocks, blockPath),
         block,
       );
 
@@ -651,6 +653,7 @@ function updateBadgeItemsAtPath(
 }
 
 export type ResumeBlockSettings =
+  | ({ type: "image" } & Partial<Omit<ImageBlock, "type" | "id">>)
   | ({ type: "list" } & Pick<ListBlock, "ordered" | "marker" | "gap">)
   | ({ type: "badges" } & Pick<BadgeBlock, "wrap" | "gap">)
   | ({ type: "group" } & Pick<
@@ -671,6 +674,8 @@ function updateBlockSettingsAtPath(
 
     if (rest.length === 0) {
       switch (block.type) {
+        case "image":
+          return settings.type === "image" ? { ...block, ...settings } : block;
         case "list":
           return settings.type === "list" ? { ...block, ...settings } : block;
         case "badges":
@@ -1173,6 +1178,9 @@ export function moveBlockInDocument({
   blockPath: string[];
   toIndex: number;
 }): ResumeDocument {
+  const section = document.sections.find((section) => section.id === sectionId);
+  const parent = section ? findBlockByPath(section.blocks, blockPath.slice(0, -1)) : undefined;
+  if (parent?.type === "row" && parent.columnLayout) return document;
   return {
     ...document,
     sections: document.sections.map((section) => {

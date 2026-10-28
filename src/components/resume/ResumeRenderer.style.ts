@@ -2,7 +2,7 @@
 
 import { createStyles } from "antd-style";
 
-export const useResumeRendererStyles = createStyles(({ css }) => ({
+export const useResumeRendererStyles = createStyles(({ css, token }) => ({
   root: css`
     display: flex;
     flex-direction: column;
@@ -130,6 +130,11 @@ export const useResumeRendererStyles = createStyles(({ css }) => ({
 
     &[data-resume-edit-surface-mode="layout"] {
       overflow: visible;
+    }
+
+    &[data-resume-block-selected="true"][data-resume-edit-surface-mode="layout"] {
+      outline: 2px solid ${token.colorPrimary};
+      outline-offset: 3px;
     }
 
     &[data-resume-dragging="true"] {

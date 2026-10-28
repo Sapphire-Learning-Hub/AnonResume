@@ -75,9 +75,7 @@ export function createResumePdfExporter(params?: {
               : {}),
           }
         : undefined;
-    const page = await browser.newPage(
-      pageOptions,
-    );
+    const page = await browser.newPage(pageOptions);
     let closePromise: Promise<void> | undefined;
     const closeResources = () => {
       closePromise ??= Promise.allSettled([page.close(), browser.close()]).then(
@@ -94,10 +92,14 @@ export function createResumePdfExporter(params?: {
       input.signal?.throwIfAborted();
       input.signal?.addEventListener("abort", handleAbort, { once: true });
       await page.goto(input.printUrl, { waitUntil: "networkidle" });
-      await page.waitForFunction(
-        (flagName) => window[flagName as keyof Window] === true,
-        input.readyFlag,
-      );
+      await page.waitForFunction((flagName) => {
+        if (
+          document.documentElement.getAttribute("data-resume-image-assets") ===
+          "error"
+        )
+          throw new Error("resume_image_load_failed");
+        return window[flagName as keyof Window] === true;
+      }, input.readyFlag);
 
       return await page.pdf({
         format: "A4",

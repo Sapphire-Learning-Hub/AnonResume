@@ -5,6 +5,8 @@ export interface ResumeEditorSelection {
   blockPath?: string[];
   badgeItemId?: string;
   richTextField?: string;
+  /** Ordered contiguous sibling IDs; the blockPath remains the range anchor. */
+  blockRange?: string[];
 }
 
 export function createSelectionForBlock(
@@ -15,6 +17,8 @@ export function createSelectionForBlock(
   const blockPath = [...parentPath, block.id];
 
   switch (block.type) {
+    case "image":
+      return { sectionId, blockPath };
     case "text":
       return {
         sectionId,

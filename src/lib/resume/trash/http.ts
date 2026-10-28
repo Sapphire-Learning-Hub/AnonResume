@@ -10,6 +10,7 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/http/request-body";
 import { requireSameOrigin } from "@/lib/http/request-origin";
+import { ImageAssetError, imageErrorStatus } from "@/lib/resume/assets/errors";
 import {
   ResumeNotFoundError,
   ResumeVersionSnapshotNotFoundError,
@@ -28,6 +29,7 @@ export function withResumeLifecycleErrors<Arguments extends unknown[]>(
     try {
       return await handler(...args);
     } catch (error) {
+      if (error instanceof ImageAssetError) return NextResponse.json({ error: error.code }, { status: imageErrorStatus(error.code) });
       if (
         error instanceof ResumeTrashedError ||
         error instanceof ResumeTrashBusyError ||

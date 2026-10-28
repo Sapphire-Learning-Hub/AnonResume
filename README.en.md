@@ -128,6 +128,18 @@ The development server is available at <http://localhost:3000> by default.
 
 ## Configuration
 
+### Images and Persistent Storage
+
+Images use private local storage by default. Upload enablement, the per-file limit (10 MiB by default), the account quota (200 MiB by default), and optional S3 settings belong in Platform Configuration. Static JPEG, PNG and WebP inputs are pixel-bounded, reoriented and stripped of EXIF/GPS metadata before storing normalized WebP images and separate thumbnails.
+
+- Set `ANONRESUME_IMAGE_DIR` to a stable production directory outside release folders, such as `/var/lib/anonresume/images`, writable by the Web service user. With systemd `ProtectSystem=strict`, allow only this directory through `ReadWritePaths`, not the entire application directory. Development defaults to `.anonresume/images`.
+- Official Compose mounts a separate `resume-images` volume, writable by the non-root Web process while the root filesystem remains read-only. Keep this volume during upgrades. Multiple Web instances require shared storage or the same S3 bucket. PDF Workers fetch authorized images through Web and need no shared image mount.
+- S3 requires a private bucket, region and encrypted credentials, with optional endpoint and prefix. Existing assets prevent changes to the effective storage location; automatic storage migration is not included. Credential rotation does not require removing image references.
+- Removing a library entry preserves references in current resumes, Trash, history, personal templates and valid PDF snapshots. Web maintenance cleans removed, unreferenced assets after 30 days, retries failed file deletion, and recovers incomplete uploads after 24 hours. Back up and restore PostgreSQL together with the private image files or bucket.
+- Documents containing images use schema 2; existing schema 1 documents remain readable. Back up and migrate the database before upgrading. Do not directly roll back to image-unaware code after creating image documents.
+
+### Other Configuration
+
 [`.env.example`](./.env.example) lists deployment trust roots, not every runtime setting. The long-lived required values are the database connection, public origin, authentication secret, and configuration master key. Production should supply them through host-level credential facilities such as systemd Credentials instead of storing real values in repository files. The database schema, previous master key, initial super-admin email, and legacy encryption keys are used only for their documented scenarios.
 
 Runtime settings such as SMTP, GitHub OAuth, management sessions, PDF queues, resume history, AI switches, trusted model endpoints, quotas, and worker cadence are maintained in the management console under Platform Configuration. Configuration supports drafts, publishing, history, and rollback. Sensitive values are encrypted and never returned in plaintext. Hot settings apply after publishing, while restart-bound changes identify the affected services.

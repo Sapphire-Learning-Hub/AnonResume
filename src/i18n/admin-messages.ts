@@ -2,6 +2,17 @@ import type { AppLocale } from "./messages";
 import type { AdminSystemRoleKey } from "@/lib/admin/permissions";
 
 const zhCN = {
+  "configuration.imageStorageInUse": "仍有图片存量，不能直接切换存储位置。请先备份并迁移或清理图片；凭据轮换不受影响。",
+  "configuration.field.imagesEnabled": "允许上传图片",
+  "configuration.field.imageStorage": "图片存储方式（local 或 s3）",
+  "configuration.field.imageUploadLimitMiB": "图片上传上限（MiB）",
+  "configuration.field.imageAccountQuotaMiB": "账号图片容量（MiB）",
+  "configuration.field.imageS3Endpoint": "图片 S3 服务地址",
+  "configuration.field.imageS3Region": "图片 S3 区域",
+  "configuration.field.imageS3Bucket": "图片 S3 私有存储桶",
+  "configuration.field.imageS3Prefix": "图片 S3 路径前缀",
+  "configuration.field.imageS3AccessKeyId": "图片 S3 Access Key ID",
+  "configuration.field.imageS3SecretAccessKey": "图片 S3 Secret Access Key",
   "shell.superAdmin": "超级管理员",
   "shell.console": "管理中台",
   "shell.signOut": "退出",
@@ -863,6 +874,17 @@ export const adminSystemRoleMessageKeys: Record<
 };
 
 const enUS: AdminMessages = {
+  "configuration.imageStorageInUse": "Existing images prevent a storage location change. Back up and migrate or remove them first. Credential rotation is unaffected.",
+  "configuration.field.imagesEnabled": "Allow image uploads",
+  "configuration.field.imageStorage": "Image storage (local or s3)",
+  "configuration.field.imageUploadLimitMiB": "Image upload limit (MiB)",
+  "configuration.field.imageAccountQuotaMiB": "Account image quota (MiB)",
+  "configuration.field.imageS3Endpoint": "Image S3 endpoint",
+  "configuration.field.imageS3Region": "Image S3 region",
+  "configuration.field.imageS3Bucket": "Private image S3 bucket",
+  "configuration.field.imageS3Prefix": "Image S3 prefix",
+  "configuration.field.imageS3AccessKeyId": "Image S3 Access Key ID",
+  "configuration.field.imageS3SecretAccessKey": "Image S3 Secret Access Key",
   "shell.superAdmin": "Super administrator",
   "shell.console": "Management console",
   "shell.signOut": "Sign out",

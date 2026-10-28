@@ -108,6 +108,11 @@ function addBlock(
     content.text = text;
     appearance.style = serializeValue(block.style);
     label = text || "Text block";
+  } else if (block.type === "image") {
+    content.assetId = block.assetId;
+    content.alt = block.alt;
+    appearance.layout = serializeValue({ width: block.width, height: block.height, fit: block.fit, positionX: block.positionX, positionY: block.positionY, radius: block.radius, align: block.align });
+    label = block.alt || "Image";
   } else if (block.type === "badges") {
     appearance.layout = serializeValue({ wrap: block.wrap, gap: block.gap });
     label = "Badges";
@@ -130,6 +135,7 @@ function addBlock(
       gap: block.gap,
       align: block.align,
       justify: block.justify,
+      columnLayout: block.columnLayout,
     });
     label = "Row";
   }

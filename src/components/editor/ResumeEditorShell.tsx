@@ -39,6 +39,7 @@ import {
   ItalicOutlined,
   LinkOutlined,
   PlusSquareOutlined,
+  PictureOutlined,
   ReloadOutlined,
   StrikethroughOutlined,
   TagOutlined,
@@ -89,6 +90,9 @@ import { ActionConfirmationModal } from "@/components/ui/ActionConfirmationModal
 import { AppRouteLink, AppRouteLoadingHold } from "@/components/ui/AppRouteLoading";
 import { useAppFeedback } from "@/components/ui/useAppFeedback";
 import { SavePersonalTemplateDialog } from "@/components/dashboard/templates/SavePersonalTemplateDialog";
+import { ImageLibrary } from "@/components/dashboard/images/ImageLibrary";
+import { ImageTools } from "@/components/editor/images/ImageTools";
+import { BlockCompositionTools } from "@/components/editor/composition/BlockCompositionTools";
 import { prepareTemplateSource } from "@/components/editor/templates/prepare-template-source";
 import { LocaleSwitcher } from "@/i18n/LocaleSwitcher";
 import {
@@ -421,6 +425,7 @@ export function ResumeEditorShell({
   const { locale, t } = useI18n();
   const { notification, toast } = useAppFeedback();
   const [templateSaveOpen, setTemplateSaveOpen] = useState(false);
+  const [imagePicker, setImagePicker] = useState<"insert" | "replace">();
   const router = useRouter();
   const [resolvedDraftRepository] = useState(
     () => draftRepository ?? createResumeDraftRepository(),
@@ -822,6 +827,11 @@ export function ResumeEditorShell({
 
     function handleEditorKeyDown(event: KeyboardEvent) {
       const key = event.key.toLowerCase();
+      if (event.key === "Escape" && store.getState().selection.blockRange) {
+        const { blockRange: _range, ...single } = store.getState().selection;
+        void _range;
+        store.getState().setSelection(single);
+      }
 
       if ((event.metaKey || event.ctrlKey) && key === "/") {
         event.preventDefault();
@@ -871,7 +881,7 @@ export function ResumeEditorShell({
       window.removeEventListener("blur", stopTemporaryLayoutMode);
       globalThis.document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [editSurfaceMode]);
+  }, [editSurfaceMode, store]);
   const showSaveValidationNotification = useEffectEvent(() => {
     if (!saveValidation) return;
 
@@ -1031,7 +1041,7 @@ export function ResumeEditorShell({
   const selectedBadgeBlock =
     selectedBlock?.type === "badges" ? selectedBlock : undefined;
   const selectedStructuralBlock =
-    selectedBlock && selectedBlock.type !== "text" ? selectedBlock : undefined;
+    selectedBlock && selectedBlock.type !== "text" && selectedBlock.type !== "image" ? selectedBlock : undefined;
   const contextRibbonKind = getContextRibbonKind(selection, selectedBlock?.type);
   const effectiveRibbonTab =
     activeEditSurfaceMode === "markdown"
@@ -1353,9 +1363,12 @@ export function ResumeEditorShell({
   const canMoveSelectedSectionUp = selectedSectionIndex > 0;
   const canMoveSelectedSectionDown =
     selectedSectionIndex > -1 && selectedSectionIndex < document.sections.length - 1;
+  const selectedBlockParent = selectedSection && selection.blockPath ? findBlockByPath(selectedSection.blocks, selection.blockPath.slice(0, -1)) : undefined;
+  const isFixedColumn = selectedBlockParent?.type === "row" && Boolean(selectedBlockParent.columnLayout);
   const canMoveSelectedBlockUp =
-    Boolean(selectedBlock) && (selectedBlockPosition?.index ?? -1) > 0;
+    !isFixedColumn && Boolean(selectedBlock) && (selectedBlockPosition?.index ?? -1) > 0;
   const canMoveSelectedBlockDown =
+    !isFixedColumn &&
     Boolean(selectedBlock) &&
     selectedBlockPosition !== undefined &&
     selectedBlockPosition.index < selectedBlockPosition.count - 1;
@@ -1915,6 +1928,12 @@ export function ResumeEditorShell({
         </EditorRibbonPropertyGroup>
       ) : null}
     </>
+  ) : selectedBlock?.type === "image" && selection.sectionId && selection.blockPath ? (
+      <ImageTools key={selectedBlock.id} block={selectedBlock} onReplace={() => setImagePicker("replace")} onChange={block => {
+        if (selection.sectionId && selection.blockPath) store.getState().updateBlockSettings({ sectionId: selection.sectionId, blockPath: selection.blockPath, settings: block });
+      }} onDelete={() => {
+        if (selection.sectionId && selection.blockPath) store.getState().deleteBlock({ sectionId: selection.sectionId, blockPath: selection.blockPath });
+      }} />
   ) : selectedBadgeBlock?.type === "badges" && selectedBadgeItem && selection.blockPath ? (
     <>
       <EditorRibbonPropertyGroup label={t("editor.ribbon.property.badgeActions")}>
@@ -3195,6 +3214,7 @@ export function ResumeEditorShell({
                 className={styles.ribbonPresetGrid}
                 data-onboarding-anchor="editor-insert-content"
               >
+                <Button className={styles.ribbonSmallCommand} icon={<PictureOutlined />} disabled={activeEditSurfaceMode !== "content" || !selectedSection} onClick={() => setImagePicker("insert")}>{t("images.insert")}</Button>
                 {listBlockPresets(locale).map((preset) => (
                   <Button
                     aria-label={t(preset.labelKey)}
@@ -3248,6 +3268,11 @@ export function ResumeEditorShell({
             key: "reorder",
             label: t("editor.ribbon.group.mode"),
             content: renderEditSurfaceModeControls(true),
+          },
+          {
+            key: "composition",
+            label: t("composition.title"),
+            content: <BlockCompositionTools document={document} selection={selection} enabled={activeEditSurfaceMode === "layout"} onCommand={(command) => store.getState().composeBlocks(command)} />,
           },
           {
             key: "page",
@@ -3373,6 +3398,17 @@ export function ResumeEditorShell({
         />
       ) : null}
 
+      <Modal open={Boolean(imagePicker)} title={t("images.title")} width={960} footer={null} destroyOnHidden onCancel={() => setImagePicker(undefined)}>
+        <ImageLibrary onSelect={asset => {
+          const state = store.getState();
+          const currentSelection = state.selection;
+          if (!currentSelection.sectionId) return;
+          if (imagePicker === "replace" && currentSelection.blockPath) {
+            state.updateBlockSettings({ sectionId: currentSelection.sectionId, blockPath: currentSelection.blockPath, settings: { type: "image", assetId: asset.id, intrinsicWidth: asset.width, intrinsicHeight: asset.height, alt: asset.name } });
+          } else state.addImage({ sectionId: currentSelection.sectionId, blockPath: currentSelection.blockPath, asset });
+          setImagePicker(undefined);
+        }} />
+      </Modal>
       <SavePersonalTemplateDialog
         open={templateSaveOpen}
         initialName={store.getState().document.meta.title}
@@ -3792,8 +3828,8 @@ export function ResumeEditorShell({
                     showPrintSafeArea={showPrintSafeArea}
                     zoom={zoom}
                     selection={selection}
-                    onSelectBlock={(nextSelection) =>
-                      store.getState().setSelection(nextSelection)
+                    onSelectBlock={(nextSelection, options) =>
+                      options ? store.getState().selectLayoutBlock(nextSelection, options.extend) : store.getState().setSelection(nextSelection)
                     }
                     onChangeSectionTitle={(params) =>
                       store.getState().updateSectionTitle(params)

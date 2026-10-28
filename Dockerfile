@@ -56,7 +56,9 @@ COPY --from=builder --chown=anonresume:anonresume /app/scripts ./scripts
 COPY --from=builder --chown=anonresume:anonresume /app/src ./src
 COPY --from=builder --chown=anonresume:anonresume /app/package.json /app/tsconfig.json ./
 COPY --from=builder --chown=anonresume:anonresume /app/docker/entrypoint.sh /usr/local/bin/anonresume
-RUN chmod 0755 /usr/local/bin/anonresume
+RUN chmod 0755 /usr/local/bin/anonresume \
+  && install -d -o 1001 -g 1001 -m 0700 /var/lib/anonresume/images
+ENV ANONRESUME_IMAGE_DIR=/var/lib/anonresume/images
 USER anonresume
 EXPOSE 3000
 ENTRYPOINT ["anonresume"]

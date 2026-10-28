@@ -5,6 +5,7 @@ import type {
   ResumePageLayout,
 } from "../pagination";
 import type { RichTextPosition } from "./rich-text-range";
+import { calculateFragmentHeight, pathsEqual } from "../pagination-model";
 
 interface PagePadding {
   top: number;
@@ -28,6 +29,7 @@ export interface ResumePageBreakMap {
   revision: string;
   pageCount: number;
   breaks: ResumePageBreak[];
+  columns?: Array<{ sectionId: string; path: string[]; firstHeight: number; leftHeight: number; rightHeight: number; continues?: boolean }>;
 }
 
 interface BreakAnchor {
@@ -37,6 +39,7 @@ interface BreakAnchor {
 }
 
 function findFirstAnchor(fragment: ResumePageFragment): BreakAnchor {
+  if (fragment.columnLayout && !fragment.continuation) return { kind: "structural", path: fragment.path };
   if (fragment.textRange) {
     return {
       kind: "text",
@@ -82,6 +85,40 @@ export function createResumePageBreakMap(input: {
     input.sections.map((section) => [section.id, section]),
   );
   const breaks: ResumePageBreak[] = [];
+  const columns: NonNullable<ResumePageBreakMap["columns"]> = [];
+  function findNode(nodes: MeasuredResumeNode[], path: string[]): MeasuredResumeNode | undefined {
+    for (const node of nodes) {
+      if (pathsEqual(node.path, path)) return node;
+      const child = findNode(node.children ?? [], path);
+      if (child) return child;
+    }
+  }
+  function collectColumns(sectionId: string, fragments: ResumePageFragment[]) {
+    const nodes = sectionMap.get(sectionId)?.blocks ?? [];
+    for (const fragment of fragments) {
+      if (fragment.columnLayout && !fragment.continuation) {
+        const node = findNode(nodes, fragment.path);
+        const left = node?.children?.[0];
+        const leftFragment = fragment.children?.[0];
+        if (node && left && leftFragment) columns.push({ sectionId, path: fragment.path, firstHeight: calculateFragmentHeight(node, fragment), leftHeight: calculateFragmentHeight(left, leftFragment), rightHeight: node.children?.[1]?.height ?? 0, continues: fragment.continues });
+      }
+      collectColumns(sectionId, fragment.children ?? []);
+    }
+  }
+  function columnSpacerCompensation(sectionId: string, fragments: ResumePageFragment[], anchor: BreakAnchor): number {
+    for (const fragment of fragments) {
+      if (fragment.columnLayout && anchor.path.length > fragment.path.length && fragment.path.every((id, index) => anchor.path[index] === id)) {
+        const node = findNode(sectionMap.get(sectionId)?.blocks ?? [], fragment.path);
+        const left = node?.children?.[0];
+        const leftFragment = fragment.children?.[0];
+        if (node && left && leftFragment) return Math.max(0, calculateFragmentHeight(node, fragment) - calculateFragmentHeight(left, leftFragment));
+      }
+      const compensation = columnSpacerCompensation(sectionId, fragment.children ?? [], anchor);
+      if (compensation) return compensation;
+    }
+    return 0;
+  }
+  for (const page of input.pages) for (const section of page.sections) collectColumns(section.sectionId, section.blocks);
 
   for (let pageIndex = 1; pageIndex < input.pages.length; pageIndex += 1) {
     const previousPage = input.pages[pageIndex - 1]!;
@@ -121,6 +158,7 @@ export function createResumePageBreakMap(input: {
       fromPageIndex: pageIndex - 1,
       toPageIndex: pageIndex,
       spacerHeight:
+        columnSpacerCompensation(firstSection.sectionId, previousPage.sections.find((section) => section.sectionId === firstSection.sectionId)?.blocks ?? [], anchor) +
         Math.max(0, input.pageHeight - previousPage.totalHeight) +
         input.pagePadding.bottom +
         input.pageGap +
@@ -133,5 +171,6 @@ export function createResumePageBreakMap(input: {
     revision: input.revision,
     pageCount: input.pages.length,
     breaks,
+    ...(columns.length ? { columns } : {}),
   };
 }
