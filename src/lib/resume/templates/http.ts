@@ -8,6 +8,7 @@ import {
   RequestBodyTooLargeError,
 } from "@/lib/http/request-body";
 import { TemplateError, templateErrorStatus } from "./errors";
+import { ImageAssetError, imageErrorStatus } from "@/lib/resume/assets/errors";
 
 export type TemplateRouteContext = { params: Promise<{ id: string }> };
 export function templateRoute<Args extends [Request, ...unknown[]]>(
@@ -26,7 +27,8 @@ export function templateRoute<Args extends [Request, ...unknown[]]>(
           ? NextResponse.json({ error: "unauthorized" }, { status: 401 })
           : await handler(session.user.id, ...args));
     } catch (error) {
-      if (error instanceof TemplateError)
+      if (error instanceof ImageAssetError) response = NextResponse.json({ error: error.code }, { status: imageErrorStatus(error.code) });
+      else if (error instanceof TemplateError)
         response = NextResponse.json(
           { error: error.code },
           { status: templateErrorStatus(error.code) },

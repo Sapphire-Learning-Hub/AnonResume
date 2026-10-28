@@ -22,6 +22,16 @@ export type ConfigurationFieldChange =
   | { operation: "set"; value: boolean | number | string | string[] };
 
 export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> = {
+  imagesEnabled: "configuration.field.imagesEnabled",
+  imageStorage: "configuration.field.imageStorage",
+  imageUploadLimitMiB: "configuration.field.imageUploadLimitMiB",
+  imageAccountQuotaMiB: "configuration.field.imageAccountQuotaMiB",
+  imageS3Endpoint: "configuration.field.imageS3Endpoint",
+  imageS3Region: "configuration.field.imageS3Region",
+  imageS3Bucket: "configuration.field.imageS3Bucket",
+  imageS3Prefix: "configuration.field.imageS3Prefix",
+  imageS3AccessKeyId: "configuration.field.imageS3AccessKeyId",
+  imageS3SecretAccessKey: "configuration.field.imageS3SecretAccessKey",
   smtpHost: "configuration.field.smtpHost",
   smtpPort: "configuration.field.smtpPort",
   smtpSecure: "configuration.field.smtpSecure",
@@ -101,6 +111,8 @@ export const configurationNumberBounds: Partial<
   Record<ConfigKey, { min: number; max?: number }>
 > = {
   diagnosticsRetentionDays: { min: 1, max: 30 },
+  imageUploadLimitMiB: { min: 1, max: 10 },
+  imageAccountQuotaMiB: { min: 13, max: 102400 },
   diagnosticsMaxRecords: { min: 100, max: 100_000 },
   smtpPort: { min: 1, max: 65_535 },
   emailVerificationExpiresSeconds: { min: 300 },

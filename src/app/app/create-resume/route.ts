@@ -14,8 +14,9 @@ import {
 } from "@/lib/http/request-body";
 import { createApplicationUrl, requireSameOrigin } from "@/lib/http/request-origin";
 import { createGeneratedResumeRecord } from "@/lib/resume/repository";
+import { withResumeLifecycleErrors } from "@/lib/resume/trash/http";
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   const forbiddenResponse = requireSameOrigin(request);
 
   if (forbiddenResponse) {
@@ -113,3 +114,4 @@ export async function POST(request: Request) {
 
   return NextResponse.redirect(redirectUrl, { status: 303 });
 }
+export const POST = withResumeLifecycleErrors(postHandler);

@@ -5,6 +5,8 @@ import type { AiProposalProgressChange } from "@/lib/ai/runs/stream-events";
 
 function blockPreview(block: ResumeBlock): string | null {
   switch (block.type) {
+    case "image":
+      return block.alt || null;
     case "text":
       return getPlainTextFromRichText(block.content);
     case "badges":

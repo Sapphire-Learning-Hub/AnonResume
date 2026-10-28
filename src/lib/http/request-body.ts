@@ -9,7 +9,7 @@ export class RequestBodyTooLargeError extends Error {
   }
 }
 
-async function readLimitedRequestBody(request: Request, maxBytes: number) {
+export async function readLimitedRequestBody(request: Request, maxBytes: number) {
   const contentLength = Number.parseInt(
     request.headers.get("content-length") ?? "",
     10,

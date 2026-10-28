@@ -91,6 +91,7 @@ services:
       - "${ANONRESUME_PORT:-3000}:3000"
     volumes:
       - deployment-secrets:/run/anonresume-secrets:ro
+      - resume-images:/var/lib/anonresume/images
     restart: unless-stopped
 
   ai-worker:
@@ -138,3 +139,4 @@ services:
 volumes:
   deployment-secrets:
   postgres-data:
+  resume-images:

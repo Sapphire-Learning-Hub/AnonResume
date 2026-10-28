@@ -6,6 +6,7 @@ import { unified } from "unified";
 import type { AppLocale } from "@/i18n/messages";
 
 import { listResumeFontPresets } from "../font-presets";
+import { parseImageMarkdown } from "../images/markdown";
 import { visitResumeBlocks } from "../block-tree";
 import { createRichTextFromPlainText } from "../operations";
 import type {
@@ -172,6 +173,28 @@ function blocksFromMdastNode(
 
   switch (node.type) {
     case "paragraph": {
+      if (node.children.some(child => child.type === "image")) {
+        const blocks: ResumeBlock[] = [];
+        let offset = node.position?.start.offset ?? 0;
+        const appendText = (end: number) => {
+          const source = chunkSource.slice(offset, end).trim();
+          if (source) blocks.push(createTextBlock(context, generatedId(context, "text"), parseInline(source, line, context), line));
+        };
+        for (const child of node.children) {
+          if (child.type !== "image") continue;
+          appendText(child.position?.start.offset ?? offset);
+          const imageId = node.children.length === 1 ? id : generatedId(context, "image");
+          const block = parseImageMarkdown(child, imageId, baseBlock?.type === "image" ? baseBlock : undefined);
+          if (!block) diagnostic(context, "image_asset_required", line);
+          else {
+            blocks.push(block);
+            context.sourceMap.blocks.push({ id: imageId, start: { line, column: 1 }, end: { line, column: 1 } });
+          }
+          offset = child.position?.end.offset ?? offset;
+        }
+        appendText(node.position?.end.offset ?? offset);
+        return blocks;
+      }
       if (
         context.sourceVersion >= 2 &&
         node.children.some((child) => child.type === "inlineCode") &&
@@ -788,7 +811,7 @@ function blocksFromDirective(
       ];
     }
     case "row": {
-      checkAllowedAttributes(node, ["gap", "align", "justify"], context);
+      checkAllowedAttributes(node, ["gap", "align", "justify", "columns"], context);
       const baseRow = baseBlock?.type === "row" ? baseBlock : undefined;
       const baseChildren =
         baseRow?.children.flatMap((child) =>
@@ -841,6 +864,7 @@ function blocksFromDirective(
         {
           id,
           type: "row",
+          ...(node.attributes.columns ? { columnLayout: enumAttribute(node, "columns", ["image-right"] as const, context) } : {}),
           ...(numberAttribute(node, "gap", context) === undefined
             ? {}
             : { gap: numberAttribute(node, "gap", context) }),

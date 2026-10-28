@@ -27,6 +27,7 @@ function collectIds(block: ResumeBlock): string[] {
     ];
   }
 
+  if (block.type === "image") return [block.id];
   return [block.id, ...block.children.flatMap(collectIds)];
 }
 

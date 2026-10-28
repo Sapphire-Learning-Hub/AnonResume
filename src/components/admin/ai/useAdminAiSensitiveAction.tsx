@@ -44,6 +44,11 @@ export function useAdminAiSensitiveAction() {
       });
     }
     if (!response.ok) {
+      const body: unknown = await response.clone().json().catch(() => null);
+      if (body && typeof body === "object" && "error" in body && body.error === "image_storage_in_use") {
+        toast.error({ key: "admin-sensitive-action-error", content: t("configuration.imageStorageInUse") });
+        return null;
+      }
       toast.error({ key: "admin-sensitive-action-error", content: <>{t("ai.failed")}<DiagnosticReference diagnosticId={readResponseDiagnostic(response)} /></> });
       return null;
     }

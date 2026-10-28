@@ -1,4 +1,5 @@
 import { ResumeRenderer } from "./ResumeRenderer";
+import { ResumeImageAccess } from "./images/ResumeImage";
 
 export function ResumePrintShell({
   eyebrow,
@@ -6,12 +7,14 @@ export function ResumePrintShell({
   backHref,
   backLabel,
   document,
+  imageAccess = {},
 }: {
   eyebrow: string;
   title: string;
   backHref?: string;
   backLabel?: string;
   document: Parameters<typeof ResumeRenderer>[0]["document"];
+  imageAccess?: { slug?: string; jobId?: string };
 }) {
   return (
     <main
@@ -71,7 +74,9 @@ export function ResumePrintShell({
         data-resume-print-content="true"
         style={{ width: "min(960px, 100%)", margin: "0 auto" }}
       >
-        <ResumeRenderer document={document} mode="print" />
+        <ResumeImageAccess access={imageAccess}>
+          <ResumeRenderer document={document} mode="print" />
+        </ResumeImageAccess>
       </section>
     </main>
   );

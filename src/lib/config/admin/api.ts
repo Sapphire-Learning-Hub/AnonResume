@@ -38,6 +38,7 @@ export function configurationApiErrorResponse(error: unknown) {
       { status: 409 },
     );
   }
+  if (error instanceof ConfigurationStateError && error.message === "image_storage_in_use") return NextResponse.json({ error: "image_storage_in_use" }, { status: 409 });
   if (
     error instanceof ConfigurationStateError &&
     error.message === "configuration_revision_not_found"

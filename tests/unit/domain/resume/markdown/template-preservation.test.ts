@@ -310,7 +310,6 @@ describe("Markdown preserves resume semantics", () => {
 
   it.each([
     "| A | B |\n| --- | --- |\n| 1 | 2 |",
-    "![photo](https://example.com/photo.png)",
   ])(
     "blocks unsupported Markdown rather than silently discarding it",
     (body) => {

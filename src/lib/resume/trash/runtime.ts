@@ -1,4 +1,5 @@
 import { getLogger, serializeSafeError } from "@/lib/observability/logging";
+import { cleanupImages } from "@/lib/resume/assets/maintenance";
 import {
   processTrashedResumeStops,
   runResumeTrashMaintenance,
@@ -22,6 +23,8 @@ async function maintain() {
   try {
     await processTrashedResumeStops();
     const result = await runResumeTrashMaintenance();
+    const images = await cleanupImages();
+    if (images.removed || images.failed) log[images.failed ? "warn" : "info"]("image_maintenance_completed", { labels: images, outcome: images.failed ? "failure" : "success" });
     if (result.purged || result.failed)
       log[result.failed ? "warn" : "info"]("trash_maintenance_completed", {
         labels: result,

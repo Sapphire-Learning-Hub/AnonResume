@@ -36,6 +36,10 @@ const ResumePageBreakContext = createContext<ResumePageBreakMap | undefined>(
   undefined,
 );
 
+export function useResumeColumnFragment(sectionId: string, path: string[]) {
+  return useContext(ResumePageBreakContext)?.columns?.find((column) => column.sectionId === sectionId && pathsEqual(column.path, path));
+}
+
 function pathsEqual(left: string[], right: string[]) {
   return (
     left.length === right.length &&

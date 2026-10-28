@@ -7,6 +7,7 @@ import {
 } from "@/domain/resume/public-appearance";
 
 import { ResumeRenderer } from "./ResumeRenderer";
+import { ResumeImageAccess } from "./images/ResumeImage";
 import { ResponsiveResumeViewport } from "./ResponsiveResumeViewport";
 import { PublicPdfExportButton } from "../pdf/PublicPdfExportButton";
 
@@ -23,6 +24,7 @@ export function ResumeViewShell({
   downloadLabel,
   document,
   appearance,
+  publicSlug,
 }: {
   eyebrow?: string;
   title: string;
@@ -33,6 +35,7 @@ export function ResumeViewShell({
   downloadLabel?: string;
   document: Parameters<typeof ResumeRenderer>[0]["document"];
   appearance?: PublicResumeAppearance;
+  publicSlug?: string;
 }) {
   const headerMode = appearance?.header ?? "full";
   const showHeader = headerMode !== "none";
@@ -102,7 +105,9 @@ export function ResumeViewShell({
 
       <section className="resume-view-content">
         <ResponsiveResumeViewport reflowAt={640}>
-          <ResumeRenderer document={document} mode="view" responsiveView />
+          <ResumeImageAccess access={publicSlug ? { slug: publicSlug } : {}}>
+            <ResumeRenderer document={document} mode="view" responsiveView />
+          </ResumeImageAccess>
         </ResponsiveResumeViewport>
       </section>
     </main>

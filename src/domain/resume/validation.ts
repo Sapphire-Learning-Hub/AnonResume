@@ -9,6 +9,7 @@ import {
 } from "@/i18n/messages";
 
 import { isResumeFontFamilyAllowed } from "./font-presets";
+import { collectImageAssetIds } from "./images/model";
 import {
   resumeDocumentSchema,
   type ResumeBlock,
@@ -670,7 +671,9 @@ export function validateResumeDocument(document: unknown): ResumeDocument {
     throw new ResumeDocumentValidationError(issues);
   }
 
-  return parsed;
+  return parsed.schemaVersion === 1 && collectImageAssetIds(parsed).length > 0
+    ? { ...parsed, schemaVersion: 2 }
+    : parsed;
 }
 
 export function isResumeStructureValidationError(error: unknown) {

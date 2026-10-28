@@ -4,10 +4,23 @@ import { measureResumeFlow } from "@/components/resume/pagination/flow-measureme
 import type { TiptapTextBlockEditorHandle } from "@/components/resume/TiptapTextBlockEditor";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
 import type { ResumeDocument } from "@/domain/resume/schema";
+import { createImageBlock } from "@/domain/resume/images/model";
 
 describe("measureResumeFlow", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("measures fixed columns in parallel and removes text spacers without counting the photo twice", () => {
+    const image = createImageBlock({ id: crypto.randomUUID(), name: "Photo", width: 600, height: 800 });
+    const document = documentWithBlocks([{ id: "columns", type: "row", columnLayout: "image-right", children: [textBlock("text", "Long text"), image] }]);
+    const root = createSectionRoot(2);
+    const row = appendMeasuredElement(root, "div", { "data-resume-block-path": "columns", "data-height": "640" });
+    const text = appendMeasuredElement(row, "div", { "data-resume-block-path": "columns::text", "data-height": "640" });
+    appendMeasuredElement(text, "span", { "data-resume-page-break-id": "column-break", "data-height": "40" });
+    appendMeasuredElement(row, "div", { "data-resume-block-path": `columns::${image.id}`, "data-height": "160" });
+    const measured = measureResumeFlow({ root, document, zoom: 2, committedSpacerHeights: new Map([["column-break", 20]]) });
+    expect(measured?.[0]?.blocks[0]).toMatchObject({ columnLayout: "image-right", height: 300, children: [{ path: ["columns", "text"], height: 300 }, { path: ["columns", image.id], height: 80 }] });
   });
 
   it("subtracts a structural spacer once and normalizes measurements by zoom", () => {

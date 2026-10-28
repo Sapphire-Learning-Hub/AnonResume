@@ -9,6 +9,8 @@ import { and, asc, count, eq, gte, inArray, isNull, lt, min, or, sql } from "dri
 
 import { db, pdfExportJobs, resumes } from "@/db";
 import type { ResumeTransaction } from "@/lib/resume/transaction";
+import { assertOwnedDocumentAssets } from "@/lib/resume/assets/references";
+import { ImageAssetError } from "@/lib/resume/assets/errors";
 import { getDiagnosticContext, taskDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { withTaskDiagnostics } from "@/lib/observability/diagnostics/tasks";
 import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
@@ -207,6 +209,7 @@ export async function enqueuePdfExport(
 
   const [job] = await db.transaction(async (transaction) => {
     await lockPdfResume(transaction, params.resumeUserId, params.resumeId);
+    const document = await assertOwnedDocumentAssets(transaction, params.resumeUserId, params.document);
     await transaction.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${PDF_QUEUE_LOCK}))`,
     );
@@ -242,7 +245,7 @@ export async function enqueuePdfExport(
         resumeId: params.resumeId,
         requesterUserId: params.requesterUserId ?? null,
         accessTokenHash: hashAccessToken(accessToken),
-        document: params.document,
+        document,
         diagnosticContext: getDiagnosticContext() ?? null,
         filename: params.filename,
       })
@@ -399,10 +402,14 @@ export async function adminRetryPdfExport(
   configuration: Readonly<PdfExportConfiguration>,
 ) {
   return db.transaction(async (transaction) => {
-    const [target] = await transaction.select({ userId: pdfExportJobs.resumeUserId, resumeId: pdfExportJobs.resumeId })
+    const [target] = await transaction.select({ userId: pdfExportJobs.resumeUserId, resumeId: pdfExportJobs.resumeId, document: pdfExportJobs.document })
       .from(pdfExportJobs).where(eq(pdfExportJobs.id, jobId)).limit(1);
     if (!target) throw new PdfExportNotFoundError(jobId);
     await lockPdfResume(transaction, target.userId, target.resumeId);
+    const document = await assertOwnedDocumentAssets(transaction, target.userId, target.document).catch(error => {
+      if (error instanceof ImageAssetError) throw new PdfExportStateConflictError(jobId);
+      throw error;
+    });
     await transaction.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${PDF_QUEUE_LOCK}))`,
     );
@@ -434,7 +441,7 @@ export async function adminRetryPdfExport(
         resumeId: row.resumeId,
         requesterUserId: row.requesterUserId,
         accessTokenHash: hashAccessToken(randomBytes(32).toString("base64url")),
-        document: row.document,
+        document,
         diagnosticContext: getDiagnosticContext() ?? null,
         filename: row.filename,
       })

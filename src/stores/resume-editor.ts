@@ -1,4 +1,7 @@
 import { createStore } from "zustand/vanilla";
+import { createImageBlock } from "@/domain/resume/images/model";
+import { getBlockInsertionAnchor } from "@/domain/resume/block-tree";
+import { composeResumeBlocks, extendBlockSelection, resolveBlockRange, type BlockCompositionCommand } from "@/domain/resume/composition/operations";
 
 import {
   createSelectionForBlock,
@@ -98,6 +101,8 @@ export interface ResumeEditorState {
 
 export interface ResumeEditorActions {
   setSelection: (selection: ResumeEditorSelection) => void;
+  selectLayoutBlock: (selection: ResumeEditorSelection, extend?: boolean) => void;
+  composeBlocks: (command: BlockCompositionCommand) => void;
   replaceDocument: (params: {
     document: ResumeDocument;
     history: "record" | "skip";
@@ -184,6 +189,11 @@ export interface ResumeEditorActions {
     blockPath?: string[];
     presetId: BlockPresetId;
   }) => void;
+  addImage: (params: {
+    sectionId: string;
+    blockPath?: string[];
+    asset: Parameters<typeof createImageBlock>[0];
+  }) => void;
   addSection: (presetId?: SectionPresetId) => void;
   setSectionVisibility: (params: {
     sectionId: string;
@@ -268,9 +278,12 @@ function getSelectionForDocument(
     (item) => item.id === selection.sectionId,
   );
   if (!section) return {};
-  if (!selection.blockPath?.length) return { sectionId: section.id };
+  if (!selection.blockPath?.length) return { sectionId: section.id, ...(selection.richTextField === "title" && section.title ? { richTextField: "title" } : {}) };
   const block = findBlockByPath(section.blocks, selection.blockPath);
   if (!block) return { sectionId: section.id };
+  if (selection.blockRange && !resolveBlockRange(document, selection)) {
+    return { sectionId: section.id, blockPath: selection.blockPath };
+  }
   if (selection.badgeItemId) {
     if (
       block.type !== "badges" ||
@@ -314,7 +327,18 @@ export function createResumeEditorStore({
       future: [],
     },
     setSelection: (selection) => {
-      set({ selection });
+      set({ selection: getSelectionForDocument(get().document, selection) });
+    },
+    selectLayoutBlock: (selection, extend) => {
+      const current = get();
+      set({ selection: getSelectionForDocument(current.document, extend ? extendBlockSelection(current.document, current.selection, selection) : selection) });
+    },
+    composeBlocks: (command) => {
+      const current = get();
+      const result = composeResumeBlocks(current.document, current.selection, command);
+      if (result.document === current.document) return;
+      get().updateDocument(() => result.document);
+      set({ selection: getSelectionForDocument(result.document, result.selection) });
     },
     replaceDocument: ({ document: nextDocument, history }) => {
       const current = get();
@@ -344,8 +368,11 @@ export function createResumeEditorStore({
       const current = get();
       const nextDocument = updater(current.document);
 
+      if (nextDocument === current.document) return;
+
       set({
         document: nextDocument,
+        selection: getSelectionForDocument(nextDocument, current.selection),
         dirty: true,
         saveStatus: "dirty",
         saveValidation: undefined,
@@ -511,7 +538,8 @@ export function createResumeEditorStore({
     addBlock: ({ sectionId, blockPath, presetId }) => {
       const locale = resolveLocale(get().document.meta.locale);
       const block = createBlockFromPreset(presetId, locale);
-      const parentPath = blockPath?.slice(0, -1) ?? [];
+      const section = get().document.sections.find((section) => section.id === sectionId);
+      const parentPath = blockPath && section ? getBlockInsertionAnchor(section.blocks, blockPath).slice(0, -1) : [];
 
       get().updateDocument((document) =>
         blockPath?.length
@@ -530,6 +558,18 @@ export function createResumeEditorStore({
       set({
         selection: createSelectionForBlock(sectionId, block, parentPath),
       });
+    },
+    addImage: ({ sectionId, blockPath, asset }) => {
+      const block = createImageBlock(asset);
+      const section = get().document.sections.find((section) => section.id === sectionId);
+      const parentPath = blockPath && section ? getBlockInsertionAnchor(section.blocks, blockPath).slice(0, -1) : [];
+      get().updateDocument(document => {
+        const updated = blockPath?.length
+          ? insertBlockAfterDocument({ document, sectionId, blockPath, block })
+          : appendBlockToSectionDocument({ document, sectionId, block });
+        return { ...updated, schemaVersion: 2 };
+      });
+      set({ selection: createSelectionForBlock(sectionId, block, parentPath) });
     },
     addSection: (presetId) => {
       const locale = resolveLocale(get().document.meta.locale);
@@ -615,7 +655,7 @@ export function createResumeEditorStore({
       set({
         selection: {
           sectionId,
-          blockPath: [...blockPath.slice(0, -1), copy.id],
+          blockPath: [...getBlockInsertionAnchor(section.blocks, blockPath).slice(0, -1), copy.id],
           richTextField: copy.type === "text" ? "content" : undefined,
         },
       });
@@ -826,6 +866,7 @@ export function createResumeEditorStore({
 
       set({
         document: previous,
+        selection: getSelectionForDocument(previous, { ...current.selection, blockRange: undefined }),
         dirty: true,
         saveStatus: "dirty",
         history: {
@@ -842,6 +883,7 @@ export function createResumeEditorStore({
 
       set({
         document: next,
+        selection: getSelectionForDocument(next, { ...current.selection, blockRange: undefined }),
         dirty: true,
         saveStatus: "dirty",
         history: {

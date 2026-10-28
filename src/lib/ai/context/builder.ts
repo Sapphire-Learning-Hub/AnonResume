@@ -76,6 +76,8 @@ export function buildAiProviderContext(context: AiResumeContext) {
 
 function contextBlock(block: ResumeBlock): AiContextBlock {
   switch (block.type) {
+    case "image":
+      return { id: block.id, type: block.type, content: { alt: block.alt } };
     case "text":
       return { id: block.id, type: block.type, content: block.content };
     case "badges":
@@ -152,6 +154,7 @@ function collectEditableTargets(
       case "group":
       case "row":
         return collectEditableTargets(block.children, sectionId, blockPath);
+      case "image":
       case "badges":
         return [];
     }

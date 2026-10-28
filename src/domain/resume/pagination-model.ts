@@ -6,6 +6,7 @@ import {
 
 export type MeasuredResumeNodeType =
   | "text"
+  | "image"
   | "badges"
   | "row"
   | "group"
@@ -25,6 +26,7 @@ export interface MeasuredResumeNode {
   height: number;
   partial?: boolean;
   direction?: "vertical" | "horizontal";
+  columnLayout?: "image-right";
   childGap?: number;
   wrapperHeight?: number;
   children?: MeasuredResumeNode[];
@@ -37,6 +39,9 @@ export interface MeasuredResumeNode {
 
 export interface ResumePageFragment {
   path: string[];
+  columnLayout?: "image-right";
+  /** The text column continues beyond this page; keep its leading edge stable. */
+  continues?: boolean;
   children?: ResumePageFragment[];
   continuation?: boolean;
   includeWrapper?: boolean;
@@ -76,7 +81,8 @@ export function createWholeFragment(
 ): ResumePageFragment {
   return {
     path: [...node.path],
-    ...(node.partial && node.children?.length
+    ...(node.columnLayout ? { columnLayout: node.columnLayout } : {}),
+    ...((node.partial || node.columnLayout) && node.children?.length
       ? { children: node.children.map(createWholeFragment) }
       : {}),
     ...(node.continuation ? { continuation: true } : {}),
@@ -93,6 +99,8 @@ export function calculateMeasuredChildrenHeight(
   children: MeasuredResumeNode[] = node.children ?? [],
 ) {
   const childGap = getChildGap(node);
+
+  if (node.columnLayout) return Math.max(0, ...children.map((child) => child.height));
 
   return (
     (node.wrapperHeight ?? 0) +
@@ -133,6 +141,13 @@ export function calculateFragmentHeight(
   }
 
   const childGap = getChildGap(node);
+
+  if (node.columnLayout) {
+    return Math.max(0, ...fragment.children.map((childFragment) => {
+      const child = node.children?.find((child) => pathsEqual(child.path, childFragment.path));
+      return child ? calculateFragmentHeight(child, childFragment) : 0;
+    }));
+  }
 
   return (
     (fragment.includeWrapper === false ? 0 : (node.wrapperHeight ?? 0)) +

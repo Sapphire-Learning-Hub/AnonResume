@@ -4,6 +4,7 @@ import {
   db,
   systemConfigRevisions,
   systemConfigValues,
+  resumeAssets,
 } from "@/db";
 import {
   decryptConfigSecret,
@@ -380,6 +381,15 @@ export async function publishConfigurationDraft(input: {
       .where(eq(systemConfigValues.revisionId, draft.id));
     const values = decodeSnapshot(draftRows, input.keyring);
     validatePublishableManagedConfig(values);
+    const [asset] = await transaction.select({ id: resumeAssets.id }).from(resumeAssets).limit(1);
+    if (asset) {
+      const activeRows = await transaction.select().from(systemConfigValues).where(eq(systemConfigValues.revisionId, active.id));
+      const previous = decodeSnapshot(activeRows, input.keyring);
+      for (const key of ["imageStorage", "imageS3Endpoint", "imageS3Region", "imageS3Bucket", "imageS3Prefix"] as const) {
+        if (key !== "imageStorage" && previous.imageStorage === "local" && values.imageStorage === "local") continue;
+        if (previous[key] !== values[key]) throw new ConfigurationStateError("image_storage_in_use");
+      }
+    }
     const now = new Date();
 
     await transaction

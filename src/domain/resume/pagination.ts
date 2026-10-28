@@ -85,6 +85,7 @@ function getSectionTitleGap(section: MeasuredResumeSection) {
 
 function isBreakableVerticalNode(node: MeasuredResumeNode) {
   return (
+    Boolean(node.columnLayout) ||
     (node.type === "text" && Boolean(node.textLines?.length)) ||
     (node.direction !== "horizontal" &&
       (node.type === "group" ||
@@ -311,6 +312,19 @@ function takeVerticalChildren(
   };
 }
 
+function takeColumnFragment(node: MeasuredResumeNode, availableSpace: number, pageHeight: number): NodePlacementResult {
+  const left = node.children?.[0];
+  const image = node.continuation ? undefined : node.children?.[1];
+  if (!left || (image && image.height > availableSpace)) return { height: 0 };
+  const placed = takeNodeFragment(left, availableSpace, pageHeight, true);
+  if (!placed.fragment) return { height: 0 };
+  return {
+    fragment: { path: [...node.path], columnLayout: node.columnLayout, ...(placed.remainingNode ? { continues: true } : {}), ...(node.continuation ? { continuation: true } : {}), children: [placed.fragment, ...(image ? [createWholeFragment(image)] : [])] },
+    height: Math.max(placed.height, image?.height ?? 0),
+    remainingNode: placed.remainingNode ? { ...node, continuation: true, partial: true, children: [placed.remainingNode], height: placed.remainingNode.height } : undefined,
+  };
+}
+
 function takeNodeFragment(
   node: MeasuredResumeNode,
   availableSpace: number,
@@ -327,6 +341,8 @@ function takeNodeFragment(
   if (!allowSplit || !isBreakableVerticalNode(node)) {
     return { height: 0 };
   }
+
+  if (node.columnLayout) return takeColumnFragment(node, availableSpace, pageHeight);
 
   if (node.type === "text" && node.textLines?.length) {
     return takeTextLines(node, availableSpace);
@@ -376,8 +392,9 @@ function takeSectionFragment(params: {
   availableSpace: number;
   pageHeight: number;
   includeTitle: boolean;
+  allowOverflow: boolean;
 }) {
-  const { section, blocks, availableSpace, pageHeight, includeTitle } = params;
+  const { section, blocks, availableSpace, pageHeight, includeTitle, allowOverflow } = params;
   const placedBlocks: ResumePageFragment[] = [];
   const remainingBlocks: MeasuredResumeNode[] = [];
   let usedHeight =
@@ -404,6 +421,10 @@ function takeSectionFragment(params: {
 
     if (!placement.fragment || placement.height <= 0) {
       if (placedBlocks.length === 0) {
+        if (block.columnLayout && !allowOverflow) break;
+        if (block.columnLayout && includeTitle && section.titleHeight > 0) {
+          return { fragment: { sectionId: section.id, includeTitle: true, blocks: [], totalHeight: section.titleHeight }, remainingBlocks: blocks };
+        }
         placedBlocks.push(createWholeFragment(block));
         usedHeight += gapBeforeBlock + block.height;
         remainingBlocks.push(...blocks.slice(blockIndex + 1));
@@ -526,6 +547,7 @@ export function paginateMeasuredSections(input: {
           (currentPage.sections.length > 0 ? input.sectionGap : 0),
         pageHeight: input.pageHeight,
         includeTitle,
+        allowOverflow: currentPage.sections.length === 0,
       });
 
       if (!result.fragment) {

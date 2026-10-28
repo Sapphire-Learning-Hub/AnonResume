@@ -69,6 +69,8 @@ Example Company
 :::
 ```
 
+For an image on the right, use `:::row {columns="image-right" gap=16 align="start"}`. Place the left-column content first and one image second. Wrap multiple left-column blocks in one `group`. The right column reserves the image's configured width, while text continues on later pages at the same left-column width without repeating the image. Copy image Markdown from **My images**.
+
 Use `layout` for a section's equal-width columns. Keep one `group` boundary around a column containing several blocks. Use `column` when a single text block with multiple paragraphs forms a column, and write ordinary paragraphs inside. Ordinary vertical groups inside a column do not need repeated wrappers:
 
 ```markdown
@@ -133,3 +135,5 @@ The editor recognizes ordinary Markdown, supported legacy AnonResume directives 
 Copying the Markdown source carries visible content, explicit block directives, and public settings from the settings block. It does not carry design details retained only on the current device. Markdown source is therefore useful for editing and moving public semantics, but it is not a complete backup and should not replace the platform's normal save and export flows. Keep the relevant sparse directive in source when a special layout must survive across devices.
 
 Markdown comments are preserved. Other raw HTML, scripts, and custom CSS are not supported.
+
+Images use `![alternative text](anonresume-asset:image-id)`. Choose **Copy Markdown** from an image's menu in **My images** to obtain a valid reference. Optional title parameters preserve size and cropping when needed. External image URLs are not supported. The source references an asset in your account, not the image file itself; copying the source does not share the asset with another account.

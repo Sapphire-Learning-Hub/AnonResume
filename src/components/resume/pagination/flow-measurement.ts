@@ -423,6 +423,13 @@ function measureResumeBlock(params: {
     return undefined;
   }
 
+  if (params.block.type === "row" && params.block.columnLayout) {
+    const children = params.block.children.map((block) => measureResumeBlock({ ...params, block, blockPath: [...params.blockPath, block.id] }));
+    if (children.some((child) => !child)) return undefined;
+    const measuredChildren = children.filter((child): child is MeasuredResumeNode => Boolean(child));
+    return { id: params.block.id, path: params.blockPath, type: "row", columnLayout: params.block.columnLayout, direction: "horizontal", children: measuredChildren, height: Math.max(0, ...measuredChildren.map((child) => child.height)) };
+  }
+
   if (params.block.type === "group" && params.block.direction !== "horizontal") {
     const children = params.block.children.map((child) =>
       measureResumeBlock({

@@ -1,0 +1,1 @@
+ALTER TABLE "resume_assets" ADD COLUMN "checked_at" timestamp with time zone;
