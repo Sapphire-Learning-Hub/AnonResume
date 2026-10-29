@@ -1711,6 +1711,26 @@ describe("ResumeRenderer", () => {
     });
   });
 
+  it("selects the innermost canvas block and extends layout selection without selecting its ancestors", () => {
+    const onSelectBlock = vi.fn();
+    render(<ResumeRenderer document={createDefaultResumeDocument()} mode="edit" editSurfaceMode="layout" onMoveBlock={vi.fn()} onSelectBlock={onSelectBlock} />);
+    fireEvent.click(screen.getByTestId("resume-block-item-group-experience-anonresume-row-experience-header-text-experience-role"), { shiftKey: true });
+    expect(onSelectBlock).toHaveBeenCalledExactlyOnceWith({ sectionId: "section-experience", blockPath: ["group-experience-anonresume", "row-experience-header", "text-experience-role"] }, { extend: true });
+  });
+
+  it("selects list-item content directly in layout mode without selecting the whole list", () => {
+    const document = createDefaultResumeDocument();
+    const section = document.sections[0]!;
+    const list = section.blocks.find((block) => block.type === "list");
+    if (!list || list.type !== "list") throw new Error("Expected list content");
+    const item = list.items[0]!;
+    const path = [list.id, item.id, item.children[0]!.id];
+    const onSelectBlock = vi.fn();
+    render(<ResumeRenderer document={document} mode="edit" editSurfaceMode="layout" onMoveBlock={vi.fn()} onSelectBlock={onSelectBlock} />);
+    fireEvent.click(screen.getByTestId(`resume-block-item-${path.join("-")}`), { shiftKey: true });
+    expect(onSelectBlock).toHaveBeenCalledExactlyOnceWith({ sectionId: section.id, blockPath: path }, { extend: true });
+  });
+
   it("keeps a selection handle for a sole structural block", () => {
     const onSelectBlock = vi.fn();
 

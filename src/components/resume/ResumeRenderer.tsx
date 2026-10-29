@@ -35,7 +35,7 @@ import {
 } from "react";
 
 import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
-import { getBlockSubtreeDepth, isContainerBlock } from "@/domain/resume/block-tree";
+import { HolderOutlined } from "@ant-design/icons";
 import { ONBOARDING_EDIT_BLOCK_ID } from "@/domain/onboarding/editor-basics-document";
 import {
   findBlockByPath,
@@ -1150,7 +1150,7 @@ function SortableListItem({
           });
         }}
       >
-        ⋮⋮
+        <HolderOutlined aria-hidden />
       </button>
       {children}
     </li>
@@ -1738,6 +1738,11 @@ function SortableBlockItem({
         data-resume-edit-surface-mode={editSurfaceMode}
         data-resume-over={over}
         data-resume-block-selected={selection?.sectionId === sectionId && (selection.blockRange ? selection.blockPath?.slice(0, -1).join("/") === blockPath.slice(0, -1).join("/") && selection.blockRange.includes(block.id) : selection.blockPath?.join("/") === blockPath.join("/"))}
+        onClick={editSurfaceMode === "layout" && onSelectBlock ? (event) => {
+          if (event.target instanceof Element && event.target.closest("a, button, input, [contenteditable='true']")) return;
+          event.stopPropagation();
+          onSelectBlock({ sectionId, blockPath }, { extend: event.shiftKey });
+        } : undefined}
         data-onboarding-anchor={
           mode === "edit" && block.id === ONBOARDING_EDIT_BLOCK_ID
             ? "onboarding-edit-target"
@@ -1764,7 +1769,6 @@ function SortableBlockItem({
               label: dragLabel,
             })}
             className={styles.blockDragHandle}
-            style={isContainerBlock(block) ? { right: -18 - 32 * (getBlockSubtreeDepth(block) - 1) } : undefined}
             title={editSurfaceMode === "layout" ? t("composition.hint") : undefined}
             data-resume-handle-placement={handlePlacement}
             {...(draggable ? attributes : {})}
@@ -1775,7 +1779,7 @@ function SortableBlockItem({
               else onSelectBlock?.({ sectionId, blockPath });
             }}
           >
-            ⋮⋮
+            <HolderOutlined aria-hidden />
           </button>
         ) : null}
         {renderBlock(block, styles, {
@@ -1878,9 +1882,17 @@ function SortableBlockChildren({
         >
           <div
             style={columnItemStyle}
+            className={styles.layoutSelectionTarget}
+            data-resume-edit-surface-mode={editSurfaceMode}
+            data-resume-block-selected={isSelectedBlock(selection, sectionId, blockPath)}
             data-testid={`resume-block-item-${blockPath.join("-")}`}
             data-resume-block-path={serializeBlockPath(blockPath)}
             data-resume-drag-mode="none"
+            onClick={mode === "edit" && editSurfaceMode === "layout" && onSelectBlock ? (event) => {
+              if (event.target instanceof Element && event.target.closest("a, button, input, [contenteditable='true']")) return;
+              event.stopPropagation();
+              onSelectBlock({ sectionId, blockPath }, { extend: event.shiftKey });
+            } : undefined}
             data-onboarding-anchor={
               mode === "edit" && block.id === ONBOARDING_EDIT_BLOCK_ID
                 ? "onboarding-edit-target"
@@ -2084,7 +2096,7 @@ function renderBlock(
 ): ReactNode {
   switch (block.type) {
     case "image":
-      return <ResumeImage block={block} selected={context.mode === "edit" && isSelectedBlock(context.selection, context.sectionId, context.blockPath)} onSelect={context.mode === "edit" && context.onSelectBlock ? () => context.onSelectBlock?.({ sectionId: context.sectionId, blockPath: context.blockPath }) : undefined} />;
+      return <ResumeImage block={block} selected={context.mode === "edit" && isSelectedBlock(context.selection, context.sectionId, context.blockPath)} onSelect={context.mode === "edit" && context.editSurfaceMode !== "layout" && context.onSelectBlock ? () => context.onSelectBlock?.({ sectionId: context.sectionId, blockPath: context.blockPath }) : undefined} />;
     case "text":
       return renderTextBlock(block, {
         t: context.t,

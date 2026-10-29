@@ -2095,10 +2095,17 @@ describe("ResumeEditorShell", () => {
   });
 
   it("exposes list, badge, and group settings from layout handles", () => {
+    const document = createDefaultResumeDocument();
+    document.sections[0]!.blocks = document.sections[0]!.blocks.filter(
+      (block) => block.type === "list" || block.type === "badges",
+    );
+    const group = document.sections[1]!.blocks[0]!;
+    if (group.type !== "group") throw new Error("Expected a group fixture");
+    group.children = group.children.filter((block) => block.type === "text");
     render(
       <ResumeEditorShell
         resumeId="resume-demo"
-        initialDocument={createDefaultResumeDocument()}
+        initialDocument={document}
       />,
     );
 
@@ -2430,19 +2437,20 @@ describe("ResumeEditorShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "拖动 列表内容" })[0]!);
+    const canvas = within(screen.getByRole("article"));
+    fireEvent.click(canvas.getAllByLabelText("拖动 列表内容", { selector: "button" })[0]!);
     expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
       "placeholder",
       "8",
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "拖动 标签内容" })[0]!);
+    fireEvent.click(canvas.getAllByLabelText("拖动 标签内容", { selector: "button" })[0]!);
     expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
       "placeholder",
       "8",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "拖动 双列内容" }));
+    fireEvent.click(canvas.getByLabelText("拖动 双列内容", { selector: "button" }));
     expect(within(getInspectorPanel()).getByLabelText("内容间距")).toHaveAttribute(
       "placeholder",
       "10",
@@ -2992,7 +3000,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("空白章节") }));
 
     expect(screen.getByRole("button", { name: "新章节" })).toBeInTheDocument();
-    expect(screen.getByText("从这里开始编写")).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByText("从这里开始编写")).toBeInTheDocument();
   });
 
   it("adds a projects preset section from the Insert ribbon", () => {
@@ -3077,7 +3085,7 @@ describe("ResumeEditorShell", () => {
     fireEvent.click(screen.getByRole("button", { name: spacedLabel("隐藏章节") }));
 
     expect(screen.getAllByText("已隐藏")).toHaveLength(1);
-    expect(screen.queryByText("共享渲染器基础")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("article")).queryByText("共享渲染器基础")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: spacedLabel("显示章节") })).toBeInTheDocument();
   });
 
@@ -3097,7 +3105,7 @@ describe("ResumeEditorShell", () => {
 
     expect(screen.queryByRole("button", { name: "个人简介" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "经历" })).toBeInTheDocument();
-    expect(screen.getByText("AnonResume - 前端工程师")).toBeInTheDocument();
+    expect(within(screen.getByRole("article")).getByText("AnonResume - 前端工程师")).toBeInTheDocument();
   });
 
   it("undoes and redoes section changes from the toolbar", () => {
@@ -3140,6 +3148,7 @@ describe("ResumeEditorShell", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: spacedLabel("布局排序") }));
     fireEvent.click(screen.getByRole("button", { name: "上移 经历" }));
 
     const canvas = screen.getByRole("article");

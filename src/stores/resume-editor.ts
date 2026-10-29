@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import { moveSelectedBlocks } from "@/domain/resume/composition/ordering";
 import { createImageBlock } from "@/domain/resume/images/model";
 import { getBlockInsertionAnchor } from "@/domain/resume/block-tree";
 import { composeResumeBlocks, extendBlockSelection, resolveBlockRange, type BlockCompositionCommand } from "@/domain/resume/composition/operations";
@@ -103,6 +104,7 @@ export interface ResumeEditorActions {
   setSelection: (selection: ResumeEditorSelection) => void;
   selectLayoutBlock: (selection: ResumeEditorSelection, extend?: boolean) => void;
   composeBlocks: (command: BlockCompositionCommand) => void;
+  moveSelectedBlocks: (toIndex: number) => void;
   replaceDocument: (params: {
     document: ResumeDocument;
     history: "record" | "skip";
@@ -336,6 +338,13 @@ export function createResumeEditorStore({
     composeBlocks: (command) => {
       const current = get();
       const result = composeResumeBlocks(current.document, current.selection, command);
+      if (result.document === current.document) return;
+      get().updateDocument(() => result.document);
+      set({ selection: getSelectionForDocument(result.document, result.selection) });
+    },
+    moveSelectedBlocks: (toIndex) => {
+      const current = get();
+      const result = moveSelectedBlocks(current.document, current.selection, toIndex);
       if (result.document === current.document) return;
       get().updateDocument(() => result.document);
       set({ selection: getSelectionForDocument(result.document, result.selection) });

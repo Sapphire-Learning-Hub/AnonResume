@@ -343,6 +343,9 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
   outlineTitleArea: css`
     position: relative;
     min-width: 0;
+    &[data-has-prefix="true"] {
+      padding-left: 22px;
+    }
 
     &:hover > [data-edit-action="true"],
     &:focus-within > [data-edit-action="true"] {
@@ -458,6 +461,7 @@ export const useResumeEditorShellStyles = createStyles(({ token, css }) => ({
     }
   `,
   canvasPanel: css`
+    position: relative;
     gap: 0;
     height: 100%;
     min-height: 0;
