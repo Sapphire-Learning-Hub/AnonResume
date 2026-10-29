@@ -197,6 +197,7 @@ type ConfigRegistry = {
 export const CONFIG_REGISTRY = {
   imagesEnabled: definition("resume", "hot", ["web"], true, "IMAGES_ENABLED"),
   imageStorage: definition("resume", "hot", ["web"], "local", "IMAGE_STORAGE"),
+  imageLocalDirectory: definition("resume", "hot", ["web"], ".anonresume/images", "ANONRESUME_IMAGE_DIR"),
   imageUploadLimitMiB: definition("resume", "hot", ["web"], 10, "IMAGE_UPLOAD_LIMIT_MIB"),
   imageAccountQuotaMiB: definition("resume", "hot", ["web"], 200, "IMAGE_ACCOUNT_QUOTA_MIB"),
   imageS3Endpoint: definition("resume", "hot", ["web"], "", "IMAGE_S3_ENDPOINT"),

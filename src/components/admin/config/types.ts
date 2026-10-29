@@ -24,6 +24,7 @@ export type ConfigurationFieldChange =
 export const configurationFieldMessageKeys: Record<ConfigKey, AdminMessageKey> = {
   imagesEnabled: "configuration.field.imagesEnabled",
   imageStorage: "configuration.field.imageStorage",
+  imageLocalDirectory: "configuration.field.imageLocalDirectory",
   imageUploadLimitMiB: "configuration.field.imageUploadLimitMiB",
   imageAccountQuotaMiB: "configuration.field.imageAccountQuotaMiB",
   imageS3Endpoint: "configuration.field.imageS3Endpoint",
@@ -94,6 +95,7 @@ export const configurationFieldNoticeMessageKeys: Partial<
   Record<ConfigKey, AdminMessageKey>
 > = {
   githubClientId: "configuration.notice.githubClientId",
+  imageLocalDirectory: "configuration.notice.imageLocalDirectory",
 };
 
 export const configurationGroupMessageKeys = {

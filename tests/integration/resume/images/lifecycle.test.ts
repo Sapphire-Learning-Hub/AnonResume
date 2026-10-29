@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
@@ -42,7 +42,7 @@ vi.mock("@/lib/config/runtime", () => ({
       .from(systemConfigRevisions)
       .where(eq(systemConfigRevisions.status, "active"));
     return {
-      values: getManagedConfigDefaults(),
+      values: { ...getManagedConfigDefaults(), imageLocalDirectory: directory },
       desiredRevisionId: active?.id ?? null,
       hotRevisionId: active?.id ?? null,
     };
@@ -90,6 +90,23 @@ async function upload() {
       .toBuffer(),
   );
 }
+
+it("keeps using the configured directory after a legacy environment change", async () => {
+  await upload();
+  const other = await mkdtemp(join(tmpdir(), "images-wrong-node-"));
+  vi.stubEnv("ANONRESUME_IMAGE_DIR", other);
+  try {
+    await upload();
+    expect((await listImages(userId, {})).items).toHaveLength(2);
+  } finally { await rm(other, { recursive: true, force: true }); }
+});
+
+it("does not accept new uploads into a mount that cannot read existing images", async () => {
+  const asset = await upload();
+  await unlink(join(directory, asset.id, "thumbnail.webp"));
+  await expect(upload()).rejects.toMatchObject({ code: "image_storage_unavailable" });
+  expect((await listImages(userId, {})).items).toHaveLength(1);
+});
 
 it("stores private immutable pixels, refuses foreign references and resolves dimensions on the server", async () => {
   const asset = await upload();

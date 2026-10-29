@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
@@ -243,7 +244,7 @@ describe("runtime configuration snapshots", () => {
     expect(snapshot.hotRevisionId).toBe(original.activeRevision.id);
     expect(snapshot.health).toBe("recovery_required");
     expect(snapshot.lastError).toBe("active_revision_unreadable");
-    expect(snapshot.values).toEqual(getManagedConfigDefaults());
+    expect(snapshot.values).toEqual({ ...getManagedConfigDefaults(), imageLocalDirectory: resolve(process.env.ANONRESUME_IMAGE_DIR || ".anonresume/images") });
 
     const revisions = await db
       .select({ id: systemConfigRevisions.id, status: systemConfigRevisions.status })

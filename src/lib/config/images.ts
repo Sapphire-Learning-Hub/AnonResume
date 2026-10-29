@@ -1,6 +1,10 @@
 import { z } from "zod";
 
 export const imageConfigFields = {
+  imageLocalDirectory: z.string().trim().min(1).max(4096).refine((value) =>
+    value === ".anonresume/images" ||
+    (value.startsWith("/") && !value.includes("//") && !/[\\\u0000-\u001f\u007f]/.test(value) &&
+      value.split("/").every((part) => part !== "." && part !== ".."))),
   imagesEnabled: z.boolean(),
   imageStorage: z.enum(["local", "s3"]),
   imageUploadLimitMiB: z.number().int().min(1).max(10),

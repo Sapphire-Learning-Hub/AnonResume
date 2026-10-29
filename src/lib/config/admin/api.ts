@@ -14,10 +14,13 @@ import {
 
 import { ConfigurationValidationError } from "./validation";
 import { MetricsConfigurationValidationError } from "@/lib/config/observability";
+import { ImageDirectoryError } from "@/lib/resume/assets/local-directory";
 
 const configurationLog = getLogger("anonresume.configuration");
 
 export function configurationApiErrorResponse(error: unknown) {
+  if (error instanceof ImageDirectoryError)
+    return NextResponse.json({ error: "image_directory_unavailable" }, { status: 400 });
   const authError = adminApiErrorResponse(error);
   if (authError) return authError;
   if (
