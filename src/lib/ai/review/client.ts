@@ -1,3 +1,4 @@
+import type { JobReviewContext } from "@/domain/job-search/schema";
 import { z } from "zod";
 import { attachErrorDiagnostic, readResponseDiagnostic } from "@/lib/observability/diagnostics/schema";
 import { AiClientError } from "@/lib/ai/client";
@@ -20,7 +21,7 @@ export function listResumeReviews(resumeId: string, signal?: AbortSignal, cursor
   return request(`?${query}`, reviewPageSchema, "GET", undefined, signal);
 }
 export function getResumeReview(id: string, signal?: AbortSignal) { return request(`/${id}`, reviewDetailsSchema, "GET", undefined, signal); }
-export function startResumeReview(resumeId: string, input: AiReviewInput) { return request("", z.object({ reviewId: z.string().uuid(), runId: z.string().uuid() }), "POST", { resumeId, ...input }); }
+export function startResumeReview(resumeId: string, input: AiReviewInput & { jobContext?: JobReviewContext }) { return request("", z.object({ reviewId: z.string().uuid(), runId: z.string().uuid() }), "POST", { resumeId, ...input }); }
 export function ignoreReviewIssue(id: string, issueId: string, ignored: boolean) { return request(`/${id}/issues`, reviewDetailsSchema, "PATCH", { issueId, ignored }); }
 export function deleteResumeReview(id: string) { return request(`/${id}`, z.object({ deleted: z.literal(true) }), "DELETE"); }
 export function generateReviewSuggestions(id: string, issueIds: string[], resumeVersion: number, supplementalFacts?: string) { return request(`/${id}/suggestions`, z.object({ conversationId: z.string().uuid(), runId: z.string().uuid() }), "POST", { issueIds, resumeVersion, supplementalFacts }); }

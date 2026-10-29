@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { ConfigProvider } from "antd";
 import type { ComponentType } from "react";
 
@@ -55,6 +61,7 @@ describe("PublicResumeUrlBuilder", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -74,9 +81,10 @@ describe("PublicResumeUrlBuilder", () => {
     expect(
       screen.getByText("当前管理员账号不提供简历功能。"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "进入管理后台" }),
-    ).toHaveAttribute("href", "/app/manage");
+    expect(screen.getByRole("link", { name: "进入管理后台" })).toHaveAttribute(
+      "href",
+      "/app/manage",
+    );
     expect(fetchResumeEntriesPage).not.toHaveBeenCalled();
   });
 
@@ -183,10 +191,9 @@ describe("PublicResumeUrlBuilder", () => {
       name: "已发布简历",
     });
     fireEvent.mouseDown(selector);
-    fireEvent.change(
-      screen.getByRole("combobox", { name: "已发布简历" }),
-      { target: { value: "产品" } },
-    );
+    fireEvent.change(screen.getByRole("combobox", { name: "已发布简历" }), {
+      target: { value: "产品" },
+    });
 
     await waitFor(() => {
       expect(fetchResumeEntriesPage).toHaveBeenLastCalledWith({
@@ -201,7 +208,8 @@ describe("PublicResumeUrlBuilder", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("loads the next page when the resume selector reaches the end", async () => {
+  it("keeps the next page when the initial empty search timer settles", async () => {
+    vi.useFakeTimers();
     vi.mocked(fetchResumeEntriesPage)
       .mockResolvedValueOnce({
         items: [
@@ -238,27 +246,30 @@ describe("PublicResumeUrlBuilder", () => {
         totalPages: 2,
       });
 
-    renderBuilder();
+    await act(async () => {
+      renderBuilder();
+    });
 
-    const selector = await screen.findByRole("combobox", {
+    const selector = screen.getByRole("combobox", {
       name: "已发布简历",
     });
     fireEvent.mouseDown(selector);
-    await screen.findByRole("listbox");
     const popupList = document.querySelector(
       ".ant-select-dropdown-list-holder",
     );
     expect(popupList).not.toBeNull();
-    fireEvent.scroll(popupList!);
-
-    await waitFor(() => {
-      expect(fetchResumeEntriesPage).toHaveBeenLastCalledWith({
-        page: 2,
-        pageSize: 20,
-        publication: "published",
-        query: "",
-      });
+    await act(async () => {
+      fireEvent.scroll(popupList!);
     });
-    expect(await screen.findByText("产品经理简历")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(fetchResumeEntriesPage).toHaveBeenLastCalledWith({
+      page: 2,
+      pageSize: 20,
+      publication: "published",
+      query: "",
+    });
+    expect(screen.getByText("产品经理简历")).toBeInTheDocument();
   });
 });

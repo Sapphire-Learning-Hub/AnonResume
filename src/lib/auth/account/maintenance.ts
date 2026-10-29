@@ -1,3 +1,4 @@
+import { deleteJobSearchData } from "@/lib/job-search/account";
 import type { PoolClient } from "pg";
 
 import { getDatabaseSchemaName } from "@/db";
@@ -106,6 +107,7 @@ async function deleteProjectOwnedData(
   await client.query(`DELETE FROM ${table("admin_principals")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("account_restrictions")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("onboarding_runs")} WHERE user_id = $1`, [userId]);
+  await deleteJobSearchData(client, userId);
   await client.query(`DELETE FROM ${table("resumes")} WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM ${table("resume_templates")} WHERE user_id = $1`, [userId]);
   await client.query(`UPDATE ${table("resume_assets")} SET state = 'deleting', removed_at = $2 WHERE user_id = $1`, [userId, now]);

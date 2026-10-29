@@ -1,3 +1,4 @@
+import { transferJobSearchData } from "@/lib/job-search/account";
 import { randomBytes } from "node:crypto";
 
 import type { PoolClient } from "pg";
@@ -397,6 +398,7 @@ async function runTransfer(
     [operation.id, now],
   );
   await transferResumeData(client, primaryUserId, secondaryUserId, now);
+  await transferJobSearchData(client, primaryUserId, secondaryUserId);
   await client.query(`UPDATE ${table("resume_assets")} SET user_id = $2 WHERE user_id = $1`, [secondaryUserId, primaryUserId]);
   await client.query(`UPDATE ${table("resume_templates")} SET user_id = $2 WHERE user_id = $1`, [secondaryUserId, primaryUserId]);
   await client.query(`DELETE FROM ${table("resume_template_operations")} WHERE user_id = $1`, [secondaryUserId]);

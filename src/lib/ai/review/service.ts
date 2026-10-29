@@ -1,3 +1,5 @@
+import type { JobReviewContext } from "@/domain/job-search/schema";
+import { linkOwnedReview } from "@/lib/job-search/reviews";
 import { randomUUID } from "node:crypto";
 import { getDiagnosticContext } from "@/lib/observability/diagnostics/context";
 import { handoffDiagnosticTask } from "@/lib/observability/diagnostics/store/runtime";
@@ -21,7 +23,7 @@ import { createReviewTools, reviewMessages } from "./prompt";
 import { estimateReviewInput } from "./budget";
 import { REVIEW_EXECUTION_POLICY as policy } from "./policy";
 
-export async function prepareResumeReviewRun(args: { userId: string; resumeId: string; input: AiReviewInput; configuration: AiRunConfiguration }): Promise<PreparedReviewRun> {
+export async function prepareResumeReviewRun(args: { userId: string; resumeId: string; input: AiReviewInput; jobContext?: JobReviewContext; configuration: AiRunConfiguration }): Promise<PreparedReviewRun> {
   const input = reviewInputSchema.parse(args.input);
   const now = new Date();
   await assertAccountMergeMutationAllowed(args.userId);
@@ -61,6 +63,7 @@ export async function prepareResumeReviewRun(args: { userId: string; resumeId: s
     if (current.version !== input.resumeVersion) throw new AiRunVersionConflictError(current.version);
     await transaction.insert(aiRuns).values({ id: runId, diagnosticContext: getDiagnosticContext() ?? null, kind: "resume_review", userId: args.userId, resumeId: args.resumeId, modelId: input.modelId, keySource: row.provider.kind, status: "preparing", resumeVersion: input.resumeVersion, contextHash: context.contentHash, promptVersion: 2, reservedPoints, leaseExpiresAt: new Date(now.getTime() + args.configuration.runLeaseSeconds * 1000) });
     await transaction.insert(aiResumeReviews).values({ id: reviewId, runId, input, context, modelName: row.model.displayName });
+    if (args.jobContext) await linkOwnedReview(transaction, args.userId, reviewId, args.jobContext);
   });
   let reserved = false;
   try {

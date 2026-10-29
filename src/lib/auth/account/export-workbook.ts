@@ -104,7 +104,18 @@ function localizedSheets(
         return entries.flatMap(([field, value]) => textChunks(value).map((content, index) => ({ id: review.id, resumeId: review.resumeId, model: review.modelName, createdAt: review.createdAt, field, part: index + 1, content })));
       }),
     };
+  const jobSheets: ExportSheet[] = ([
+    [zh ? "岗位资料" : "Job opportunities", data.jobSearch.opportunities],
+    [zh ? "投递记录" : "Job applications", data.jobSearch.applications],
+    [zh ? "投递跟进" : "Application timeline", data.jobSearch.events],
+    [zh ? "岗位审查关联" : "Job review links", data.jobSearch.reviews],
+  ] as const).map(([name, entries]) => ({
+    name,
+    columns: [{ header: zh ? "记录" : "Record", key: "record", width: 10 }, { header: zh ? "内容段" : "Part", key: "part", width: 10 }, { header: zh ? "内容" : "Content", key: "content", width: 100 }],
+    rows: entries.flatMap((entry, row) => jsonChunks(entry).map((content, index) => ({ record: row + 1, part: index + 1, content }))),
+  }));
   return [
+    ...jobSheets,
     {
       name: names[0]!,
       columns: [

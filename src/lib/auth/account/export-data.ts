@@ -1,3 +1,4 @@
+import { loadJobSearchExport } from "@/lib/job-search/account";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
@@ -173,6 +174,7 @@ export async function loadAccountExportData(userId: string) {
   const templates = await db.select({ id: resumeTemplates.id, name: resumeTemplates.name, version: resumeTemplates.version, document: resumeTemplates.document, createdAt: resumeTemplates.createdAt, updatedAt: resumeTemplates.updatedAt }).from(resumeTemplates).where(eq(resumeTemplates.userId, userId)).orderBy(asc(resumeTemplates.createdAt), asc(resumeTemplates.id));
   return {
     identity,
+    jobSearch: await loadJobSearchExport(userId),
     lifecycle,
     providers: providerResult.rows.map((row) => row.providerId),
     resumes: resumeRows,

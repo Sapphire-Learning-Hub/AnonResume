@@ -2,6 +2,7 @@
 
 import {
   AuditOutlined,
+  SolutionOutlined,
   CheckSquareOutlined,
   CloudServerOutlined,
   DashboardOutlined,
@@ -357,6 +358,7 @@ const navigationIcons: Record<AppNavigationIcon, ReactNode> = {
   exports: <CloudServerOutlined />,
   fonts: <FontSizeOutlined />,
   images: <PictureOutlined />,
+  "job-search": <SolutionOutlined />,
   resumes: <FileTextOutlined />,
   roles: <SafetyCertificateOutlined />,
   security: <LockOutlined />,

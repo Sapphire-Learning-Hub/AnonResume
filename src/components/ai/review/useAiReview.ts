@@ -5,10 +5,10 @@ import { fetchAiConversationIndex, streamAiRun, AiClientError, type AiModelOptio
 import { getResumeReview, listResumeReviews } from "@/lib/ai/review/client";
 import type { ReviewDetails, ReviewPage } from "@/lib/ai/review/validation";
 
-export function useAiReview({ resumeId, resumeVersion, onError }: { resumeId: string; resumeVersion: number; onError: (error: unknown) => void }) {
+export function useAiReview({ resumeId, resumeVersion, initialReviewId, onError }: { resumeId: string; resumeVersion: number; initialReviewId?: string; onError: (error: unknown) => void }) {
   const [models, setModels] = useState<AiModelOption[]>([]);
   const [page, setPage] = useState<ReviewPage>({ items: [], nextCursor: null });
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(initialReviewId);
   const [details, setDetails] = useState<ReviewDetails>();
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);

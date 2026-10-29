@@ -91,14 +91,15 @@ export function PublicResumeUrlBuilder({
   const isFetching = status === "loading" || settledRequestKey !== requestKey;
 
   useEffect(() => {
+    const nextQuery = searchInput.trim();
+    if (nextQuery === query) return;
     const timeout = window.setTimeout(() => {
-      const nextQuery = searchInput.trim();
       setPage(1);
       setQuery(nextQuery);
     }, SEARCH_DELAY_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [searchInput]);
+  }, [searchInput, query]);
 
   useEffect(() => {
     if (viewerMode !== "product") return;
