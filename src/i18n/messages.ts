@@ -2,6 +2,7 @@ import { aiReviewMessages } from "./ai-review-messages";
 import { personalTemplateMessages } from "./personal-template-messages";
 import { imageMessages } from "./image-messages";
 import { compositionMessages } from "./composition-messages";
+import { outlineMessages } from "./outline-messages";
 
 export const supportedLocales = ["zh-CN", "en-US"] as const;
 
@@ -16,6 +17,7 @@ const messages = {
     ...personalTemplateMessages["zh-CN"],
     ...imageMessages["zh-CN"],
     ...compositionMessages["zh-CN"],
+    ...outlineMessages["zh-CN"],
     "common.appName": "AnonResume",
     "diagnostics.reference": "诊断编号",
     "diagnostics.localReference": "本地事件编号",
@@ -1759,6 +1761,7 @@ const messages = {
     ...personalTemplateMessages["en-US"],
     ...imageMessages["en-US"],
     ...compositionMessages["en-US"],
+    ...outlineMessages["en-US"],
     "common.appName": "AnonResume",
     "common.signIn": "Sign In",
     "diagnostics.reference": "Diagnostic ID",

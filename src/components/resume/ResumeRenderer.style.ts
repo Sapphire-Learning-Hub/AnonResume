@@ -119,6 +119,12 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     flex-direction: column;
     gap: var(--resume-block-gap);
   `,
+  layoutSelectionTarget: css`
+    &[data-resume-block-selected="true"][data-resume-edit-surface-mode="layout"] {
+      outline: 2px solid ${token.colorPrimary};
+      outline-offset: 3px;
+    }
+  `,
   sortableBlockItem: css`
     position: relative;
     min-width: 0;
@@ -132,6 +138,17 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
       overflow: visible;
     }
 
+    &:hover:not(:has([data-resume-block-path]:hover)) > button,
+    &[data-resume-block-selected="true"] > button,
+    &:focus-within:not(:has([data-resume-block-path]:focus-within)) > button {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    &:hover:not(:has([data-resume-block-path]:hover)) > [data-resume-sort-chrome="true"],
+    &[data-resume-block-selected="true"] > [data-resume-sort-chrome="true"] {
+      opacity: 1;
+    }
+
     &[data-resume-block-selected="true"][data-resume-edit-surface-mode="layout"] {
       outline: 2px solid ${token.colorPrimary};
       outline-offset: 3px;
@@ -142,9 +159,10 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     }
   `,
   sortableBlockChrome: css`
+    opacity: 0;
     position: absolute;
     inset: -8px;
-    border: 1px dashed rgba(15, 98, 254, 0.22);
+    border: 1px dashed ${token.colorPrimaryBorder};
     border-radius: 20px;
     pointer-events: none;
     z-index: 1;
@@ -154,15 +172,15 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     }
 
     &[data-resume-dragging="true"] {
-      border-color: rgba(15, 98, 254, 0.4);
+      border-color: ${token.colorPrimary};
       box-shadow:
         0 16px 30px rgba(15, 23, 42, 0.1),
-        inset 0 0 0 1px rgba(15, 98, 254, 0.18);
+        inset 0 0 0 1px ${token.colorPrimaryBorder};
     }
 
     &[data-resume-over="true"] {
-      border-color: rgba(15, 98, 254, 0.36);
-      box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.16);
+      border-color: ${token.colorPrimary};
+      box-shadow: inset 0 0 0 1px ${token.colorPrimaryBorder};
     }
   `,
   sortableBlockStack: css`
@@ -171,10 +189,13 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     &[data-resume-sort-layer="active"]
       > [data-resume-block-path]
       > [data-resume-sort-chrome="true"] {
-        border-color: rgba(15, 98, 254, 0.34);
+        border-color: ${token.colorPrimaryBorder};
       }
   `,
   blockDragHandle: css`
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
     position: absolute;
     z-index: 3;
     display: inline-flex;
@@ -183,10 +204,10 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     min-width: 30px;
     height: 26px;
     padding: 0 8px;
-    border: 1px dashed rgba(15, 98, 254, 0.32);
+    border: 1px solid ${token.colorPrimaryBorder};
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
-    color: #475569;
+    background: ${token.colorBgElevated};
+    color: ${token.colorTextSecondary};
     font-size: 11px;
     line-height: 1;
     letter-spacing: -0.08em;
@@ -195,6 +216,10 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
 
     &:active {
       cursor: grabbing;
+    }
+    &:focus-visible {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     &[data-resume-handle-placement="floating"] {

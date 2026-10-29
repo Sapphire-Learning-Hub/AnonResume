@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import {
   closestCenter,
@@ -68,6 +68,9 @@ function SortableSectionOutlineItem({
   onRenameSection,
   onMoveSection,
   classNames,
+  prefix,
+  children,
+  sortingEnabled = true,
 }: {
   section: ResumeSection;
   sectionIndex: number;
@@ -76,6 +79,9 @@ function SortableSectionOutlineItem({
   onSelectSection: (sectionId: string) => void;
   onRenameSection: (params: { sectionId: string; title: string }) => void;
   onMoveSection: (params: { sectionId: string; toIndex: number }) => void;
+  prefix?: ReactNode;
+  children?: ReactNode;
+  sortingEnabled?: boolean;
   classNames: {
     outlineItem: string;
     outlineTitleArea: string;
@@ -98,7 +104,7 @@ function SortableSectionOutlineItem({
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: section.id });
+  } = useSortable({ id: section.id, disabled: !sortingEnabled });
   const { t } = useI18n();
   const titleText = getSectionTitleText(section);
   const sectionTitle = titleText || t("renderer.untitledSection");
@@ -148,8 +154,10 @@ function SortableSectionOutlineItem({
         icon={<HolderOutlined aria-hidden="true" />}
         size="small"
         type="text"
+        disabled={!sortingEnabled}
       />
-      <div className={classNames.outlineTitleArea}>
+      <div className={classNames.outlineTitleArea} data-has-prefix={Boolean(prefix)}>
+        {prefix}
         {editing ? (
           <Input
             autoFocus
@@ -215,7 +223,7 @@ function SortableSectionOutlineItem({
           icon={<UpOutlined aria-hidden="true" />}
           size="small"
           type="text"
-          disabled={!canMoveUp}
+          disabled={!sortingEnabled || !canMoveUp}
           aria-label={t("renderer.moveUp", { title: sectionTitle })}
           onClick={(event) => {
             stopEventPropagation(event);
@@ -230,7 +238,7 @@ function SortableSectionOutlineItem({
           icon={<DownOutlined aria-hidden="true" />}
           size="small"
           type="text"
-          disabled={!canMoveDown}
+          disabled={!sortingEnabled || !canMoveDown}
           aria-label={t("renderer.moveDown", { title: sectionTitle })}
           onClick={(event) => {
             stopEventPropagation(event);
@@ -241,6 +249,7 @@ function SortableSectionOutlineItem({
           }}
         />
       </div>
+      {children}
     </div>
   );
 }
@@ -252,12 +261,18 @@ export function SectionOutline({
   onRenameSection,
   onMoveSection,
   classNames,
+  renderSectionPrefix,
+  renderSectionChildren,
+  sortingEnabled = true,
 }: {
   sections: ResumeSection[];
   selectedSectionId?: string;
   onSelectSection: (sectionId: string) => void;
   onRenameSection: (params: { sectionId: string; title: string }) => void;
   onMoveSection: (params: { sectionId: string; toIndex: number }) => void;
+  renderSectionPrefix?: (section: ResumeSection) => ReactNode;
+  renderSectionChildren?: (section: ResumeSection) => ReactNode;
+  sortingEnabled?: boolean;
   classNames: {
     outlineList: string;
     outlineItem: string;
@@ -285,6 +300,7 @@ export function SectionOutline({
   const sectionIds = sections.map((section) => section.id);
 
   function handleDragEnd(event: DragEndEvent) {
+    if (!sortingEnabled) return;
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
@@ -333,6 +349,8 @@ export function SectionOutline({
               onSelectSection={onSelectSection}
               onRenameSection={onRenameSection}
               onMoveSection={onMoveSection}
+              sortingEnabled={sortingEnabled}
+              prefix={renderSectionPrefix?.(section)}
               classNames={{
                 outlineItem: classNames.outlineItem,
                 outlineTitleArea: classNames.outlineTitleArea,
@@ -345,7 +363,9 @@ export function SectionOutline({
                 compactActionRow: classNames.compactActionRow,
                 outlineOrderButton: classNames.outlineOrderButton,
               }}
-            />
+            >
+              {renderSectionChildren?.(section)}
+            </SortableSectionOutlineItem>
           ))}
         </div>
       </SortableContext>

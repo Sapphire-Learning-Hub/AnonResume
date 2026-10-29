@@ -14,6 +14,43 @@ export function isContainerBlock(
   return block.type === "group" || block.type === "row";
 }
 
+export interface BlockOutlineNode {
+  kind: "block" | "item";
+  path: string[];
+  block?: ResumeBlock;
+  children: BlockOutlineNode[];
+}
+
+/** Content identities only: derived pagination fragments never enter the outline. */
+export function getBlockOutlineTree(blocks: ResumeBlock[], parentPath: string[] = []): BlockOutlineNode[] {
+  return blocks.map((block) => {
+    const path = [...parentPath, block.id];
+    return {
+      kind: "block",
+      path,
+      block,
+      children: isContainerBlock(block)
+        ? getBlockOutlineTree(block.children, path)
+        : block.type === "list"
+          ? block.items.map((item) => ({ kind: "item", path: [...path, item.id], children: getBlockOutlineTree(item.children, [...path, item.id]) }))
+          : [],
+    };
+  });
+}
+
+export interface FlatBlockOutlineNode extends BlockOutlineNode {
+  depth: number;
+  index: number;
+  siblingCount: number;
+}
+
+export function flattenBlockOutlineTree(nodes: BlockOutlineNode[], collapsed: ReadonlySet<string>, depth = 0): FlatBlockOutlineNode[] {
+  return nodes.flatMap((node, index) => [
+    { ...node, depth, index, siblingCount: nodes.length },
+    ...(collapsed.has(JSON.stringify(node.path)) ? [] : flattenBlockOutlineTree(node.children, collapsed, depth + 1)),
+  ]);
+}
+
 /** Resolve only an exact container/list-item path, never a descendant guess. */
 export function getBlockChildrenAtPath(blocks: ResumeBlock[], path: string[]): ResumeBlock[] | undefined {
   if (!path.length) return blocks;

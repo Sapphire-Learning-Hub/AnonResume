@@ -59,7 +59,9 @@ import {
   ResumeSummaryEditor,
   type ResumeSummaryUpdateResult,
 } from "@/components/resume/ResumeSummaryEditor";
-import { SectionOutline } from "@/components/editor/SectionOutline";
+import { StructureOutline } from "@/components/editor/outline/StructureOutline";
+import { CanvasBlockActions } from "@/components/editor/outline/CanvasBlockActions";
+import type { ResumeEditorSelection } from "@/domain/resume/editor-selection";
 import {
   EditorRibbon,
   EditorRibbonPropertyGroup,
@@ -1711,6 +1713,14 @@ export function ResumeEditorShell({
 
     target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
     store.getState().setSelection({ sectionId });
+  }
+
+  function handleOutlineBlockSelection(next: ResumeEditorSelection, extend = false) {
+    if (activeEditSurfaceMode === "layout") store.getState().selectLayoutBlock(next, extend);
+    else store.getState().setSelection(next);
+    const section = Array.from(canvasViewportRef.current?.querySelectorAll<HTMLElement>("[data-resume-section-id]") ?? []).filter((element) => element.dataset.resumeSectionId === next.sectionId);
+    const target = section.flatMap((element) => Array.from(element.querySelectorAll<HTMLElement>("[data-resume-block-path]"))).find((element) => element.dataset.resumeBlockPath === next.blockPath?.join("::") && element.getClientRects().length > 0);
+    (target ?? section[0])?.scrollIntoView?.({ behavior: "smooth", block: "center", inline: "nearest" });
   }
 
   function handleCanvasPageChange(nextPage: number) {
@@ -3665,9 +3675,14 @@ export function ResumeEditorShell({
           onSelectOutline={() => void handleEditSurfaceModeChange("content")}
         >
           {activeEditSurfaceMode !== "markdown" ? (
-            <SectionOutline
-              sections={document.sections}
-              selectedSectionId={selection.sectionId}
+            <StructureOutline
+              document={document}
+              selection={selection}
+              layout={activeEditSurfaceMode === "layout"}
+              onSelect={handleOutlineBlockSelection}
+              onMoveBlock={(params) => store.getState().moveBlock(params)}
+              onMoveRange={(toIndex) => store.getState().moveSelectedBlocks(toIndex)}
+              onCompose={(command) => store.getState().composeBlocks(command)}
               onSelectSection={handleOutlineSectionSelection}
               onRenameSection={({ sectionId, title }) =>
                 store.getState().setSectionTitle({
@@ -3728,6 +3743,7 @@ export function ResumeEditorShell({
           aria-label={t("editor.canvas")}
           className={`${styles.panel} ${styles.canvasPanel}`}
         >
+          {activeEditSurfaceMode === "layout" && !aiProposalPreview ? <CanvasBlockActions document={document} selection={selection} onSelect={(next) => store.getState().setSelection(next)} onMove={(toIndex) => store.getState().moveSelectedBlocks(toIndex)} onCompose={(command) => store.getState().composeBlocks(command)} /> : null}
           <div
             className={`${styles.columnStickyHeader} ${styles.canvasHeader}`}
             data-testid="editor-canvas-header"

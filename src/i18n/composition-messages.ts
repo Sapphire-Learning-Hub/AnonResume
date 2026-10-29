@@ -9,7 +9,7 @@ export const compositionMessages = {
     "composition.into-next": "移入后一个分组",
     "composition.out": "移出一层",
     "composition.hint":
-      "在布局排序模式点击区块手柄，按住 Shift 选择连续的同级内容。",
+      "在布局排序模式点击内容或大纲节点，按住 Shift 选择连续的同级内容。",
   },
   "en-US": {
     "composition.title": "Compose blocks",
@@ -21,6 +21,6 @@ export const compositionMessages = {
     "composition.into-next": "Move into next group",
     "composition.out": "Move out one level",
     "composition.hint":
-      "In layout mode, click a block handle, then Shift-click to select consecutive siblings.",
+      "In layout mode, click content or an outline node, then Shift-click to select consecutive siblings.",
   },
 } as const;
