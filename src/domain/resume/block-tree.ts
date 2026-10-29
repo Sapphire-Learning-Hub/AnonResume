@@ -478,3 +478,36 @@ export function findInnermostListItemAtPath(
 
   return target;
 }
+
+/** Remove one block and only ancestors made empty by that removal. Preserve unrelated content. */
+export function removeBlockTreeNode(blocks: ResumeBlock[], path: string[]): ResumeBlock[] {
+  const [id, ...rest] = path;
+  let changed = false;
+  const result = blocks.flatMap((block): ResumeBlock[] => {
+    if (block.id !== id) return [block];
+    if (!rest.length) { changed = true; return []; }
+    if (isContainerBlock(block)) {
+      const children = removeBlockTreeNode(block.children, rest);
+      if (children === block.children) return [block];
+      changed = true;
+      if (!children.length) return [];
+      if (block.type === "row" && block.columnLayout && (children.length !== 2 || children[1]?.type !== "image" || children[0]?.type === "image")) {
+        const { columnLayout: _layout, ...row } = block;
+        void _layout;
+        return [{ ...row, children }];
+      }
+      return [{ ...block, children }];
+    }
+    if (block.type !== "list" || rest.length < 2) return [block];
+    const [itemId, ...childPath] = rest;
+    const items = block.items.flatMap((item) => {
+      if (item.id !== itemId) return [item];
+      const children = removeBlockTreeNode(item.children, childPath);
+      if (children === item.children) return [item];
+      changed = true;
+      return children.length ? [{ ...item, children }] : [];
+    });
+    return changed ? (items.length ? [{ ...block, items }] : []) : [block];
+  });
+  return changed ? result : blocks;
+}

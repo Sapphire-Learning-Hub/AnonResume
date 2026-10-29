@@ -1,7 +1,9 @@
 "use client";
 
 import { WarningOutlined } from "@ant-design/icons";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type Ref } from "react";
+
+import type { MarkdownSearchHandle } from "@/components/editor/search/markdown-search";
 
 import type {
   ResumeMarkdownDiagnostic,
@@ -13,6 +15,7 @@ import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 
 export function MarkdownEditingWorkspace({
   source,
+  searchRef,
   diagnostics,
   isPreviewStale = false,
   labels,
@@ -21,6 +24,7 @@ export function MarkdownEditingWorkspace({
   onSourceChange,
 }: {
   source: string;
+  searchRef?: Ref<MarkdownSearchHandle>;
   diagnostics: ResumeMarkdownDiagnostic[];
   isPreviewStale?: boolean;
   labels: MarkdownWorkspaceLabels;
@@ -49,6 +53,7 @@ export function MarkdownEditingWorkspace({
     >
       <h2 className={styles.paneHeading}>{labels.source}</h2>
       <MarkdownSourceEditor
+        searchRef={searchRef}
         ariaLabel={labels.source}
         diagnostics={diagnostics}
         focusRequest={focusRequest}

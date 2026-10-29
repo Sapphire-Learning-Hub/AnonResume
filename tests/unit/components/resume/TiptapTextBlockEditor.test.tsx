@@ -933,3 +933,14 @@ function pageBreak(
     pageIndex: 1,
   };
 }
+
+it("provides non-mutating search ranges across rich-text marks without moving focus", async () => {
+  const ref = createRef<TiptapTextBlockEditorHandle>();
+  const onChange = vi.fn();
+  render(<TiptapTextBlockEditor ref={ref} content={{ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "before " }, { type: "text", text: "nee", marks: [{ type: "bold" }] }, { type: "text", text: "dle after" }] }] }} onChange={onChange} />);
+  await waitFor(() => expect(ref.current).not.toBeNull());
+  const before = document.activeElement;
+  expect(ref.current?.getSearchRanges({ paragraphIndex: 0, from: 7, to: 13 }).map((range) => range.toString()).join("")).toBe("needle");
+  expect(document.activeElement).toBe(before);
+  expect(onChange).not.toHaveBeenCalled();
+});
