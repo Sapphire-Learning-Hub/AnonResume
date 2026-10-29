@@ -1,0 +1,4 @@
+ALTER TABLE "job_applications" DROP CONSTRAINT "job_applications_stage_check";--> statement-breakpoint
+ALTER TABLE "job_applications" DROP CONSTRAINT "job_applications_date_check";--> statement-breakpoint
+ALTER TABLE "job_applications" ADD CONSTRAINT "job_applications_stage_check" CHECK ("job_applications"."stage" IN ('pending','applied','screening_passed','communicating','ai_interview','personality_assessment','written_test','interviewing','interview_1','interview_2','interview_3','manager_interview','hr_interview','verbal_offer','offered','rejected','withdrawn'));--> statement-breakpoint
+ALTER TABLE "job_applications" ADD CONSTRAINT "job_applications_date_check" CHECK (("job_applications"."stage" = 'pending' AND "job_applications"."applied_at" IS NULL) OR ("job_applications"."stage" = 'withdrawn') OR ("job_applications"."stage" NOT IN ('pending','withdrawn') AND "job_applications"."applied_at" IS NOT NULL));

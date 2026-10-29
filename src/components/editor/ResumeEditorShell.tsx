@@ -357,7 +357,7 @@ const OUTLINE_PANEL_MAX_WIDTH = 640;
 const MARKDOWN_PANEL_INITIAL_MAX_WIDTH = 640;
 
 export function ResumeEditorShell({
-  resumeId,
+  resumeId, initialReviewId,
   publicSlug,
   initialDocument,
   initialSummary = "",
@@ -380,6 +380,7 @@ export function ResumeEditorShell({
   onboardingRun,
 }: {
   resumeId: string;
+  initialReviewId?: string;
   publicSlug?: string;
   initialDocument: ResumeEditorStoreState["document"];
   initialSummary?: string;
@@ -697,7 +698,7 @@ export function ResumeEditorShell({
   const [temporaryLayoutMode, setTemporaryLayoutMode] = useState(false);
   const [shortcutPanelOpen, setShortcutPanelOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-  const [aiReviewOpen, setAiReviewOpen] = useState(false);
+  const [aiReviewOpen, setAiReviewOpen] = useState(Boolean(initialReviewId));
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiMenuKeyboard, setAiMenuKeyboard] = useState(false);
   const [aiSuggestionConversationId, setAiSuggestionConversationId] = useState<string>();
@@ -4011,6 +4012,7 @@ export function ResumeEditorShell({
         onPreviewProposal={previewAiProposal}
       />
       {aiReviewOpen ? <AiReviewPanel
+        initialReviewId={initialReviewId}
         key={resumeId}
         resumeId={resumeId}
         resumeVersion={version}

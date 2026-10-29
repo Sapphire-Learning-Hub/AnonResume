@@ -1,3 +1,5 @@
+import { jobContextSchema } from "@/domain/job-search/schema";
+import { JobSearchError, jobErrorStatus } from "@/lib/job-search/errors";
 import { z } from "zod";
 import { reviewInputSchema } from "@/domain/resume/ai/review/schema";
 import { getOptionalSession } from "@/lib/auth/session";
@@ -13,7 +15,7 @@ import { deleteOwnedResumeReview, getOwnedResumeReview, listOwnedResumeReviews, 
 import { reviewCursorSchema } from "./validation";
 
 type Action = "list" | "create" | "get" | "delete" | "issue" | "suggest";
-const creation = reviewInputSchema.extend({ resumeId: z.string().min(1).max(200) }).strict();
+const creation = reviewInputSchema.extend({ resumeId: z.string().min(1).max(200), jobContext: jobContextSchema.optional() }).strict();
 const ignore = z.object({ issueId: z.string().min(1).max(100), ignored: z.boolean() }).strict();
 const suggestions = z.object({ issueIds: z.array(z.string().min(1).max(100)).min(1).max(40), resumeVersion: z.number().int().positive(), supplementalFacts: z.string().trim().max(8000).optional() }).strict();
 
@@ -42,8 +44,8 @@ export async function handleReviewRequest(action: Action, request: Request, revi
       return Response.json(await listOwnedResumeReviews({ userId, resumeId, cursor, limit }), { headers: { "Cache-Control": "private, no-store" } });
     }
     if (action === "create") {
-      const { resumeId, ...input } = creation.parse(await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES));
-      const prepared = await prepareResumeReviewRun({ userId, resumeId, input, configuration: await configuration() });
+      const { resumeId, jobContext, ...input } = creation.parse(await parseLimitedJsonRequest(request, MAX_ACTION_REQUEST_BYTES));
+      const prepared = await prepareResumeReviewRun({ userId, resumeId, input, jobContext, configuration: await configuration() });
       return Response.json({ reviewId: prepared.reviewId, runId: prepared.runId }, { status: 202 });
     }
     const id = z.string().uuid().parse(reviewId);
@@ -59,6 +61,7 @@ export async function handleReviewRequest(action: Action, request: Request, revi
     if (action === "issue") return Response.json(await setOwnedReviewIssueIgnored({ userId, reviewId: id, ...ignore.parse(body) }));
     return Response.json(await prepareReviewSuggestions({ userId, reviewId: id, ...suggestions.parse(body), configuration: await configuration() }), { status: 202 });
   } catch (error) {
+    if (error instanceof JobSearchError) return Response.json({error: error.code}, {status: jobErrorStatus(error.code)});
     if (error instanceof ReviewFactsRequiredError) return Response.json({ error: error.code }, { status: 422 });
     if (error instanceof AiProviderError) return Response.json({ error: error.code === "context_limit" ? "ai_review_context_limit" : "ai_review_empty" }, { status: 422 });
     const response = createAiErrorResponse(error);

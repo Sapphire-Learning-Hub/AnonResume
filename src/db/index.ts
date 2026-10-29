@@ -1,3 +1,5 @@
+import { jobSearchDatabaseTables } from "./job-search-schema";
+export { jobOpportunities, jobApplications, jobApplicationEvents, jobReviewLinks, jobSearchOperations } from "./job-search-schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 
 import { getDatabasePool } from "@/lib/runtime/database";
@@ -101,6 +103,7 @@ export {
 export const db = drizzle({
   client: getDatabasePool(),
   schema: {
+    ...jobSearchDatabaseTables,
     ...accountMergeDatabaseTables,
     ...aiDatabaseTables,
     ...configDatabaseTables,

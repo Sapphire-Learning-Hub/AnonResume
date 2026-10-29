@@ -16,6 +16,7 @@ export type AppNavigationIcon =
   | "exports"
   | "fonts"
   | "images"
+  | "job-search"
   | "resumes"
   | "roles"
   | "security"
@@ -180,6 +181,7 @@ export function buildAppNavigation(
           id: "fonts",
           label: translate("fontMarket.navigation"),
         },
+        { href: "/app/job-search", icon: "job-search", id: "job-search", label: translate("jobs.title") },
         { href: "/app/images", icon: "images", id: "images", label: translate("images.title") },
         {
           href: "/app/ai",

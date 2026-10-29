@@ -1,3 +1,4 @@
+import { jobSearchMessages } from "./job-search-messages";
 import { searchMessages } from "./search-messages";
 import { aiReviewMessages } from "./ai-review-messages";
 import { personalTemplateMessages } from "./personal-template-messages";
@@ -14,6 +15,7 @@ export const localeCookieName = "anonresume-locale";
 
 const messages = {
   "zh-CN": {
+    ...jobSearchMessages["zh-CN"],
     ...searchMessages["zh-CN"],
     ...aiReviewMessages["zh-CN"],
     ...personalTemplateMessages["zh-CN"],
@@ -1759,6 +1761,7 @@ const messages = {
     "account.recovery.restored": "账号已恢复",
   },
   "en-US": {
+    ...jobSearchMessages["en-US"],
     ...searchMessages["en-US"],
     ...aiReviewMessages["en-US"],
     ...personalTemplateMessages["en-US"],

@@ -22,6 +22,13 @@ async function ownedRecord(userId: string, reviewId: string) {
   return row ?? null;
 }
 
+export async function isOwnedResumeReview(userId: string, resumeId: string, reviewId: string) {
+  const [row] = await db.select({ id: aiResumeReviews.id }).from(aiResumeReviews)
+    .innerJoin(aiRuns, eq(aiRuns.id, aiResumeReviews.runId))
+    .where(and(eq(aiResumeReviews.id, reviewId), eq(aiRuns.userId, userId), eq(aiRuns.resumeId, resumeId))).limit(1);
+  return Boolean(row);
+}
+
 export async function getOwnedResumeReview(input: { userId: string; reviewId: string }) {
   const row = await ownedRecord(input.userId, input.reviewId);
   if (!row) return null;
