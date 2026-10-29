@@ -1433,6 +1433,7 @@ function EditableBadge({
   return (
     <span
       ref={editorRef}
+      data-resume-badge-item-id={target.itemId}
       aria-label={t("editor.badgeText")}
       className={`${styles.badge} ${styles.badgeEditor}`}
       contentEditable="plaintext-only"
@@ -1533,6 +1534,7 @@ function renderBadgeBlock(
                       badgeItemId: item.id,
                     })
                   }
+                  data-resume-badge-item-id={item.id}
                 >
                   {item.text}
                 </button>
@@ -1548,7 +1550,7 @@ function renderBadgeBlock(
             nodeId={item.id}
             fields={["node", "text", "order"]}
           >
-            <span className={className}>{item.text}</span>
+            <span className={className} data-resume-badge-item-id={item.id}>{item.text}</span>
           </ResumeDiffTarget>
         );
       })}
@@ -2275,7 +2277,7 @@ function renderBlockFragment(
       nodeId={block.id}
       fields={["node", "text", "style", "layout", "order"]}
     >
-      <div data-resume-block-path={key}>
+      <div data-resume-block-path={key} data-resume-source-range={fragment.textRange ? JSON.stringify(fragment.textRange) : undefined}>
         {renderBlock(renderedBlock, styles, {
           t: context.t,
           mode: context.mode,

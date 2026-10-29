@@ -1,5 +1,6 @@
-import { StrictMode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode, createRef } from "react";
+import type { MarkdownSearchHandle } from "@/components/editor/search/markdown-search";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { MarkdownSourceEditor } from "@/components/editor/markdown/MarkdownSourceEditor";
 
@@ -129,4 +130,33 @@ describe("MarkdownSourceEditor", () => {
     expect(destroy).toHaveBeenCalledTimes(2);
     destroy.mockRestore();
   });
+});
+
+
+it("replaces source links and directives atomically and keeps native undo intact", async () => {
+  const ref = createRef<MarkdownSearchHandle>();
+  const onChange = vi.fn();
+  const source = "[needle](https://example.test/needle)\n:::group needle\ntext\n:::";
+  render(<MarkdownSourceEditor searchRef={ref} value={source} diagnostics={[]} ariaLabel="Markdown source" onChange={onChange} onFocusDiagnostic={() => undefined} />);
+  const editor = await screen.findByRole("textbox", { name: "Markdown source" });
+  let count = 0;
+  act(() => { count = ref.current?.replaceMatches({ text: "needle", caseSensitive: true }, "changed") ?? 0; });
+  expect(count).toBe(3);
+  expect(onChange).toHaveBeenLastCalledWith("[changed](https://example.test/changed)\n:::group changed\ntext\n:::");
+  fireEvent.keyDown(editor, { key: "z", code: "KeyZ", keyCode: 90, ctrlKey: true });
+  expect(onChange).toHaveBeenLastCalledWith(source);
+});
+
+it("uses literal search offsets for source replacement without stealing the search field focus", async () => {
+  const ref = createRef<MarkdownSearchHandle>();
+  const onChange = vi.fn();
+  const source = "😀C++ and C++";
+  render(<><input aria-label="Find input" /><MarkdownSourceEditor searchRef={ref} value={source} diagnostics={[]} ariaLabel="Markdown source" onChange={onChange} onFocusDiagnostic={() => undefined} /></>);
+  await screen.findByRole("textbox", { name: "Markdown source" });
+  const input = screen.getByRole("textbox", { name: "Find input" });
+  input.focus();
+  act(() => { ref.current?.setQuery({ text: "C++", caseSensitive: true }); ref.current?.selectMatch({ from: 2, to: 5, text: "C++" }); });
+  expect(input).toHaveFocus();
+  act(() => { ref.current?.replaceMatches({ text: "C++", caseSensitive: true }, "$&", { from: 2, to: 5, text: "C++" }); });
+  expect(onChange).toHaveBeenLastCalledWith("😀$& and C++");
 });

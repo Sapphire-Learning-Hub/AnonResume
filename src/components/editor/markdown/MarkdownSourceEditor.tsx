@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -10,7 +10,6 @@ import {
   setDiagnostics,
   type Diagnostic,
 } from "@codemirror/lint";
-import { searchKeymap } from "@codemirror/search";
 import { EditorState } from "@codemirror/state";
 import {
   drawSelection,
@@ -22,12 +21,16 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 
+import { createMarkdownSearchHandle, markdownSearchExtension } from "@/components/editor/search/codemirror-search";
+import type { MarkdownSearchHandle } from "@/components/editor/search/markdown-search";
+
 import type { ResumeMarkdownDiagnostic } from "@/domain/resume/markdown";
 
 import { useMarkdownSourceEditorStyles } from "./MarkdownSourceEditor.style";
 
 export interface MarkdownSourceEditorProps {
   value: string;
+  searchRef?: Ref<MarkdownSearchHandle>;
   diagnostics: ResumeMarkdownDiagnostic[];
   focusRequest?: {
     diagnostic: ResumeMarkdownDiagnostic;
@@ -76,6 +79,7 @@ function toCodeMirrorDiagnostics(
 
 export function MarkdownSourceEditor({
   value,
+  searchRef,
   diagnostics,
   focusRequest,
   ariaLabel,
@@ -92,6 +96,8 @@ export function MarkdownSourceEditor({
   const initialValueRef = useRef(value);
   const initialAriaLabelRef = useRef(ariaLabel);
   const applyingControlledValueRef = useRef(false);
+
+  useImperativeHandle(searchRef, () => createMarkdownSearchHandle(() => viewRef.current), []);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -117,6 +123,7 @@ export function MarkdownSourceEditor({
           lineNumbers(),
           highlightActiveLineGutter(),
           history(),
+          markdownSearchExtension,
           drawSelection(),
           dropCursor(),
           bracketMatching(),
@@ -131,7 +138,6 @@ export function MarkdownSourceEditor({
           keymap.of([
             ...defaultKeymap,
             ...historyKeymap,
-            ...searchKeymap,
             ...lintKeymap,
           ]),
           EditorView.updateListener.of((update) => {
@@ -204,7 +210,7 @@ export function MarkdownSourceEditor({
     <div
       ref={containerRef}
       className={styles.root}
-      onKeyDownCapture={(event) => {
+      onKeyDown={(event) => {
         if (
           (event.metaKey || event.ctrlKey) &&
           (event.key.toLowerCase() === "z" || event.key.toLowerCase() === "y")

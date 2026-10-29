@@ -1,3 +1,4 @@
+import { searchMessages } from "./search-messages";
 import { aiReviewMessages } from "./ai-review-messages";
 import { personalTemplateMessages } from "./personal-template-messages";
 import { imageMessages } from "./image-messages";
@@ -13,6 +14,7 @@ export const localeCookieName = "anonresume-locale";
 
 const messages = {
   "zh-CN": {
+    ...searchMessages["zh-CN"],
     ...aiReviewMessages["zh-CN"],
     ...personalTemplateMessages["zh-CN"],
     ...imageMessages["zh-CN"],
@@ -1757,6 +1759,7 @@ const messages = {
     "account.recovery.restored": "账号已恢复",
   },
   "en-US": {
+    ...searchMessages["en-US"],
     ...aiReviewMessages["en-US"],
     ...personalTemplateMessages["en-US"],
     ...imageMessages["en-US"],

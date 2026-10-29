@@ -41,6 +41,7 @@ import {
   PlusSquareOutlined,
   PictureOutlined,
   ReloadOutlined,
+  SearchOutlined,
   StrikethroughOutlined,
   TagOutlined,
   UnderlineOutlined,
@@ -70,6 +71,9 @@ import {
   type EditorRibbonTabItem,
 } from "@/components/editor/EditorRibbon";
 import { EditorStatusBar } from "@/components/editor/EditorStatusBar";
+import { FindReplaceBar } from "@/components/editor/search/FindReplaceBar";
+import { CanvasSearchHighlights } from "@/components/editor/search/CanvasSearchHighlights";
+import { useResumeSearch } from "@/components/editor/search/useResumeSearch";
 import { EditorShortcutPanel } from "@/components/editor/EditorShortcutPanel";
 import { ResumeOnboardingController } from "@/components/editor/onboarding/ResumeOnboardingController";
 import { EditorWorkspaceSidebar } from "@/components/editor/navigation/EditorWorkspaceSidebar";
@@ -652,6 +656,7 @@ export function ResumeEditorShell({
   const textEditorRef = useRef<TiptapTextBlockEditorHandle>(null);
   const publicLinkCopiedTimerRef = useRef<number | undefined>(undefined);
   const canvasViewportRef = useRef<HTMLDivElement>(null);
+  const searchScopeRef = useRef<HTMLElement>(null);
   const workspaceBodyRef = useRef<HTMLElement>(null);
   const markdownPanelMeasuredRef = useRef(false);
   const [textEditorFormattingState, setTextEditorFormattingState] = useState<{
@@ -758,6 +763,14 @@ export function ResumeEditorShell({
     aiProposalPreview && aiPreviewMode === "effect"
       ? aiProposalPreview.document
       : document;
+
+  const search = useResumeSearch({
+    store,
+    scopeRef: searchScopeRef,
+    markdown: activeEditSurfaceMode === "markdown",
+    source: markdownSession.source,
+    disabled: Boolean(aiProposalPreview),
+  });
 
   const handlePaginationReadyChange = useCallback((ready: boolean) => {
     setPaginationReady(ready);
@@ -2796,6 +2809,17 @@ export function ResumeEditorShell({
 
   const documentActions = (
     <>
+      <Tooltip title={t("editor.search.open")}>
+        <Button
+          aria-label={t("editor.search.open")}
+          aria-pressed={search.open}
+          className={styles.ribbonIconButton}
+          disabled={Boolean(aiProposalPreview)}
+          icon={<SearchOutlined />}
+          type="text"
+          onClick={search.openSearch}
+        />
+      </Tooltip>
       <Dropdown trigger={["hover"]} open={aiMenuOpen} autoFocus={aiMenuKeyboard} onOpenChange={(open) => {
         setAiMenuOpen(open);
         if (!open) setAiMenuKeyboard(false);
@@ -3339,7 +3363,7 @@ export function ResumeEditorShell({
   return (
     <div className={styles.editorWorkspace}>
       <AppRouteLoadingHold active={!initialPaginationReady || previewBusy} />
-      <main className={styles.shell} data-testid="resume-editor-shell">
+      <main className={styles.shell} data-testid="resume-editor-shell" ref={searchScopeRef}>
       <EditorRibbon
         activeTab={effectiveRibbonTab}
         backHref="/app"
@@ -3710,6 +3734,7 @@ export function ResumeEditorShell({
 
         {activeEditSurfaceMode === "markdown" ? (
           <MarkdownEditingWorkspace
+            searchRef={search.markdownRef}
             diagnostics={markdownSession.diagnostics}
             getDiagnosticMessage={(diagnostic) =>
               getResumeMarkdownDiagnosticMessage(t, diagnostic)
@@ -3743,6 +3768,36 @@ export function ResumeEditorShell({
           aria-label={t("editor.canvas")}
           className={`${styles.panel} ${styles.canvasPanel}`}
         >
+          {search.open ? (
+            <FindReplaceBar
+              query={search.query}
+              replacement={search.replacement}
+              count={search.count}
+              index={search.index}
+              mode={activeEditSurfaceMode === "markdown" ? "markdown" : "document"}
+              expanded={search.expanded}
+              focusRequest={search.focusRequest}
+              onQuery={search.onQuery}
+              onReplacement={search.setReplacement}
+              onNavigate={search.navigate}
+              onReplace={search.replaceCurrent}
+              onReplaceAll={search.replaceAll}
+              onToggle={search.toggleExpanded}
+              onClose={search.close}
+            />
+          ) : null}
+          {search.open && activeEditSurfaceMode !== "markdown" ? (
+            <CanvasSearchHighlights
+              paginationReady={paginationReady}
+              viewportRef={canvasViewportRef}
+              document={document}
+              matches={search.documentMatches}
+              currentKey={search.currentMatch?.key}
+              selection={selection}
+              editorRef={textEditorRef}
+              navigationRequest={search.navigationRequest}
+            />
+          ) : null}
           {activeEditSurfaceMode === "layout" && !aiProposalPreview ? <CanvasBlockActions document={document} selection={selection} onSelect={(next) => store.getState().setSelection(next)} onMove={(toIndex) => store.getState().moveSelectedBlocks(toIndex)} onCompose={(command) => store.getState().composeBlocks(command)} /> : null}
           <div
             className={`${styles.columnStickyHeader} ${styles.canvasHeader}`}

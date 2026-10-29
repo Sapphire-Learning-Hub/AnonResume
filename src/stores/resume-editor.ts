@@ -1,4 +1,6 @@
 import { createStore } from "zustand/vanilla";
+import { replaceResumeMatches } from "@/domain/resume/search/document";
+import type { ResumeSearchQuery } from "@/domain/resume/search/types";
 import { moveSelectedBlocks } from "@/domain/resume/composition/ordering";
 import { createImageBlock } from "@/domain/resume/images/model";
 import { getBlockInsertionAnchor } from "@/domain/resume/block-tree";
@@ -101,6 +103,12 @@ export interface ResumeEditorState {
 }
 
 export interface ResumeEditorActions {
+  replaceSearchMatches: (input: {
+    query: ResumeSearchQuery;
+    replacement: string;
+    targetKey?: string;
+    expectedDocument: ResumeDocument;
+  }) => { count: number; stale: boolean };
   setSelection: (selection: ResumeEditorSelection) => void;
   selectLayoutBlock: (selection: ResumeEditorSelection, extend?: boolean) => void;
   composeBlocks: (command: BlockCompositionCommand) => void;
@@ -348,6 +356,13 @@ export function createResumeEditorStore({
       if (result.document === current.document) return;
       get().updateDocument(() => result.document);
       set({ selection: getSelectionForDocument(result.document, result.selection) });
+    },
+    replaceSearchMatches: ({ query, replacement, targetKey, expectedDocument }) => {
+      const current = get();
+      if (current.document !== expectedDocument) return { count: 0, stale: true };
+      const result = replaceResumeMatches(current.document, query, replacement, targetKey);
+      if (result.count) current.updateDocument(() => result.document);
+      return { count: result.count, stale: false };
     },
     replaceDocument: ({ document: nextDocument, history }) => {
       const current = get();

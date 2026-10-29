@@ -35,6 +35,8 @@ import { defaultLocale, getMessages } from "@/i18n/messages";
 
 import { useTiptapTextBlockEditorStyles } from "./TiptapTextBlockEditor.style";
 import { ResumeIconNode } from "./ResumeIconNode";
+import { splitDomTextRange } from "@/components/resume/search/dom-ranges";
+import type { RichTextSearchMatch } from "@/domain/resume/search/types";
 import { ResumeInlineTagMark } from "./ResumeInlineTagMark";
 import { ResumeTextColorMark } from "./ResumeTextColorMark";
 import {
@@ -116,6 +118,7 @@ export interface TiptapTextBlockEditorHandle {
     | ReturnType<typeof measureTiptapRichTextLines>
     | undefined;
   prepareLink: () => TiptapLinkContext | undefined;
+  getSearchRanges: (match: Pick<RichTextSearchMatch, "paragraphIndex" | "from" | "to">) => Range[];
 }
 
 export interface TiptapLinkContext {
@@ -506,6 +509,19 @@ export const TiptapTextBlockEditor = forwardRef<
       measureRichTextLines: () =>
         editor ? measureTiptapRichTextLines(editor) : undefined,
       prepareLink: () => editor ? prepareLinkForEditor(editor, linkSelectionRef) : undefined,
+      getSearchRanges: (match) => {
+        if (!editor || match.paragraphIndex < 0 || match.paragraphIndex >= editor.state.doc.childCount) return [];
+        const paragraph = editor.state.doc.child(match.paragraphIndex);
+        if (match.from < 0 || match.to > paragraph.content.size || match.from >= match.to) return [];
+        let start = 1;
+        for (let i = 0; i < match.paragraphIndex; i += 1) start += editor.state.doc.child(i).nodeSize;
+        const from = editor.view.domAtPos(start + match.from, 1);
+        const to = editor.view.domAtPos(start + match.to, -1);
+        const range = editor.view.dom.ownerDocument.createRange();
+        range.setStart(from.node, from.offset);
+        range.setEnd(to.node, to.offset);
+        return splitDomTextRange(range);
+      },
       applyCommand: (command) => {
         if (!editor) {
           return false;

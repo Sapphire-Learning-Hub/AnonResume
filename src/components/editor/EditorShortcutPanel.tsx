@@ -56,6 +56,9 @@ export function EditorShortcutPanel({
       title: t("editor.shortcuts.group.general"),
       items: [
         { label: t("editor.save"), keys: `${modifier} + S` },
+        { label: t("editor.search.open"), keys: `${modifier} + F` },
+        { label: t("editor.search.next"), keys: "F3", alternateKeys: `${modifier} + G` },
+        { label: t("editor.search.previous"), keys: "Shift + F3", alternateKeys: `${modifier} + Shift + G` },
         { label: t("editor.undo"), keys: `${modifier} + Z` },
         {
           label: t("editor.redo"),

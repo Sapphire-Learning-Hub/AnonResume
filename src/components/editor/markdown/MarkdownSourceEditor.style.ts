@@ -25,6 +25,16 @@ export const useMarkdownSourceEditorStyles = createStyles(({ css, token }) => ({
       overflow: auto;
     }
 
+    > .cm-editor .cm-resume-search-match {
+      background: ${token.colorWarningBg};
+      outline: 1px solid ${token.colorWarningBorder};
+    }
+
+    > .cm-editor .cm-resume-search-match[data-current="true"] {
+      background: ${token.colorPrimaryBg};
+      outline-color: ${token.colorPrimary};
+    }
+
     > .cm-editor .cm-gutters {
       color: ${token.colorTextTertiary};
       background: ${token.colorFillQuaternary};
