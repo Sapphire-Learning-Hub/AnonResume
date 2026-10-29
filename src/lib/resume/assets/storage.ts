@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
 import type { ManagedConfig } from "@/lib/config/registry";
-import { readImageStorageDirectory } from "@/lib/config/process-environment";
 import { createLocalImageStorage } from "./local-storage";
 import { createS3ImageStorage } from "./s3-storage";
+import { localImageDirectory } from "./local-directory";
 
 export function imageStorageLocation(config: ManagedConfig) {
   const location =
     config.imageStorage === "local"
-      ? ["local", resolve(readImageStorageDirectory())]
+      ? ["local", localImageDirectory(config.imageLocalDirectory)]
       : [
           "s3",
           config.imageS3Endpoint,
@@ -20,7 +19,7 @@ export function imageStorageLocation(config: ManagedConfig) {
 }
 export function imageStorage(config: ManagedConfig) {
   return config.imageStorage === "local"
-    ? createLocalImageStorage(readImageStorageDirectory())
+    ? createLocalImageStorage(config.imageLocalDirectory)
     : createS3ImageStorage({
         endpoint: config.imageS3Endpoint,
         region: config.imageS3Region,

@@ -70,6 +70,9 @@ export async function uploadImage(userId: string, name: string, input: Buffer) {
           runtime.hotRevisionId !== active.id)
       )
         throw new ImageAssetError("image_busy");
+      const [mismatched] = await tx.select({ id: resumeAssets.id }).from(resumeAssets)
+        .where(sql`${resumeAssets.location} <> ${location}`).limit(1);
+      if (mismatched) throw new ImageAssetError("image_storage_unavailable");
       try {
         await lockTemplateAccount(tx, userId);
       } catch (error) {
@@ -92,6 +95,15 @@ export async function uploadImage(userId: string, name: string, input: Buffer) {
         config.imageAccountQuotaMiB * 1024 * 1024
       )
         throw new ImageAssetError("image_quota_exceeded");
+      if (config.imageStorage === "local") {
+        // A newly started node must see existing pixels, not an empty replacement mount.
+        const [existing] = await tx.select({ id: resumeAssets.id }).from(resumeAssets)
+          .where(eq(resumeAssets.state, "ready")).limit(1);
+        if (existing) {
+          try { await imageStorage(config).get(`${existing.id}/thumbnail.webp`); }
+          catch { throw new ImageAssetError("image_storage_unavailable"); }
+        }
+      }
       await tx.insert(resumeAssets).values({
         id,
         userId,

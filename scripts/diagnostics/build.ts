@@ -1,6 +1,7 @@
 import { resolveReleaseMetadata } from "@/lib/runtime/release-metadata";
 import { spawn } from "node:child_process";
 import { privatizeSourceMaps } from "./source-maps";
+import { restrictStandaloneOutput } from "./standalone";
 
 const buildId = crypto.randomUUID();
 const child = spawn(
@@ -20,6 +21,7 @@ const status = await new Promise<number>((resolve, reject) => {
   child.once("exit", (code) => resolve(code ?? 1));
 });
 if (status !== 0) process.exit(status);
+await restrictStandaloneOutput(".next");
 await privatizeSourceMaps(
   ".next",
   `.anonresume/diagnostics/${buildId}`,

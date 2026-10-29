@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 
 import { asc, eq, inArray } from "drizzle-orm";
@@ -34,7 +35,7 @@ describe("configuration revision store", () => {
     expect(initial.draftRevision.version).toBe(2);
     expect(initial.draftRevision.baseRevisionId).toBe(initial.activeRevision.id);
     expect((await readActiveConfigSnapshot({ keyring })).values).toEqual(
-      getManagedConfigDefaults(),
+      { ...getManagedConfigDefaults(), imageLocalDirectory: resolve(process.env.ANONRESUME_IMAGE_DIR || ".anonresume/images") },
     );
 
     await updateConfigurationDraft({
@@ -154,7 +155,7 @@ describe("configuration revision store", () => {
     });
     expect(published.version).toBe(rollbackDraft.version);
     expect((await readActiveConfigSnapshot({ keyring })).values).toEqual(
-      getManagedConfigDefaults(),
+      { ...getManagedConfigDefaults(), imageLocalDirectory: resolve(process.env.ANONRESUME_IMAGE_DIR || ".anonresume/images") },
     );
 
     const historyAfter = await db

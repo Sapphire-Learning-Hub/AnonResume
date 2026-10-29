@@ -20,6 +20,8 @@ import {
   type ManagedConfig,
 } from "@/lib/config/registry";
 import { validatePublishableManagedConfig } from "@/lib/config/observability";
+import { readImageStorageDirectory } from "@/lib/config/process-environment";
+import { localImageDirectory, validateLocalImageDirectory } from "@/lib/resume/assets/local-directory";
 import type {
   ConfigApplyMode,
   ConfigConsumer,
@@ -173,6 +175,18 @@ export async function ensureConfigurationState(input: {
     let active = revisions.find((revision) => revision.status === "active");
     let draft = revisions.find((revision) => revision.status === "draft");
 
+    // Capture a legacy deployment value once. Published configuration then owns
+    // the complete path; later environment changes cannot relocate stored images.
+    const directoryRows = await transaction.select({ revisionId: systemConfigValues.revisionId, value: systemConfigValues.valueJson })
+      .from(systemConfigValues).where(eq(systemConfigValues.key, "imageLocalDirectory"));
+    const pinnedDirectory = directoryRows.find((row) => row.revisionId === active?.id) ?? directoryRows[0];
+    const initialDirectory = typeof pinnedDirectory?.value === "string"
+      ? pinnedDirectory.value : localImageDirectory(process.getBuiltinModule("path").resolve(readImageStorageDirectory()));
+    const missingDirectories = revisions.filter((revision) => !directoryRows.some((row) => row.revisionId === revision.id));
+    if (missingDirectories.length) await transaction.insert(systemConfigValues).values(missingDirectories.map((revision) => ({
+      revisionId: revision.id, key: "imageLocalDirectory", valueJson: initialDirectory, encryptedValue: null,
+    }))).onConflictDoNothing();
+
     if (!active) {
       if (revisions.length > 0) {
         throw new ConfigurationStateError();
@@ -191,7 +205,7 @@ export async function ensureConfigurationState(input: {
         .returning();
       active = created;
       await transaction.insert(systemConfigValues).values(
-        encodeSnapshot(created!.id, getManagedConfigDefaults(), input.keyring),
+        encodeSnapshot(created!.id, { ...getManagedConfigDefaults(), imageLocalDirectory: initialDirectory }, input.keyring),
       );
     }
 
@@ -381,15 +395,21 @@ export async function publishConfigurationDraft(input: {
       .where(eq(systemConfigValues.revisionId, draft.id));
     const values = decodeSnapshot(draftRows, input.keyring);
     validatePublishableManagedConfig(values);
+    const activeRows = await transaction.select().from(systemConfigValues).where(eq(systemConfigValues.revisionId, active.id));
+    const previous = decodeSnapshot(activeRows, input.keyring);
+    const localDirectoryChanged = values.imageStorage === "local" &&
+      (previous.imageStorage !== "local" || localImageDirectory(previous.imageLocalDirectory) !== localImageDirectory(values.imageLocalDirectory));
     const [asset] = await transaction.select({ id: resumeAssets.id }).from(resumeAssets).limit(1);
     if (asset) {
-      const activeRows = await transaction.select().from(systemConfigValues).where(eq(systemConfigValues.revisionId, active.id));
-      const previous = decodeSnapshot(activeRows, input.keyring);
+      if (previous.imageStorage === "local" && localDirectoryChanged)
+        throw new ConfigurationStateError("image_storage_in_use");
       for (const key of ["imageStorage", "imageS3Endpoint", "imageS3Region", "imageS3Bucket", "imageS3Prefix"] as const) {
         if (key !== "imageStorage" && previous.imageStorage === "local" && values.imageStorage === "local") continue;
         if (previous[key] !== values[key]) throw new ConfigurationStateError("image_storage_in_use");
       }
     }
+    if (localDirectoryChanged)
+      await validateLocalImageDirectory(values.imageLocalDirectory);
     const now = new Date();
 
     await transaction

@@ -1,4 +1,21 @@
 import { CONFIG_REGISTRY, parseManagedConfig } from "@/lib/config/registry";
+import { createHash } from "node:crypto";
+import { resolve } from "node:path";
+import { imageStorageLocation } from "@/lib/resume/assets/storage";
+
+it("keeps legacy local image identities when the new setting is absent", () => {
+  const root = ".anonresume/images";
+  const oldIdentity = createHash("sha256").update(JSON.stringify(["local", resolve(root)])).digest("hex");
+  expect(imageStorageLocation(parseManagedConfig({}))).toBe(oldIdentity);
+  expect(imageStorageLocation(parseManagedConfig({ imageLocalDirectory: "/var/lib/other-images" }))).not.toBe(oldIdentity);
+});
+
+it("accepts one complete directory rather than combining independently configured paths", () => {
+  expect(parseManagedConfig({}).imageLocalDirectory).toBe(".anonresume/images");
+  expect(parseManagedConfig({ imageLocalDirectory: "/var/lib/resume-photos" }).imageLocalDirectory).toBe("/var/lib/resume-photos");
+  for (const path of ["", "../images", "/photos/../images", "C:\\images", "a\\b", "a//b", "./photos", "a\u0000b"])
+    expect(() => parseManagedConfig({ imageLocalDirectory: path })).toThrow();
+});
 
 it("requires complete private S3 settings and bounds upload quotas", () => {
   expect(() => parseManagedConfig({ imageStorage: "s3" })).toThrow();

@@ -73,6 +73,7 @@ export class LegacyEnvironmentImportConflictError extends Error {
 }
 
 function parseEnvironmentValue(key: ConfigKey, rawValue: string) {
+  if (key === "imageLocalDirectory") return process.getBuiltinModule("path").resolve(rawValue);
   if (key === "metricsEnabled" || key === "tracingEnabled") {
     if (rawValue === "otlp") return true;
     if (rawValue === "none") return false;
