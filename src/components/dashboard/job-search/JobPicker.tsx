@@ -50,7 +50,7 @@ export function JobPicker({
       loading={resource.loading || more}
       options={options.map((job) => ({
         value: job.id,
-        label: `${job.company ? `${job.company} · ` : ""}${job.title}`,
+        label: job.company ? `${job.title} (${job.company})` : job.title,
       }))}
       onChange={(id) => onChange(options.find((job) => job.id === id))}
       popupRender={(menu) => (

@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { Button } from "antd";
 import { createStyles } from "antd-style";
@@ -51,7 +52,7 @@ export function FontCompareTray({
 
   return (
     <aside aria-label={t("fontMarket.compareSelection")} className={styles.tray}>
-      <span className={styles.names}>{presets.map((preset) => preset.name).join(" · ")}</span>
+      <span className={styles.names}><InlineMetadata>{presets.map((preset) => <span key={preset.id}>{preset.name}</span>)}</InlineMetadata></span>
       <div className={styles.actions}>
         <Button onClick={onClear}>{t("fontMarket.compareClear")}</Button>
         <Button disabled={presets.length < 2} onClick={onCompare} type="primary">

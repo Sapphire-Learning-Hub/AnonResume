@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  简体中文 · <a href="./README.en.md">English</a>
+  简体中文 &emsp; <a href="./README.en.md">English</a>
 </p>
 
 > [!IMPORTANT]
@@ -21,10 +21,10 @@
 </p>
 
 <p align="center">
-  <a href="https://anonresume.zqdesigned.city">在线体验</a> ·
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#功能亮点">功能亮点</a> ·
-  <a href="#技术文章">技术文章</a> ·
+  <a href="https://anonresume.zqdesigned.city">在线体验</a> &emsp;
+  <a href="#快速开始">快速开始</a> &emsp;
+  <a href="#功能亮点">功能亮点</a> &emsp;
+  <a href="#技术文章">技术文章</a> &emsp;
   <a href="#参与贡献">参与贡献</a>
 </p>
 

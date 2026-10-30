@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import {
   Fragment,
   useCallback,
@@ -275,7 +276,7 @@ export function ApplicationGantt({
                     stage: t(stageLabelKey(app.rejectedFromStage)),
                   })
                 : t(stageLabelKey(app.stage));
-              const title = `${app.snapshot.company ? `${app.snapshot.company} · ` : ""}${app.snapshot.title}`;
+              const title = app.snapshot.company ? `${app.snapshot.title} (${app.snapshot.company})` : app.snapshot.title;
               const dates = `${date(range.start)} → ${range.ongoing ? t("jobs.today") : date(range.end)}`;
               return (
                 <div className={styles.row} role="row" key={app.id}>
@@ -285,11 +286,10 @@ export function ApplicationGantt({
                       className={styles.title}
                       onClick={() => onSelect(app)}
                     >
-                      {title}
+                      <InlineMetadata stacked><span>{app.snapshot.title}</span>{app.snapshot.company ? <span className={styles.muted}>{app.snapshot.company}</span> : null}</InlineMetadata>
                     </Button>
                     <span className={styles.muted}>
-                      {stage}
-                      {app.channel ? ` · ${app.channel}` : ""}
+                      <InlineMetadata><span>{stage}</span>{app.channel ? <span>{app.channel}</span> : null}</InlineMetadata>
                     </span>
                   </div>
                   <div className={styles.track} role="cell">
@@ -323,7 +323,7 @@ export function ApplicationGantt({
                               ? "none"
                               : undefined,
                         }}
-                        aria-label={`${title} · ${stage} · ${dates}`}
+                        aria-label={`${title}, ${stage}, ${dates}`}
                         onClick={() => onSelect(app)}
                       >
                         {!app.milestones.items.length ? stage : null}

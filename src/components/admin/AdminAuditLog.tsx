@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { Button, Modal } from "antd";
 import { useState, type ReactNode } from "react";
@@ -304,13 +305,13 @@ export function AdminAuditLog({
           />,
           event.actor ? (
             <AdminIdentity
-              description={`${event.actor.description ?? ""} · ${event.actor.id}`}
+              description={<InlineMetadata stacked>{event.actor.description ? <span>{event.actor.description}</span> : null}<span>{event.actor.id}</span></InlineMetadata>}
               key="actor"
               title={event.actor.label}
             />
           ) : t("audit.system"),
           <AdminIdentity
-            description={`${targetTypeLabel(event.targetType)}${event.targetId ? ` · ${event.targetId}` : ""}`}
+            description={<InlineMetadata stacked><span>{targetTypeLabel(event.targetType)}</span>{event.targetId ? <span>{event.targetId}</span> : null}</InlineMetadata>}
             key="target"
             title={targetLabel(event)}
           />,

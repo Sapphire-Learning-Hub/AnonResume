@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { managementFetch } from "@/lib/admin/client/request";
 
@@ -567,7 +568,7 @@ export function AdminAiProviders({
                           </>
                         }
                         key={model.modelId}
-                        modelKey={`${model.modelKey} · ${model.modelId}`}
+                        modelKey={<InlineMetadata stacked><span>{model.modelKey}</span><span>{model.modelId}</span></InlineMetadata>}
                         name={model.modelName}
                         status={
                           <Tag color={model.modelEnabled ? "success" : "default"}>

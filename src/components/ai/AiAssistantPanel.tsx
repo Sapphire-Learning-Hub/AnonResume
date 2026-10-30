@@ -307,11 +307,7 @@ export function AiAssistantPanel({
                 aria-label={t("ai.model")}
                 options={assistant.models.map((model) => ({
                   value: model.id,
-                  label: `${model.displayName} · ${model.providerName} · ${
-                    model.keySource === "platform"
-                      ? t("ai.model.platform")
-                      : t("ai.model.personal")
-                  }`,
+                  label: `${model.displayName} (${model.providerName}, ${t(model.keySource === "platform" ? "ai.model.platform" : "ai.model.personal")})`,
                 }))}
                 placeholder={t("ai.model.select")}
                 value={assistant.selectedModelId}

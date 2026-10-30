@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { managementFetch } from "@/lib/admin/client/request";
 
@@ -109,7 +110,7 @@ export function AdminAiUsage({
           }}
           rows={usage.items.map((item) => [
             <AdminIdentity key="run" title={item.runId} description={formatDate(item.createdAt)} />,
-            <AdminIdentity key="user" title={item.userName} description={`${item.email} · ${item.userId}`} />,
+            <AdminIdentity key="user" title={item.userName} description={<InlineMetadata stacked><span>{item.email}</span><span>{item.userId}</span></InlineMetadata>} />,
             <AdminIdentity key="resume" title={item.resumeName} description={item.resumeId} />,
             <AdminIdentity key="model" title={item.modelName} description={item.modelId} />,
             <AdminStatus key="status" tone={item.status === "complete" ? "success" : item.status === "settlement_pending" ? "warning" : "default"}>{statusLabels[item.status] ?? item.status}</AdminStatus>,

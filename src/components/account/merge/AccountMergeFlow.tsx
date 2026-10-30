@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { ExclamationCircleOutlined, LoadingOutlined } from "@ant-design/icons";
 import { Button, Input, Modal, Radio, Spin } from "antd";
@@ -418,7 +419,7 @@ export function AccountMergeFlow({
   function renderAccountSummary(account: MergeAccountSummary, label: string) {
     const methods = account.loginMethods.map((method) =>
       method === "credential" ? t("account.merge.methodEmail") : "GitHub"
-    ).join(" · ");
+    );
     return (
       <section className={styles.summary}>
         <span className={styles.label}>{label}</span>
@@ -427,7 +428,7 @@ export function AccountMergeFlow({
         <span className={styles.summaryMeta}>
           {t("account.merge.resumeCount", { count: account.resumeCount })}
         </span>
-        <span className={styles.summaryMeta}>{methods}</span>
+        <span className={styles.summaryMeta}><InlineMetadata>{methods.map((method) => <span key={method}>{method}</span>)}</InlineMetadata></span>
       </section>
     );
   }

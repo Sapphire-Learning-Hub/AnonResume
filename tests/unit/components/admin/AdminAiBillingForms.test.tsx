@@ -379,7 +379,7 @@ describe("AI billing administration forms", () => {
     fireEvent.click(screen.getByRole("button", { name: "计费历史" }));
 
     const dialog = await screen.findByRole("dialog", {
-      name: "示例模型 · 计费历史",
+      name: /示例模型.*计费历史/,
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/manage/ai/providers/00000000-0000-4000-8000-000000000001/models/00000000-0000-4000-8000-000000000002/rate-versions",

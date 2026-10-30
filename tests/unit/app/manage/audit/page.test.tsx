@@ -127,7 +127,8 @@ describe("ManagementAuditPage", () => {
     );
 
     expect(screen.getByText("停用用户")).toBeInTheDocument();
-    expect(screen.getByText("权限 · users.suspend")).toBeInTheDocument();
+    expect(screen.getByText("权限")).toBeInTheDocument();
+    expect(screen.getAllByText("users.suspend").length).toBeGreaterThan(0);
   });
 
   it("shows readable labels for AI audit actions and targets", async () => {
@@ -205,8 +206,11 @@ describe("ManagementAuditPage", () => {
     expect(screen.getByText("更新 AI 模型")).toBeInTheDocument();
     expect(screen.getByText("删除模型服务")).toBeInTheDocument();
     expect(screen.getByText("处理 AI 结算")).toBeInTheDocument();
-    expect(screen.getByText("AI 模型 · model-1")).toBeInTheDocument();
-    expect(screen.getByText("模型服务 · provider-1")).toBeInTheDocument();
-    expect(screen.getByText("AI 任务 · run-1")).toBeInTheDocument();
+    expect(screen.getByText("AI 模型")).toBeInTheDocument();
+    expect(screen.getAllByText("model-1").length).toBeGreaterThan(0);
+    expect(screen.getByText("模型服务")).toBeInTheDocument();
+    expect(screen.getAllByText("provider-1").length).toBeGreaterThan(0);
+    expect(screen.getByText("AI 任务")).toBeInTheDocument();
+    expect(screen.getAllByText("run-1").length).toBeGreaterThan(0);
   });
 });

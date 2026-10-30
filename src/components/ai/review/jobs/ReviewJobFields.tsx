@@ -47,7 +47,7 @@ function ApplicationPicker({
       onChange={onChange}
       options={state.data?.items.map((app) => ({
         value: app.id,
-        label: `${t(stageLabelKey(app.stage))} · ${new Date(app.createdAt).toLocaleString(locale)}${app.channel ? ` · ${app.channel}` : ""}`,
+        label: `${t(stageLabelKey(app.stage))} (${new Date(app.createdAt).toLocaleString(locale)}${app.channel ? `, ${app.channel}` : ""})`,
       }))}
       notFoundContent={
         state.failed ? (

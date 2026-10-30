@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { UploadOutlined, MoreOutlined } from "@ant-design/icons";
 import {
   Button,
@@ -250,8 +251,7 @@ export function ImageLibrary({
                     {image.name}
                   </Typography.Text>
                   <span className={styles.hint}>
-                    {image.width} × {image.height} ·{" "}
-                    {(image.bytes / 1024).toFixed(0)} KiB
+                    <InlineMetadata><span>{image.width} × {image.height}</span><span>{(image.bytes / 1024).toFixed(0)} KiB</span></InlineMetadata>
                   </span>
                   <div className={styles.actions}>
                     {onSelect ? (

@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useCallback, useState, useRef, useEffect } from "react";
 import { Button, Empty, Spin } from "antd";
 import type { JobSearchQuery, Opportunity } from "@/domain/job-search/schema";
@@ -55,8 +56,10 @@ export function OpportunityLibrary({
                 {job.title}
               </Button>
               <div className={styles.muted}>
-                {job.company} ·{" "}
-                {t("jobs.count", { count: job.applicationCount })}
+                <InlineMetadata>
+                  {job.company ? <span>{job.company}</span> : null}
+                  <span>{t("jobs.count", { count: job.applicationCount })}</span>
+                </InlineMetadata>
               </div>
             </div>
             <Button onClick={() => onSelect(job)}>{t("jobs.details")}</Button>

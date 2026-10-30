@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import type { ReactNode } from "react";
 import { useCallback, useRef, useState, useEffect } from "react";
 import { Button, Empty, Select, Spin } from "antd";
@@ -77,14 +78,13 @@ function ApplicationCard({
         </span>
       ) : null}
       <span className={styles.muted}>
-        {app.appliedAt
-          ? new Date(app.appliedAt).toLocaleDateString(locale)
-          : t("jobs.noDate")}
-        {app.channel ? ` · ${app.channel}` : ""}
+        <InlineMetadata>
+          <span>{app.appliedAt ? new Date(app.appliedAt).toLocaleDateString(locale) : t("jobs.noDate")}</span>
+          {app.channel ? <span>{app.channel}</span> : null}
+        </InlineMetadata>
       </span>
       <span className={styles.muted}>
-        {t("jobs.activityAt")} ·{" "}
-        {new Date(app.activityAt).toLocaleString(locale)}
+        <InlineMetadata><span>{t("jobs.activityAt")}</span><time>{new Date(app.activityAt).toLocaleString(locale)}</time></InlineMetadata>
       </span>
       <Select
         size="small"

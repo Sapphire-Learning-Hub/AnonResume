@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useClosingDialog } from "@/components/dashboard/job-search/useClosingDialog";
 import { useRef, useState } from "react";
 import { Button, Checkbox, Form, Input, Modal } from "antd";
@@ -77,7 +78,7 @@ export function StageChangeDialog({
     <Modal
       open={open && dialog.open}
       afterClose={dialog.afterClose}
-      title={`${t("jobs.stageDialog")} · ${t(stageLabelKey(target))}`}
+      title={<InlineMetadata><span>{t("jobs.stageDialog")}</span><span>{t(stageLabelKey(target))}</span></InlineMetadata>}
       onCancel={() => dialog.close()}
       footer={null}
       destroyOnHidden

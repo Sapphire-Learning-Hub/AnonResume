@@ -531,7 +531,7 @@ export function BlockOutline(props: Props) {
           <div className={styles.overlay}>
             {getOutlineLabel(activeNode, t, activeNode.index)}
             {range && range.blocks.length > 1 && isSelected(activeNode)
-              ? ` · ${t("outline.multi", { count: range.blocks.length })}`
+              ? ` (${t("outline.multi", { count: range.blocks.length })})`
               : ""}
           </div>
         ) : null}

@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { managementFetch } from "@/lib/admin/client/request";
 
@@ -93,8 +94,8 @@ export function AdminAiQuotas({
             totalPages: quotas.totalPages,
           }}
           rows={quotas.items.map((item) => [
-            <AdminIdentity key="user" title={item.userName} description={`${item.email} · ${item.userId}`} />,
-            <span key="limit">{formatNumber(item.monthlyLimit)}{item.customLimit ? ` · ${t("ai.customQuota")}` : ""}</span>,
+            <AdminIdentity key="user" title={item.userName} description={<InlineMetadata stacked><span>{item.email}</span><span>{item.userId}</span></InlineMetadata>} />,
+            <InlineMetadata key="limit"><span>{formatNumber(item.monthlyLimit)}</span>{item.customLimit ? <span>{t("ai.customQuota")}</span> : null}</InlineMetadata>,
             formatNumber(item.usedPoints),
             formatNumber(item.reservedPoints),
             <span key="period">{formatDate(item.periodStartedAt)} – {formatDate(item.periodEndsAt)}</span>,
@@ -131,7 +132,7 @@ export function AdminAiQuotas({
         width={620}
       >
         {quotaDraft ? <Form className="admin-dialog-form" layout="vertical">
-          <AdminIdentity title={quotaDraft.userName} description={`${quotaDraft.email} · ${quotaDraft.userId}`} />
+          <AdminIdentity title={quotaDraft.userName} description={<InlineMetadata stacked><span>{quotaDraft.email}</span><span>{quotaDraft.userId}</span></InlineMetadata>} />
           <div className="admin-quota-summary">
             <span>{t("ai.usedPoints")}：{formatNumber(quotaDraft.usedPoints)}</span>
             <span>{t("ai.reservedPoints")}：{formatNumber(quotaDraft.reservedPoints)}</span>

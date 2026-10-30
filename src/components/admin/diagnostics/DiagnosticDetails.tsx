@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { Alert, Descriptions, Space, Tag, Timeline, Typography } from "antd";
 import type { AppLocale } from "@/i18n/messages";
@@ -57,7 +58,7 @@ export function DiagnosticDetails({ data, locale }: { data: Details; locale: App
       color: event.kind === "fault" || event.outcome === "failure" ? "red" : event.outcome === "success" ? "green" : "gray",
       content: <div className={styles.stage}>
         <Space wrap><strong>{index+1}. {t(event.kind === "fault" ? "fault" : names[event.name] ?? "stage.app.operation")}</strong><Tag>{t(`outcome.${event.outcome}`)}</Tag>{event.durationMs !== null ? <span>{Math.round(event.durationMs)} ms</span> : null}</Space>
-        <span className={styles.meta}>{date(event.at)} · {event.identity.role} · {event.identity.instance}</span>
+        <span className={styles.meta}><InlineMetadata><time>{date(event.at)}</time><span>{event.identity.role}</span><span>{event.identity.instance}</span></InlineMetadata></span>
         {event.taskId ? <span className={styles.meta}>{t("task")}: {event.taskId}</span> : null}
         {event.parentId ? <span className={styles.meta}>{t("parent")}: {data.events.some((parent) => parent.id === event.parentId) ? `#${data.events.findIndex((parent) => parent.id === event.parentId)+1}` : event.parentId}</span> : null}
       </div>,

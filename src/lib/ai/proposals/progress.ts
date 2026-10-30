@@ -10,7 +10,7 @@ function blockPreview(block: ResumeBlock): string | null {
     case "text":
       return getPlainTextFromRichText(block.content);
     case "badges":
-      return block.items.map((item) => item.text).join(" · ");
+      return block.items.map((item) => item.text).join(", ");
     case "list":
       return block.items
         .flatMap((item) => item.children.map(blockPreview))

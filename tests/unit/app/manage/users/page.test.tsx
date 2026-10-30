@@ -94,10 +94,10 @@ describe("management users page lifecycle states", () => {
   it("shows terminal lifecycle status without management actions", async () => {
     render(await ManagementUsersPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByText(/待注销.*2026\/10\/14/)).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: /待注销.*2026\/10\/14/ })).toBeInTheDocument();
     expect(screen.getByText("已注销")).toBeInTheDocument();
     expect(screen.getByText("m***@example.com")).toBeInTheDocument();
-    expect(screen.getByText(/已合并.*2026\/10\/9/)).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: /已合并.*2026\/10\/9/ })).toBeInTheDocument();
     expect(screen.getByText("合并至 Primary User（primary@example.com）")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "用户操作" })).not.toBeInTheDocument();
   });

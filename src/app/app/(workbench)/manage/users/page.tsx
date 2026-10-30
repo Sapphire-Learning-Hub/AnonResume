@@ -1,3 +1,4 @@
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import {
   AdminIdentity,
   AdminPage,
@@ -96,10 +97,7 @@ export default async function ManagementUsersPage({
                 : t("users.regular"),
             user.lifecycleStatus === "pending_deletion" ? (
               <AdminStatus key="status" tone="warning">
-                {t("users.pendingDeletion")}
-                {user.deletionDueAt
-                  ? ` · ${t("users.pendingDeletionDue", { time: user.deletionDueAt.toLocaleString(locale) })}`
-                  : null}
+                <InlineMetadata><span>{t("users.pendingDeletion")}</span>{user.deletionDueAt ? <span>{t("users.pendingDeletionDue", { time: user.deletionDueAt.toLocaleString(locale) })}</span> : null}</InlineMetadata>
               </AdminStatus>
             ) : user.lifecycleStatus === "deleted" ? (
               <AdminStatus key="status" tone="danger">
@@ -107,10 +105,7 @@ export default async function ManagementUsersPage({
               </AdminStatus>
             ) : merged ? (
               <AdminStatus key="status" tone="info">
-                {t("users.merged")}
-                {user.mergedAt
-                  ? ` · ${t("users.mergedAt", { time: user.mergedAt.toLocaleString(locale) })}`
-                  : null}
+                <InlineMetadata><span>{t("users.merged")}</span>{user.mergedAt ? <span>{t("users.mergedAt", { time: user.mergedAt.toLocaleString(locale) })}</span> : null}</InlineMetadata>
               </AdminStatus>
             ) : (
               <AdminStatus
