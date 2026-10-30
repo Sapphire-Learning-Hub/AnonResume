@@ -49,20 +49,38 @@ function getCommittedSpacerHeight(
   element: HTMLElement,
   committedSpacerHeights: ReadonlyMap<string, number>,
 ) {
-  const ids = new Set(
-    Array.from(
-      element.querySelectorAll<HTMLElement>("[data-resume-page-break-id]"),
-    ).flatMap((spacer) =>
-      spacer.dataset.resumePageBreakId
-        ? [spacer.dataset.resumePageBreakId]
-        : [],
-    ),
-  );
+  const heights = new Map<string, number>();
+  for (const spacer of element.querySelectorAll<HTMLElement>(
+    "[data-resume-page-break-id]",
+  )) {
+    const id = spacer.dataset.resumePageBreakId;
+    if (!id) continue;
+    // Multiple columns cross the same page boundary in parallel.
+    const boundary = spacer.dataset.resumePageIndex ?? id;
+    heights.set(
+      boundary,
+      Math.max(heights.get(boundary) ?? 0, committedSpacerHeights.get(id) ?? 0),
+    );
+  }
+  return [...heights.values()].reduce((total, height) => total + height, 0);
+}
 
-  return Array.from(ids).reduce(
-    (total, id) => total + (committedSpacerHeights.get(id) ?? 0),
-    0,
-  );
+function getRenderedScale(element: HTMLElement | undefined, fallback: number) {
+  if (!element) return fallback;
+  const style = getComputedStyle(element);
+  const cssPixels = (value: string) => Number.parseFloat(value) || 0;
+  const width =
+    cssPixels(style.width) +
+    (style.boxSizing === "border-box"
+      ? 0
+      : cssPixels(style.paddingLeft) +
+        cssPixels(style.paddingRight) +
+        cssPixels(style.borderLeftWidth) +
+        cssPixels(style.borderRightWidth));
+  const renderedWidth = element.getBoundingClientRect().width;
+  // A zoom transition can still be between its initial and target values.
+  // Normalize against the scale actually rendered in this frame.
+  return width > 0 && renderedWidth > 0 ? renderedWidth / width : fallback;
 }
 
 function measureElementHeight(
@@ -559,6 +577,7 @@ export function measureResumeSectionFlow(
     "data-resume-section-id",
     section.id,
   );
+  const zoom = getRenderedScale(sectionElement, params.zoom);
   const titleElement = section.title
     ? (sectionElement?.querySelector<HTMLElement>(
         '[data-resume-section-title="true"]',
@@ -567,20 +586,19 @@ export function measureResumeSectionFlow(
   const titleHeight = section.title
     ? measureElementHeight(
         titleElement,
-        params.zoom,
+        zoom,
         params.committedSpacerHeights,
       )
     : 0;
   const titleGap = titleElement
     ? Math.max(
         0,
-        Number.parseFloat(getComputedStyle(titleElement).marginBottom) /
-          params.zoom || 0,
+        Number.parseFloat(getComputedStyle(titleElement).marginBottom) || 0,
       )
     : 0;
   const height = measureElementHeight(
     sectionElement,
-    params.zoom,
+    zoom,
     params.committedSpacerHeights,
   );
   const blocks = section.blocks.map((block) =>
@@ -589,7 +607,7 @@ export function measureResumeSectionFlow(
       block,
       blockPath: [block.id],
       sectionId: section.id,
-      zoom: params.zoom,
+      zoom,
       activeEditor: params.activeEditor,
       activeSelection: params.activeSelection,
       committedSpacerHeights: params.committedSpacerHeights,
@@ -598,7 +616,7 @@ export function measureResumeSectionFlow(
 
   if (
     !sectionElement ||
-    height <= 0 ||
+    (height <= 0 && (section.title || !section.blocks.every(isStructurallyEmptyBlock))) ||
     blocks.some((block) => !block) ||
     (section.title && titleHeight <= 0)
   ) {
@@ -611,7 +629,14 @@ export function measureResumeSectionFlow(
     titleHeight,
     titleGap,
     keepTogether: section.pagination?.keepTogether,
+    paddingTop: section.layout?.padding?.top ?? 0,
+    paddingBottom: section.layout?.padding?.bottom ?? 0,
     topLevelGap: section.layout?.gap ?? RESUME_DEFAULT_BLOCK_GAP_PX,
+    ...((section.layout?.columns ?? 1) > 1
+      ? { parallelColumns: section.layout?.columns }
+      : section.layout?.direction === "horizontal"
+        ? { parallelColumns: section.blocks.length }
+        : {}),
     blocks: blocks as MeasuredResumeNode[],
   };
 }

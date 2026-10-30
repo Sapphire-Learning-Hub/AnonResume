@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { paginateMeasuredSections } from "@/domain/resume/pagination";
 import { measureResumeFlow } from "@/components/resume/pagination/flow-measurement";
 import type { TiptapTextBlockEditorHandle } from "@/components/resume/TiptapTextBlockEditor";
 import { createDefaultResumeDocument } from "@/domain/resume/default-document";
@@ -10,6 +11,77 @@ describe("measureResumeFlow", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  it.each([false, true])("finishes measuring an empty visible section (empty container: %s)", (withContainer) => {
+    const document = documentWithBlocks(withContainer ? [{ id: "empty", type: "row", children: [] }] : []);
+    const root = createSectionRoot(1);
+    root.querySelector("section")!.setAttribute("data-height", "0");
+    if (withContainer) appendMeasuredElement(root, "div", { "data-resume-block-path": "empty", "data-height": "0" });
+    const result = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map() });
+    expect(result).toMatchObject([{ id: "section", height: 0 }]);
+    expect(result?.[0]?.blocks).toHaveLength(withContainer ? 1 : 0);
+  });
+
+  it("retains section insets in the pagination budget", () => {
+    const document = documentWithBlocks([textBlock("body", "Body")]);
+    document.sections[0]!.layout = { padding: { top: 12, bottom: 20, left: 0, right: 0 } };
+    const root = createSectionRoot(1);
+    appendMeasuredElement(root, "div", { "data-resume-block-path": "body", "data-height": "80" });
+    const measured = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map() });
+    expect(measured?.[0]).toMatchObject({paddingTop: 12, paddingBottom: 20});
+  });
+
+  it("measures animated zoom in document units without scaling CSS title spacing", () => {
+    const document = documentWithBlocks([textBlock("body", "Body")]);
+    document.sections[0]!.title = textBlock("title", "Title").content;
+    const root = createSectionRoot(0.9);
+    const section = root.querySelector("section")!;
+    section.style.width = "100px";
+    Object.defineProperty(section, "getBoundingClientRect", { value: () => ({ ...rect(219.6), width: 90 }) });
+    const title = appendMeasuredElement(section, "h2", { "data-resume-section-title": "true", "data-height": "28.8" });
+    title.style.marginBottom = "12px";
+    appendMeasuredElement(section, "div", { "data-resume-block-path": "body", "data-height": "180" });
+    // The canvas is still at 90% on its way to the requested 80% zoom.
+    const measured = measureResumeFlow({ root, document, zoom: 0.8, committedSpacerHeights: new Map() })!;
+    expect(measured[0]!.height).toBeCloseTo(244);
+    expect(measured[0]!.titleHeight).toBeCloseTo(32);
+    expect(measured[0]!.titleGap).toBe(12);
+    expect(measured[0]!.blocks[0]!.height).toBeCloseTo(200);
+  });
+
+  it("subtracts a shared grid page transition once when remeasuring the section", () => {
+    const document = documentWithBlocks([textBlock("left", "A"), textBlock("right", "B")]);
+    document.sections[0]!.layout = { columns: 2 };
+    const root = createSectionRoot(1);
+    const section = root.querySelector("section")!;
+    section.setAttribute("data-height", "140");
+    for (const id of ["left", "right"]) {
+      const block = appendMeasuredElement(section, "div", { "data-resume-block-path": id, "data-height": "140" });
+      appendMeasuredElement(block, "span", { "data-resume-page-break-id": id, "data-resume-page-index": "1", "data-height": "100" });
+    }
+    const result = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map([["left", 100], ["right", 100]]) });
+    expect(result?.[0]?.height).toBe(40);
+    expect(result?.[0]?.blocks.map((block) => block.height)).toEqual([40, 40]);
+  });
+
+  it.each([{ columns: 2 }, { direction: "horizontal" as const }])(
+    "uses the occupied height of a parallel section before paginating following text: %j",
+    (layout) => {
+      const document = documentWithBlocks([textBlock("left", "Left"), textBlock("right", "Right")]);
+      document.sections[0]!.layout = { ...layout, gap: 22 };
+      const root = createSectionRoot(1);
+      root.querySelector("section")!.setAttribute("data-height", "60");
+      appendMeasuredElement(root, "div", { "data-resume-block-path": "left", "data-height": "60" });
+      appendMeasuredElement(root, "div", { "data-resume-block-path": "right", "data-height": "40" });
+      const sections = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map() })!;
+      const pages = paginateMeasuredSections({ pageHeight: 120, sectionGap: 10, sections: [...sections, {
+        id: "following", height: 40, titleHeight: 0, blocks: [{ id: "tail", path: ["tail"], type: "text", height: 40 }],
+      }] }).pages;
+      expect(pages).toHaveLength(1);
+      expect(pages[0]!.totalHeight).toBe(110);
+      expect(pages[0]!.sections[0]!.blocks.map((block) => block.path)).toEqual([["left"], ["right"]]);
+    },
+  );
 
   it("measures fixed columns in parallel and removes text spacers without counting the photo twice", () => {
     const image = createImageBlock({ id: crypto.randomUUID(), name: "Photo", width: 600, height: 800 });

@@ -26,6 +26,9 @@ export interface MeasuredResumeSection {
   titleGap?: number;
   keepTogether?: boolean;
   topLevelGap?: number;
+  parallelColumns?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
   blocks: MeasuredResumeNode[];
 }
 
@@ -77,6 +80,10 @@ function getPage(pages: ResumePageLayout[]) {
 
 function getTopLevelGap(section: MeasuredResumeSection) {
   return section.topLevelGap ?? RESUME_DEFAULT_BLOCK_GAP_PX;
+}
+
+function getSectionPadding(section: MeasuredResumeSection) {
+  return (section.paddingTop ?? 0) + (section.paddingBottom ?? 0);
 }
 
 function getSectionTitleGap(section: MeasuredResumeSection) {
@@ -358,9 +365,10 @@ function createSectionFragment(
   includeTitle: boolean,
 ): ResumePageSectionLayout {
   const totalHeight =
+    getSectionPadding(section) +
     (includeTitle && section.titleHeight > 0
       ? section.titleHeight +
-        (blocks.length > 0 ? getSectionTitleGap(section) : 0)
+        (blocks.length > 0 ? getSectionTitleGap(section) : (section.titleGap ?? 0))
       : 0) +
     blocks.reduce((total, fragment, blockIndex) => {
       const block = measuredBlocks.find((candidate) =>
@@ -397,8 +405,9 @@ function takeSectionFragment(params: {
   const { section, blocks, availableSpace, pageHeight, includeTitle, allowOverflow } = params;
   const placedBlocks: ResumePageFragment[] = [];
   const remainingBlocks: MeasuredResumeNode[] = [];
-  let usedHeight =
-    includeTitle && section.titleHeight > 0 ? section.titleHeight : 0;
+  let usedHeight = getSectionPadding(section) +
+    (includeTitle && section.titleHeight > 0 ? section.titleHeight : 0);
+  if (includeTitle && blocks.length === 0) usedHeight += section.titleGap ?? 0;
 
   if (includeTitle && blocks.length > 0) {
     usedHeight += getSectionTitleGap(section);
@@ -421,9 +430,9 @@ function takeSectionFragment(params: {
 
     if (!placement.fragment || placement.height <= 0) {
       if (placedBlocks.length === 0) {
-        if (block.columnLayout && !allowOverflow) break;
+        if (!allowOverflow) break;
         if (block.columnLayout && includeTitle && section.titleHeight > 0) {
-          return { fragment: { sectionId: section.id, includeTitle: true, blocks: [], totalHeight: section.titleHeight }, remainingBlocks: blocks };
+          return { fragment: { sectionId: section.id, includeTitle: true, blocks: [], totalHeight: section.titleHeight + getSectionPadding(section) + (section.titleGap ?? 0) }, remainingBlocks: blocks };
         }
         placedBlocks.push(createWholeFragment(block));
         usedHeight += gapBeforeBlock + block.height;
@@ -467,14 +476,15 @@ function takeSectionFragment(params: {
     placedBlocks.length === 0 &&
     includeTitle &&
     section.titleHeight > 0 &&
-    blocks.length === 0
+    blocks.length === 0 &&
+    (usedHeight <= availableSpace || allowOverflow)
   ) {
     return {
       fragment: {
         sectionId: section.id,
         includeTitle: true,
         blocks: [],
-        totalHeight: section.titleHeight,
+        totalHeight: usedHeight,
       } satisfies ResumePageSectionLayout,
       remainingBlocks: [],
     };
@@ -515,6 +525,83 @@ export function paginateMeasuredSections(input: {
   const pages: ResumePageLayout[] = [createEmptyPage(0)];
 
   for (const section of input.sections) {
+    // Empty sections still occupy their insets and the surrounding section gaps.
+    // Keep them in both layouts so the continuous canvas and printed pages agree.
+    if (section.blocks.length === 0 && section.titleHeight === 0) {
+      let page = getPage(pages);
+      const height = getSectionPadding(section);
+      if (page.sections.length > 0 && page.totalHeight + input.sectionGap + height > input.pageHeight) {
+        pages.push(createEmptyPage(pages.length));
+        page = getPage(pages);
+      }
+      appendSectionToPage(page, { sectionId: section.id, includeTitle: false, blocks: [], totalHeight: height }, input.sectionGap);
+      continue;
+    }
+    if (section.parallelColumns && section.blocks.length) {
+      const currentPage = getPage(pages);
+      if (
+        section.keepTogether &&
+        section.height <= input.pageHeight &&
+        currentPage.sections.length > 0 &&
+        currentPage.totalHeight + input.sectionGap + section.height >
+          input.pageHeight
+      ) {
+        pages.push(createEmptyPage(pages.length));
+      }
+      let includeTitle = section.titleHeight > 0;
+      for (
+        let offset = 0;
+        offset < section.blocks.length;
+        offset += section.parallelColumns
+      ) {
+        const row = section.blocks.slice(
+          offset,
+          offset + section.parallelColumns,
+        );
+        const rowHeight = Math.max(...row.map((block) => block.height));
+        const titleHeight = includeTitle
+          ? section.titleHeight + getSectionTitleGap(section)
+          : 0;
+        let page = getPage(pages);
+        let currentSection = page.sections.at(-1);
+        let gap =
+          currentSection?.sectionId === section.id
+            ? getTopLevelGap(section)
+            : page.sections.length
+              ? input.sectionGap
+              : 0;
+        if (
+          page.sections.length &&
+          page.totalHeight + gap + titleHeight + rowHeight +
+            (currentSection?.sectionId === section.id ? 0 : getSectionPadding(section)) > input.pageHeight
+        ) {
+          pages.push(createEmptyPage(pages.length));
+          page = getPage(pages);
+          currentSection = undefined;
+          gap = 0;
+        }
+        const height = titleHeight + rowHeight +
+          (currentSection?.sectionId === section.id ? 0 : getSectionPadding(section));
+        if (currentSection?.sectionId === section.id) {
+          currentSection.blocks.push(...row.map(createWholeFragment));
+          currentSection.totalHeight += gap + height;
+          page.totalHeight += gap + height;
+        } else {
+          appendSectionToPage(
+            page,
+            {
+              sectionId: section.id,
+              includeTitle,
+              blocks: row.map(createWholeFragment),
+              totalHeight: height,
+            },
+            input.sectionGap,
+          );
+        }
+        includeTitle = false;
+      }
+      continue;
+    }
     let remainingBlocks = section.blocks.map(cloneMeasuredNode);
     let includeTitle = section.titleHeight > 0;
 
