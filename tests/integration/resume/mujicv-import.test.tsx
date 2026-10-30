@@ -140,12 +140,12 @@ describe("current Mujicv resume import", () => {
       <ResumeRenderer document={resumeDocument} mode="view" />,
     );
 
-    expect(screen.getByText("邹权")).toBeInTheDocument();
-    expect(container.querySelectorAll("[data-resume-icon-id]")).toHaveLength(5);
+    expect(screen.getByText("邹权", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-resume-page] [data-resume-icon-id]")).toHaveLength(5);
 
     rerender(<ResumeRenderer document={resumeDocument} mode="print" />);
 
-    expect(container.querySelectorAll("[data-resume-icon-id]")).toHaveLength(5);
+    expect(container.querySelectorAll("[data-resume-page] [data-resume-icon-id]")).toHaveLength(5);
     await waitFor(() => {
       expect(window.document.documentElement).toHaveAttribute(
         "data-print-ready",

@@ -49,7 +49,7 @@ describe("PublicResumePage", () => {
     expect(
       screen.queryByRole("button", { name: "下载 PDF" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("林知夏")).toBeInTheDocument();
+    expect(screen.getByText("林知夏", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
     expect(
       screen.getByTestId("responsive-resume-viewport"),
     ).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe("PublicResumePage", () => {
     expect(
       screen.queryByRole("heading", { level: 1, name: "居中叙事简历" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("林知夏")).toBeInTheDocument();
+    expect(screen.getByText("林知夏", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
   });
 
   it("does not let appearance parameters enable anonymous PDF export", async () => {

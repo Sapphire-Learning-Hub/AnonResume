@@ -65,11 +65,11 @@ describe("ResumeDocumentDiffModal", () => {
       name: "当前内容简历",
     });
 
-    expect(within(source).getByText("Bun").closest("[data-resume-diff-kind]"))
+    expect(within(source).getByText("Bun", { selector: ':not([aria-hidden="true"] *)' }).closest("[data-resume-diff-kind]"))
       .toHaveAttribute("data-resume-diff-kind", "removed");
     expect(
       within(target)
-        .getByText("TypeScript")
+        .getByText("TypeScript", { selector: ':not([aria-hidden="true"] *)' })
         .closest("[data-resume-diff-kind]"),
     ).toHaveAttribute("data-resume-diff-kind", "added");
     expect(within(dialog).getByTestId("diff-page-setting-title"))

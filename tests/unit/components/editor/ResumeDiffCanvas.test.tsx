@@ -58,8 +58,8 @@ describe("ResumeDiffCanvas", () => {
     const source = screen.getByRole("region", { name: "历史版本简历" });
     const target = screen.getByRole("region", { name: "当前内容简历" });
 
-    expect(within(source).getByText("基于").tagName).toBe("DEL");
-    expect(within(target).getByText("面向").tagName).toBe("INS");
+    expect(within(source).getByText("基于", { selector: ':not([aria-hidden="true"] *)' }).tagName).toBe("DEL");
+    expect(within(target).getByText("面向", { selector: ':not([aria-hidden="true"] *)' }).tagName).toBe("INS");
     expect(screen.getByTestId("diff-summary-changed")).toHaveTextContent(
       "修改 5",
     );

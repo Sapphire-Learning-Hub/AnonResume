@@ -232,6 +232,7 @@ function takeVerticalChildren(
   node: MeasuredResumeNode,
   availableSpace: number,
   pageHeight: number,
+  keepWithNext: boolean,
 ): NodePlacementResult {
   const children = node.children ?? [];
   const fragments: ResumePageFragment[] = [];
@@ -256,7 +257,7 @@ function takeVerticalChildren(
       continue;
     }
 
-    const placement = takeNodeFragment(child, childSpace, pageHeight, true);
+    const placement = takeNodeFragment(child, childSpace, pageHeight, true, keepWithNext);
 
     if (placement.fragment && placement.height > 0) {
       fragments.push(placement.fragment);
@@ -274,12 +275,12 @@ function takeVerticalChildren(
       break;
     }
 
-    const companion = popKeepWithNextCompanion({
+    const companion = keepWithNext ? popKeepWithNextCompanion({
       parent: node,
       next: child,
       previous: children[childIndex - 1],
       fragments,
-    });
+    }) : undefined;
 
     if (companion) {
       height -= companion.height + (fragments.length > 0 ? childGap : 0);
@@ -319,11 +320,11 @@ function takeVerticalChildren(
   };
 }
 
-function takeColumnFragment(node: MeasuredResumeNode, availableSpace: number, pageHeight: number): NodePlacementResult {
+function takeColumnFragment(node: MeasuredResumeNode, availableSpace: number, pageHeight: number, keepWithNext: boolean): NodePlacementResult {
   const left = node.children?.[0];
   const image = node.continuation ? undefined : node.children?.[1];
   if (!left || (image && image.height > availableSpace)) return { height: 0 };
-  const placed = takeNodeFragment(left, availableSpace, pageHeight, true);
+  const placed = takeNodeFragment(left, availableSpace, pageHeight, true, keepWithNext);
   if (!placed.fragment) return { height: 0 };
   return {
     fragment: { path: [...node.path], columnLayout: node.columnLayout, ...(placed.remainingNode ? { continues: true } : {}), ...(node.continuation ? { continuation: true } : {}), children: [placed.fragment, ...(image ? [createWholeFragment(image)] : [])] },
@@ -337,6 +338,7 @@ function takeNodeFragment(
   availableSpace: number,
   pageHeight: number,
   allowSplit: boolean,
+  keepWithNext: boolean,
 ): NodePlacementResult {
   if (node.height <= availableSpace) {
     return {
@@ -349,13 +351,13 @@ function takeNodeFragment(
     return { height: 0 };
   }
 
-  if (node.columnLayout) return takeColumnFragment(node, availableSpace, pageHeight);
+  if (node.columnLayout) return takeColumnFragment(node, availableSpace, pageHeight, keepWithNext);
 
   if (node.type === "text" && node.textLines?.length) {
     return takeTextLines(node, availableSpace);
   }
 
-  return takeVerticalChildren(node, availableSpace, pageHeight);
+  return takeVerticalChildren(node, availableSpace, pageHeight, keepWithNext);
 }
 
 function createSectionFragment(
@@ -401,8 +403,9 @@ function takeSectionFragment(params: {
   pageHeight: number;
   includeTitle: boolean;
   allowOverflow: boolean;
-}) {
-  const { section, blocks, availableSpace, pageHeight, includeTitle, allowOverflow } = params;
+  keepWithNext?: boolean;
+}): { fragment?: ResumePageSectionLayout; remainingBlocks: MeasuredResumeNode[] } {
+  const { section, blocks, availableSpace, pageHeight, includeTitle, allowOverflow, keepWithNext = true } = params;
   const placedBlocks: ResumePageFragment[] = [];
   const remainingBlocks: MeasuredResumeNode[] = [];
   let usedHeight = getSectionPadding(section) +
@@ -425,12 +428,16 @@ function takeSectionFragment(params: {
             freeSpace,
             pageHeight,
             placedBlocks.length === 0 || isBreakableVerticalNode(block),
+            keepWithNext,
           )
         : { height: 0 };
 
     if (!placement.fragment || placement.height <= 0) {
       if (placedBlocks.length === 0) {
         if (!allowOverflow) break;
+        // A keep-with-next preference must not turn a splittable container into
+        // one oversized atomic block. Retry once on an empty page without it.
+        if (keepWithNext) return takeSectionFragment({ ...params, keepWithNext: false });
         if (block.columnLayout && includeTitle && section.titleHeight > 0) {
           return { fragment: { sectionId: section.id, includeTitle: true, blocks: [], totalHeight: section.titleHeight + getSectionPadding(section) + (section.titleGap ?? 0) }, remainingBlocks: blocks };
         }
@@ -438,11 +445,11 @@ function takeSectionFragment(params: {
         usedHeight += gapBeforeBlock + block.height;
         remainingBlocks.push(...blocks.slice(blockIndex + 1));
       } else {
-        const companion = popKeepWithNextCompanion({
+        const companion = keepWithNext ? popKeepWithNextCompanion({
           next: block,
           previous: blocks[blockIndex - 1],
           fragments: placedBlocks,
-        });
+        }) : undefined;
 
         if (companion) {
           usedHeight -=
@@ -470,6 +477,10 @@ function takeSectionFragment(params: {
       );
       break;
     }
+  }
+
+  if (placedBlocks.length === 0 && blocks.length > 0 && allowOverflow && keepWithNext) {
+    return takeSectionFragment({ ...params, keepWithNext: false });
   }
 
   if (

@@ -2454,6 +2454,7 @@ function ResumePagedSectionRenderer({
     [sections],
   );
   const rootRef = useRef<HTMLDivElement>(null);
+  const measurementRef = useRef<HTMLDivElement>(null);
   const [activeTextEditor, setActiveTextEditor] =
     useState<TiptapTextBlockEditorHandle | null>(null);
   const captureTextEditor = useCallback(
@@ -2511,7 +2512,8 @@ function ResumePagedSectionRenderer({
   );
   const createPaginationWork = useCallback(
     (revision: EditPaginationRevision) => {
-      const root = rootRef.current;
+      // Paged output only contains fragments; measure the complete shared markup.
+      const root = mode === "edit" ? rootRef.current : measurementRef.current;
 
       if (!root) return undefined;
 
@@ -2617,6 +2619,7 @@ function ResumePagedSectionRenderer({
     },
     [
       activeTextEditor,
+      mode,
       measurementLayout,
       pageContentHeight,
       selection,
@@ -2794,6 +2797,39 @@ function ResumePagedSectionRenderer({
                 </div>
               ))
               )}
+              {mode !== "edit" ? (
+                <div
+                  ref={measurementRef}
+                  className={styles.measurementFrame}
+                  aria-hidden="true"
+                  inert
+                  data-resume-measurement="true"
+                >
+                  <div
+                    className={styles.documentSurface}
+                    style={styleVariables as CSSProperties}
+                    data-resume-measurement-surface="true"
+                  >
+                    <div className={styles.pageContent}>
+                      {measurementLayout[0]?.sections.map(
+                        (sectionLayout, sectionIndex) => {
+                          const section = sectionMap.get(sectionLayout.sectionId);
+                          return section
+                            ? renderResumeSection(section, {
+                                t,
+                                sectionLayout,
+                                mode,
+                                editSurfaceMode,
+                                styles,
+                                instanceKey: `measure-${section.id}-${sectionIndex}`,
+                              })
+                            : null;
+                        },
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </ResumeDiffProvider>
         </TextPaginationRequestContext.Provider>

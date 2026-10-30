@@ -63,6 +63,44 @@ it("splits text at a fixed column width and emits the image only once", () => {
   });
 });
 
+it("relaxes impossible keep-with-next inside the text column while keeping the photo on its first page", () => {
+  const row = columns();
+  row.children![0] = {
+    id: "group",
+    path: ["row", "group"],
+    type: "group",
+    direction: "vertical",
+    height: 220,
+    childGap: 10,
+    children: [
+      { id: "lead", path: ["row", "group", "lead"], type: "row", height: 90 },
+      {
+        id: "list",
+        path: ["row", "group", "list"],
+        type: "list",
+        height: 120,
+        childGap: 0,
+        children: [0, 1, 2].map((i) => ({
+          id: `item-${i}`,
+          path: ["row", "group", "list", `item-${i}`],
+          type: "listItem",
+          height: 40,
+          wrapperHeight: 40,
+        })),
+      },
+    ],
+  };
+  row.height = 220;
+  const { pages } = run([row]);
+  expect(pages.map((page) => page.totalHeight)).toEqual([90, 80, 40]);
+  expect(countPath(pages, "row/photo")).toBe(1);
+  expect(pages[0]?.sections[0]?.blocks[0]).toMatchObject({ continues: true });
+  expect(pages[1]?.sections[0]?.blocks[0]).toMatchObject({
+    columnLayout: "image-right",
+    continuation: true,
+  });
+});
+
 it("moves the whole column start when remaining space cannot hold the photo", () => {
   const { pages, sections } = run([
     { id: "before", path: ["before"], type: "text", height: 50 },

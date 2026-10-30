@@ -47,7 +47,7 @@ describe("ResumePrintPage", () => {
 
     expect(screen.getByText("打印简历")).toBeInTheDocument();
     expect(screen.getByText("居中叙事简历")).toBeInTheDocument();
-    expect(screen.getByText("林知夏")).toBeInTheDocument();
+    expect(screen.getByText("林知夏", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "返回编辑器" })).toHaveAttribute(
       "href",
       "/app/resumes/resume-foundation",

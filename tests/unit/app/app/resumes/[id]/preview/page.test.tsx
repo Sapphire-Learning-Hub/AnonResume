@@ -61,8 +61,10 @@ describe("ResumePreviewPage", () => {
     expect(header).toContainElement(
       screen.getByRole("heading", { level: 1, name: "居中叙事简历" }),
     );
-    expect(screen.getByText("林知夏")).toBeInTheDocument();
-    expect(screen.getByText("品牌策划与内容创意")).toBeInTheDocument();
+    expect(screen.getByText("林知夏", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
+    expect(screen.getByText("品牌策划与内容创意", {
+      selector: ':not([aria-hidden="true"] *)',
+    })).toBeInTheDocument();
     expect(header).toContainElement(
       screen.getByRole("link", { name: "返回编辑器" }),
     );
