@@ -5,6 +5,7 @@ import type {
   ResumePageLayout,
 } from "../pagination";
 import type { RichTextPosition } from "./rich-text-range";
+import { RESUME_DEFAULT_BLOCK_GAP_PX } from "../presentation/defaults";
 import { calculateFragmentHeight, pathsEqual } from "../pagination-model";
 
 interface PagePadding {
@@ -62,6 +63,34 @@ function hasPath(nodes: MeasuredResumeNode[], path: string[]): boolean {
       node.path.every((segment, index) => segment === path[index]) ||
       hasPath(node.children ?? [], path),
   );
+}
+
+function getExistingAnchorGap(
+  section: MeasuredResumeSection,
+  anchor: BreakAnchor,
+) {
+  if (
+    anchor.kind === "text" &&
+    anchor.textPosition &&
+    (anchor.textPosition.paragraphIndex ||
+      anchor.textPosition.nodeIndex ||
+      anchor.textPosition.offset)
+  )
+    return 0;
+  let nodes = section.blocks;
+  let gap = section.topLevelGap ?? RESUME_DEFAULT_BLOCK_GAP_PX;
+  let boundaryGap = 0;
+  for (let depth = 1; depth <= anchor.path.length; depth += 1) {
+    const index = nodes.findIndex((node) =>
+      pathsEqual(node.path, anchor.path.slice(0, depth)),
+    );
+    if (index < 0) break;
+    if (index > 0) boundaryGap = gap;
+    const node = nodes[index]!;
+    nodes = node.children ?? [];
+    gap = node.direction === "horizontal" ? 0 : (node.childGap ?? 0);
+  }
+  return boundaryGap;
 }
 
 function createBreakId(sectionId: string, anchor: BreakAnchor) {
@@ -123,22 +152,24 @@ export function createResumePageBreakMap(input: {
   for (let pageIndex = 1; pageIndex < input.pages.length; pageIndex += 1) {
     const previousPage = input.pages[pageIndex - 1]!;
     const page = input.pages[pageIndex]!;
-    const firstSection = page.sections.find((section) => section.blocks.length > 0);
+    const firstSection = page.sections[0];
     const firstFragment = firstSection?.blocks[0];
     const measuredSection = firstSection
       ? sectionMap.get(firstSection.sectionId)
       : undefined;
 
-    if (!firstSection || !firstFragment || !measuredSection) {
+    if (!firstSection || !measuredSection) {
       continue;
     }
 
     const startsNewSection = !previousPage.sectionIds.includes(
       firstSection.sectionId,
     );
-    const anchor: BreakAnchor = startsNewSection
+    const anchor: BreakAnchor | undefined = startsNewSection
       ? { kind: "section", path: [] }
-      : findFirstAnchor(firstFragment);
+      : firstFragment ? findFirstAnchor(firstFragment) : undefined;
+
+    if (!anchor) continue;
 
     if (
       anchor.kind !== "section" &&
@@ -162,9 +193,17 @@ export function createResumePageBreakMap(input: {
         Math.max(0, input.pageHeight - previousPage.totalHeight) +
         input.pagePadding.bottom +
         input.pageGap +
-        input.pagePadding.top -
-        (startsNewSection ? input.sectionGap : 0),
+        input.pagePadding.top +
+        (startsNewSection ? 0 : (measuredSection.paddingTop ?? 0) + (measuredSection.paddingBottom ?? 0)) -
+        (startsNewSection ? input.sectionGap : getExistingAnchorGap(measuredSection, anchor)),
     });
+    if (!startsNewSection && measuredSection.parallelColumns) {
+      const firstBreak = breaks.at(-1)!;
+      for (const sibling of firstSection.blocks.slice(1, measuredSection.parallelColumns)) {
+        const siblingAnchor: BreakAnchor = { kind: "structural", path: sibling.path };
+        breaks.push({ ...firstBreak, id: createBreakId(firstSection.sectionId, siblingAnchor), path: [...sibling.path] });
+      }
+    }
   }
 
   return {
