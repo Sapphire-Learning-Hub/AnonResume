@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { managementFetch } from "@/lib/admin/client/request";
 
@@ -200,7 +201,7 @@ export function AdminSecurityPanel({
           {devices.map((device) => (
             <li className="admin-card-list__item" key={device.id}>
               <AdminIdentity
-                description={`${t("security.created", { time: new Date(device.createdAt).toLocaleString(locale) })} · ${device.lastUsedAt ? t("security.lastUsed", { time: new Date(device.lastUsedAt).toLocaleString(locale) }) : t("security.neverUsed")}`}
+                description={<InlineMetadata stacked><span>{t("security.created", { time: new Date(device.createdAt).toLocaleString(locale) })}</span><span>{device.lastUsedAt ? t("security.lastUsed", { time: new Date(device.lastUsedAt).toLocaleString(locale) }) : t("security.neverUsed")}</span></InlineMetadata>}
                 title={device.name}
               />
               <div className="admin-action-group">

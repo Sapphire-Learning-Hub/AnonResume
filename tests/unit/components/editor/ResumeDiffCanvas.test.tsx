@@ -83,10 +83,10 @@ describe("ResumeDiffCanvas", () => {
       "English",
     );
     expect(screen.getByTestId("diff-page-setting-page.margin")).toHaveTextContent(
-      "上 32 · 右 32 · 下 32 · 左 32",
+      /上 32.*右 32.*下 32.*左 32/,
     );
     expect(screen.getByTestId("diff-page-setting-page.margin")).toHaveTextContent(
-      "上 24 · 右 28 · 下 24 · 左 28",
+      /上 24.*右 28.*下 24.*左 28/,
     );
   });
 

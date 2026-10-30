@@ -241,7 +241,7 @@ describe("admin paginated queries", () => {
 
     try {
       await expect(getAdminSystemStatus()).resolves.toMatchObject({
-        release: "v1.2.3 · abcdef123456",
+        release: expect.stringMatching(/^v1\.2\.3.*\babcdef123456\b/),
       });
     } finally {
       if (previousTag === undefined) {

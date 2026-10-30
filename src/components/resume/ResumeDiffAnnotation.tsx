@@ -174,7 +174,7 @@ export function ResumeDiffTarget({
     >
       {markerText}
       {primary.kind === "moved" && primary.valueLabel
-        ? ` · ${primary.valueLabel}`
+        ? ` (${primary.valueLabel})`
         : null}
     </span>,
   );

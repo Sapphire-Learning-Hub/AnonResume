@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { DiagnosticReference } from "@/components/system/DiagnosticReference";
 import { attachErrorDiagnostic, getErrorDiagnostic } from "@/lib/observability/diagnostics/schema";
 
@@ -2579,9 +2580,9 @@ export function ResumeEditorShell({
                       </span>
                       <span
                         className={styles.fontPresetMeta}
-                        title={`${t(preset.descriptionKey)} · ${t("editor.fontPreset.license")}`}
+                        title={`${t(preset.descriptionKey)} (${t("editor.fontPreset.license")})`}
                       >
-                        {t(preset.descriptionKey)} · {t("editor.fontPreset.license")}
+                        <InlineMetadata><span>{t(preset.descriptionKey)}</span><span>{t("editor.fontPreset.license")}</span></InlineMetadata>
                       </span>
                     </span>
                   ),

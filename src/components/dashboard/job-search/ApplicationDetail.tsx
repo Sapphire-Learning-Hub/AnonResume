@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useClosingDialog } from "./useClosingDialog";
 import { useCallback, useState } from "react";
 import { Button, Drawer, Empty, Modal, Select, Spin, Tag } from "antd";
@@ -109,8 +110,7 @@ export function ApplicationDetail({
         <div className={styles.stack}>
           <div className={styles.toolbar}>
             <strong>
-              {app.snapshot.company ? `${app.snapshot.company} · ` : ""}
-              {app.snapshot.title}
+              <InlineMetadata><span>{app.snapshot.title}</span>{app.snapshot.company ? <span>{app.snapshot.company}</span> : null}</InlineMetadata>
             </strong>
             {app.archived ? <Tag>{t("jobs.archived")}</Tag> : null}
           </div>
@@ -155,8 +155,7 @@ export function ApplicationDetail({
           </dl>
           {app.rejectedFromStage ? (
             <div>
-              <strong>{t("jobs.failedAt")} · </strong>
-              {t(stageLabelKey(app.rejectedFromStage))}
+              <InlineMetadata><strong>{t("jobs.failedAt")}</strong><span>{t(stageLabelKey(app.rejectedFromStage))}</span></InlineMetadata>
             </div>
           ) : null}
           <strong>{t("jobs.description")}</strong>
@@ -236,10 +235,9 @@ export function ApplicationDetail({
             timeline.data?.items.map((event) => (
               <article className={styles.note} key={event.id}>
                 <strong>
-                  {t(eventLabelKey(event.kind))}
-                  {event.fromStage && event.toStage
-                    ? ` · ${t(stageLabelKey(event.fromStage))} → ${t(stageLabelKey(event.toStage))}`
-                    : ""}
+                  <InlineMetadata><span>{t(eventLabelKey(event.kind))}</span>
+                    {event.fromStage && event.toStage ? <span>{t(stageLabelKey(event.fromStage))} → {t(stageLabelKey(event.toStage))}</span> : null}
+                  </InlineMetadata>
                 </strong>
                 <time className={styles.muted}>
                   {new Date(event.occurredAt).toLocaleString(locale)}

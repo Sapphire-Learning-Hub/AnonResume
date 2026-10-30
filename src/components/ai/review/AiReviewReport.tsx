@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { useState } from "react";
 import { Button, Checkbox, Empty, Input, Progress, Select, Tag } from "antd";
@@ -30,13 +31,13 @@ export function AiReviewReport({ details, busy, onGenerate, onIgnore, onLocate }
     <div className={styles.score}><strong>{t("aiReview.score")}</strong><span className={styles.number}>{t("aiReview.scoreValue", { score: report.score })}</span></div>
     <p className={styles.paragraph}>{report.summary}</p>
     <div className={styles.stack}>{report.dimensions.map((entry) => <div key={entry.dimension} className={styles.field}>
-      <strong>{t(`aiReview.dimension.${entry.dimension}`)} · {t("aiReview.grade", { grade: entry.grade })}</strong>
+      <strong><InlineMetadata><span>{t(`aiReview.dimension.${entry.dimension}`)}</span><span>{t("aiReview.grade", { grade: entry.grade })}</span></InlineMetadata></strong>
       <Progress percent={entry.grade * 25} showInfo={false} size="small" />
       <p className={styles.muted}>{entry.reason}</p>
     </div>)}</div>
     {report.strengths.length ? <div className={styles.stack}><h3 className={styles.title}>{t("aiReview.strengths")}</h3>{report.strengths.map((value, index) => <p className={styles.paragraph} key={index}>{value}</p>)}</div> : null}
     {report.match ? <div className={styles.stack}>
-      <h3 className={styles.title}>{t("aiReview.match")}{report.match.score !== null ? ` · ${t("aiReview.scoreValue", { score: report.match.score })}` : ""}</h3>
+      <h3 className={styles.title}><InlineMetadata><span>{t("aiReview.match")}</span>{report.match.score !== null ? <span>{t("aiReview.scoreValue", { score: report.match.score })}</span> : null}</InlineMetadata></h3>
       <p className={styles.paragraph}>{report.match.summary}</p>
       {report.match.requirements.map((entry, index) => <div className={styles.card} key={index}>
         <strong>{entry.text}</strong>

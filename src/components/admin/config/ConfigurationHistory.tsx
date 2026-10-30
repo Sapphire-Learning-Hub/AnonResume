@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { Button, Empty, Modal, Space, Tag } from "antd";
 import { createStyles } from "antd-style";
@@ -107,12 +108,7 @@ export function ConfigurationHistory({
                     {item.status === "active" ? <Tag color="green">{text.active}</Tag> : null}
                   </Space>
                   <p className="admin-dialog-description">
-                    {[
-                      `${text.author}: ${item.createdByUserId}`,
-                      item.publishedAt
-                        ? `${text.publishedAt}: ${new Date(item.publishedAt).toLocaleString()}`
-                        : null,
-                    ].filter(Boolean).join(" · ")}
+                    <InlineMetadata><span>{text.author}: {item.createdByUserId}</span>{item.publishedAt ? <span>{text.publishedAt}: {new Date(item.publishedAt).toLocaleString()}</span> : null}</InlineMetadata>
                   </p>
                 </div>
                 <Button

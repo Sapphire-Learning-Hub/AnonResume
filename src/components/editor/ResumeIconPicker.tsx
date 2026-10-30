@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { useDeferredValue, useEffect, useState } from "react";
 
@@ -245,7 +246,7 @@ export function ResumeIconPicker({
             const actionLabel = t("editor.iconLibrary.insertNamed", { name: label });
 
             return (
-              <Tooltip key={icon.id} title={`${label} · ${icon.source}`}>
+              <Tooltip key={icon.id} title={<InlineMetadata><span>{label}</span><span>{icon.source}</span></InlineMetadata>}>
                 <Button
                   aria-label={actionLabel}
                   className={styles.iconButton}

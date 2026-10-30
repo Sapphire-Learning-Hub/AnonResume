@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="./README.md">简体中文</a> · English
+  <a href="./README.md">简体中文</a> &emsp; English
 </p>
 
 > [!IMPORTANT]
@@ -21,10 +21,10 @@
 </p>
 
 <p align="center">
-  <a href="https://anonresume.zqdesigned.city">Live Demo</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#highlights">Highlights</a> ·
-  <a href="#technical-articles">Technical Articles</a> ·
+  <a href="https://anonresume.zqdesigned.city">Live Demo</a> &emsp;
+  <a href="#quick-start">Quick Start</a> &emsp;
+  <a href="#highlights">Highlights</a> &emsp;
+  <a href="#technical-articles">Technical Articles</a> &emsp;
   <a href="#contributing">Contributing</a>
 </p>
 

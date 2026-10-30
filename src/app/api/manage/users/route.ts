@@ -19,7 +19,7 @@ async function getHandler(request: Request) {
       ...result,
       items: result.items.map(({ id, name, email }) => ({
         id,
-        label: `${name} · ${email}`,
+        label: `${name} (${email})`,
       })),
     });
   } catch (error) {

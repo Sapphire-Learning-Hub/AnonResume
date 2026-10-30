@@ -61,7 +61,7 @@ export function formatReleaseMetadata(metadata: ReleaseMetadata) {
     return metadata.tag;
   }
 
-  return `${metadata.tag} · ${metadata.commit.slice(0, RELEASE_COMMIT_LENGTH)}`;
+  return `${metadata.tag} (${metadata.commit.slice(0, RELEASE_COMMIT_LENGTH)})`;
 }
 
 export function getApplicationRelease() {

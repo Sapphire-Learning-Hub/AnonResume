@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useCallback, useState, useRef, useEffect } from "react";
 import { Button, Empty, Spin } from "antd";
 import type {
@@ -59,22 +60,23 @@ export function ApplicationList({
                 {job.snapshot.title}
               </Button>
               <div className={styles.muted}>
-                {job.snapshot.company} ·{" "}
-                {job.rejectedFromStage
+                <InlineMetadata>
+                {job.snapshot.company ? <span>{job.snapshot.company}</span> : null}
+                <span>{job.rejectedFromStage
                   ? t("jobs.rejectedFrom", {
                       stage: t(stageLabelKey(job.rejectedFromStage)),
                     })
-                  : t(stageLabelKey(job.stage))}
+                  : t(stageLabelKey(job.stage))}</span>
+                </InlineMetadata>
               </div>
               <div className={styles.muted}>
-                {job.appliedAt
-                  ? new Date(job.appliedAt).toLocaleString(locale)
-                  : t("jobs.noDate")}
-                {job.channel ? ` · ${job.channel}` : ""}
+                <InlineMetadata>
+                  <span>{job.appliedAt ? new Date(job.appliedAt).toLocaleString(locale) : t("jobs.noDate")}</span>
+                  {job.channel ? <span>{job.channel}</span> : null}
+                </InlineMetadata>
               </div>
               <div className={styles.muted}>
-                {t("jobs.activityAt")} ·{" "}
-                {new Date(job.activityAt).toLocaleString(locale)}
+                <InlineMetadata><span>{t("jobs.activityAt")}</span><time>{new Date(job.activityAt).toLocaleString(locale)}</time></InlineMetadata>
               </div>
             </div>
             <Button onClick={() => onSelect(job)}>{t("jobs.details")}</Button>

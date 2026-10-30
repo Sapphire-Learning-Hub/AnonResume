@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { AdminAiSearch } from "@/components/admin/ai/AdminAiSearch";
 import type { LedgerItem } from "@/components/admin/ai/types";
@@ -44,7 +45,7 @@ export function AdminAiLedger({
           }}
           rows={ledger.items.map((item) => [
             <AdminIdentity key="entry" title={item.ledgerId} description={item.runId ?? "-"} />,
-            <AdminIdentity key="user" title={item.userName} description={`${item.email} · ${item.userId}`} />,
+            <AdminIdentity key="user" title={item.userName} description={<InlineMetadata stacked><span>{item.email}</span><span>{item.userId}</span></InlineMetadata>} />,
             item.resumeName ? <AdminIdentity key="resume" title={item.resumeName} description={item.resumeId} /> : "-",
             item.modelName ? <AdminIdentity key="model" title={item.modelName} description={item.modelId} /> : "-",
             ledgerLabels[item.entryType] ?? item.entryType,

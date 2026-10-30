@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 
 import { Button, Tag } from "antd";
 
@@ -49,11 +50,10 @@ export function FontDetailDialog({
           </div>
           <FontSpecimen preset={preset} previewText={previewText} />
           <p>
-            <a href={preset.source} rel="noreferrer" target="_blank">
+            <InlineMetadata><a href={preset.source} rel="noreferrer" target="_blank">
               {t("fontMarket.source")}
             </a>
-            {" · "}
-            {t("fontMarket.license")}
+            <span>{t("fontMarket.license")}</span></InlineMetadata>
           </p>
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button onClick={() => onApply(preset)} type="primary">

@@ -74,7 +74,7 @@ export function AiReviewPanel({ resumeId, resumeVersion, initialReviewId, onClos
           onChange={review.setSelectedId}
           options={review.page.items.map((item) => ({
             value: item.id,
-            label: `${new Date(item.createdAt).toLocaleString(locale)} · ${item.score === null ? t(item.status === "stopped" ? "aiReview.stopped" : ["queued", "preparing", "streaming"].includes(item.status) ? "aiReview.running" : "aiReview.failed") : t("aiReview.scoreValue", { score: item.score })}`,
+            label: `${new Date(item.createdAt).toLocaleString(locale)} (${item.score === null ? t(item.status === "stopped" ? "aiReview.stopped" : ["queued", "preparing", "streaming"].includes(item.status) ? "aiReview.running" : "aiReview.failed") : t("aiReview.scoreValue", { score: item.score })})`,
           }))}
         />
         {!review.page.items.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("aiReview.empty")} /> : null}

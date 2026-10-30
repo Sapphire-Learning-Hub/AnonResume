@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useCallback, useState } from "react";
 import { Button, Empty, Spin } from "antd";
 import { AppRouteLink } from "@/components/ui/AppRouteLoading";
@@ -49,8 +50,7 @@ export function ReviewLinks({
           <div>
             {new Date(review.createdAt).toLocaleString(locale)}
             <div className={styles.muted}>
-              {review.resumeName}
-              {review.score !== null ? ` · ${review.score}` : ""}
+              <InlineMetadata><span>{review.resumeName}</span>{review.score !== null ? <span>{t("aiReview.scoreValue", { score: review.score })}</span> : null}</InlineMetadata>
             </div>
           </div>
           {review.available && review.resumeId ? (

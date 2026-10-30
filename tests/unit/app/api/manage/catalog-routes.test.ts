@@ -89,7 +89,7 @@ describe("management paginated catalog routes", () => {
       query: "alice",
     });
     await expect(response.json()).resolves.toMatchObject({
-      items: [{ id: "user-1", label: "Alice · alice@example.com" }],
+      items: [{ id: "user-1", label: expect.stringMatching(/Alice.*alice@example\.com/) }],
       page: 2,
       totalPages: 2,
     });

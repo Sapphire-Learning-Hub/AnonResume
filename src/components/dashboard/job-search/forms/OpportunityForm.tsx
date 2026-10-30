@@ -1,4 +1,5 @@
 "use client";
+import { InlineMetadata } from "@/components/ui/InlineMetadata";
 import { useRef, useState } from "react";
 import { Button, Checkbox, Form, Input } from "antd";
 import type { JobFields, Opportunity } from "@/domain/job-search/schema";
@@ -148,7 +149,7 @@ export function OpportunityForm({
           {candidates.map((job) => (
             <div className={styles.record} key={job.id}>
               <span>
-                {job.company} · {job.title}
+                <InlineMetadata>{job.company ? <span>{job.company}</span> : null}<span>{job.title}</span></InlineMetadata>
               </span>
               {onUseExisting ? (
                 <Button onClick={() => onUseExisting(job)}>
