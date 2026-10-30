@@ -4,6 +4,7 @@ import { createStyles } from "antd-style";
 
 export const useResumeRendererStyles = createStyles(({ css, token }) => ({
   root: css`
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -15,7 +16,8 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
       &[data-resume-responsive-view="true"] {
         gap: 16px;
 
-        [data-resume-page="true"] {
+        [data-resume-page="true"],
+        [data-resume-measurement-surface="true"] {
           width: 100%;
           min-height: 0;
           padding: 22px 18px;
@@ -28,6 +30,17 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
         }
       }
     }
+  `,
+  measurementFrame: css`
+    /* Keep full layout measurable in screen and print without adding a page. */
+    position: absolute;
+    top: 0;
+    width: 210mm;
+    max-width: 100%;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
   `,
   pageFrame: css`
     display: grid;

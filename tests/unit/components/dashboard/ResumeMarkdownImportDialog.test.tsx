@@ -48,10 +48,10 @@ describe("ResumeMarkdownImportDialog", () => {
     fireEvent.change(source, { target: { value: mujicvSource } });
     fireEvent.click(within(dialog).getByRole("button", { name: "解析预览" }));
 
-    expect(await within(dialog).findByText("Imported Person")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Imported Person", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
     expect(within(dialog).getByText("2 个章节")).toBeInTheDocument();
     expect(within(dialog).getByText("已自动识别为木及简历 Markdown")).toBeInTheDocument();
-    expect(within(dialog).getByText("123456")).toBeInTheDocument();
+    expect(within(dialog).getByText("123456", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
 
     const form = within(dialog).getByTestId("create-markdown-resume-form");
 
@@ -127,7 +127,7 @@ describe("ResumeMarkdownImportDialog", () => {
       target: { value: mujicvSource },
     });
     fireEvent.click(screen.getByRole("button", { name: "解析预览" }));
-    expect(await screen.findByText("Imported Person")).toBeInTheDocument();
+    expect(await screen.findByText("Imported Person", { selector: ':not([aria-hidden="true"] *)' })).toBeInTheDocument();
 
     rerender(
       <ResumeMarkdownImportDialog

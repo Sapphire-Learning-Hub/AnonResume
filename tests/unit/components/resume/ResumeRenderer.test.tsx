@@ -13,6 +13,12 @@ import {
   ResumeSectionRenderer,
 } from "@/components/resume/ResumeRenderer";
 
+// Text queries include hidden measurement DOM by default; assert the visible output.
+const visibleTextSelector = ':not([aria-hidden="true"] *)';
+function getVisibleText(...[text, options]: Parameters<typeof screen.getByText>) {
+  return screen.getByText(text, { ...options, selector: visibleTextSelector });
+}
+
 function createRect(height: number, width = 794) {
   return {
     width,
@@ -42,16 +48,105 @@ describe("ResumeRenderer", () => {
     document.documentElement.removeAttribute("data-print-ready");
   });
 
+  it.each(["view", "print"] as const)(
+    "remeasures complete nested content after pagination in %s mode",
+    async (mode) => {
+      const resume = createDefaultResumeDocument();
+      resume.sections = [
+        {
+          id: "nested",
+          visible: true,
+          layout: { gap: 0 },
+          blocks: [
+            {
+              id: "group",
+              type: "group",
+              direction: "vertical",
+              gap: 0,
+              children: ["one", "two", "three"].map((id) => ({
+                id,
+                type: "row",
+                children: [
+                  {
+                    id: `${id}-text`,
+                    type: "text",
+                    content: {
+                      type: "doc",
+                      content: [
+                        {
+                          type: "paragraph",
+                          content: [{ type: "text", text: id }],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              })),
+            },
+          ],
+        },
+      ];
+      Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+        configurable: true,
+        value: function (this: HTMLElement) {
+          if (
+            this.hasAttribute("data-resume-section-id") ||
+            this.getAttribute("data-resume-block-path") === "group"
+          ) {
+            return createRect(
+              this.querySelectorAll(
+                '[data-resume-block-path="group::one"], [data-resume-block-path="group::two"], [data-resume-block-path="group::three"]',
+              ).length * 600,
+            );
+          }
+          return createRect(600);
+        },
+      });
+      const onReady = vi.fn();
+      const { container, rerender } = render(
+        <ResumeRenderer
+          document={resume}
+          mode={mode}
+          paginationRevision={0}
+          onPaginationReadyChange={onReady}
+        />,
+      );
+      await waitFor(() =>
+        expect(
+          container.querySelectorAll('[data-resume-page="true"]'),
+        ).toHaveLength(3),
+      );
+      onReady.mockClear();
+      rerender(
+        <ResumeRenderer
+          document={resume}
+          mode={mode}
+          paginationRevision={1}
+          onPaginationReadyChange={onReady}
+        />,
+      );
+      await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+      expect(
+        container.querySelectorAll('[data-resume-page="true"]'),
+      ).toHaveLength(3);
+      expect(
+        Array.from(container.querySelectorAll('[data-resume-page="true"]')).map(
+          (page) => page.textContent,
+        ),
+      ).toEqual(["one", "two", "three"]);
+    },
+  );
+
   it("renders section titles and list content from a resume document", () => {
     render(
       <ResumeRenderer document={createDefaultResumeDocument()} mode="view" />,
     );
 
-    expect(screen.getByText("个人简介")).toBeInTheDocument();
+    expect(getVisibleText("个人简介")).toBeInTheDocument();
     expect(
-      screen.getByText("基于流式布局的结构化简历编辑基础能力"),
+      getVisibleText("基于流式布局的结构化简历编辑基础能力"),
     ).toBeInTheDocument();
-    expect(getComputedStyle(screen.getByText("第 1 页")).color).toBe(
+    expect(getComputedStyle(getVisibleText("第 1 页")).color).toBe(
       "rgba(255, 255, 255, 0.92)",
     );
   });
@@ -426,7 +521,7 @@ describe("ResumeRenderer", () => {
     render(<ResumeRenderer document={document} mode="view" />);
 
     expect(
-      screen.getByText("共享渲染器基础").closest("p"),
+      getVisibleText("共享渲染器基础").closest("p"),
     ).toHaveStyle({ color: expectedColor });
   });
 
@@ -443,7 +538,7 @@ describe("ResumeRenderer", () => {
     render(<ResumeRenderer document={document} mode="view" />);
 
     expect(
-      screen.getByText("共享渲染器基础").closest("p"),
+      getVisibleText("共享渲染器基础").closest("p"),
     ).toHaveStyle({ color: "#be123c" });
   });
 
@@ -657,18 +752,18 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    expect(screen.getByTestId("resume-section-section-profile")).toHaveAttribute(
+    expect(within(screen.getByTestId("resume-page-1")).getByTestId("resume-section-section-profile")).toHaveAttribute(
       "data-resume-diff-kind",
       "moved",
     );
     expect(
-      screen.getByTestId("resume-block-item-block-profile-summary"),
+      within(screen.getByTestId("resume-page-1")).getByTestId("resume-block-item-block-profile-summary"),
     ).toHaveAttribute("data-resume-diff-kind", "changed");
-    expect(screen.getByText("Bun").closest("[data-resume-diff-kind]"))
+    expect(getVisibleText("Bun").closest("[data-resume-diff-kind]"))
       .toHaveAttribute("data-resume-diff-kind", "removed");
-    expect(screen.getByText("基于").tagName).toBe("DEL");
+    expect(getVisibleText("基于").tagName).toBe("DEL");
     expect(
-      container.querySelectorAll("[data-resume-diff-marker='true']"),
+      container.querySelectorAll("[data-resume-page] [data-resume-diff-marker='true']"),
     ).toHaveLength(3);
   });
 
@@ -719,7 +814,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    expect(screen.getByText("面向").tagName).toBe("INS");
+    expect(getVisibleText("面向").tagName).toBe("INS");
   });
 
   it("never renders diff annotations in print mode", () => {
@@ -1113,13 +1208,13 @@ describe("ResumeRenderer", () => {
       <ResumeRenderer document={createDefaultResumeDocument()} mode="view" />,
     );
 
-    expect(screen.getByText("经历")).toBeInTheDocument();
+    expect(getVisibleText("经历")).toBeInTheDocument();
     expect(
-      screen.getByText("AnonResume - 前端工程师"),
+      getVisibleText("AnonResume - 前端工程师"),
     ).toBeInTheDocument();
-    expect(screen.getByText("2026.01 - 2026.08")).toBeInTheDocument();
+    expect(getVisibleText("2026.01 - 2026.08")).toBeInTheDocument();
     expect(
-      screen.getByText("构建共享 Web 与打印渲染链路的结构化简历编辑器。"),
+      getVisibleText("构建共享 Web 与打印渲染链路的结构化简历编辑器。"),
     ).toBeInTheDocument();
   });
 
@@ -1181,8 +1276,8 @@ describe("ResumeRenderer", () => {
 
     render(<ResumeRenderer document={document} mode="view" />);
 
-    expect(screen.getByText("带下划线和删除线的文本").closest("s")).toBeTruthy();
-    expect(screen.getByText("带下划线和删除线的文本").closest("u")).toBeTruthy();
+    expect(getVisibleText("带下划线和删除线的文本").closest("s")).toBeTruthy();
+    expect(getVisibleText("带下划线和删除线的文本").closest("u")).toBeTruthy();
   });
 
   it.each(["view", "print"] as const)(
@@ -1206,12 +1301,12 @@ describe("ResumeRenderer", () => {
 
       render(<ResumeRenderer document={document} mode={mode} />);
 
-      const coloredText = screen.getByText("局部颜色").closest(
+      const coloredText = getVisibleText("局部颜色").closest(
         '[data-resume-text-color="#be123c"]',
       );
 
       expect(coloredText).toHaveStyle({ color: "#be123c" });
-      expect(screen.getByText("默认颜色")).not.toHaveStyle({ color: "#be123c" });
+      expect(getVisibleText("默认颜色")).not.toHaveStyle({ color: "#be123c" });
     },
   );
 
@@ -1266,7 +1361,7 @@ describe("ResumeRenderer", () => {
       <ResumeRenderer document={document} mode="view" />,
     );
 
-    expect(screen.getByText("still visible", { exact: false })).toBeInTheDocument();
+    expect(getVisibleText("still visible", { exact: false })).toBeInTheDocument();
     expect(
       container.querySelector('[data-resume-icon-missing="true"]'),
     ).toBeInTheDocument();
@@ -1373,7 +1468,7 @@ describe("ResumeRenderer", () => {
 
     render(<ResumeRenderer document={document} mode="view" />);
 
-    expect(screen.getByText("Next.js")).toHaveStyle({
+    expect(getVisibleText("Next.js")).toHaveStyle({
       display: "inline-flex",
       alignItems: "center",
       lineHeight: "1",
@@ -1417,13 +1512,13 @@ describe("ResumeRenderer", () => {
       "共享渲染器基础",
     );
     const viewSummary = within(viewRender.container)
-      .getByText("共享渲染器基础")
+      .getByText("共享渲染器基础", { selector: visibleTextSelector })
       .closest("div");
     const editRangeButton = within(editRender.container).getByLabelText(
       "2026.01 - 2026.08",
     );
     const viewRange = within(viewRender.container)
-      .getByText("2026.01 - 2026.08")
+      .getByText("2026.01 - 2026.08", { selector: visibleTextSelector })
       .closest("div");
 
     expect(viewTitle).not.toBeNull();
@@ -1496,13 +1591,13 @@ describe("ResumeRenderer", () => {
 
     const { container } = render(<ResumeRenderer document={document} mode="view" />);
 
-    expect(screen.getByText("Bold").tagName).toBe("STRONG");
+    expect(getVisibleText("Bold").tagName).toBe("STRONG");
     expect(screen.getByRole("link", { name: "Link" })).toHaveAttribute(
       "href",
       "https://example.com",
     );
     expect(
-      screen.getByText(
+      getVisibleText(
         (_content, element) =>
           element?.tagName === "CODE" && element.textContent === " Code",
       ).tagName,
@@ -1537,7 +1632,7 @@ describe("ResumeRenderer", () => {
     );
 
     const viewEmptyParagraphs = container.querySelectorAll(
-      'p[data-resume-rich-empty-paragraph="true"]',
+      '[data-resume-page] p[data-resume-rich-empty-paragraph="true"]',
     );
 
     expect(viewEmptyParagraphs).toHaveLength(2);
@@ -2659,7 +2754,7 @@ describe("ResumeRenderer", () => {
     Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
       configurable: true,
       value: function getBoundingClientRect() {
-        const pageElement = this.closest?.('[data-resume-page="true"]') as HTMLElement | null;
+        const pageElement = this.closest?.('[data-resume-page="true"], [data-resume-measurement-surface="true"]') as HTMLElement | null;
         const lineHeight = Number(
           pageElement?.style.getPropertyValue("--resume-line-height") || "1.45",
         );

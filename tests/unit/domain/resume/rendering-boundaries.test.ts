@@ -25,6 +25,135 @@ const section = (
 });
 
 describe("rendering page boundaries", () => {
+  it.each(["section", "group", "listItem"] as const)(
+    "relaxes an impossible keep-with-next constraint inside %s without overflowing or losing content",
+    (container) => {
+      const parentPath =
+        container === "section"
+          ? []
+          : container === "group"
+            ? ["group"]
+            : ["outer", "outer-item"];
+      const lead: MeasuredResumeNode = {
+        id: "lead",
+        path: [...parentPath, "lead"],
+        type: container === "listItem" ? "text" : "row",
+        height: 160,
+      };
+      const list: MeasuredResumeNode = {
+        id: "list",
+        path: [...parentPath, "list"],
+        type: "list",
+        direction: "vertical",
+        height: 240,
+        childGap: 0,
+        children: [0, 1, 2].map((index) => ({
+          id: `item-${index}`,
+          path: [...parentPath, "list", `item-${index}`],
+          type: "listItem",
+          height: 80,
+          wrapperHeight: 80,
+        })),
+      };
+      const children = [lead, list];
+      const blocks: MeasuredResumeNode[] =
+        container === "section"
+          ? children
+          : container === "group"
+            ? [
+                {
+                  id: "group",
+                  path: ["group"],
+                  type: "group",
+                  direction: "vertical",
+                  childGap: 10,
+                  height: 410,
+                  children,
+                },
+              ]
+            : [
+                {
+                  id: "outer",
+                  path: ["outer"],
+                  type: "list",
+                  height: 410,
+                  children: [
+                    {
+                      id: "outer-item",
+                      path: parentPath,
+                      type: "listItem",
+                      height: 410,
+                      childGap: 10,
+                      children,
+                    },
+                  ],
+                },
+              ];
+      const pages = paginateMeasuredSections({
+        pageHeight: 200,
+        sectionGap: 0,
+        sections: [{ ...section("nested", blocks), topLevelGap: 10 }],
+      }).pages;
+      expect(pages.map((page) => page.totalHeight)).toEqual([160, 160, 80]);
+      const leaves = (
+        fragments: (typeof pages)[number]["sections"][number]["blocks"],
+      ): string[] =>
+        fragments.flatMap((fragment) =>
+          fragment.children?.length
+            ? leaves(fragment.children)
+            : [fragment.path.at(-1)!],
+        );
+      expect(
+        pages.flatMap((page) =>
+          page.sections.flatMap((part) => leaves(part.blocks)),
+        ),
+      ).toEqual(["lead", "item-0", "item-1", "item-2"]);
+    },
+  );
+
+  it("preserves a section title and insets when keep-with-next leaves no room for its first nested fragment", () => {
+    const group: MeasuredResumeNode = {
+      id: "group",
+      path: ["group"],
+      type: "group",
+      height: 320,
+      childGap: 10,
+      children: [
+        { id: "lead", path: ["group", "lead"], type: "row", height: 140 },
+        {
+          id: "list",
+          path: ["group", "list"],
+          type: "list",
+          height: 170,
+          childGap: 10,
+          children: [0, 1].map((i) => ({
+            id: `item-${i}`,
+            path: ["group", "list", `item-${i}`],
+            type: "listItem",
+            height: 80,
+            wrapperHeight: 80,
+          })),
+        },
+      ],
+    };
+    const pages = paginateMeasuredSections({
+      pageHeight: 200,
+      sectionGap: 0,
+      sections: [
+        {
+          ...section("nested", [group]),
+          titleHeight: 30,
+          titleGap: 10,
+          paddingTop: 10,
+          paddingBottom: 10,
+        },
+      ],
+    }).pages;
+    expect(pages.map((page) => page.totalHeight)).toEqual([200, 190]);
+    expect(pages[0]?.sections[0]?.includeTitle).toBe(true);
+    expect(pages[1]?.sections[0]?.includeTitle).toBe(false);
+  });
+
   it("keeps empty section spacing consistent between continuous and paged rendering", () => {
     const result = paginateMeasuredSections({
       pageHeight: 100,
