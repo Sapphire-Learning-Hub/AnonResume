@@ -83,11 +83,11 @@ function getDocumentStart(): RichTextPosition {
 }
 
 function getDocumentEnd(content: RichTextContent): RichTextPosition {
-  // The start of the last empty paragraph is not the end of the document:
-  // that paragraph still occupies a line and must survive a page split.
+  // An empty paragraph or terminal hard break still owns a final empty line.
+  // Use the following paragraph boundary so that line survives a page split.
   const paragraphIndex = content.content.length - 1;
   const nodeCount = content.content[paragraphIndex]!.content.length;
-  return nodeCount === 0
+  return nodeCount === 0 || content.content[paragraphIndex]!.content.at(-1)?.type === "hardBreak"
     ? { paragraphIndex: content.content.length, nodeIndex: 0, offset: 0 }
     : { paragraphIndex, nodeIndex: nodeCount, offset: 0 };
 }
@@ -179,6 +179,7 @@ export function sliceRichTextContent(
     const startsAfterParagraphContent =
       startsHere &&
       paragraph.content.length > 0 &&
+      paragraph.content.at(-1)?.type !== "hardBreak" &&
       from.nodeIndex === paragraph.content.length &&
       from.offset === 0;
     const isExcludedBoundaryParagraph =

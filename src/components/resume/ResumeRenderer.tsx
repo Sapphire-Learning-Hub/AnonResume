@@ -362,11 +362,15 @@ function RichTextParagraph({
   paragraph,
   paragraphIndex,
   style,
+  continuesParagraph = false,
+  trailingPageBreaks,
 }: {
   children: ReactNode;
   paragraph: RichTextContent["content"][number];
   paragraphIndex: number;
   style?: CSSProperties;
+  continuesParagraph?: boolean;
+  trailingPageBreaks?: ReactNode;
 }) {
   const empty = paragraph.content.length === 0;
 
@@ -377,14 +381,18 @@ function RichTextParagraph({
       data-resume-rich-paragraph-index={paragraphIndex}
       style={style}
     >
-      {empty ? (
+      {children}
+      {empty ? <br aria-hidden="true" /> : !continuesParagraph && paragraph.content.at(-1)?.type === "hardBreak" ? (
         <>
-          {children}
-          <br aria-hidden="true" />
+          {trailingPageBreaks}
+          <br
+            aria-hidden="true"
+            data-resume-rich-paragraph-index={paragraphIndex}
+            data-resume-rich-node-index={paragraph.content.length}
+            data-resume-rich-node-type="trailingBreak"
+          />
         </>
-      ) : (
-        children
-      )}
+      ) : null}
     </p>
   );
 }
@@ -629,9 +637,11 @@ function getTextBlockStyle(block: TextBlock): CSSProperties {
 function StyledRichText({
   block,
   pageBreakAnchor,
+  continuesParagraph = false,
 }: {
   block: TextBlock;
   pageBreakAnchor?: { sectionId: string; path: string[] };
+  continuesParagraph?: boolean;
 }) {
   const annotations = useResumeDiffAnnotations("block", block.id, ["text"]);
   const annotation = getInlineTextAnnotation(annotations);
@@ -666,6 +676,12 @@ function StyledRichText({
         paragraph={paragraph}
         paragraphIndex={paragraphIndex}
         style={getTextBlockStyle(block)}
+        continuesParagraph={continuesParagraph && paragraphIndex === block.content.content.length - 1}
+        trailingPageBreaks={pageBreaks.filter((pageBreak) =>
+          pageBreak.position.paragraphIndex === paragraphIndex &&
+          pageBreak.position.nodeIndex === paragraph.content.length &&
+          pageBreak.position.offset === 0,
+        ).map((pageBreak) => <ResumeInlinePageBreak key={pageBreak.id} pageBreak={pageBreak} />)}
       >
         {emptyParagraphBreaks.map((pageBreak) => (
           <ResumeInlinePageBreak key={pageBreak.id} pageBreak={pageBreak} />
@@ -985,6 +1001,7 @@ function renderTextBlock(
     editSurfaceMode: NonNullable<ResumeRendererProps["editSurfaceMode"]>;
     sectionId: string;
     blockPath: string[];
+    continuesParagraph?: boolean;
     selection?: ResumeEditorSelection;
     styles: ResumeRendererStyles;
     onSelectBlock?: ResumeRendererProps["onSelectBlock"];
@@ -1010,7 +1027,7 @@ function renderTextBlock(
         shellTestId: `selected-editor-shell-${context.sectionId}-${block.id}`,
         placeholderTestId: `selected-editor-placeholder-${context.sectionId}-${block.id}`,
         placeholder: (
-          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} continuesParagraph={context.continuesParagraph} />
         ),
         editor: (
           <ResumeTextBlockEditor
@@ -1058,7 +1075,7 @@ function renderTextBlock(
         }
       >
         <div className={selected ? context.styles.selectedEditableText : undefined}>
-          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
+          <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} continuesParagraph={context.continuesParagraph} />
         </div>
       </button>
     );
@@ -1066,7 +1083,7 @@ function renderTextBlock(
 
   return (
     <div>
-      <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} />
+      <StyledRichText block={block} pageBreakAnchor={pageBreakAnchor} continuesParagraph={context.continuesParagraph} />
     </div>
   );
 }
@@ -2095,6 +2112,7 @@ function renderBlock(
     t: Translator;
     sectionId: string;
     blockPath: string[];
+    continuesParagraph?: boolean;
     textEditorRef?: ResumeRendererProps["textEditorRef"];
     onTextEditorFormattingStateChange?: ResumeRendererProps["onTextEditorFormattingStateChange"];
   },
@@ -2109,6 +2127,7 @@ function renderBlock(
         editSurfaceMode: context.editSurfaceMode,
         sectionId: context.sectionId,
         blockPath: context.blockPath,
+        continuesParagraph: context.continuesParagraph,
         selection: context.selection,
         styles,
         onSelectBlock: context.onSelectBlock,
@@ -2294,6 +2313,10 @@ function renderBlockFragment(
             context.onTextEditorFormattingStateChange,
           sectionId: context.sectionId,
           blockPath: fragment.path,
+          // A page-ending hard break inside a paragraph is already its line
+          // terminator; only the source paragraph's end has a trailing caret line.
+          continuesParagraph: Boolean(fragment.textRange &&
+            (fragment.textRange.to.nodeIndex || fragment.textRange.to.offset)),
         })}
       </div>
     </ResumeDiffTarget>

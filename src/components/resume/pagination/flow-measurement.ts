@@ -195,13 +195,13 @@ function listStaticRichTextSegments(blockElement: HTMLElement) {
     const nodeIndex = Number(element.dataset.resumeRichNodeIndex);
     const nodeType = element.dataset.resumeRichNodeType;
 
-    if (element.dataset.resumeRichEmptyParagraph === "true") {
+    if (element.dataset.resumeRichEmptyParagraph === "true" || nodeType === "trailingBreak") {
       if (!Number.isInteger(paragraphIndex)) return undefined;
 
       const lineBreak = element.querySelector<HTMLElement>(":scope > br");
 
       segments.push({
-        from: { paragraphIndex, nodeIndex: 0, offset: 0 },
+        from: { paragraphIndex, nodeIndex: nodeType === "trailingBreak" ? nodeIndex : 0, offset: 0 },
         to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
         rect: (lineBreak ?? element).getBoundingClientRect(),
       });
@@ -311,11 +311,21 @@ function normalizeParagraphLineHeights(
     // The layout-neutral editor shell retains the same paragraph markup, so
     // this also supplies line-box heights for the active Tiptap measurements.
     // Do not redistribute space between paragraphs with different fonts.
-    result.push(...(paragraph
-      ? normalizeTextLineHeights(paragraphLines, measureElementHeight(
-          paragraph, params.zoom, params.committedSpacerHeights,
-        ))
-      : paragraphLines));
+    if (paragraph) {
+      const height = measureElementHeight(paragraph, params.zoom, params.committedSpacerHeights);
+      const lineHeight = Number.parseFloat(getComputedStyle(paragraph).lineHeight);
+      // Inline glyph bounds can differ across fonts or browser rasterization
+      // without changing the line boxes. When the paragraph occupies exactly
+      // its CSS line-height per line, distribute that space equally. Allow
+      // Chromium's 1/64px layout rounding, but retain measured weights when
+      // inline content actually expands the paragraph beyond that minimum.
+      const uniform = Number.isFinite(lineHeight) && lineHeight > 0 &&
+        Math.abs(height - lineHeight * paragraphLines.length) <= paragraphLines.length / 64 + 0.5;
+      result.push(...normalizeTextLineHeights(
+        uniform ? paragraphLines.map((line) => ({ ...line, height: 1 })) : paragraphLines,
+        height,
+      ));
+    } else result.push(...paragraphLines);
     start = end;
   }
   return result;

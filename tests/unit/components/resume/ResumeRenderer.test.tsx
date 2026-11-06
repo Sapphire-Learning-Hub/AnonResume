@@ -48,6 +48,45 @@ describe("ResumeRenderer", () => {
     document.documentElement.removeAttribute("data-print-ready");
   });
 
+  it.each(["view", "print"] as const)("preserves a terminal soft-break line exactly once across pages in %s", async (mode) => {
+    const resume = createDefaultResumeDocument();
+    resume.settings.page.margin = { top: 520, bottom: 520, left: 32, right: 32 };
+    resume.sections = [{ id: "soft-break", visible: true, layout: { gap: 0 }, blocks: [{
+      id: "body", type: "text", content: { type: "doc", content: [{
+        type: "paragraph", content: [{ type: "text", text: "A" }, { type: "hardBreak" }],
+      }] },
+    }] }];
+    // Model browser line boxes: a final BR alone does not create a caret line;
+    // the terminal placeholder does. Geometry is the external DOM boundary.
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function (this: HTMLElement) {
+        if (this.tagName === "BR") {
+          const top = this.dataset.resumeRichNodeType === "trailingBreak" ? 60 : 0;
+          return { ...createRect(60), top, bottom: top + 60 };
+        }
+        if (this.tagName === "P" || this.hasAttribute("data-resume-block-path") || this.hasAttribute("data-resume-section-id")) {
+          return createRect(Math.max(1, this.querySelectorAll("br").length) * 60);
+        }
+        return createRect(0);
+      },
+    });
+    const rangeSpy = vi.spyOn(document, "createRange").mockImplementation(() => ({
+      setStart() {}, setEnd() {}, getBoundingClientRect: () => createRect(60),
+    }) as unknown as Range);
+    try {
+      const { container } = render(<ResumeRenderer document={resume} mode={mode} />);
+      await waitFor(() => expect(container.querySelectorAll('[data-resume-page="true"]')).toHaveLength(2));
+      const pages = container.querySelectorAll('[data-resume-page="true"]');
+      expect(pages[0]).toHaveTextContent("A");
+      expect(pages[1]).not.toHaveTextContent("A");
+      // Each page owns one line, with neither a duplicated nor a dropped blank.
+      expect([...pages].map((page) => page.querySelectorAll("p br").length)).toEqual([1, 1]);
+    } finally {
+      rangeSpy.mockRestore();
+    }
+  });
+
   it.each(["view", "print"] as const)(
     "remeasures complete nested content after pagination in %s mode",
     async (mode) => {

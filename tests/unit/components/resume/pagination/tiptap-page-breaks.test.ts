@@ -1,9 +1,24 @@
 import type { Editor } from "@tiptap/core";
+import { Schema } from "@tiptap/pm/model";
 import { describe, expect, it, vi } from "vitest";
 
 import { measureTiptapRichTextLines } from "@/components/resume/pagination/tiptap-page-breaks";
 
 describe("measureTiptapRichTextLines", () => {
+  it("measures the caret line after a paragraph's final hard break", () => {
+    const schema = new Schema({ nodes: {
+      doc: { content: "paragraph+" }, paragraph: { content: "inline*" },
+      text: { group: "inline" }, hardBreak: { inline: true, group: "inline" },
+    } });
+    const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text("A"), schema.node("hardBreak")])]);
+    const editor = { state: { doc }, view: { coordsAtPos: (pos: number) => ({
+      top: pos === 3 ? 20 : 0, bottom: pos === 3 ? 40 : 20, left: 0, right: 0,
+    }) } } as unknown as Editor;
+    expect(measureTiptapRichTextLines(editor)).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 1, offset: 1 }, height: 20 },
+      { from: { paragraphIndex: 0, nodeIndex: 2, offset: 0 }, to: { paragraphIndex: 1, nodeIndex: 0, offset: 0 }, height: 20 },
+    ]);
+  });
   it("measures the rendered character after an ambiguous wrapped caret", () => {
     const textNode = {
       isText: true,

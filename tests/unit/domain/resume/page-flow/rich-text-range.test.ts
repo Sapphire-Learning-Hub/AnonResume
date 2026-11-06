@@ -52,6 +52,18 @@ function expectValidSlices(slices: RichTextContent[]) {
 }
 
 describe("rich text pagination ranges", () => {
+  it("preserves the empty line after a terminal soft break when it starts the next page", () => {
+    const source: RichTextContent = { type: "doc", content: [
+      { type: "paragraph", content: [{ type: "text", text: "A" }, { type: "hardBreak" }] },
+      { type: "paragraph", content: [{ type: "text", text: "B" }] },
+    ] };
+    expect(sliceRichTextContent(source, {
+      from: { paragraphIndex: 0, nodeIndex: 2, offset: 0 },
+      to: { paragraphIndex: 1, nodeIndex: 1, offset: 0 },
+    }).content).toEqual([{ type: "paragraph", content: [] }, source.content[1]]);
+    const terminal: RichTextContent = { ...source, content: [source.content[0]!] };
+    expect(splitRichTextContent(terminal, [{ paragraphIndex: 0, nodeIndex: 2, offset: 0 }])).toHaveLength(2);
+  });
   it("orders positions by paragraph, node, and offset", () => {
     expect(
       compareRichTextPositions(
