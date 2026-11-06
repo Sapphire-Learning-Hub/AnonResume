@@ -1724,9 +1724,9 @@ describe("ResumeRenderer", () => {
     ).toBe(true);
   });
 
-  it.each(["edit", "view", "print"] as const)("keeps whitespace and long-word layout compatible with the text editor in %s", (mode) => {
+  it.each(["edit", "view", "print"] as const)("keeps text shaping and wrapping compatible with the text editor in %s", (mode) => {
     const document = createDefaultResumeDocument();
-    const text = "  Name    Role\tLocation " + "https://example.test/" + "unbroken".repeat(40);
+    const text = "  office    affinity\tLocation " + "https://example.test/" + "unbroken".repeat(40);
     document.sections = [{
       id: "spacing", visible: true,
       title: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Section    title" }] }] },
@@ -1739,10 +1739,12 @@ describe("ResumeRenderer", () => {
     expect([...paragraphs].some((paragraph) => paragraph.textContent === text)).toBe(true);
     // This is a cross-surface geometry contract, including hidden measurement
     // and selected-editor placeholders. Collapsing spaces or refusing to wrap
-    // long words changes line counts when ProseMirror becomes active.
+    // long words or changing ligatures changes line counts when ProseMirror becomes active.
     for (const paragraph of paragraphs) {
       expect(getComputedStyle(paragraph).whiteSpace).toBe("break-spaces");
       expect(getComputedStyle(paragraph).overflowWrap).toBe("break-word");
+      expect(getComputedStyle(paragraph).fontVariantLigatures).toBe("none");
+      expect(getComputedStyle(paragraph).fontFeatureSettings).toBe('"liga" 0');
     }
   });
 
