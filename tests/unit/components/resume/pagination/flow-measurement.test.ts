@@ -84,6 +84,28 @@ describe("measureResumeFlow", () => {
     },
   );
 
+  it.each(["row", "group"] as const)("paginates long text inside a single-child horizontal %s", (type) => {
+    const document = documentWithBlocks([{
+      id: "container", ...(type === "group" ? { type: "group" as const, direction: "horizontal" as const } : { type: "row" as const }),
+      children: [textBlock("body", "ABC")],
+    }]);
+    const root = createSectionRoot(1);
+    root.querySelector("section")!.setAttribute("data-height", "60");
+    const container = appendMeasuredElement(root, "div", { "data-resume-block-path": "container", "data-height": "60" });
+    const block = appendMeasuredElement(container, "div", { "data-resume-block-path": "container::body", "data-height": "60" });
+    const span = appendMeasuredElement(block, "span", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "0", "data-resume-rich-node-type": "text" });
+    span.textContent = "ABC";
+    let index = 0;
+    stubRangeRects(() => { const top = index++ * 20; return { top, bottom: top + 20, left: 0, right: 5 }; });
+    const sections = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map() })!;
+    const pages = paginateMeasuredSections({ pageHeight: 40, sectionGap: 0, sections }).pages;
+    expect(pages.map((page) => page.totalHeight)).toEqual([40, 20]);
+    expect(pages.map((page) => page.sections[0]!.blocks[0]!.children?.[0]?.textRange)).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 0, offset: 2 } },
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 2 }, to: { paragraphIndex: 0, nodeIndex: 0, offset: 3 } },
+    ]);
+  });
+
   it("measures fixed columns in parallel and removes text spacers without counting the photo twice", () => {
     const image = createImageBlock({ id: crypto.randomUUID(), name: "Photo", width: 600, height: 800 });
     const document = documentWithBlocks([{ id: "columns", type: "row", columnLayout: "image-right", children: [textBlock("text", "Long text"), image] }]);

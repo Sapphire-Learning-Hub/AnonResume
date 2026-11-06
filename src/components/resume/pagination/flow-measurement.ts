@@ -387,7 +387,10 @@ function measureResumeBlock(params: {
     return { id: params.block.id, path: params.blockPath, type: "row", columnLayout: params.block.columnLayout, direction: "horizontal", children: measuredChildren, height: Math.max(0, ...measuredChildren.map((child) => child.height)) };
   }
 
-  if (params.block.type === "group" && params.block.direction !== "horizontal") {
+  if (
+    (params.block.type === "group" && params.block.direction !== "horizontal") ||
+    ((params.block.type === "group" || params.block.type === "row") && params.block.children.length === 1)
+  ) {
     const children = params.block.children.map((child) =>
       measureResumeBlock({
         ...params,
@@ -406,9 +409,9 @@ function measureResumeBlock(params: {
     return {
       id: params.block.id,
       path: params.blockPath,
-      type: "group",
+      type: params.block.type,
       height,
-      direction: params.block.direction,
+      direction: params.block.type === "group" ? params.block.direction : "horizontal",
       childGap,
       wrapperHeight: calculateWrapperHeight(height, measuredChildren, childGap),
       children: measuredChildren,
