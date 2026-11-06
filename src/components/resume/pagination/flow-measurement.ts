@@ -196,25 +196,13 @@ function listStaticRichTextSegments(blockElement: HTMLElement) {
     const nodeType = element.dataset.resumeRichNodeType;
 
     if (element.dataset.resumeRichEmptyParagraph === "true") {
-      const nextParagraph = element.nextElementSibling;
-      const nextParagraphIndex = Number(
-        nextParagraph instanceof HTMLElement
-          ? nextParagraph.dataset.resumeRichParagraphIndex
-          : undefined,
-      );
-
-      if (
-        !Number.isInteger(paragraphIndex) ||
-        !Number.isInteger(nextParagraphIndex)
-      ) {
-        continue;
-      }
+      if (!Number.isInteger(paragraphIndex)) return undefined;
 
       const lineBreak = element.querySelector<HTMLElement>(":scope > br");
 
       segments.push({
         from: { paragraphIndex, nodeIndex: 0, offset: 0 },
-        to: { paragraphIndex: nextParagraphIndex, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
         rect: (lineBreak ?? element).getBoundingClientRect(),
       });
       continue;
@@ -271,35 +259,6 @@ function measureStaticRichTextLines(
   } catch {
     return undefined;
   }
-}
-
-function measureTrailingEmptyParagraphs(params: {
-  element: HTMLElement;
-  zoom: number;
-  committedSpacerHeights: ReadonlyMap<string, number>;
-}) {
-  const paragraphs = Array.from(
-    params.element.querySelectorAll<HTMLElement>(
-      "p[data-resume-rich-paragraph-index]",
-    ),
-  );
-  let height = 0;
-
-  for (let index = paragraphs.length - 1; index >= 0; index -= 1) {
-    const paragraph = paragraphs[index]!;
-
-    if (paragraph.dataset.resumeRichEmptyParagraph !== "true") {
-      break;
-    }
-
-    height += measureElementHeight(
-      paragraph,
-      params.zoom,
-      params.committedSpacerHeights,
-    );
-  }
-
-  return height;
 }
 
 function normalizeTextLineHeights(
@@ -384,23 +343,15 @@ function getTextMeasurements(params: {
     return {};
   }
 
-  const trailingHeight = Math.min(
-    params.height,
-    measureTrailingEmptyParagraphs({
-      element: params.element,
-      zoom: params.zoom,
-      committedSpacerHeights: params.committedSpacerHeights,
-    }),
-  );
   const normalizedTextLines = normalizeTextLineHeights(
     normalizeParagraphLineHeights(textLines, params),
-    Math.max(0, params.height - trailingHeight),
+    params.height,
   );
 
   return {
     textLines: normalizedTextLines,
     leadingHeight: 0,
-    trailingHeight,
+    trailingHeight: 0,
   };
 }
 

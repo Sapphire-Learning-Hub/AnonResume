@@ -1,6 +1,7 @@
 import type { RichTextContent } from "../schema";
 
 export interface RichTextPosition {
+  /** A zero-offset position after the final paragraph represents document end. */
   paragraphIndex: number;
   nodeIndex: number;
   offset: number;
@@ -39,6 +40,9 @@ function normalizePosition(
   position: RichTextPosition,
 ): RichTextPosition {
   const { paragraphIndex, nodeIndex, offset } = position;
+  if (paragraphIndex === content.content.length && nodeIndex === 0 && offset === 0) {
+    return { paragraphIndex, nodeIndex, offset };
+  }
   const paragraph = content.content[paragraphIndex];
 
   if (
@@ -79,14 +83,13 @@ function getDocumentStart(): RichTextPosition {
 }
 
 function getDocumentEnd(content: RichTextContent): RichTextPosition {
+  // The start of the last empty paragraph is not the end of the document:
+  // that paragraph still occupies a line and must survive a page split.
   const paragraphIndex = content.content.length - 1;
-  const paragraph = content.content[paragraphIndex]!;
-
-  return {
-    paragraphIndex,
-    nodeIndex: paragraph.content.length,
-    offset: 0,
-  };
+  const nodeCount = content.content[paragraphIndex]!.content.length;
+  return nodeCount === 0
+    ? { paragraphIndex: content.content.length, nodeIndex: 0, offset: 0 }
+    : { paragraphIndex, nodeIndex: nodeCount, offset: 0 };
 }
 
 function cloneNodeRange(
