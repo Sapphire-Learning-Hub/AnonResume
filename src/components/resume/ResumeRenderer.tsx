@@ -379,10 +379,16 @@ function RichTextParagraph({
       data-style-scope="resume-rich-text"
       data-resume-rich-empty-paragraph={empty ? "true" : undefined}
       data-resume-rich-paragraph-index={paragraphIndex}
-      // Match ProseMirror's whitespace and wrapping rules on every shared
+      // Match ProseMirror's text shaping and wrapping rules on every shared
       // surface, including the layout-neutral editor placeholder. Otherwise
       // editing can double the line count while pagination still sees one line.
-      style={{ whiteSpace: "break-spaces", overflowWrap: "break-word", ...style }}
+      style={{
+        whiteSpace: "break-spaces",
+        overflowWrap: "break-word",
+        fontVariantLigatures: "none",
+        fontFeatureSettings: '"liga" 0',
+        ...style,
+      }}
     >
       {children}
       {empty ? <br aria-hidden="true" /> : !continuesParagraph && paragraph.content.at(-1)?.type === "hardBreak" ? (
