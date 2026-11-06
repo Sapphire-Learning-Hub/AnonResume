@@ -6,6 +6,8 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { RichTextPosition } from "@/domain/resume/page-flow/rich-text-range";
 import type { MeasuredRichTextLine } from "@/domain/resume/pagination";
 
+import { measureInlineSegments } from "./rich-text-line-measurement";
+
 export interface TiptapPageBreak {
   id: string;
   position: RichTextPosition;
@@ -211,36 +213,7 @@ export function measureTiptapRichTextLines(
       ...segment,
       rect: editor.view.coordsAtPos(segment.proseMirror, 1),
     }));
-    const lines: MeasuredRichTextLine[] = [];
-    let lineStart = measured[0]!;
-    let lineEnd = lineStart.to;
-    let lineBottom = lineStart.rect.bottom;
-
-    for (let index = 1; index < measured.length; index += 1) {
-      const current = measured[index]!;
-
-      if (Math.abs(current.rect.top - lineStart.rect.top) > 1) {
-        lines.push({
-          from: lineStart.from,
-          to: lineEnd,
-          height: Math.max(1, Math.ceil(lineBottom - lineStart.rect.top)),
-        });
-        lineStart = current;
-        lineEnd = current.to;
-        lineBottom = current.rect.bottom;
-      } else {
-        lineEnd = current.to;
-        lineBottom = Math.max(lineBottom, current.rect.bottom);
-      }
-    }
-
-    lines.push({
-      from: lineStart.from,
-      to: lineEnd,
-      height: Math.max(1, Math.ceil(lineBottom - lineStart.rect.top)),
-    });
-
-    return lines;
+    return measureInlineSegments(measured);
   } catch {
     return undefined;
   }

@@ -46,6 +46,25 @@ describe("measureTiptapRichTextLines", () => {
     ]);
   });
 
+  it("keeps an inline icon and differently sized text on the same visual line", () => {
+    const nodes = [
+      { isText: true, text: "A", nodeSize: 1 },
+      { isText: false, nodeSize: 1 },
+      { isText: true, text: "BC", nodeSize: 2 },
+    ];
+    const editor = {
+      state: { doc: { childCount: 1, child: () => ({ childCount: nodes.length, child: (index: number) => nodes[index], nodeSize: 6 }) } },
+      view: { coordsAtPos: (position: number) => {
+        const top = position === 2 ? 2.25 : position === 4 ? 20 : 0;
+        return { top, bottom: top + (position === 2 ? 14 : 18.5), left: 0, right: 0 };
+      } },
+    } as unknown as Editor;
+    expect(measureTiptapRichTextLines(editor)).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 2, offset: 1 }, height: 19 },
+      { from: { paragraphIndex: 0, nodeIndex: 2, offset: 1 }, to: { paragraphIndex: 0, nodeIndex: 2, offset: 2 }, height: 19 },
+    ]);
+  });
+
   it("measures an empty paragraph between two text paragraphs", () => {
     const textNode = {
       isText: true,

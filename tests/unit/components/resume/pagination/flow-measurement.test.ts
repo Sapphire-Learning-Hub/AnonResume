@@ -331,6 +331,79 @@ describe("measureResumeFlow", () => {
     ]);
   });
 
+  it.each([0.5, 1, 2])("keeps inline icons with their text when paginating at zoom %s", (zoom) => {
+    const document = documentWithBlocks([textBlock("body", "ABCD")]);
+    const root = createSectionRoot(zoom);
+    const block = appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "body", "data-height": String(40 * zoom),
+    });
+    for (let index = 0; index < 4; index += 1) {
+      const node = appendMeasuredElement(block, "span", {
+        "data-resume-rich-paragraph-index": "0",
+        "data-resume-rich-node-index": String(index),
+        "data-resume-rich-node-type": index === 1 ? "resumeIcon" : "text",
+      });
+      if (index === 1) {
+        appendMeasuredElement(node, "span", {
+          "data-resume-icon-id": "lucide:mail", "data-top": String(2.25 * zoom), "data-height": String(14 * zoom),
+        });
+      } else node.textContent = index === 0 ? "A" : index === 2 ? "B" : "C";
+    }
+    let call = 0;
+    stubRangeRects(() => {
+      const top = call++ < 2 ? 0 : 20 * zoom;
+      return { top, bottom: top + 18.5 * zoom, left: 0, right: 10 * zoom };
+    });
+    const sections = measureResumeFlow({ root, document, zoom, committedSpacerHeights: new Map() })!;
+    const lines = sections[0]!.blocks[0]!.textLines!;
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ from: { nodeIndex: 0 }, to: { nodeIndex: 2, offset: 1 }, height: 20 });
+    // A page with room for one line and a little extra must never split
+    // the first visual line between its text and icon.
+    const pages = paginateMeasuredSections({ pageHeight: 25, sectionGap: 0, sections }).pages;
+    expect(pages[0]!.sections[0]!.blocks[0]!.textRange?.to).toEqual({ paragraphIndex: 0, nodeIndex: 2, offset: 1 });
+  });
+
+  it.each([false, true])("budgets each paragraph by its occupied height, not by font glyph height (editing: %s)", (editing) => {
+    const doc = documentWithBlocks([{
+      ...textBlock("body", "A"),
+      content: { type: "doc", content: Array.from({ length: 4 }, () => ({ type: "paragraph", content: [{ type: "text", text: "A" }] })) },
+    }]);
+    const root = createSectionRoot(1);
+    const block = appendMeasuredElement(root, "div", {
+      "data-resume-block-path": "body", "data-height": "100",
+    });
+    for (let index = 0; index < 4; index += 1) {
+      const paragraph = appendMeasuredElement(block, "p", {
+        "data-resume-rich-paragraph-index": String(index),
+        "data-height": index === 2 ? "40" : "20",
+      });
+      const text = appendMeasuredElement(paragraph, "span", {
+        "data-resume-rich-paragraph-index": String(index),
+        "data-resume-rich-node-index": "0", "data-resume-rich-node-type": "text",
+      });
+      text.textContent = "A";
+      if (index === 2) appendMeasuredElement(paragraph, "span", { "data-resume-page-break-id": "boundary", "data-height": "20" });
+    }
+    let index = 0;
+    stubRangeRects(() => {
+      const top = index * 20;
+      const height = index++ < 2 ? 16 : 18;
+      return { top, bottom: top + height, left: 0, right: 10 };
+    });
+    const activeEditor = { measureRichTextLines: () => Array.from({ length: 4 }, (_, paragraphIndex) => ({
+      from: { paragraphIndex, nodeIndex: 0, offset: 0 }, to: { paragraphIndex, nodeIndex: 0, offset: 1 }, height: paragraphIndex < 2 ? 16 : 18,
+    })) } as unknown as TiptapTextBlockEditorHandle;
+    const sections = measureResumeFlow({
+      root, document: doc, zoom: 1, committedSpacerHeights: new Map([["boundary", 20]]),
+      ...(editing ? { activeEditor, activeSelection: { sectionId: "section", blockPath: ["body"], richTextField: "content" as const } } : {}),
+    })!;
+    const pages = paginateMeasuredSections({ pageHeight: 39, sectionGap: 0, sections }).pages;
+    expect(sections[0]!.blocks[0]!.textLines?.map((line) => line.height)).toEqual([20, 20, 20, 20]);
+    expect(pages.map((page) => page.sections[0]!.blocks[0]!.textRange?.from.paragraphIndex)).toEqual([0, 1, 2, 3]);
+    expect(pages.map((page) => page.totalHeight)).toEqual([20, 20, 20, 20]);
+  });
+
   it("keeps middle empty paragraphs in their measured text position", () => {
     const document = documentWithBlocks([
       {
@@ -627,12 +700,7 @@ function stubRangeRects(
       collapse: () => undefined,
       getBoundingClientRect: () => {
         const value = resolve({ start, end });
-        return {
-          ...rect(value.bottom - value.top),
-          ...value,
-          width: value.right - value.left,
-          height: value.bottom - value.top,
-        };
+        return new DOMRect(value.left, value.top, value.right - value.left, value.bottom - value.top);
       },
     } as unknown as Range;
   });
