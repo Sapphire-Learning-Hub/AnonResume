@@ -147,6 +147,23 @@ export function createResumePageBreakMap(input: {
     }
     return 0;
   }
+  function pendingListSpacing(sectionId: string, fragments: ResumePageFragment[], anchor: BreakAnchor): number {
+    let height = 0;
+    for (const fragment of fragments) {
+      if (!fragment.children?.length || fragment.path.length >= anchor.path.length ||
+          !fragment.path.every((id, index) => anchor.path[index] === id)) continue;
+      const node = findNode(sectionMap.get(sectionId)?.blocks ?? [], fragment.path);
+      // A paginated list fragment includes its final item's bottom margin.
+      // The continuous canvas only renders that margin after the entire list,
+      // so account for it while the break still lies inside this list. Splits
+      // within a child already exclude this overhead from their page budget.
+      if (node?.type === "list" && fragment.includeWrapper !== false) {
+        height += node.wrapperHeight ?? 0;
+      }
+      height += pendingListSpacing(sectionId, fragment.children, anchor);
+    }
+    return height;
+  }
   for (const page of input.pages) for (const section of page.sections) collectColumns(section.sectionId, section.blocks);
 
   for (let pageIndex = 1; pageIndex < input.pages.length; pageIndex += 1) {
@@ -178,6 +195,10 @@ export function createResumePageBreakMap(input: {
       continue;
     }
 
+    const previousFragments = previousPage.sections.find(
+      (section) => section.sectionId === firstSection.sectionId,
+    )?.blocks ?? [];
+
     breaks.push({
       id: createBreakId(firstSection.sectionId, anchor),
       kind: anchor.kind,
@@ -189,7 +210,8 @@ export function createResumePageBreakMap(input: {
       fromPageIndex: pageIndex - 1,
       toPageIndex: pageIndex,
       spacerHeight:
-        columnSpacerCompensation(firstSection.sectionId, previousPage.sections.find((section) => section.sectionId === firstSection.sectionId)?.blocks ?? [], anchor) +
+        columnSpacerCompensation(firstSection.sectionId, previousFragments, anchor) +
+        pendingListSpacing(firstSection.sectionId, previousFragments, anchor) +
         Math.max(0, input.pageHeight - previousPage.totalHeight) +
         input.pagePadding.bottom +
         input.pageGap +

@@ -4,6 +4,7 @@ import { createResumePageBreakMap } from "@/domain/resume/page-flow/break-map";
 import { paginateMeasuredSections } from "@/domain/resume/pagination";
 import type {
   MeasuredResumeSection,
+  MeasuredResumeNode,
   ResumePageLayout,
 } from "@/domain/resume/pagination";
 
@@ -21,6 +22,49 @@ const structuralSections: MeasuredResumeSection[] = [
 ];
 
 describe("createResumePageBreakMap", () => {
+  it.each([0, 1, 2])("keeps list-item boundaries at the page inset without cumulative trailing-gap drift (nesting: %s)", (depth) => {
+    const prefix = Array.from({ length: depth }, (_, index) => [`outer-${index}`, `parent-item-${index}`]).flat();
+    const items = Array.from({ length: 7 }, (_, index) => ({
+      id: `item-${index}`, path: [...prefix, "list", `item-${index}`],
+      type: "listItem" as const, height: 30,
+    }));
+    let root: MeasuredResumeNode = {
+      id: "list", path: [...prefix, "list"], type: "list", direction: "vertical",
+      height: 280, childGap: 10, wrapperHeight: 10, children: items,
+    };
+    for (let index = depth - 1; index >= 0; index -= 1) {
+      const item: MeasuredResumeNode = { id: prefix[index * 2 + 1]!, path: prefix.slice(0, index * 2 + 2), type: "listItem", direction: "vertical", height: root.height, children: [root] };
+      root = { id: prefix[index * 2]!, path: prefix.slice(0, index * 2 + 1), type: "list", direction: "vertical", height: root.height + 10, childGap: 10, wrapperHeight: 10, children: [item] };
+    }
+    const section: MeasuredResumeSection = { id: "list-section", height: root.height, titleHeight: 0, topLevelGap: 0, blocks: [root] };
+    const pages = paginateMeasuredSections({ sections: [section], pageHeight: 100, sectionGap: 0 }).pages;
+    const map = createResumePageBreakMap({ pages, sections: [section], pageHeight: 100, pageGap: 24, sectionGap: 0, pagePadding: { top: 10, right: 10, bottom: 10, left: 10 }, revision: "list-boundaries" });
+    expect(map.breaks.length).toBeGreaterThanOrEqual(2);
+    let inserted = 0;
+    for (const boundary of map.breaks) {
+      inserted += boundary.spacerHeight;
+      const itemIndex = items.findIndex((item) => item.path.join("/") === boundary.path.join("/"));
+      expect(itemIndex).toBeGreaterThan(0);
+      // In the continuous canvas the list's final margin has not happened yet.
+      // Only item heights, inter-item gaps and inserted page spacers precede it.
+      expect(itemIndex * 40 + inserted).toBe(boundary.toPageIndex * 144);
+    }
+  });
+
+  it("does not compensate a list's trailing gap after the list has ended", () => {
+    const section: MeasuredResumeSection = { id: "section-main", height: 120, titleHeight: 0, topLevelGap: 0, blocks: [
+      { id: "list", path: ["list"], type: "list", direction: "vertical", height: 80, childGap: 10, wrapperHeight: 10, children: [
+        { id: "a", path: ["list", "a"], type: "listItem", height: 30 },
+        { id: "b", path: ["list", "b"], type: "listItem", height: 30 },
+      ] },
+      { id: "after", path: ["after"], type: "text", height: 40 },
+    ] };
+    const pages = paginateMeasuredSections({ sections: [section], pageHeight: 100, sectionGap: 0 }).pages;
+    const map = createResumePageBreakMap({ pages, sections: [section], pageHeight: 100, pageGap: 24, sectionGap: 0, pagePadding: { top: 10, right: 10, bottom: 10, left: 10 }, revision: "after-list" });
+    expect(map.breaks).toHaveLength(1);
+    expect(80 + map.breaks[0]!.spacerHeight).toBe(144);
+  });
+
   it("honors keep-together for a parallel section that fits a fresh page", () => {
     const section: MeasuredResumeSection = {
       id: "grid", height: 70, titleHeight: 0, topLevelGap: 10, parallelColumns: 2, keepTogether: true,
