@@ -996,6 +996,53 @@ describe("paginateMeasuredSections", () => {
     ]);
   });
 
+  it.each([1, 2, 3])("isolates an oversized first leaf through %i nested containers", (depth) => {
+    const parentPath = Array.from({ length: depth }, (_,index) => `group-${index}`);
+    const children: MeasuredResumeNode[] = [150, 50, 60].map((height, index) => ({
+      id: `leaf-${index}`, path: [...parentPath, `leaf-${index}`], type: "image", height,
+    }));
+    let node: MeasuredResumeNode = { id: parentPath.at(-1)!, path: parentPath, type: "group", direction: "vertical", childGap: 10, children, height: 280 };
+    for (let index = depth - 2; index >= 0; index -= 1) node = {
+      id: parentPath[index]!, path: parentPath.slice(0, index + 1), type: "group", direction: "vertical", height: 280, children: [node],
+    };
+    const result = paginateMeasuredSections({ pageHeight: 100, sectionGap: 0, sections: [
+      { id: "before", height: 20, titleHeight: 0, blocks: [{ id: "before", path: ["before"], type: "text", height: 20 }] },
+      { id: "nested", height: 280, titleHeight: 0, blocks: [node] },
+    ] });
+    expect(result.pages.map((page) => page.totalHeight)).toEqual([20, 150, 50, 60]);
+    const leafPaths = (fragments: typeof result.pages[number]["sections"][number]["blocks"]): string[][] =>
+      fragments.flatMap((fragment) => fragment.children ? leafPaths(fragment.children) : [fragment.path]);
+    expect(result.pages.flatMap((page) => page.sections.flatMap((section) => leafPaths(section.blocks)))).toEqual([
+      ["before"], ...children.map((child) => child.path),
+    ]);
+  });
+
+  it("continues after an oversized text line instead of overflowing the remaining lines", () => {
+    const result = paginateMeasuredSections({ pageHeight: 100, sectionGap: 0, sections: [{
+      id: "s", titleHeight: 0, height: 170, blocks: [{ id: "t", path: ["t"], type: "text", height: 170,
+        textLines: [150, 20].map((height, index) => ({ height, from: { paragraphIndex: 0, nodeIndex: 0, offset: index }, to: { paragraphIndex: 0, nodeIndex: 0, offset: index + 1 } })),
+      }],
+    }] });
+    expect(result.pages.map((page) => page.totalHeight)).toEqual([150, 20]);
+    expect(result.pages.map((page) => page.sections[0]!.blocks[0]!.textRange)).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 0, offset: 1 } },
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 1 }, to: { paragraphIndex: 0, nodeIndex: 0, offset: 2 } },
+    ]);
+  });
+
+  it("keeps an oversized photo on the first column fragment without swallowing later text", () => {
+    const result = paginateMeasuredSections({ pageHeight: 100, sectionGap: 0, sections: [{
+      id: "s", titleHeight: 0, height: 200, blocks: [{ id: "row", path: ["row"], type: "row", columnLayout: "image-right", height: 200, children: [
+        { id: "text", path: ["row", "text"], type: "text", height: 200,
+          textLines: Array.from({length: 10}, (_, index) => ({height: 20, from: {paragraphIndex: index, nodeIndex: 0, offset: 0}, to: {paragraphIndex: index, nodeIndex: 0, offset: 1}})),
+        },
+        { id: "photo", path: ["row", "photo"], type: "image", height: 140 },
+      ] }],
+    }] });
+    expect(result.pages.map((page) => page.totalHeight)).toEqual([140, 100]);
+    expect(result.pages.map((page) => page.sections[0]!.blocks[0]!.children?.map((child) => child.path.at(-1)))).toEqual([["text", "photo"], ["text"]]);
+  });
+
   it("places an oversized atomic node once so pagination always advances", () => {
     const result = paginateMeasuredSections({
       pageHeight: 100,
@@ -1023,7 +1070,7 @@ describe("paginateMeasuredSections", () => {
     ]);
   });
 
-  it("treats a zero-height nested container atomically instead of looping", () => {
+  it("does not create a blank page before oversized content following an empty container", () => {
     const result = paginateMeasuredSections({
       pageHeight: 50,
       sectionGap: 0,
@@ -1065,9 +1112,7 @@ describe("paginateMeasuredSections", () => {
     });
 
     expect(result.pages).toHaveLength(1);
-    expect(result.pages[0]?.sections[0]?.blocks).toEqual([
-      { path: ["outer-group"] },
-    ]);
+    expect(result.pages[0]?.totalHeight).toBe(80);
   });
 
   it("splits a rich text block across two pages at measured line boundaries", () => {

@@ -94,10 +94,10 @@ function isBreakableVerticalNode(node: MeasuredResumeNode) {
   return (
     Boolean(node.columnLayout) ||
     (node.type === "text" && Boolean(node.textLines?.length)) ||
-    (node.direction !== "horizontal" &&
-      (node.type === "group" ||
-        node.type === "list" ||
-        node.type === "listItem") &&
+    (((node.direction !== "horizontal" &&
+      (node.type === "group" || node.type === "list" || node.type === "listItem")) ||
+      // A single child has no parallel sibling whose alignment must be kept.
+      ((node.type === "row" || node.type === "group") && node.children?.length === 1)) &&
       Boolean(node.children?.length))
   );
 }
@@ -132,6 +132,7 @@ function createTextRemainderNode(
 function takeTextLines(
   node: MeasuredResumeNode,
   availableSpace: number,
+  allowOverflow = false,
 ): NodePlacementResult {
   const lines = node.textLines ?? [];
   const leadingHeight = node.leadingHeight ?? 0;
@@ -145,7 +146,7 @@ function takeTextLines(
     const nextHeight =
       height + line.height + (isLastLine ? trailingHeight : 0);
 
-    if (nextHeight > availableSpace) {
+    if (nextHeight > availableSpace && !(allowOverflow && index === 0)) {
       break;
     }
 
@@ -233,6 +234,7 @@ function takeVerticalChildren(
   availableSpace: number,
   pageHeight: number,
   keepWithNext: boolean,
+  allowOverflow: boolean,
 ): NodePlacementResult {
   const children = node.children ?? [];
   const fragments: ResumePageFragment[] = [];
@@ -242,7 +244,7 @@ function takeVerticalChildren(
   let height = wrapperHeight;
   let splitWithinChild = false;
 
-  if (height > availableSpace) {
+  if (height > availableSpace && !allowOverflow) {
     return { height: 0 };
   }
 
@@ -257,7 +259,7 @@ function takeVerticalChildren(
       continue;
     }
 
-    const placement = takeNodeFragment(child, childSpace, pageHeight, true, keepWithNext);
+    const placement = takeNodeFragment(child, childSpace, pageHeight, true, keepWithNext, allowOverflow && height === wrapperHeight);
 
     if (placement.fragment && placement.height > 0) {
       fragments.push(placement.fragment);
@@ -320,11 +322,11 @@ function takeVerticalChildren(
   };
 }
 
-function takeColumnFragment(node: MeasuredResumeNode, availableSpace: number, pageHeight: number, keepWithNext: boolean): NodePlacementResult {
+function takeColumnFragment(node: MeasuredResumeNode, availableSpace: number, pageHeight: number, keepWithNext: boolean, allowOverflow: boolean): NodePlacementResult {
   const left = node.children?.[0];
   const image = node.continuation ? undefined : node.children?.[1];
-  if (!left || (image && image.height > availableSpace)) return { height: 0 };
-  const placed = takeNodeFragment(left, availableSpace, pageHeight, true, keepWithNext);
+  if (!left || (image && image.height > availableSpace && !allowOverflow)) return { height: 0 };
+  const placed = takeNodeFragment(left, availableSpace, pageHeight, true, keepWithNext, allowOverflow);
   if (!placed.fragment) return { height: 0 };
   return {
     fragment: { path: [...node.path], columnLayout: node.columnLayout, ...(placed.remainingNode ? { continues: true } : {}), ...(node.continuation ? { continuation: true } : {}), children: [placed.fragment, ...(image ? [createWholeFragment(image)] : [])] },
@@ -339,6 +341,7 @@ function takeNodeFragment(
   pageHeight: number,
   allowSplit: boolean,
   keepWithNext: boolean,
+  allowOverflow = false,
 ): NodePlacementResult {
   if (node.height <= availableSpace) {
     return {
@@ -348,16 +351,18 @@ function takeNodeFragment(
   }
 
   if (!allowSplit || !isBreakableVerticalNode(node)) {
-    return { height: 0 };
+    return allowOverflow
+      ? { fragment: createWholeFragment(node), height: node.height }
+      : { height: 0 };
   }
 
-  if (node.columnLayout) return takeColumnFragment(node, availableSpace, pageHeight, keepWithNext);
+  if (node.columnLayout) return takeColumnFragment(node, availableSpace, pageHeight, keepWithNext, allowOverflow);
 
   if (node.type === "text" && node.textLines?.length) {
-    return takeTextLines(node, availableSpace);
+    return takeTextLines(node, availableSpace, allowOverflow);
   }
 
-  return takeVerticalChildren(node, availableSpace, pageHeight, keepWithNext);
+  return takeVerticalChildren(node, availableSpace, pageHeight, keepWithNext, allowOverflow);
 }
 
 function createSectionFragment(
@@ -441,9 +446,15 @@ function takeSectionFragment(params: {
         if (block.columnLayout && includeTitle && section.titleHeight > 0) {
           return { fragment: { sectionId: section.id, includeTitle: true, blocks: [], totalHeight: section.titleHeight + getSectionPadding(section) + (section.titleGap ?? 0) }, remainingBlocks: blocks };
         }
-        placedBlocks.push(createWholeFragment(block));
-        usedHeight += gapBeforeBlock + block.height;
-        remainingBlocks.push(...blocks.slice(blockIndex + 1));
+        // On an empty page only the first unsplittable leaf may overflow.
+        // Keep descending through containers so later siblings still paginate.
+        const overflow = takeNodeFragment(block, freeSpace, pageHeight, true, false, true);
+        placedBlocks.push(overflow.fragment ?? createWholeFragment(block));
+        usedHeight += gapBeforeBlock + (overflow.fragment ? overflow.height : block.height);
+        remainingBlocks.push(
+          ...(overflow.remainingNode ? [overflow.remainingNode] : []),
+          ...blocks.slice(blockIndex + 1),
+        );
       } else {
         const companion = keepWithNext ? popKeepWithNextCompanion({
           next: block,
