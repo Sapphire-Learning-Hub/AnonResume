@@ -26,6 +26,29 @@ function documentWithContent(content: RichTextContent): ResumeDocument {
 }
 
 describe("AnonResume Markdown rich text dialect", () => {
+  it.each([false, true])("keeps long paragraphs editable with projection=%s", (withProjection) => {
+    const text = "Long paragraph preserves content. ".repeat(300);
+    const content: RichTextContent = { type: "doc", content: [{ type: "paragraph", content: [
+      { type: "text", text: text.slice(0, 3500) },
+      { type: "text", text: text.slice(3500, 7000) },
+      { type: "text", text: text.slice(7000) },
+    ] }] };
+    const baseDocument = documentWithContent(content);
+    const serialized = serializeResumeMarkdown(baseDocument);
+    const parsed = parseResumeMarkdown({
+      source: serialized.source.replace("Long paragraph", "Updated paragraph"),
+      baseDocument, locale: "zh-CN",
+      ...(withProjection ? { projection: serialized.projection } : {}),
+    });
+    expect(parsed.hasErrors).toBe(false);
+    const block = parsed.document?.sections[0]?.blocks[0];
+    expect(block?.type).toBe("text");
+    if (block?.type !== "text") throw new Error("Expected a text block");
+    const nodes = block.content.content[0]!.content;
+    expect(nodes.every((node) => node.type !== "text" || node.text.length <= 4000)).toBe(true);
+    expect(nodes.map((node) => node.type === "text" ? node.text : "").join("")).toBe(text.trimEnd().replace("Long paragraph", "Updated paragraph"));
+  });
+
   it("keeps standard marks readable and projects presentation-only marks", () => {
     const content: RichTextContent = {
       type: "doc",

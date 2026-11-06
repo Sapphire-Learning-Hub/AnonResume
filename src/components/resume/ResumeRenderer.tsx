@@ -236,20 +236,6 @@ function serializeBlockPath(blockPath: string[]) {
   return blockPath.join(BLOCK_PATH_SEPARATOR);
 }
 
-function assignRefValue<T>(ref: Ref<T> | undefined, value: T | null) {
-  if (typeof ref === "function") {
-    ref(value);
-  } else if (ref) {
-    (ref as { current: T | null }).current = value;
-  }
-}
-
-function mergeRefs<T>(...refs: Array<Ref<T> | undefined>): Ref<T> {
-  return (value) => {
-    refs.forEach((ref) => assignRefValue(ref, value));
-  };
-}
-
 function getInlineToolbarLabels(t: Translator): TiptapInlineToolbarLabels {
   return {
     applyLink: t("editor.applyLink"),
@@ -2490,18 +2476,6 @@ function ResumePagedSectionRenderer({
   );
   const rootRef = useRef<HTMLDivElement>(null);
   const measurementRef = useRef<HTMLDivElement>(null);
-  const [activeTextEditor, setActiveTextEditor] =
-    useState<TiptapTextBlockEditorHandle | null>(null);
-  const captureTextEditor = useCallback(
-    (editor: TiptapTextBlockEditorHandle | null) => {
-      setActiveTextEditor(editor);
-    },
-    [],
-  );
-  const mergedTextEditorRef = useMemo(
-    () => mergeRefs(captureTextEditor, textEditorRef),
-    [captureTextEditor, textEditorRef],
-  );
   const pageContentHeight = useMemo(
     () => getPageContentHeight(settings),
     [settings],
@@ -2539,16 +2513,14 @@ function ResumePagedSectionRenderer({
       zoom,
     ],
   );
-  const committedSpacerHeightsRef = useRef<ReadonlyMap<string, number>>(
-    new Map(),
-  );
   const measurementCacheRef = useRef(
     new Map<string, MeasuredResumeSection>(),
   );
   const createPaginationWork = useCallback(
     (revision: EditPaginationRevision) => {
-      // Paged output only contains fragments; measure the complete shared markup.
-      const root = mode === "edit" ? rootRef.current : measurementRef.current;
+      // Always measure unpaginated shared markup. Existing canvas spacers can
+      // split reflowed lines; subtracting their heights cannot undo that wrap.
+      const root = measurementRef.current;
 
       if (!root) return undefined;
 
@@ -2586,17 +2558,13 @@ function ResumePagedSectionRenderer({
               section,
               geometry: revision.geometry,
               width: revision.width,
-              active:
-                selection?.sectionId === section.id ? selection : undefined,
             });
             const cached = measurementCacheRef.current.get(cacheKey);
             const measured =
               cached ??
               measureResumeSectionFlow(root, section, {
                 zoom,
-                activeEditor: activeTextEditor,
-                activeSelection: selection,
-                committedSpacerHeights: committedSpacerHeightsRef.current,
+                committedSpacerHeights: new Map(),
               });
 
             if (!measured) {
@@ -2653,11 +2621,8 @@ function ResumePagedSectionRenderer({
       };
     },
     [
-      activeTextEditor,
-      mode,
       measurementLayout,
       pageContentHeight,
-      selection,
       settings.page.margin,
       visibleSections,
       zoom,
@@ -2679,15 +2644,6 @@ function ResumePagedSectionRenderer({
   const pageBreakMap = pagination.breaks;
   const paginationSettled = pagination.ready && fontAssetStatus === "ready";
   const printReady = paginationSettled;
-
-  useLayoutEffect(() => {
-    committedSpacerHeightsRef.current = new Map(
-      pageBreakMap.breaks.map((pageBreak) => [
-        pageBreak.id,
-        pageBreak.spacerHeight,
-      ]),
-    );
-  }, [pageBreakMap.breaks]);
 
   const firstPageBySectionId = useMemo(() => {
     const firstPages = new Map<string, number>();
@@ -2767,7 +2723,7 @@ function ResumePagedSectionRenderer({
                           onChangeSectionTitle,
                           onChangeTextBlock,
                           onMoveBlock,
-                          textEditorRef: mergedTextEditorRef,
+                          textEditorRef,
                           onTextEditorFormattingStateChange,
                           instanceKey: `edit-${section.id}-${sectionIndex}`,
                           anchorId: getResumeSectionAnchorId(section.id),
@@ -2818,7 +2774,7 @@ function ResumePagedSectionRenderer({
                           onChangeSectionTitle,
                           onChangeTextBlock,
                           onMoveBlock,
-                          textEditorRef: mergedTextEditorRef,
+                          textEditorRef,
                           onTextEditorFormattingStateChange,
                           instanceKey: `page-${page.index}-${sectionLayout.sectionId}-${sectionIndex}`,
                           anchorId:
@@ -2832,7 +2788,6 @@ function ResumePagedSectionRenderer({
                 </div>
               ))
               )}
-              {mode !== "edit" ? (
                 <div
                   ref={measurementRef}
                   className={styles.measurementFrame}
@@ -2853,7 +2808,7 @@ function ResumePagedSectionRenderer({
                             ? renderResumeSection(section, {
                                 t,
                                 sectionLayout,
-                                mode,
+                                mode: mode === "edit" ? "view" : mode,
                                 editSurfaceMode,
                                 styles,
                                 instanceKey: `measure-${section.id}-${sectionIndex}`,
@@ -2864,7 +2819,6 @@ function ResumePagedSectionRenderer({
                     </div>
                   </div>
                 </div>
-              ) : null}
             </div>
           </ResumeDiffProvider>
         </TextPaginationRequestContext.Provider>

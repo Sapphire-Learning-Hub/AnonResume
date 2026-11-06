@@ -3,6 +3,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
+import type { RichTextContent } from "@/domain/resume/schema";
 import type { RichTextPosition } from "@/domain/resume/page-flow/rich-text-range";
 import type { MeasuredRichTextLine } from "@/domain/resume/pagination";
 
@@ -34,39 +35,44 @@ function getParagraphStart(doc: ProseMirrorNode, paragraphIndex: number) {
   return position;
 }
 
+// ProseMirror merges adjacent text with equivalent marks. Pagination positions
+// belong to the source document, so map through cumulative inline lengths rather
+// than assuming its node indexes survive the editor's normalization.
+function paragraphNodes(
+  paragraph: ProseMirrorNode,
+  source?: RichTextContent["content"][number],
+) {
+  const nodes = source
+    ? source.content.map((node) => ({
+        size: node.type === "text" ? node.text.length : 1,
+        hardBreak: node.type === "hardBreak",
+      }))
+    : Array.from({ length: paragraph.childCount }, (_, index) => {
+        const node = paragraph.child(index);
+        return {
+          size: node.isText ? node.text?.length ?? 0 : 1,
+          hardBreak: node.type?.name === "hardBreak",
+        };
+      });
+  // During a content update the editor and React source can briefly differ.
+  // Wait for the matching document instead of installing invalid decorations.
+  if (source && nodes.reduce((sum, node) => sum + node.size, 0) !== paragraph.nodeSize - 2) return undefined;
+  return nodes;
+}
+
 export function resolveRichTextPosition(
   doc: ProseMirrorNode,
   position: RichTextPosition,
+  source?: RichTextContent,
 ) {
-  if (
-    position.paragraphIndex < 0 ||
-    position.paragraphIndex >= doc.childCount
-  ) {
-    return undefined;
-  }
-
-  const paragraph = doc.child(position.paragraphIndex);
-
-  if (position.nodeIndex < 0 || position.nodeIndex > paragraph.childCount) {
-    return undefined;
-  }
-
-  let resolved = getParagraphStart(doc, position.paragraphIndex);
-
-  for (let index = 0; index < position.nodeIndex; index += 1) {
-    resolved += paragraph.child(index).nodeSize;
-  }
-
-  if (position.nodeIndex === paragraph.childCount) {
-    return position.offset === 0 ? resolved : undefined;
-  }
-
-  const node = paragraph.child(position.nodeIndex);
-  const nodeSize = node.isText ? node.text?.length ?? 0 : 1;
-
-  return position.offset >= 0 && position.offset <= nodeSize
-    ? resolved + position.offset
-    : undefined;
+  if (source && source.content.length !== doc.childCount) return undefined;
+  if (position.paragraphIndex < 0 || position.paragraphIndex >= doc.childCount) return undefined;
+  const nodes = paragraphNodes(doc.child(position.paragraphIndex), source?.content[position.paragraphIndex]);
+  if (!nodes || position.nodeIndex < 0 || position.nodeIndex > nodes.length) return undefined;
+  const nodeSize = nodes[position.nodeIndex]?.size ?? 0;
+  if (position.offset < 0 || position.offset > nodeSize) return undefined;
+  return getParagraphStart(doc, position.paragraphIndex) +
+    nodes.slice(0, position.nodeIndex).reduce((sum, node) => sum + node.size, 0) + position.offset;
 }
 
 function createPageBreakElement(
@@ -136,11 +142,13 @@ export function createTiptapPageBreakExtension(className: string) {
 export function applyTiptapPageBreaks(
   editor: Editor,
   pageBreaks: readonly TiptapPageBreak[],
+  source?: RichTextContent,
 ) {
   const resolved = pageBreaks.flatMap((pageBreak) => {
     const proseMirrorPosition = resolveRichTextPosition(
       editor.state.doc,
       pageBreak.position,
+      source,
     );
 
     return proseMirrorPosition === undefined
@@ -159,7 +167,8 @@ interface DomainSegment {
   proseMirror: number;
 }
 
-function listDomainSegments(doc: ProseMirrorNode) {
+function listDomainSegments(doc: ProseMirrorNode, source?: RichTextContent) {
+  if (source && source.content.length !== doc.childCount) return undefined;
   const segments: DomainSegment[] = [];
 
   for (
@@ -168,10 +177,12 @@ function listDomainSegments(doc: ProseMirrorNode) {
     paragraphIndex += 1
   ) {
     const paragraph = doc.child(paragraphIndex);
+    const nodes = paragraphNodes(paragraph, source?.content[paragraphIndex]);
+    if (!nodes) return undefined;
     const paragraphStart = getParagraphStart(doc, paragraphIndex);
     let nodeStart = paragraphStart;
 
-    if (paragraph.childCount === 0) {
+    if (nodes.length === 0) {
       segments.push({
         from: { paragraphIndex, nodeIndex: 0, offset: 0 },
         to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
@@ -180,9 +191,8 @@ function listDomainSegments(doc: ProseMirrorNode) {
       continue;
     }
 
-    for (let nodeIndex = 0; nodeIndex < paragraph.childCount; nodeIndex += 1) {
-      const node = paragraph.child(nodeIndex);
-      const nodeSize = node.isText ? node.text?.length ?? 0 : 1;
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+      const nodeSize = nodes[nodeIndex]!.size;
 
       for (let offset = 0; offset < nodeSize; offset += 1) {
         segments.push({
@@ -192,14 +202,14 @@ function listDomainSegments(doc: ProseMirrorNode) {
         });
       }
 
-      nodeStart += node.nodeSize;
+      nodeStart += nodeSize;
     }
 
     // ProseMirror renders a caret line after a terminal hard break. It has no
     // content node, but still occupies a line and may begin the next page.
-    if (paragraph.lastChild?.type.name === "hardBreak") {
+    if (nodes.at(-1)?.hardBreak) {
       segments.push({
-        from: { paragraphIndex, nodeIndex: paragraph.childCount, offset: 0 },
+        from: { paragraphIndex, nodeIndex: nodes.length, offset: 0 },
         to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
         proseMirror: nodeStart,
       });
@@ -211,8 +221,10 @@ function listDomainSegments(doc: ProseMirrorNode) {
 
 export function measureTiptapRichTextLines(
   editor: Editor,
+  source?: RichTextContent,
 ): MeasuredRichTextLine[] | undefined {
-  const segments = listDomainSegments(editor.state.doc);
+  const segments = listDomainSegments(editor.state.doc, source);
+  if (!segments) return undefined;
 
   if (segments.length === 0) {
     return [];

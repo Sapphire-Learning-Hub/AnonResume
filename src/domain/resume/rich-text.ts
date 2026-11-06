@@ -98,12 +98,15 @@ function sanitizeRuntimeRichTextContent(content: unknown): unknown {
   };
 }
 
-export function normalizeRichTextContent(content: unknown): RichTextContent {
+export function normalizeRichTextContent(
+  content: unknown,
+  maxTextNodeLength?: number,
+): RichTextContent {
   const parsed = richTextContentSchema.parse(
     sanitizeRuntimeRichTextContent(content),
   );
 
-  return {
+  const normalized: RichTextContent = {
     ...parsed,
     content: parsed.content.map((paragraph) => ({
       ...paragraph,
@@ -150,6 +153,43 @@ export function normalizeRichTextContent(content: unknown): RichTextContent {
               : { type: "link" };
           }),
         };
+      }),
+    })),
+  };
+  return maxTextNodeLength === undefined
+    ? normalized
+    : splitRichTextNodes(normalized, maxTextNodeLength);
+}
+
+export function splitRichTextNodes(
+  content: RichTextContent,
+  maxTextNodeLength: number,
+): RichTextContent {
+  if (!Number.isInteger(maxTextNodeLength) || maxTextNodeLength < 1) {
+    throw new RangeError("maxTextNodeLength must be a positive integer");
+  }
+
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  return {
+    ...content,
+    content: content.content.map((paragraph) => ({
+      ...paragraph,
+      content: paragraph.content.flatMap((node) => {
+        if (node.type !== "text" || node.text.length <= maxTextNodeLength) {
+          return [node];
+        }
+        const chunks: typeof node[] = [];
+        let text = "";
+        for (const { segment } of segmenter.segment(node.text)) {
+          if (text && text.length + segment.length > maxTextNodeLength) {
+            chunks.push({ ...node, text });
+            text = "";
+          }
+          // Keep an oversized grapheme intact for validation, never truncate it.
+          text += segment;
+        }
+        if (text) chunks.push({ ...node, text });
+        return chunks;
       }),
     })),
   };

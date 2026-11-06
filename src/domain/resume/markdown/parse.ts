@@ -16,7 +16,8 @@ import type {
   ResumeSection,
   RichTextContent,
 } from "../schema";
-import { validateResumeDocument } from "../validation";
+import { resumeValidationLimits, validateResumeDocument } from "../validation";
+import { splitRichTextNodes } from "@/domain/resume/rich-text";
 import {
   parseDirectiveAttributes,
   parseResumeMarkdownDirectives,
@@ -99,7 +100,7 @@ function parseInline(
 ): RichTextContent {
   const result = parseResumeMarkdownInline(source, line);
   context.diagnostics.push(...result.diagnostics);
-  return result.content;
+  return splitRichTextNodes(result.content, resumeValidationLimits.maxRichTextNodeLength);
 }
 
 function createTextBlock(
