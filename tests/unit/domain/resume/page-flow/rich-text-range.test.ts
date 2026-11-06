@@ -181,6 +181,33 @@ describe("rich text pagination ranges", () => {
     expectValidSlices(slices);
   });
 
+  it("does not add a blank fragment for a split after the final text", () => {
+    const single: RichTextContent = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "A" }] }] };
+    expect(splitRichTextContent(single, [{ paragraphIndex: 0, nodeIndex: 0, offset: 1 }])).toEqual([single]);
+  });
+
+  it("retains every trailing empty paragraph when splitting a document", () => {
+    const trailing: RichTextContent = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "AB" }] },
+        { type: "paragraph", content: [] },
+        { type: "paragraph", content: [] },
+      ],
+    };
+    const slices = splitRichTextContent(trailing, [
+      { paragraphIndex: 0, nodeIndex: 0, offset: 1 },
+      { paragraphIndex: 2, nodeIndex: 0, offset: 0 },
+    ]);
+    expect(slices.map((slice) => slice.content)).toEqual([
+      [{ type: "paragraph", content: [{ type: "text", text: "A" }] }],
+      [{ type: "paragraph", content: [{ type: "text", text: "B" }] }, { type: "paragraph", content: [] }],
+      [{ type: "paragraph", content: [] }],
+    ]);
+    expect(splitRichTextContent(trailing, [])).toEqual([trailing]);
+    expectValidSlices(slices);
+  });
+
   it("returns one valid empty paragraph for an empty range", () => {
     const position = { paragraphIndex: 0, nodeIndex: 1, offset: 0 };
     const slice = sliceRichTextContent(content, {

@@ -65,6 +65,16 @@ describe("measureTiptapRichTextLines", () => {
     ]);
   });
 
+  it("measures a final empty paragraph instead of discarding its line", () => {
+    const editor = {
+      state: { doc: { childCount: 1, child: () => ({ childCount: 0, nodeSize: 2 }) } },
+      view: { coordsAtPos: () => ({ top: 0, bottom: 20, left: 0, right: 0 }) },
+    } as unknown as Editor;
+    expect(measureTiptapRichTextLines(editor)).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 1, nodeIndex: 0, offset: 0 }, height: 20 },
+    ]);
+  });
+
   it("measures an empty paragraph between two text paragraphs", () => {
     const textNode = {
       isText: true,

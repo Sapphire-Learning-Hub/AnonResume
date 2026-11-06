@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { sliceRichTextContent } from "@/domain/resume/page-flow/rich-text-range";
 import { paginateMeasuredSections } from "@/domain/resume/pagination";
 import { measureResumeFlow } from "@/components/resume/pagination/flow-measurement";
 import type { TiptapTextBlockEditorHandle } from "@/components/resume/TiptapTextBlockEditor";
@@ -402,6 +403,38 @@ describe("measureResumeFlow", () => {
     expect(sections[0]!.blocks[0]!.textLines?.map((line) => line.height)).toEqual([20, 20, 20, 20]);
     expect(pages.map((page) => page.sections[0]!.blocks[0]!.textRange?.from.paragraphIndex)).toEqual([0, 1, 2, 3]);
     expect(pages.map((page) => page.totalHeight)).toEqual([20, 20, 20, 20]);
+  });
+
+  it.each([false, true])("preserves trailing empty paragraphs and their pagination budget (entirely empty: %s)", (entirelyEmpty) => {
+    const content: ResumeDocument["sections"][number]["title"] = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: entirelyEmpty ? [] : [{ type: "text", text: "A" }] },
+        { type: "paragraph", content: [] },
+        { type: "paragraph", content: [] },
+      ],
+    };
+    const document = documentWithBlocks([{ id: "summary", type: "text", content }]);
+    const root = createSectionRoot(1);
+    root.querySelector("section")!.setAttribute("data-height", "60");
+    const block = appendMeasuredElement(root, "div", { "data-resume-block-path": "summary", "data-height": "60" });
+    content.content.forEach((paragraph, index) => {
+      const p = appendMeasuredElement(block, "p", {
+        "data-resume-rich-paragraph-index": String(index), "data-height": "20", "data-top": String(index * 20),
+        ...(paragraph.content.length ? {} : { "data-resume-rich-empty-paragraph": "true" }),
+      });
+      if (paragraph.content.length) {
+        const span = appendMeasuredElement(p, "span", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "0", "data-resume-rich-node-type": "text" });
+        span.textContent = "A";
+      } else appendMeasuredElement(p, "br", { "data-height": "20", "data-top": String(index * 20) });
+    });
+    stubRangeRects(() => ({ top: 0, bottom: 20, left: 0, right: 5 }));
+    const sections = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map() })!;
+    const pages = paginateMeasuredSections({ pageHeight: 40, sectionGap: 0, sections }).pages;
+    expect(pages.map((page) => page.totalHeight)).toEqual([40, 20]);
+    const fragments = pages.flatMap((page) => page.sections.flatMap((section) => section.blocks));
+    const rendered = fragments.flatMap((fragment) => sliceRichTextContent(content, fragment.textRange!).content);
+    expect(rendered).toEqual(content.content);
   });
 
   it("keeps middle empty paragraphs in their measured text position", () => {
