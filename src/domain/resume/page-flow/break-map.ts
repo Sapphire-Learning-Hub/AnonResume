@@ -140,7 +140,13 @@ export function createResumePageBreakMap(input: {
         const node = findNode(sectionMap.get(sectionId)?.blocks ?? [], fragment.path);
         const left = node?.children?.[0];
         const leftFragment = fragment.children?.[0];
-        if (node && left && leftFragment) return Math.max(0, calculateFragmentHeight(node, fragment) - calculateFragmentHeight(left, leftFragment));
+        if (node && left && leftFragment) {
+          // Every enclosing image column can leave space below its text. The
+          // continuous canvas needs all of it, including nested columns whose
+          // outer image is shorter and contributes no extra space itself.
+          return Math.max(0, calculateFragmentHeight(node, fragment) - calculateFragmentHeight(left, leftFragment)) +
+            columnSpacerCompensation(sectionId, fragment.children ?? [], anchor);
+        }
       }
       const compensation = columnSpacerCompensation(sectionId, fragment.children ?? [], anchor);
       if (compensation) return compensation;

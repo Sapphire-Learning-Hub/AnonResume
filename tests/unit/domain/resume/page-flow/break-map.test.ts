@@ -22,6 +22,54 @@ const structuralSections: MeasuredResumeSection[] = [
 ];
 
 describe("createResumePageBreakMap", () => {
+  it.each([
+    { depth: 1, outerImageHeight: 20 },
+    { depth: 1, outerImageHeight: 98 },
+    { depth: 2, outerImageHeight: 20 },
+    { depth: 2, outerImageHeight: 98 },
+  ])("preserves page insets through nested image columns ($depth levels, outer image $outerImageHeight)", ({ depth, outerImageHeight }) => {
+    const prefix = Array.from({ length: depth }, (_, index) => [`row-${index}`, `left-${index}`]).flat();
+    const innerPath = [...prefix, "inner"];
+    const body: MeasuredResumeNode = {
+      id: "body", path: [...innerPath, "body"], type: "text", height: 240,
+      textLines: Array.from({ length: 8 }, (_, index) => ({
+        from: { paragraphIndex: index, nodeIndex: 0, offset: 0 },
+        to: { paragraphIndex: index, nodeIndex: 1, offset: 0 }, height: 30,
+      })),
+    };
+    let root: MeasuredResumeNode = {
+      id: "inner", path: innerPath, type: "row", columnLayout: "image-right", direction: "horizontal", height: 240,
+      children: [body, { id: "image", path: [...innerPath, "image"], type: "image", height: 35 }],
+    };
+    for (let index = depth - 1; index >= 0; index -= 1) {
+      const rowPath = prefix.slice(0, index * 2 + 1);
+      const leftPath = prefix.slice(0, index * 2 + 2);
+      const before: MeasuredResumeNode[] = index === depth - 1
+        ? [{ id: "before", path: [...leftPath, "before"], type: "text", height: 60 }] : [];
+      const height = root.height + (before.length ? 60 : 0);
+      root = {
+        id: rowPath.at(-1)!, path: rowPath, type: "row", columnLayout: "image-right", direction: "horizontal", height,
+        children: [
+          { id: leftPath.at(-1)!, path: leftPath, type: "group", direction: "vertical", height, childGap: 0, children: [...before, root] },
+          { id: `image-${index}`, path: [...rowPath, `image-${index}`], type: "image", height: outerImageHeight },
+        ],
+      };
+    }
+    const section: MeasuredResumeSection = { id: "nested", height: root.height, titleHeight: 0, topLevelGap: 0, blocks: [root] };
+    const pages = paginateMeasuredSections({ sections: [section], pageHeight: 100, sectionGap: 0 }).pages;
+    const map = createResumePageBreakMap({ pages, sections: [section], pageHeight: 100, pageGap: 24, sectionGap: 0, pagePadding: { top: 10, right: 10, bottom: 10, left: 10 }, revision: "nested-columns" });
+    expect(pages).toHaveLength(4);
+    expect(map.breaks).toHaveLength(3);
+    let inserted = 0;
+    for (const boundary of map.breaks) {
+      inserted += boundary.spacerHeight;
+      expect(boundary.path).toEqual(body.path);
+      // The continuous text flow has not consumed the taller images' remaining
+      // space. Each page must nevertheless start at the same printable inset.
+      expect(60 + boundary.textPosition!.paragraphIndex * 30 + inserted).toBe(boundary.toPageIndex * 144);
+    }
+  });
+
   it.each([0, 1, 2])("keeps list-item boundaries at the page inset without cumulative trailing-gap drift (nesting: %s)", (depth) => {
     const prefix = Array.from({ length: depth }, (_, index) => [`outer-${index}`, `parent-item-${index}`]).flat();
     const items = Array.from({ length: 7 }, (_, index) => ({
