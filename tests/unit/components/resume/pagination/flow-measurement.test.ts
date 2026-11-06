@@ -9,6 +9,49 @@ import type { ResumeDocument } from "@/domain/resume/schema";
 import { createImageBlock } from "@/domain/resume/images/model";
 
 describe("measureResumeFlow", () => {
+  it.each([false, true])("uses equal occupied line boxes for mixed fonts within one paragraph (editing: %s)", (editing) => {
+    const document = documentWithBlocks([textBlock("body", "ABCD")]);
+    const root = createSectionRoot(1);
+    const block = appendMeasuredElement(root, "div", { "data-resume-block-path": "body", "data-height": "80" });
+    const paragraph = appendMeasuredElement(block, "p", { "data-resume-rich-paragraph-index": "0", "data-height": "80" });
+    paragraph.style.lineHeight = "20px";
+    const text = appendMeasuredElement(paragraph, "span", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "0", "data-resume-rich-node-type": "text" });
+    text.textContent = "ABCD";
+    stubRangeRects(({ start }) => ({ top: start * 20, bottom: start * 20 + (start < 2 ? 24 : 18), left: 0, right: 5 }));
+    const activeEditor = { measureRichTextLines: () => Array.from({ length: 4 }, (_, index) => ({
+      from: { paragraphIndex: 0, nodeIndex: 0, offset: index },
+      to: { paragraphIndex: 0, nodeIndex: 0, offset: index + 1 }, height: index < 2 ? 24 : 18,
+    })) } as unknown as TiptapTextBlockEditorHandle;
+    const sections = measureResumeFlow({ root, document, zoom: 1, committedSpacerHeights: new Map(),
+      ...(editing ? { activeEditor, activeSelection: { sectionId: "section", blockPath: ["body"], richTextField: "content" as const } } : {}),
+    })!;
+    const pages = paginateMeasuredSections({ sections, pageHeight: 40, sectionGap: 0 }).pages;
+    expect(pages.map((page) => page.totalHeight)).toEqual([40, 40]);
+    expect(pages.map((page) => page.sections[0]!.blocks[0]!.textRange?.from.offset)).toEqual([0, 2]);
+  });
+
+  it.each([0.5, 1, 2])("keeps the terminal soft-break line in the page budget at zoom %s", (zoom) => {
+    const document = documentWithBlocks([{
+      id: "body", type: "text", content: { type: "doc", content: [
+        { type: "paragraph", content: [{ type: "text", text: "A" }, { type: "hardBreak" }] },
+      ] },
+    }]);
+    const root = createSectionRoot(zoom);
+    const block = appendMeasuredElement(root, "div", { "data-resume-block-path": "body", "data-height": String(40 * zoom) });
+    const paragraph = appendMeasuredElement(block, "p", { "data-resume-rich-paragraph-index": "0", "data-height": String(40 * zoom) });
+    const text = appendMeasuredElement(paragraph, "span", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "0", "data-resume-rich-node-type": "text" });
+    text.textContent = "A";
+    appendMeasuredElement(paragraph, "br", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "1", "data-resume-rich-node-type": "hardBreak", "data-height": String(20 * zoom) });
+    appendMeasuredElement(paragraph, "br", { "data-resume-rich-paragraph-index": "0", "data-resume-rich-node-index": "2", "data-resume-rich-node-type": "trailingBreak", "data-height": String(20 * zoom), "data-top": String(20 * zoom) });
+    stubRangeRects(() => ({ top: 0, bottom: 20 * zoom, left: 0, right: 5 }));
+    const sections = measureResumeFlow({ root, document, zoom, committedSpacerHeights: new Map() })!;
+    const pages = paginateMeasuredSections({ sections, pageHeight: 20, sectionGap: 0 }).pages;
+    expect(pages.map((page) => page.totalHeight)).toEqual([20, 20]);
+    expect(pages[1]!.sections[0]!.blocks[0]!.textRange).toEqual({
+      from: { paragraphIndex: 0, nodeIndex: 2, offset: 0 }, to: { paragraphIndex: 1, nodeIndex: 0, offset: 0 },
+    });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

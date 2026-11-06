@@ -194,6 +194,16 @@ function listDomainSegments(doc: ProseMirrorNode) {
 
       nodeStart += node.nodeSize;
     }
+
+    // ProseMirror renders a caret line after a terminal hard break. It has no
+    // content node, but still occupies a line and may begin the next page.
+    if (paragraph.lastChild?.type.name === "hardBreak") {
+      segments.push({
+        from: { paragraphIndex, nodeIndex: paragraph.childCount, offset: 0 },
+        to: { paragraphIndex: paragraphIndex + 1, nodeIndex: 0, offset: 0 },
+        proseMirror: nodeStart,
+      });
+    }
   }
 
   return segments;
