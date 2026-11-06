@@ -2,9 +2,57 @@ import type { Editor } from "@tiptap/core";
 import { Schema } from "@tiptap/pm/model";
 import { describe, expect, it, vi } from "vitest";
 
-import { measureTiptapRichTextLines } from "@/components/resume/pagination/tiptap-page-breaks";
+import type { RichTextContent } from "@/domain/resume/schema";
+import { measureTiptapRichTextLines, resolveRichTextPosition } from "@/components/resume/pagination/tiptap-page-breaks";
 
 describe("measureTiptapRichTextLines", () => {
+  it("keeps source node positions when ProseMirror merges adjacent text", () => {
+    const schema = new Schema({ nodes: {
+      doc: { content: "paragraph+" }, paragraph: { content: "inline*" },
+      text: { group: "inline" }, hardBreak: { inline: true, group: "inline" },
+    } });
+    const source: RichTextContent = { type: "doc", content: [{ type: "paragraph", content: [
+      { type: "text", text: "ab" }, { type: "text", text: "cd" }, { type: "hardBreak" },
+    ] }] };
+    const doc = schema.nodeFromJSON(source);
+    expect(doc.firstChild?.childCount).toBe(2);
+    const editor = { state: { doc }, view: { coordsAtPos: (pos: number) => ({
+      top: pos < 3 ? 0 : pos < 6 ? 20 : 40, bottom: pos < 3 ? 20 : pos < 6 ? 40 : 60,
+    }) } } as unknown as Editor;
+    const lines = measureTiptapRichTextLines(editor, source);
+    expect(lines).toEqual([
+      { from: { paragraphIndex: 0, nodeIndex: 0, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 0, offset: 2 }, height: 20 },
+      { from: { paragraphIndex: 0, nodeIndex: 1, offset: 0 }, to: { paragraphIndex: 0, nodeIndex: 2, offset: 1 }, height: 20 },
+      { from: { paragraphIndex: 0, nodeIndex: 3, offset: 0 }, to: { paragraphIndex: 1, nodeIndex: 0, offset: 0 }, height: 20 },
+    ]);
+    expect(resolveRichTextPosition(doc, lines![1]!.from, source)).toBe(3);
+    expect(resolveRichTextPosition(doc, lines![2]!.from, source)).toBe(6);
+    expect(resolveRichTextPosition(doc, { paragraphIndex: 0, nodeIndex: 1, offset: 3 }, source)).toBeUndefined();
+  });
+
+  it("maps source positions across icons and paragraphs and rejects stale lengths", () => {
+    const schema = new Schema({ nodes: {
+      doc: { content: "paragraph+" }, paragraph: { content: "inline*" },
+      text: { group: "inline" }, hardBreak: { inline: true, group: "inline" },
+      resumeIcon: { inline: true, group: "inline", atom: true, attrs: { iconId: {} } },
+    } });
+    const source: RichTextContent = { type: "doc", content: [
+      { type: "paragraph", content: [{ type: "text", text: "A" }, { type: "text", text: "B" }, { type: "resumeIcon", attrs: { iconId: "mail" } }, { type: "text", text: "C" }] },
+      { type: "paragraph", content: [] },
+    ] };
+    const doc = schema.nodeFromJSON(source);
+    expect(resolveRichTextPosition(doc, { paragraphIndex: 0, nodeIndex: 2, offset: 0 }, source)).toBe(3);
+    expect(resolveRichTextPosition(doc, { paragraphIndex: 0, nodeIndex: 3, offset: 1 }, source)).toBe(5);
+    expect(resolveRichTextPosition(doc, { paragraphIndex: 1, nodeIndex: 0, offset: 0 }, source)).toBe(7);
+    const editor = { state: { doc }, view: { coordsAtPos: () => ({ top: 0, bottom: 20 }) } } as unknown as Editor;
+    const stale = structuredClone(source);
+    stale.content[0]!.content.push({ type: "text", text: "pending update" });
+    expect(measureTiptapRichTextLines(editor, stale)).toBeUndefined();
+    expect(resolveRichTextPosition(doc, { paragraphIndex: 0, nodeIndex: 2, offset: 0 }, stale)).toBeUndefined();
+    stale.content.pop();
+    expect(measureTiptapRichTextLines(editor, stale)).toBeUndefined();
+  });
+
   it("measures the caret line after a paragraph's final hard break", () => {
     const schema = new Schema({ nodes: {
       doc: { content: "paragraph+" }, paragraph: { content: "inline*" },

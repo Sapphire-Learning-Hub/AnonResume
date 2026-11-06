@@ -19,6 +19,12 @@ function getVisibleText(...[text, options]: Parameters<typeof screen.getByText>)
   return screen.getByText(text, { ...options, selector: visibleTextSelector });
 }
 
+function getRenderedTestId(id: string) {
+  const matches = screen.getAllByTestId(id).filter((element) => !element.closest('[data-resume-measurement="true"]'));
+  expect(matches).toHaveLength(1);
+  return matches[0]!;
+}
+
 function createRect(height: number, width = 794) {
   return {
     width,
@@ -175,6 +181,44 @@ describe("ResumeRenderer", () => {
       ).toEqual(["one", "two", "three"]);
     },
   );
+
+  it("does not feed old inline page breaks back into text pagination", async () => {
+    const resume = createDefaultResumeDocument();
+    resume.settings.page.margin = { top: 540, bottom: 540, left: 32, right: 32 };
+    resume.sections = [{ id: "section", visible: true, layout: { gap: 0 }, blocks: [{
+      id: "body", type: "text", content: { type: "doc", content: [{
+        type: "paragraph", content: [{ type: "text", text: "ABCD" }],
+      }] },
+    }] }];
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: function (this: HTMLElement) {
+        const spacers = [...this.querySelectorAll<HTMLElement>("[data-resume-page-break-id]")];
+        const spacerHeight = spacers.reduce((sum, spacer) => sum + Number.parseFloat(spacer.style.height || "0"), 0);
+        // A stale break divides a reflowed line. Its extra line box remains
+        // even after subtracting the explicit spacer's height.
+        return createRect(80 + spacerHeight + (spacers.length ? 20 : 0));
+      },
+    });
+    const rangeSpy = vi.spyOn(document, "createRange").mockImplementation(() => {
+      let offset = 0;
+      return {
+        setStart(_node: Node, nextOffset: number) { offset = nextOffset; },
+        setEnd() {},
+        getBoundingClientRect: () => ({ ...createRect(20), top: offset * 20, bottom: (offset + 1) * 20 }),
+      } as unknown as Range;
+    });
+    try {
+      const onReady = vi.fn();
+      const { container, rerender } = render(<ResumeRenderer document={resume} mode="edit" paginationRevision={0} onPaginationReadyChange={onReady} />);
+      await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+      expect(container.querySelectorAll('[data-resume-page="true"]')).toHaveLength(2);
+      onReady.mockClear();
+      rerender(<ResumeRenderer document={resume} mode="edit" paginationRevision={1} onPaginationReadyChange={onReady} />);
+      await waitFor(() => expect(onReady).toHaveBeenLastCalledWith(true));
+      expect(container.querySelectorAll('[data-resume-page="true"]')).toHaveLength(2);
+    } finally { rangeSpy.mockRestore(); }
+  });
 
   it("renders section titles and list content from a resume document", () => {
     render(
@@ -791,12 +835,12 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    expect(within(screen.getByTestId("resume-page-1")).getByTestId("resume-section-section-profile")).toHaveAttribute(
+    expect(within(getRenderedTestId("resume-page-1")).getByTestId("resume-section-section-profile")).toHaveAttribute(
       "data-resume-diff-kind",
       "moved",
     );
     expect(
-      within(screen.getByTestId("resume-page-1")).getByTestId("resume-block-item-block-profile-summary"),
+      within(getRenderedTestId("resume-page-1")).getByTestId("resume-block-item-block-profile-summary"),
     ).toHaveAttribute("data-resume-diff-kind", "changed");
     expect(getVisibleText("Bun").closest("[data-resume-diff-kind]"))
       .toHaveAttribute("data-resume-diff-kind", "removed");
@@ -1044,7 +1088,7 @@ describe("ResumeRenderer", () => {
 
     expect(
       container.querySelectorAll(
-        '[data-resume-section-id="section-profile"]',
+        '[data-resume-section-id="section-profile"]:not([aria-hidden="true"] *)',
       ),
     ).toHaveLength(1);
     expect(
@@ -1052,11 +1096,11 @@ describe("ResumeRenderer", () => {
         .querySelector("[data-resume-pagination-ready]")
         ?.getAttribute("data-resume-pagination-ready"),
     ).toBe("false");
-    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+    expect(getRenderedTestId("resume-page-2")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "文本编辑器" })).toBe(editor);
 
     fireEvent.compositionEnd(editor);
-    expect(screen.getByTestId("resume-page-2")).toBeInTheDocument();
+    expect(getRenderedTestId("resume-page-2")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
@@ -1124,7 +1168,7 @@ describe("ResumeRenderer", () => {
       ).toHaveLength(2);
     });
 
-    const experienceSection = screen.getByTestId(
+    const experienceSection = getRenderedTestId(
       "resume-section-section-experience",
     );
     expect(experienceSection.parentElement?.firstElementChild).toHaveAttribute(
@@ -1170,7 +1214,7 @@ describe("ResumeRenderer", () => {
         '[data-resume-block-path="group-experience-anonresume"]',
       ),
     ).toBe(experienceBlock);
-    expect(screen.getByTestId("resume-page-1")).toBeInTheDocument();
+    expect(getRenderedTestId("resume-page-1")).toBeInTheDocument();
     expect(screen.queryByTestId("resume-page-2")).not.toBeInTheDocument();
   });
 
@@ -1701,7 +1745,7 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const placeholder = screen.getByTestId(
+    const placeholder = getRenderedTestId(
       "selected-editor-placeholder-section-profile-block-empty-paragraphs",
     );
     const editEmptyParagraphs = placeholder.querySelectorAll(
@@ -1795,7 +1839,7 @@ describe("ResumeRenderer", () => {
     ).toHaveLength(0);
 
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "resume-block-item-group-experience-anonresume-row-experience-header",
       ),
     ).toHaveAttribute("data-resume-drag-mode", "none");
@@ -1816,10 +1860,10 @@ describe("ResumeRenderer", () => {
         name: /拖动/,
       }).length,
     ).toBeGreaterThan(0);
-    const blockItem = screen.getByTestId(
+    const blockItem = getRenderedTestId(
       "resume-block-item-group-experience-anonresume-row-experience-header",
     );
-    const sortChrome = screen.getByTestId(
+    const sortChrome = getRenderedTestId(
       "resume-sort-chrome-group-experience-anonresume-row-experience-header",
     );
     const dragHandle = screen.getByRole("button", {
@@ -1872,7 +1916,7 @@ describe("ResumeRenderer", () => {
   it("selects the innermost canvas block and extends layout selection without selecting its ancestors", () => {
     const onSelectBlock = vi.fn();
     render(<ResumeRenderer document={createDefaultResumeDocument()} mode="edit" editSurfaceMode="layout" onMoveBlock={vi.fn()} onSelectBlock={onSelectBlock} />);
-    fireEvent.click(screen.getByTestId("resume-block-item-group-experience-anonresume-row-experience-header-text-experience-role"), { shiftKey: true });
+    fireEvent.click(getRenderedTestId("resume-block-item-group-experience-anonresume-row-experience-header-text-experience-role"), { shiftKey: true });
     expect(onSelectBlock).toHaveBeenCalledExactlyOnceWith({ sectionId: "section-experience", blockPath: ["group-experience-anonresume", "row-experience-header", "text-experience-role"] }, { extend: true });
   });
 
@@ -1885,7 +1929,7 @@ describe("ResumeRenderer", () => {
     const path = [list.id, item.id, item.children[0]!.id];
     const onSelectBlock = vi.fn();
     render(<ResumeRenderer document={document} mode="edit" editSurfaceMode="layout" onMoveBlock={vi.fn()} onSelectBlock={onSelectBlock} />);
-    fireEvent.click(screen.getByTestId(`resume-block-item-${path.join("-")}`), { shiftKey: true });
+    fireEvent.click(getRenderedTestId(`resume-block-item-${path.join("-")}`), { shiftKey: true });
     expect(onSelectBlock).toHaveBeenCalledExactlyOnceWith({ sectionId: section.id, blockPath: path }, { extend: true });
   });
 
@@ -1923,17 +1967,17 @@ describe("ResumeRenderer", () => {
     );
 
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "resume-block-item-group-experience-anonresume-row-experience-header",
       ),
     ).toHaveAttribute("data-resume-drag-mode", "handle");
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "resume-block-item-group-experience-anonresume-row-experience-header-text-experience-role",
       ),
     ).toHaveAttribute("data-resume-drag-mode", "handle");
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "resume-block-item-group-experience-anonresume-row-experience-header-text-experience-range",
       ),
     ).toHaveAttribute("data-resume-drag-mode", "handle");
@@ -1960,10 +2004,10 @@ describe("ResumeRenderer", () => {
       />,
     );
 
-    const firstListItem = screen.getByTestId(
+    const firstListItem = getRenderedTestId(
       "resume-list-item-block-profile-highlights-item-foundation-1",
     );
-    const firstListItemChrome = screen.getByTestId(
+    const firstListItemChrome = getRenderedTestId(
       "resume-list-item-sort-chrome-block-profile-highlights-item-foundation-1",
     );
 
@@ -1995,13 +2039,13 @@ describe("ResumeRenderer", () => {
     );
 
     expect(
-      screen.getByTestId("resume-sort-chrome-group-experience-anonresume-row-experience-header"),
+      getRenderedTestId("resume-sort-chrome-group-experience-anonresume-row-experience-header"),
     ).toHaveStyle({
       position: "absolute",
       pointerEvents: "none",
     });
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "resume-sort-chrome-group-experience-anonresume-row-experience-header-text-experience-role",
       ),
     ).toHaveStyle({
@@ -2031,12 +2075,12 @@ describe("ResumeRenderer", () => {
     expect(editor).toHaveTextContent("共享渲染器基础");
     expect(editor.parentElement).not.toBeNull();
     expect(
-      screen.getByTestId("selected-editor-shell-section-profile-block-profile-summary"),
+      getRenderedTestId("selected-editor-shell-section-profile-block-profile-summary"),
     ).toHaveStyle({
       position: "relative",
     });
     expect(
-      screen.getByTestId("selected-editor-placeholder-section-profile-block-profile-summary"),
+      getRenderedTestId("selected-editor-placeholder-section-profile-block-profile-summary"),
     ).toHaveStyle({
       visibility: "hidden",
     });
@@ -2069,7 +2113,7 @@ describe("ResumeRenderer", () => {
 
     expect(editor).toHaveTextContent("基于流式布局的结构化简历编辑基础能力");
     expect(
-      screen.getByTestId(
+      getRenderedTestId(
         "selected-editor-shell-section-profile-item-foundation-1-text",
       ),
     ).toHaveStyle({
@@ -2094,11 +2138,11 @@ describe("ResumeRenderer", () => {
     expect(editor.tagName).toBe("DIV");
     expect(editor).toHaveAttribute("contenteditable", "true");
     expect(editor).toHaveTextContent("个人简介");
-    expect(screen.getByTestId("selected-editor-shell-section-profile-title")).toHaveStyle({
+    expect(getRenderedTestId("selected-editor-shell-section-profile-title")).toHaveStyle({
       position: "relative",
     });
     expect(
-      screen.getByTestId("selected-editor-placeholder-section-profile-title"),
+      getRenderedTestId("selected-editor-placeholder-section-profile-title"),
     ).toHaveStyle({
       visibility: "hidden",
     });
@@ -2333,9 +2377,9 @@ describe("ResumeRenderer", () => {
       expect(screen.getAllByTestId(/resume-page-/)).toHaveLength(2),
     );
 
-    expect(within(screen.getByTestId("resume-page-1")).getByText("个人简介")).toBeInTheDocument();
+    expect(within(getRenderedTestId("resume-page-1")).getByText("个人简介")).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-2")).getByText("经历"),
+      within(getRenderedTestId("resume-page-2")).getByText("经历"),
     ).toBeInTheDocument();
   });
 
@@ -2597,28 +2641,28 @@ describe("ResumeRenderer", () => {
     );
 
     expect(
-      within(screen.getByTestId("resume-page-1")).getByText("经历"),
+      within(getRenderedTestId("resume-page-1")).getByText("经历"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-1")).getByText("Experience Item 1"),
+      within(getRenderedTestId("resume-page-1")).getByText("Experience Item 1"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-1")).getByText("Experience Item 2"),
+      within(getRenderedTestId("resume-page-1")).getByText("Experience Item 2"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-1")).queryByText("Experience Item 3"),
+      within(getRenderedTestId("resume-page-1")).queryByText("Experience Item 3"),
     ).toBeNull();
     expect(
-      within(screen.getByTestId("resume-page-2")).queryByText("经历"),
+      within(getRenderedTestId("resume-page-2")).queryByText("经历"),
     ).toBeNull();
     expect(
-      within(screen.getByTestId("resume-page-2")).getByText("Experience Item 3"),
+      within(getRenderedTestId("resume-page-2")).getByText("Experience Item 3"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-2")).getByText("Experience Item 4"),
+      within(getRenderedTestId("resume-page-2")).getByText("Experience Item 4"),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByTestId("resume-page-2")).getByRole("list"),
+      within(getRenderedTestId("resume-page-2")).getByRole("list"),
     ).toHaveAttribute("start", "3");
   });
 
@@ -2753,8 +2797,8 @@ describe("ResumeRenderer", () => {
       expect(screen.getAllByTestId(/resume-page-/)).toHaveLength(2),
     );
 
-    const firstPage = screen.getByTestId("resume-page-1");
-    const secondPage = screen.getByTestId("resume-page-2");
+    const firstPage = getRenderedTestId("resume-page-1");
+    const secondPage = getRenderedTestId("resume-page-2");
 
     expect(within(firstPage).getByText("Work details")).toBeInTheDocument();
     expect(within(firstPage).getByText("Nested item 1")).toBeInTheDocument();

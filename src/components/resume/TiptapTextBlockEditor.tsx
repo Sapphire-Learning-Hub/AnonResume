@@ -31,6 +31,7 @@ import {
   normalizeTextColor,
 } from "@/domain/resume/rich-text";
 import type { RichTextContent } from "@/domain/resume/schema";
+import { resumeValidationLimits } from "@/domain/resume/validation";
 import { defaultLocale, getMessages } from "@/i18n/messages";
 
 import { useTiptapTextBlockEditorStyles } from "./TiptapTextBlockEditor.style";
@@ -169,6 +170,13 @@ function createResumeIconInsertion(iconId: string) {
   ];
 }
 
+function normalizeEditorContent(content: unknown): RichTextContent {
+  return normalizeRichTextContent(
+    content,
+    resumeValidationLimits.maxRichTextNodeLength,
+  );
+}
+
 type TextSelectionRange = {
   from: number;
   to: number;
@@ -229,7 +237,7 @@ export interface TiptapTextBlockEditorProps {
 }
 
 function getFirstDocumentLinkHref(editor: Editor) {
-  const document = normalizeRichTextContent(editor.getJSON());
+  const document = normalizeEditorContent(editor.getJSON());
 
   for (const paragraph of document.content) {
     for (const node of paragraph.content) {
@@ -499,7 +507,7 @@ export const TiptapTextBlockEditor = forwardRef<
       },
     },
     onUpdate: ({ editor: nextEditor }) => {
-      onChange(normalizeRichTextContent(nextEditor.getJSON()));
+      onChange(normalizeEditorContent(nextEditor.getJSON()));
     },
   });
 
@@ -507,7 +515,7 @@ export const TiptapTextBlockEditor = forwardRef<
     ref,
     () => ({
       measureRichTextLines: () =>
-        editor ? measureTiptapRichTextLines(editor) : undefined,
+        editor ? measureTiptapRichTextLines(editor, content) : undefined,
       prepareLink: () => editor ? prepareLinkForEditor(editor, linkSelectionRef) : undefined,
       getSearchRanges: (match) => {
         if (!editor || match.paragraphIndex < 0 || match.paragraphIndex >= editor.state.doc.childCount) return [];
@@ -623,7 +631,7 @@ export const TiptapTextBlockEditor = forwardRef<
         return applied;
       },
     }),
-    [editor],
+    [editor, content],
   );
 
   useEffect(() => {
@@ -646,8 +654,8 @@ export const TiptapTextBlockEditor = forwardRef<
   useEffect(() => {
     if (!editor) return;
 
-    const nextContent = normalizeRichTextContent(content);
-    const currentContent = normalizeRichTextContent(editor.getJSON());
+    const nextContent = normalizeEditorContent(content);
+    const currentContent = normalizeEditorContent(editor.getJSON());
 
     if (areRichTextContentsEqual(currentContent, nextContent)) {
       return;
@@ -665,8 +673,8 @@ export const TiptapTextBlockEditor = forwardRef<
     }
 
     pendingPageBreaksRef.current = null;
-    applyTiptapPageBreaks(editor, pageBreaks);
-  }, [editor, pageBreaks]);
+    applyTiptapPageBreaks(editor, pageBreaks, content);
+  }, [editor, pageBreaks, content]);
 
   useEffect(() => {
     if (!editor) return;
@@ -813,7 +821,7 @@ export const TiptapTextBlockEditor = forwardRef<
           updateEditingState({ focused: false, composing: false });
 
           if (editor) {
-            onBlur?.(normalizeRichTextContent(editor.getJSON()));
+            onBlur?.(normalizeEditorContent(editor.getJSON()));
           }
         }}
         onCompositionStartCapture={() =>
@@ -827,6 +835,7 @@ export const TiptapTextBlockEditor = forwardRef<
             applyTiptapPageBreaks(
               editor,
               pendingPageBreaksRef.current ?? pageBreaksRef.current,
+              content,
             );
             pendingPageBreaksRef.current = null;
           }

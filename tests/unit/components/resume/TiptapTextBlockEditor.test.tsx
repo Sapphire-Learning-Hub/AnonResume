@@ -67,6 +67,24 @@ describe("TiptapTextBlockEditor", () => {
     expect(onBlur).toHaveBeenCalledOnce();
   });
 
+  it("commits merged editor text within the document node limit without losing marks", async () => {
+    const first = "a".repeat(3999);
+    const second = "👩‍💻e\u0301" + "b".repeat(1800);
+    const content: RichTextContent = { type: "doc", content: [{ type: "paragraph", content: [
+      { type: "text", text: first, marks: [{ type: "bold" }] },
+      { type: "text", text: second, marks: [{ type: "bold" }] },
+    ] }] };
+    let committed: RichTextContent | undefined;
+    render(<TiptapTextBlockEditor content={content} onChange={vi.fn()} onBlur={(value) => { committed = value; }} />);
+    const editor = await screen.findByRole("textbox", { name: "文本编辑器" });
+    fireEvent.focus(editor);
+    fireEvent.blur(editor);
+    const nodes = committed?.content[0]?.content;
+    expect(nodes?.every((node) => node.type === "text" && node.text.length <= 4000 && node.marks?.[0]?.type === "bold")).toBe(true);
+    expect(nodes?.map((node) => node.type === "text" ? node.text : "").join("")).toBe(first + second);
+    expect(nodes?.[1]).toMatchObject({ type: "text", text: second });
+  });
+
   it("shows inline formatting controls for a selected text range", async () => {
     const ref = createRef<TiptapTextBlockEditorHandle>();
 
