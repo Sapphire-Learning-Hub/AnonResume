@@ -1724,6 +1724,28 @@ describe("ResumeRenderer", () => {
     ).toBe(true);
   });
 
+  it.each(["edit", "view", "print"] as const)("keeps whitespace and long-word layout compatible with the text editor in %s", (mode) => {
+    const document = createDefaultResumeDocument();
+    const text = "  Name    Role\tLocation " + "https://example.test/" + "unbroken".repeat(40);
+    document.sections = [{
+      id: "spacing", visible: true,
+      title: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Section    title" }] }] },
+      blocks: [{ id: "body", type: "text", content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text }] }] } }],
+    }];
+    const { container } = render(<ResumeRenderer document={document} mode={mode}
+      selection={mode === "edit" ? { sectionId: "spacing", blockPath: ["body"], richTextField: "content" } : undefined} />);
+    const paragraphs = container.querySelectorAll<HTMLParagraphElement>("p[data-resume-rich-paragraph-index]");
+    expect(paragraphs.length).toBeGreaterThan(0);
+    expect([...paragraphs].some((paragraph) => paragraph.textContent === text)).toBe(true);
+    // This is a cross-surface geometry contract, including hidden measurement
+    // and selected-editor placeholders. Collapsing spaces or refusing to wrap
+    // long words changes line counts when ProseMirror becomes active.
+    for (const paragraph of paragraphs) {
+      expect(getComputedStyle(paragraph).whiteSpace).toBe("break-spaces");
+      expect(getComputedStyle(paragraph).overflowWrap).toBe("break-word");
+    }
+  });
+
   it("renders inline tags in the same paragraph as adjacent text", () => {
     const document = createDefaultResumeDocument();
     document.sections[0]!.blocks[0] = {
