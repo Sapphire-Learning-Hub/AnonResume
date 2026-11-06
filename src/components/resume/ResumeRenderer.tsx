@@ -1,5 +1,7 @@
 "use client";
 
+import "@fontsource-variable/noto-sans-mono/wght.css";
+
 import {
   closestCenter,
   DndContext,
@@ -370,6 +372,7 @@ function RichTextParagraph({
 
   return (
     <p
+      data-style-scope="resume-rich-text"
       data-resume-rich-empty-paragraph={empty ? "true" : undefined}
       data-resume-rich-paragraph-index={paragraphIndex}
       style={style}

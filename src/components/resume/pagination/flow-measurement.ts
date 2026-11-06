@@ -13,8 +13,9 @@ import {
 import { isRichTextContentEmpty } from "@/domain/resume/rich-text";
 import type { ResumeBlock, ResumeDocument } from "@/domain/resume/schema";
 
+import { measureInlineSegments } from "./rich-text-line-measurement";
+
 const BLOCK_PATH_SEPARATOR = "::";
-const STATIC_LINE_TOLERANCE_PX = 1;
 
 export interface MeasureResumeFlowParams {
   root: HTMLElement;
@@ -260,62 +261,13 @@ function listStaticRichTextSegments(blockElement: HTMLElement) {
   return segments;
 }
 
-function segmentsToLines(
-  segments: StaticSegment[],
-  zoom: number,
-): MeasuredRichTextLine[] {
-  if (segments.length === 0) {
-    return [];
-  }
-
-  const lines: MeasuredRichTextLine[] = [];
-  let lineStart = segments[0]!;
-  let lineEnd = lineStart.to;
-  let lineBottom = lineStart.rect.bottom;
-
-  for (let index = 1; index < segments.length; index += 1) {
-    const current = segments[index]!;
-
-    if (
-      Math.abs(current.rect.top - lineStart.rect.top) >
-      STATIC_LINE_TOLERANCE_PX
-    ) {
-      lines.push({
-        from: lineStart.from,
-        to: lineEnd,
-        height: Math.max(
-          1,
-          Math.ceil((lineBottom - lineStart.rect.top) / zoom),
-        ),
-      });
-      lineStart = current;
-      lineEnd = current.to;
-      lineBottom = current.rect.bottom;
-    } else {
-      lineEnd = current.to;
-      lineBottom = Math.max(lineBottom, current.rect.bottom);
-    }
-  }
-
-  lines.push({
-    from: lineStart.from,
-    to: lineEnd,
-    height: Math.max(
-      1,
-      Math.ceil((lineBottom - lineStart.rect.top) / zoom),
-    ),
-  });
-
-  return lines;
-}
-
 function measureStaticRichTextLines(
   blockElement: HTMLElement,
   zoom: number,
 ) {
   try {
     const segments = listStaticRichTextSegments(blockElement);
-    return segments ? segmentsToLines(segments, zoom) : undefined;
+    return segments ? measureInlineSegments(segments, zoom) : undefined;
   } catch {
     return undefined;
   }
@@ -374,6 +326,42 @@ function normalizeTextLineHeights(
   });
 }
 
+function normalizeParagraphLineHeights(
+  lines: MeasuredRichTextLine[],
+  params: {
+    element: HTMLElement;
+    zoom: number;
+    committedSpacerHeights: ReadonlyMap<string, number>;
+  },
+) {
+  const paragraphs = new Map(
+    Array.from(params.element.querySelectorAll<HTMLElement>(
+      "p[data-resume-rich-paragraph-index]",
+    )).map((paragraph) => [
+      Number(paragraph.dataset.resumeRichParagraphIndex),
+      paragraph,
+    ] as const),
+  );
+  const result: MeasuredRichTextLine[] = [];
+  for (let start = 0; start < lines.length;) {
+    const paragraphIndex = lines[start]!.from.paragraphIndex;
+    let end = start + 1;
+    while (end < lines.length && lines[end]!.from.paragraphIndex === paragraphIndex) end += 1;
+    const paragraph = paragraphs.get(paragraphIndex);
+    const paragraphLines = lines.slice(start, end);
+    // The layout-neutral editor shell retains the same paragraph markup, so
+    // this also supplies line-box heights for the active Tiptap measurements.
+    // Do not redistribute space between paragraphs with different fonts.
+    result.push(...(paragraph
+      ? normalizeTextLineHeights(paragraphLines, measureElementHeight(
+          paragraph, params.zoom, params.committedSpacerHeights,
+        ))
+      : paragraphLines));
+    start = end;
+  }
+  return result;
+}
+
 function getTextMeasurements(params: {
   element: HTMLElement;
   height: number;
@@ -405,7 +393,7 @@ function getTextMeasurements(params: {
     }),
   );
   const normalizedTextLines = normalizeTextLineHeights(
-    textLines,
+    normalizeParagraphLineHeights(textLines, params),
     Math.max(0, params.height - trailingHeight),
   );
 

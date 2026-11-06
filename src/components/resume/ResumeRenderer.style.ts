@@ -12,6 +12,11 @@ export const useResumeRendererStyles = createStyles(({ css, token }) => ({
     width: 100%;
     gap: 24px;
 
+    [data-style-scope="resume-rich-text"] code {
+      font-family: var(--font-noto-sans-mono), var(--resume-font-family), monospace;
+      line-height: 1;
+    }
+
     @media (max-width: 640px) {
       &[data-resume-responsive-view="true"] {
         gap: 16px;
