@@ -437,7 +437,10 @@ describe("account merge transfer", () => {
     const templateIds = [randomUUID(), randomUUID()];
     await db.insert(resumeTemplates).values([{ id: templateIds[0], userId: fixture.primary.id, name: "Same name", document: templateDocument }, { id: templateIds[1], userId: fixture.secondary.id, name: "Same name", document: templateDocument }]);
     await db.insert(resumeTemplateOperations).values({ userId: fixture.secondary.id, operationId: randomUUID(), kind: "save", requestHash: "hash", resultId: templateIds[1], resultVersion: 1 });
-    const deletedAt = new Date(fixture.now.getTime() - 86_400_000);
+    // Export retention is evaluated by PostgreSQL, independently of the fixed
+    // merge clock. Keep this trashed resume inside its real retention window.
+    const clock = await getDatabasePool().query<{ now: Date }>("SELECT now() AS now");
+    const deletedAt = new Date(clock.rows[0]!.now.getTime() - 86_400_000);
     const purgeAfter = new Date(deletedAt.getTime() + 30 * 86_400_000);
     await db.update(resumes).set({ deletedAt, purgeAfter, published: false }).where(eq(resumes.id, fixture.secondaryResumeId));
     await db.update(resumeVersions).set({ kind: "autosave" }).where(eq(resumeVersions.id, fixture.versionId));
