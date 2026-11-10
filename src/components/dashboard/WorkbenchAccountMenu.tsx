@@ -101,7 +101,9 @@ const useStyles = createStyles(({ token, css }) => ({
     }
 
     @media (max-width: 720px) {
-      display: none;
+      &[data-collapsed] {
+        display: none;
+      }
     }
   `,
   name: css`
@@ -124,15 +126,17 @@ const useStyles = createStyles(({ token, css }) => ({
     font-weight: 600;
   `,
   chevron: css`
-    color: ${token.colorTextTertiary};
-    font-size: 11px;
+    && {
+      color: ${token.colorTextTertiary};
+      font-size: 11px;
 
-    &[data-collapsed="true"] {
-      display: none;
-    }
+      &[data-collapsed="true"] {
+        display: none;
+      }
 
-    @media (max-width: 720px) {
-      display: none;
+      @media (max-width: 720px) {
+        display: none;
+      }
     }
   `,
   menu: css`

@@ -70,6 +70,7 @@ export function JobSearchPage({
         <h1 className={styles.heading}>{t("jobs.title")}</h1>
       </div>
       <Segmented
+        className={styles.sectionSwitch}
         value={section}
         options={[
           { value: "board", label: t("jobs.board") },
