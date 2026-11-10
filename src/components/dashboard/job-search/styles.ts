@@ -8,10 +8,20 @@ export const useJobSearchStyles = createStyles(({ css, token }) => ({
   `,
   toolbar: css`
     display: flex;
+    min-height: 64px;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
     gap: 12px;
+
+    @media (max-width: 720px) {
+      min-height: 58px;
+    }
+  `,
+  sectionSwitch: css`
+    && {
+      align-self: flex-start;
+    }
   `,
   heading: css`
     margin: 0;

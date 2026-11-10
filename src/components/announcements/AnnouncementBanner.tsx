@@ -21,12 +21,6 @@ const useStyles = createStyles(({ token, css }) => ({
       border-radius: 10px;
     }
 
-    && .ant-alert-content,
-    && .ant-alert-message {
-      min-width: 0;
-      width: 100%;
-    }
-
     && .ant-alert-icon {
       align-self: center;
     }
@@ -59,6 +53,7 @@ const useStyles = createStyles(({ token, css }) => ({
     }
 
     [data-variant="header"] & {
+      display: flex;
       flex: none;
       width: max-content;
       gap: 7px;
